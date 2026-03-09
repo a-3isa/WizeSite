@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function inWorkspace(workspaceId) {
+      return signedIn() && myUser().workspaceId == workspaceId;
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow read, update: if inWorkspace(workspaceId);
+      allow delete: if false;
+    }
+
+    match /memberships/{membershipId} {
+      // Allow read if user is in that workspace, or reading their own membership (e.g. after login to resolve workspace)
+      allow read: if signedIn() && (
+        inWorkspace(resource.data.workspaceId) ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if false; // callable function only
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if false; // callable function only
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if false; // callable function only
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
+    }
+
+    match /worker_entries/{entryId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if false; // callable function only
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
+    }
+
+    match /workers/{workerId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
+    }
+
+    match /subscriptions/{workspaceId} {
+      allow read: if inWorkspace(workspaceId);
+      allow write: if false;
+    }
+
+    match /usage_counters/{counterId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /drafts/{draftId} {
+      allow read, write: if inWorkspace(resource.data.workspaceId);
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "prod": "wize-site"
+  },
+  "targets": {},
+  "etags": {}
+}

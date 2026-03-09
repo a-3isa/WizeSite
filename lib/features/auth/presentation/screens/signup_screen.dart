@@ -1,0 +1,185 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
+
+class SignUpScreen extends ConsumerStatefulWidget {
+  const SignUpScreen({super.key});
+
+  @override
+  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  final _companyController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
+    _companyController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signup() async {
+    if (!_emailController.text.contains('@')) {
+      setState(() => _error = 'Invalid email format');
+      return;
+    }
+    if (_passwordController.text.length < 8) {
+      setState(() => _error = 'Password must be at least 8 characters');
+      return;
+    }
+    if (_passwordController.text != _confirmController.text) {
+      setState(() => _error = 'Passwords do not match');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final auth = ref.read(firebaseAuthProvider);
+      final firestore = ref.read(firestoreProvider);
+
+      final cred = await auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      final uid = cred.user!.uid;
+      final workspaceId = const Uuid().v4();
+
+      await firestore.collection('users').doc(uid).set({
+        'id': uid,
+        'fullName': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'companyName': _companyController.text.trim(),
+        'workspaceId': workspaceId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await firestore.collection('workspaces').doc(workspaceId).set({
+        'id': workspaceId,
+        'name': _companyController.text.trim().isEmpty
+            ? '${_nameController.text.trim()} Workspace'
+            : _companyController.text.trim(),
+        'ownerId': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await firestore.collection('memberships').add({
+        'workspaceId': workspaceId,
+        'userId': uid,
+        'role': 'owner',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      ref.read(activeUserIdProvider.notifier).state = uid;
+      ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
+
+      if (!cred.user!.emailVerified) {
+        await cred.user!.sendEmailVerification();
+      }
+
+      if (mounted) {
+        context.go(AppRoutes.dashboard);
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.t('signup'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Full Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(labelText: l10n.t('email')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: InputDecoration(labelText: l10n.t('password')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirm Password'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _companyController,
+              decoration: const InputDecoration(
+                labelText: 'Company Name (optional)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone Number (optional)',
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _loading ? null : _signup,
+              child: _loading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(l10n.t('signup')),
+            ),
+            TextButton(
+              onPressed: () => context.go(AppRoutes.login),
+              child: Text(l10n.t('login')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

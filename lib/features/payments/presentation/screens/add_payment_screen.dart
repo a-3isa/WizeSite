@@ -1,0 +1,224 @@
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+class AddPaymentScreen extends ConsumerStatefulWidget {
+  const AddPaymentScreen({this.paymentId, super.key});
+
+  final String? paymentId;
+
+  @override
+  ConsumerState<AddPaymentScreen> createState() => _AddPaymentScreenState();
+}
+
+class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
+  final _amountController = TextEditingController();
+  final _notesController = TextEditingController();
+  String _method = 'cash';
+  String? _projectId;
+  DateTime _date = DateTime.now();
+  bool _loading = false;
+  bool _prefilling = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.paymentId != null) {
+      _prefill();
+    }
+  }
+
+  Future<void> _prefill() async {
+    setState(() => _prefilling = true);
+    final payment = await ref
+        .read(paymentRepositoryProvider)
+        .getPayment(widget.paymentId!);
+    if (payment != null && mounted) {
+      setState(() {
+        _projectId = payment.projectId;
+        _amountController.text = payment.amount.toStringAsFixed(2);
+        _method = payment.paymentMethod;
+        _notesController.text = payment.notes;
+        _date = payment.date;
+      });
+    }
+    if (mounted) {
+      setState(() => _prefilling = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
+    final userId = ref.read(activeUserIdProvider);
+    final amount = double.tryParse(_amountController.text.trim());
+    if (workspaceId == null || userId == null) {
+      setState(() => _error = 'Please login first.');
+      return;
+    }
+    if (_projectId == null || amount == null || amount <= 0) {
+      setState(() => _error = 'Select project and enter valid amount.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      if (widget.paymentId == null) {
+        await ref
+            .read(paymentRepositoryProvider)
+            .createPayment(
+              workspaceId: workspaceId,
+              userId: userId,
+              projectId: _projectId!,
+              amount: amount,
+              date: _date,
+              paymentMethod: _method,
+              notes: _notesController.text.trim(),
+            );
+      } else {
+        await ref
+            .read(paymentRepositoryProvider)
+            .updatePayment(
+              paymentId: widget.paymentId!,
+              amount: amount,
+              date: _date,
+              paymentMethod: _method,
+              notes: _notesController.text.trim(),
+            );
+      }
+      if (mounted) {
+        context.pop();
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'failed-precondition') {
+        if (mounted) {
+          context.push('${AppRoutes.subscriptionLimit}?limit=paymentsPerMonth');
+        }
+      } else {
+        setState(() => _error = e.message ?? e.code);
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final projectsAsync = ref.watch(projectsProvider);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.paymentId == null ? 'Add Payment' : 'Edit Payment'),
+      ),
+      body: _prefilling
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                projectsAsync.when(
+                  data: (projects) => DropdownButtonFormField<String>(
+                    initialValue: _projectId,
+                    items: projects
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p.id,
+                            child: Text(p.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() => _projectId = value),
+                    decoration: const InputDecoration(labelText: 'Project'),
+                  ),
+                  error: (e, _) => Text(e.toString()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Amount'),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Date: ${_date.toIso8601String().split('T').first}',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      initialDate: _date,
+                    );
+                    if (picked != null) {
+                      setState(() => _date = picked);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _method,
+                  items: const [
+                    DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                    DropdownMenuItem(
+                      value: 'bank',
+                      child: Text('Bank Transfer'),
+                    ),
+                    DropdownMenuItem(value: 'check', child: Text('Check')),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _method = value ?? 'cash'),
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Method',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                ),
+                const SizedBox(height: 12),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: _loading ? null : _save,
+                  child: _loading
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          widget.paymentId == null
+                              ? 'Save Payment'
+                              : 'Update Payment',
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+}
