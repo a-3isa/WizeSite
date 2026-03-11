@@ -22,6 +22,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _supplierController = TextEditingController();
   String _category = 'materials';
   String? _projectId;
+  String _projectName = '';
   DateTime _date = DateTime.now();
   bool _loading = false;
   bool _prefilling = false;
@@ -43,6 +44,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (expense != null && mounted) {
       setState(() {
         _projectId = expense.projectId;
+        _projectName = expense.projectName;
         _category = expense.category;
         _amountController.text = expense.amount.toStringAsFixed(2);
         _notesController.text = expense.notes;
@@ -88,8 +90,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               workspaceId: workspaceId,
               userId: userId,
               projectId: _projectId!,
+              projectName: _projectName,
               category: _category,
               amount: amount,
+              currency: 'EGP',
               date: _date,
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
@@ -156,7 +160,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             ),
                           )
                           .toList(),
-                      onChanged: (value) => setState(() => _projectId = value),
+                      onChanged: (value) {
+                        final selected = projects.where((p) => p.id == value);
+                        setState(() {
+                          _projectId = value;
+                          _projectName = selected.isEmpty
+                              ? ''
+                              : selected.first.name;
+                        });
+                      },
                       decoration: const InputDecoration(labelText: 'Project'),
                     );
                   },

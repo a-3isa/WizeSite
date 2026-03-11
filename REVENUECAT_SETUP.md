@@ -27,12 +27,12 @@ flutter pub add purchases_flutter purchases_ui_flutter
 Current code uses:
 
 - `REVENUECAT_API_KEY` from `--dart-define`
-- fallback key: `test_xrxXJcTowFByLKxcgDhWpeEmBir`
+- no hardcoded fallback key in source code
 
 Recommended run command:
 
 ```bash
-flutter run --dart-define=REVENUECAT_API_KEY=test_xrxXJcTowFByLKxcgDhWpeEmBir --dart-define=REVENUECAT_ENTITLEMENT_ID=wizesite_pro
+flutter run --dart-define=REVENUECAT_API_KEY=your_revenuecat_public_sdk_key --dart-define=REVENUECAT_ENTITLEMENT_ID=wizesite_pro
 ```
 
 ## 3) RevenueCat dashboard configuration
@@ -107,4 +107,3 @@ Create these in RevenueCat:
 - Keep all purchase/restore/paywall logic centralized in coordinator.
 - Do not gate UI modules directly; use entitlement + quota checks at action level.
 - Keep webhook/backend entitlements as server source of truth for quota enforcement.
-

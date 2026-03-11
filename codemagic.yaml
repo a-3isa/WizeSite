@@ -1,0 +1,174 @@
+workflows:
+  ios_debug_device:
+    name: iOS Debug (Physical Device)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    # Replace with your Codemagic App Store Connect integration name.
+    integrations:
+      app_store_connect: YOUR_APP_STORE_CONNECT_INTEGRATION
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.buildtrack.buildtrackApp
+      vars:
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
+        BUNDLE_ID: com.buildtrack.buildtrackApp
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Install Flutter packages
+        script: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Fetch iOS development signing files
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_DEVELOPMENT --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Create export options plist (development)
+        script: |
+          cat > /tmp/export_options.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+            </dict>
+          </plist>
+          EOF
+
+      - name: Archive iOS app (Debug config)
+        script: |
+          xcodebuild \
+            -workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -sdk iphoneos \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
+            clean archive
+
+      - name: Export development-signed IPA
+        script: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist /tmp/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/**/*
+
+  ios_debug_device_no_publish:
+    name: iOS Debug (No App Store Publish)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    # No App Store/TestFlight publishing. This workflow only creates artifacts.
+    # Upload your iOS Development certificate (.p12) and provisioning profile
+    # in Codemagic UI (Code signing identities + Provisioning profiles).
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.buildtrack.buildtrackApp
+      vars:
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
+        BUNDLE_ID: com.buildtrack.buildtrackApp
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Install Flutter packages
+        script: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Apply uploaded signing assets
+        script: |
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Create export options plist (development)
+        script: |
+          cat > /tmp/export_options.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+            </dict>
+          </plist>
+          EOF
+
+      - name: Archive iOS app (Debug config)
+        script: |
+          xcodebuild \
+            -workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -sdk iphoneos \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
+            clean archive
+
+      - name: Export development-signed IPA
+        script: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist /tmp/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/**/*

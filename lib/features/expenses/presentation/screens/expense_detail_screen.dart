@@ -33,8 +33,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Amount: ${expense.amount.toStringAsFixed(0)}'),
+                      Text('Currency: ${expense.currency}'),
                       Text('Category: ${expense.category}'),
-                      Text('Project: ${expense.projectId}'),
+                      Text(
+                        'Project: ${expense.projectName.isEmpty ? expense.projectId : expense.projectName}',
+                      ),
                       Text(
                         'Date: ${expense.date.toIso8601String().split('T').first}',
                       ),
@@ -43,6 +46,9 @@ class ExpenseDetailScreen extends ConsumerWidget {
                       ),
                       Text(
                         'Notes: ${expense.notes.isEmpty ? '-' : expense.notes}',
+                      ),
+                      Text(
+                        'Input: ${expense.inputMethod} | Source: ${expense.source.isEmpty ? '-' : expense.source}',
                       ),
                     ],
                   ),

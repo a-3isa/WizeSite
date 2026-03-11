@@ -33,12 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuota = exports.createExpenseWithQuota = exports.createProjectWithQuota = exports.checkLimit = void 0;
+exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuota = exports.createExpenseWithQuota = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpense = void 0;
 const admin = __importStar(require("firebase-admin"));
 const params_1 = require("firebase-functions/params");
 const v2_1 = require("firebase-functions/v2");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
+var process_voice_expense_1 = require("./voice/process_voice_expense");
+Object.defineProperty(exports, "processVoiceExpense", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpense; } });
 admin.initializeApp();
 (0, v2_1.setGlobalOptions)({ region: "us-central1", maxInstances: 10 });
 const db = admin.firestore();
@@ -297,10 +299,35 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
     await assertMember(workspaceId, request.auth.uid);
     const projectId = requireString(data, "projectId");
     const category = requireString(data, "category");
+    const allowedCategories = ["labor", "materials", "equipment", "transport", "other"];
+    if (!allowedCategories.includes(category)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported expense category");
+    }
     const amount = requireNumber(data, "amount");
     if (amount <= 0) {
         throw new https_1.HttpsError("invalid-argument", "Amount must be greater than zero");
     }
+    const projectSnap = await db.collection("projects").doc(projectId).get();
+    if (!projectSnap.exists) {
+        throw new https_1.HttpsError("invalid-argument", "Project does not exist");
+    }
+    const projectData = projectSnap.data() ?? {};
+    if (`${projectData.workspaceId ?? ""}` !== workspaceId || projectData.isArchived === true) {
+        throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
+    }
+    const currencyRaw = `${data.currency ?? "EGP"}`.trim().toUpperCase();
+    const currency = ["EGP", "USD", "SAR", "AED"].includes(currencyRaw) ? currencyRaw : "EGP";
+    const inputMethod = `${data.inputMethod ?? "manual"}`.trim().toLowerCase();
+    if (inputMethod !== "manual" && inputMethod !== "voice") {
+        throw new https_1.HttpsError("invalid-argument", "inputMethod must be manual or voice");
+    }
+    const sourceRaw = `${data.source ?? ""}`.trim().toLowerCase();
+    const source = sourceRaw === "rules" || sourceRaw === "llm" || sourceRaw === "hybrid" ?
+        sourceRaw :
+        null;
+    const transcript = `${data.transcript ?? ""}`.trim();
+    const storagePath = `${data.storagePath ?? ""}`.trim();
+    const projectName = `${data.projectName ?? ""}`.trim() || `${projectData.name ?? ""}`.trim();
     const subscription = await getSubscription(workspaceId);
     if (!hasUnlimitedQuota(subscription)) {
         const current = await getCurrentUsage(workspaceId, "expensesPerMonth");
@@ -316,12 +343,18 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
             id: expenseRef.id,
             workspaceId,
             projectId,
+            projectName,
             category,
             amount,
+            currency,
             date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
             notes: `${data.notes ?? ""}`.trim(),
             supplierName: `${data.supplierName ?? ""}`.trim(),
             paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+            inputMethod,
+            transcript,
+            source,
+            storagePath,
             createdBy: request.auth.uid,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),

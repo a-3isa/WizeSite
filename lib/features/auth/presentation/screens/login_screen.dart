@@ -222,10 +222,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   : Text(l10n.t('login')),
             ),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _loading ? null : _loginWithGoogle,
-              icon: const Icon(Icons.g_mobiledata, size: 24),
-              label: const Text('Continue with Google'),
+            Consumer(
+              builder: (context, ref, _) {
+                final supported = ref.watch(googleSignInSupportedProvider);
+                return supported.when(
+                  data: (isSupported) => isSupported
+                      ? OutlinedButton.icon(
+                          onPressed: _loading ? null : _loginWithGoogle,
+                          icon: const Icon(Icons.g_mobiledata, size: 24),
+                          label: const Text('Continue with Google'),
+                        )
+                      : const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                );
+              },
             ),
             TextButton(
               onPressed: () => context.go(AppRoutes.forgotPassword),

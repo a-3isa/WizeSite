@@ -36,14 +36,17 @@ class ExpensesScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             itemBuilder: (context, index) {
               final expense = expenses[index];
+              final projectLabel = expense.projectName.isEmpty
+                  ? expense.projectId
+                  : expense.projectName;
               return Card(
                 child: ListTile(
                   onTap: () => context.push('/expense/${expense.id}'),
                   title: Text(
-                    '${expense.amount.toStringAsFixed(0)} • ${expense.category.toUpperCase()}',
+                    '${expense.amount.toStringAsFixed(0)} ${expense.currency} | ${expense.category.toUpperCase()}',
                   ),
                   subtitle: Text(
-                    '${expense.projectId} • ${expense.date.toIso8601String().split('T').first}',
+                    '$projectLabel | ${expense.date.toIso8601String().split('T').first}',
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) async {

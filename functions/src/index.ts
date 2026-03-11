@@ -3,6 +3,7 @@ import {defineSecret} from "firebase-functions/params";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
+export {processVoiceExpense} from "./voice/process_voice_expense";
 
 admin.initializeApp();
 setGlobalOptions({region: "us-central1", maxInstances: 10});
@@ -308,10 +309,39 @@ export const createExpenseWithQuota = onCall(async (request) => {
 
   const projectId = requireString(data, "projectId");
   const category = requireString(data, "category");
+  const allowedCategories = ["labor", "materials", "equipment", "transport", "other"];
+  if (!allowedCategories.includes(category)) {
+    throw new HttpsError("invalid-argument", "Unsupported expense category");
+  }
   const amount = requireNumber(data, "amount");
   if (amount <= 0) {
     throw new HttpsError("invalid-argument", "Amount must be greater than zero");
   }
+
+  const projectSnap = await db.collection("projects").doc(projectId).get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const projectData = projectSnap.data() ?? {};
+  if (`${projectData.workspaceId ?? ""}` !== workspaceId || projectData.isArchived === true) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+
+  const currencyRaw = `${data.currency ?? "EGP"}`.trim().toUpperCase();
+  const currency = ["EGP", "USD", "SAR", "AED"].includes(currencyRaw) ? currencyRaw : "EGP";
+  const inputMethod = `${data.inputMethod ?? "manual"}`.trim().toLowerCase();
+  if (inputMethod !== "manual" && inputMethod !== "voice") {
+    throw new HttpsError("invalid-argument", "inputMethod must be manual or voice");
+  }
+
+  const sourceRaw = `${data.source ?? ""}`.trim().toLowerCase();
+  const source = sourceRaw === "rules" || sourceRaw === "llm" || sourceRaw === "hybrid" ?
+    sourceRaw :
+    null;
+
+  const transcript = `${data.transcript ?? ""}`.trim();
+  const storagePath = `${data.storagePath ?? ""}`.trim();
+  const projectName = `${data.projectName ?? ""}`.trim() || `${projectData.name ?? ""}`.trim();
 
   const subscription = await getSubscription(workspaceId);
   if (!hasUnlimitedQuota(subscription)) {
@@ -330,12 +360,18 @@ export const createExpenseWithQuota = onCall(async (request) => {
       id: expenseRef.id,
       workspaceId,
       projectId,
+      projectName,
       category,
       amount,
+      currency,
       date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
       notes: `${data.notes ?? ""}`.trim(),
       supplierName: `${data.supplierName ?? ""}`.trim(),
       paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+      inputMethod,
+      transcript,
+      source,
+      storagePath,
       createdBy: request.auth!.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

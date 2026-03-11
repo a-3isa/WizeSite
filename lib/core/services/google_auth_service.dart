@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 class GoogleAuthService {
@@ -8,13 +9,17 @@ class GoogleAuthService {
   final GoogleSignIn _googleSignIn;
   bool _initialized = false;
 
+  /// True if Google Sign-In is available on this platform (e.g. Android, iOS, Web with config).
+  Future<bool> get isSupported async {
+    await _initializeIfNeeded();
+    return _googleSignIn.supportsAuthenticate();
+  }
+
   Future<UserCredential?> signInWithGoogle({required FirebaseAuth auth}) async {
     await _initializeIfNeeded();
 
     if (!_googleSignIn.supportsAuthenticate()) {
-      throw UnsupportedError(
-        'Google Sign-In is not supported on this platform.',
-      );
+      return null;
     }
 
     try {
@@ -56,14 +61,16 @@ class GoogleAuthService {
       return;
     }
 
-    final serverClientId = const String.fromEnvironment(
+    // serverClientId is not supported on Web; client ID comes from meta tag in web/index.html.
+    final rawId = const String.fromEnvironment(
       'GOOGLE_SERVER_CLIENT_ID',
       defaultValue:
           '549941684400-p03oaa7s7kf66ndscjshia7b5hb7cheg.apps.googleusercontent.com',
     );
+    final serverClientId = kIsWeb ? null : (rawId.isEmpty ? null : rawId);
 
     await _googleSignIn.initialize(
-      serverClientId: serverClientId.isEmpty ? null : serverClientId,
+      serverClientId: serverClientId,
     );
     _initialized = true;
   }

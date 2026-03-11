@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /voice-expenses/{userId}/{fileName} {
+      allow read, write: if owner(userId);
+    }
+
+    match /receipts/{userId}/{fileName} {
+      allow read, write: if owner(userId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

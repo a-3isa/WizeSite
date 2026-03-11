@@ -1,25 +1,45 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        context.go(AppRoutes.features);
-      }
-    });
+    unawaited(_bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) {
+      return;
+    }
+
+    final restored = await ref.read(sessionRestoreServiceProvider).restore();
+    if (!mounted) {
+      return;
+    }
+
+    if (restored == null) {
+      context.go(AppRoutes.features);
+      return;
+    }
+
+    ref.read(activeUserIdProvider.notifier).state = restored.userId;
+    ref.read(activeWorkspaceIdProvider.notifier).state = restored.workspaceId;
+    context.go(AppRoutes.dashboard);
   }
 
   @override

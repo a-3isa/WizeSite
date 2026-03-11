@@ -19,3 +19,7 @@ final functionsProvider = Provider<FirebaseFunctions>((ref) {
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
   return GoogleAuthService();
 });
+
+final googleSignInSupportedProvider = FutureProvider<bool>((ref) async {
+  return ref.read(googleAuthServiceProvider).isSupported;
+});

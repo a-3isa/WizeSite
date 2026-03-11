@@ -13,10 +13,7 @@ class RevenueCatPurchaseCoordinator implements PurchaseCoordinator {
     String? defaultOfferingId,
   }) : _apiKey =
            apiKey ??
-           const String.fromEnvironment(
-             'REVENUECAT_API_KEY',
-             defaultValue: 'test_xrxXJcTowFByLKxcgDhWpeEmBir',
-           ),
+           const String.fromEnvironment('REVENUECAT_API_KEY', defaultValue: ''),
        _entitlementId =
            entitlementId ??
            const String.fromEnvironment(
