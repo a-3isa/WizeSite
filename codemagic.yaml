@@ -93,7 +93,7 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: Buildozer
+      app_store_connect: Buildozer Tracker
 
     environment:
       flutter: stable
@@ -141,7 +141,7 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: Buildozer
+      app_store_connect: Buildozer Tracker
 
     environment:
       flutter: stable
