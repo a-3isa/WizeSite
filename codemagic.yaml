@@ -108,7 +108,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.ahmed.buildozer
       vars:
-        APP_ID: 6760477814
+        APP_ID: "6760477814"
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -167,7 +167,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.ahmed.buildozer
       vars:
-        APP_ID: 6760477814
+        APP_ID: "6760477814"
       flutter: stable
       xcode: latest
       cocoapods: default
