@@ -1,10 +1,97 @@
 workflows:
-  ios_debug_device:
-    name: iOS Debug (Physical Device)
+  android_release_artifact:
+    name: Android Release Artifact
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      android_signing:
+        - buildozer_upload_keystore # Replace with your Android keystore reference in Codemagic.
+      vars:
+        PACKAGE_NAME: com.ahmed.buildozer
+        BUILD_NAME_PREFIX: 1.0
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Flutter analyze
+        script: flutter analyze
+
+      - name: Build signed Android app bundle
+        script: |
+          flutter build appbundle --release \
+            --build-name="${BUILD_NAME_PREFIX}.${BUILD_NUMBER}" \
+            --build-number="${BUILD_NUMBER}"
+
+    artifacts:
+      - build/**/outputs/**/*.aab
+      - build/**/outputs/**/mapping.txt
+      - flutter_drive.log
+
+  android_google_play_internal:
+    name: Android Google Play Internal
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - google_play # Must contain GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS.
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      android_signing:
+        - buildozer_upload_keystore # Replace with your Android keystore reference in Codemagic.
+      vars:
+        PACKAGE_NAME: com.ahmed.buildozer
+        GOOGLE_PLAY_TRACK: internal
+        BUILD_NAME_PREFIX: 1.0
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Flutter analyze
+        script: flutter analyze
+
+      - name: Build signed Android app bundle
+        script: |
+          LATEST_GOOGLE_PLAY_BUILD_NUMBER=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" --tracks="$GOOGLE_PLAY_TRACK" || true)
+          if [ -z "$LATEST_GOOGLE_PLAY_BUILD_NUMBER" ]; then
+            PROJECT_BUILD_NUMBER="$BUILD_NUMBER"
+          else
+            PROJECT_BUILD_NUMBER=$((LATEST_GOOGLE_PLAY_BUILD_NUMBER + 1))
+          fi
+
+          flutter build appbundle --release \
+            --build-name="${BUILD_NAME_PREFIX}.${PROJECT_BUILD_NUMBER}" \
+            --build-number="${PROJECT_BUILD_NUMBER}"
+
+    artifacts:
+      - build/**/outputs/**/*.aab
+      - build/**/outputs/**/mapping.txt
+      - flutter_drive.log
+
+    publishing:
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+
+  ios_release_artifact:
+    name: iOS Release Artifact
     max_build_duration: 120
     instance_type: mac_mini_m2
-
-    # Replace with your Codemagic App Store Connect integration name.
     integrations:
       app_store_connect: YOUR_APP_STORE_CONNECT_INTEGRATION
 
@@ -13,12 +100,11 @@ workflows:
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: development
-        bundle_identifier: com.buildtrack.buildtrackApp
+        distribution_type: app_store
+        bundle_identifier: com.ahmed.buildozer
       vars:
-        XCODE_WORKSPACE: ios/Runner.xcworkspace
-        XCODE_SCHEME: Runner
-        BUNDLE_ID: com.buildtrack.buildtrackApp
+        BUNDLE_ID: com.ahmed.buildozer
+        BUILD_NAME_PREFIX: 1.0
 
     cache:
       cache_paths:
@@ -26,86 +112,48 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
-      - name: Install Flutter packages
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+
+      - name: Get Flutter packages
         script: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
-          cd ..
+      - name: Install pods
+        script: find . -name "Podfile" -execdir pod install \;
 
-      - name: Fetch iOS development signing files
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_DEVELOPMENT --create
-          keychain add-certificates
-          xcode-project use-profiles
+      - name: Flutter analyze
+        script: flutter analyze
 
-      - name: Create export options plist (development)
+      - name: Build signed iOS archive
         script: |
-          cat > /tmp/export_options.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-            <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>destination</key>
-              <string>export</string>
-              <key>compileBitcode</key>
-              <false/>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>manageAppVersionAndBuildNumber</key>
-              <false/>
-            </dict>
-          </plist>
-          EOF
-
-      - name: Archive iOS app (Debug config)
-        script: |
-          xcodebuild \
-            -workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Debug \
-            -sdk iphoneos \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
-            clean archive
-
-      - name: Export development-signed IPA
-        script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            -exportOptionsPlist /tmp/export_options.plist
+          flutter build ipa --release \
+            --build-name="${BUILD_NAME_PREFIX}.0" \
+            --build-number="${BUILD_NUMBER}" \
+            --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/archive/Runner.xcarchive/**/*
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
 
-  ios_debug_device_no_publish:
-    name: iOS Debug (No App Store Publish)
+  ios_testflight:
+    name: iOS TestFlight Release
     max_build_duration: 120
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: YOUR_APP_STORE_CONNECT_INTEGRATION
 
-    # No App Store/TestFlight publishing. This workflow only creates artifacts.
-    # Upload your iOS Development certificate (.p12) and provisioning profile
-    # in Codemagic UI (Code signing identities + Provisioning profiles).
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: development
-        bundle_identifier: com.buildtrack.buildtrackApp
+        distribution_type: app_store
+        bundle_identifier: com.ahmed.buildozer
       vars:
-        XCODE_WORKSPACE: ios/Runner.xcworkspace
-        XCODE_SCHEME: Runner
-        BUNDLE_ID: com.buildtrack.buildtrackApp
+        BUNDLE_ID: com.ahmed.buildozer
+        APP_STORE_APPLE_ID: 1234567890 # Replace with the numeric Apple app ID from App Store Connect.
+        BUILD_NAME_PREFIX: 1.0
 
     cache:
       cache_paths:
@@ -113,62 +161,38 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
-      - name: Install Flutter packages
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+
+      - name: Get Flutter packages
         script: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
-          cd ..
+      - name: Install pods
+        script: find . -name "Podfile" -execdir pod install \;
 
-      - name: Apply uploaded signing assets
-        script: |
-          keychain initialize
-          keychain add-certificates
-          xcode-project use-profiles
+      - name: Flutter analyze
+        script: flutter analyze
 
-      - name: Create export options plist (development)
+      - name: Build signed iOS archive
         script: |
-          cat > /tmp/export_options.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-            <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>destination</key>
-              <string>export</string>
-              <key>compileBitcode</key>
-              <false/>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>manageAppVersionAndBuildNumber</key>
-              <false/>
-            </dict>
-          </plist>
-          EOF
+          LATEST_APP_STORE_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
+          if [ -z "$LATEST_APP_STORE_BUILD_NUMBER" ]; then
+            PROJECT_BUILD_NUMBER="$BUILD_NUMBER"
+          else
+            PROJECT_BUILD_NUMBER=$((LATEST_APP_STORE_BUILD_NUMBER + 1))
+          fi
 
-      - name: Archive iOS app (Debug config)
-        script: |
-          xcodebuild \
-            -workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Debug \
-            -sdk iphoneos \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
-            clean archive
-
-      - name: Export development-signed IPA
-        script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            -exportOptionsPlist /tmp/export_options.plist
+          flutter build ipa --release \
+            --build-name="${BUILD_NAME_PREFIX}.${PROJECT_BUILD_NUMBER}" \
+            --build-number="${PROJECT_BUILD_NUMBER}" \
+            --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/archive/Runner.xcarchive/**/*
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

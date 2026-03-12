@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '549941684400',
     projectId: 'wize-site',
     storageBucket: 'wize-site.firebasestorage.app',
-    iosBundleId: 'com.buildtrack.buildtrackApp',
+    iosBundleId: 'com.ahmed.buildozer',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '549941684400',
     projectId: 'wize-site',
     storageBucket: 'wize-site.firebasestorage.app',
-    iosBundleId: 'com.buildtrack.buildtrackApp',
+    iosBundleId: 'com.ahmed.buildozer',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

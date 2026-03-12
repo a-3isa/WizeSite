@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -26,41 +27,154 @@ class ProjectsScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(AppRoutes.createProject),
         icon: const Icon(Icons.add),
-        label: const Text('New Project'),
+        label: const Text(
+          'New Project',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: SafeArea(
         child: projectsAsync.when(
           data: (projects) {
             if (projects.isEmpty) {
-              return const Center(child: Text('No projects yet.'));
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.folder_open,
+                      size: 64,
+                      color: AppColors.borderGrey,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No projects yet.',
+                      style: TextStyle(color: AppColors.textBody, fontSize: 16),
+                    ),
+                  ],
+                ),
+              );
             }
             return ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               itemBuilder: (context, index) {
                 final project = projects[index];
-                final color = project.netProfit >= 0
-                    ? Colors.green
-                    : Colors.red;
+                final positiveProfit = project.netProfit >= 0;
+                final profitColor = positiveProfit
+                    ? AppColors.success
+                    : AppColors.danger;
+
                 return Card(
-                  child: ListTile(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
                     onTap: () => context.push('/project/${project.id}'),
-                    title: Text(project.name),
-                    subtitle: Text('${project.clientName} • ${project.status}'),
-                    trailing: Text(
-                      '${project.netProfit.toStringAsFixed(0)} EGP',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w700,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.constructionOrange.withValues(
+                                alpha: 0.1,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.architecture,
+                              color: AppColors.constructionOrange,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  project.name,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.person_outline,
+                                      size: 14,
+                                      color: AppColors.textBody,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      project.clientName,
+                                      style: TextStyle(
+                                        color: AppColors.textBody,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: project.status == 'active'
+                                            ? AppColors.successLight
+                                            : AppColors.surfaceGrey,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        project.status.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: project.status == 'active'
+                                              ? AppColors.success
+                                              : AppColors.textBody,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${project.netProfit.toStringAsFixed(0)} EGP',
+                                style: TextStyle(
+                                  color: profitColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                positiveProfit ? 'Profit' : 'Loss',
+                                style: TextStyle(
+                                  color: AppColors.textBody,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 );
               },
-              separatorBuilder: (_, index) => const SizedBox(height: 8),
+              separatorBuilder: (_, index) => const SizedBox(height: 12),
               itemCount: projects.length,
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) => Center(
+            child: Text(
+              error.toString(),
+              style: TextStyle(color: AppColors.danger),
+            ),
+          ),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
       ),

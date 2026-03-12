@@ -23,7 +23,7 @@ class ReportsScreen extends ConsumerWidget {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'BuildTrack Financial Report',
+              'Buildozer Financial Report',
               style: pw.TextStyle(fontSize: 22),
             ),
             pw.SizedBox(height: 8),

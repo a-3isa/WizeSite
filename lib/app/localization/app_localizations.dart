@@ -18,7 +18,7 @@ class AppLocalizations {
 
   static const _localized = <String, Map<String, String>>{
     'en': {
-      'appName': 'BuildTrack',
+      'appName': 'Buildozer',
       'tagline': 'Smart Construction Management',
       'home': 'Home',
       'projects': 'Projects',
@@ -50,7 +50,7 @@ class AppLocalizations {
       'notifications': 'Notifications',
       'riskAlerts': 'Risk Alerts',
       'voiceExpense': 'Voice Expense',
-      'welcome': 'Welcome to BuildTrack',
+      'welcome': 'Welcome to Buildozer',
       'getStarted': 'Get Started',
       'remaining': 'Remaining',
       'status': 'Status',

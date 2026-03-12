@@ -93,7 +93,7 @@ class FeaturesScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'BuildTrack',
+                      'Buildozer',
                       style: theme.textTheme.headlineLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,

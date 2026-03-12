@@ -1,6 +1,6 @@
-# BuildTrack (Flutter + Firebase)
+# Buildozer (Flutter + Firebase)
 
-BuildTrack is a mobile-first construction operations app.
+Buildozer is a mobile-first construction operations app.
 
 This repository now includes a production-practical **voice expense pipeline**:
 1. Flutter records audio.

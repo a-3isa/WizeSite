@@ -93,79 +93,254 @@ class DashboardScreen extends ConsumerWidget {
         actions: [
           IconButton(
             onPressed: () => context.push(AppRoutes.notifications),
-            icon: const Icon(Icons.notifications_none),
+            icon: const Icon(Icons.notifications_outlined),
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.surfaceSolid,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppColors.borderGrey),
+              ),
+            ),
           ),
+          const SizedBox(width: 16),
         ],
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
+            Text(
+              "Overview",
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
             summaryAsync.when(
               data: (summary) {
                 if (summary.isEmpty) {
-                  return const Text('No workspace selected yet.');
+                  return Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSolid,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderGrey),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No workspace selected yet.',
+                        style: TextStyle(color: AppColors.textBody),
+                      ),
+                    ),
+                  );
                 }
                 final net = summary['net'] ?? 0;
                 return GridView.count(
                   crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.5,
+                  childAspectRatio: 1.4,
                   children: [
-                    MetricCard(
-                      label: 'Total Projects',
-                      value: '${summary['totalProjects']?.toInt() ?? 0}',
-                    ),
                     MetricCard(
                       label: l10n.t('activeProjects'),
                       value: '${summary['activeProjects']?.toInt() ?? 0}',
+                      color: AppColors.constructionOrange,
                     ),
                     MetricCard(
                       label: 'Total Expenses',
                       value:
-                          '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0} EGP',
+                          '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
                       color: AppColors.danger,
                     ),
                     MetricCard(
                       label: 'Total Income',
                       value:
-                          '${summary['totalIncome']?.toStringAsFixed(0) ?? 0} EGP',
+                          '${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
                       color: AppColors.success,
                     ),
                     MetricCard(
-                      label: 'Net Profit/Loss',
+                      label: 'Net Profit',
                       value: '${net.toStringAsFixed(0)} EGP',
                       color: net >= 0 ? AppColors.success : AppColors.danger,
                     ),
                   ],
                 );
               },
-              error: (error, _) => Text(error.toString()),
+              error: (error, _) => Text(
+                error.toString(),
+                style: const TextStyle(color: AppColors.danger),
+              ),
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Quick Actions',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.receipt_long_outlined,
+                    label: l10n.t('addExpense'),
+                    color: AppColors.danger,
+                    onTap: () => _onQuotaAction(
+                      context,
+                      ref,
+                      LimitType.expensesPerMonth,
+                      AppRoutes.addExpense,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.payments_outlined,
+                    label: l10n.t('addPayment'),
+                    color: AppColors.success,
+                    onTap: () => _onQuotaAction(
+                      context,
+                      ref,
+                      LimitType.paymentsPerMonth,
+                      AppRoutes.addPayment,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.engineering_outlined,
+                    label: l10n.t('addWorkerEntry'),
+                    color: AppColors.warning,
+                    onTap: () => _onQuotaAction(
+                      context,
+                      ref,
+                      LimitType.workerEntriesPerMonth,
+                      AppRoutes.workerEntry.replaceFirst(':id', 'new'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.dashboard_customize_outlined,
+                    label: l10n.t('createProject'),
+                    color: AppColors.constructionOrange,
+                    onTap: () => _onQuotaAction(
+                      context,
+                      ref,
+                      LimitType.activeProjects,
+                      AppRoutes.createProject,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            usageAsync.when(
+              data: (usage) => UsageCard(usage: usage),
+              error: (error, _) => Text(
+                error.toString(),
+                style: const TextStyle(color: AppColors.danger),
+              ),
               loading: () => const Center(child: CircularProgressIndicator()),
             ),
             const SizedBox(height: 16),
-            usageAsync.when(
-              data: (usage) => UsageCard(usage: usage),
-              error: (error, _) => Text(error.toString()),
-              loading: () => const Center(child: CircularProgressIndicator()),
-            ),
-            const SizedBox(height: 12),
             subscriptionAsync.when(
               data: (sub) => sub.tier == PlanTier.free
-                  ? Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.workspace_premium),
-                        title: Text(l10n.t('upgradeToPro')),
-                        subtitle: const Text(
-                          'Unlock higher limits and team scaling',
+                  ? Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppColors.constructionOrange,
+                            Color(0xFFFF9100),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        trailing: FilledButton(
-                          onPressed: () =>
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.constructionOrange.withValues(
+                              alpha: 0.3,
+                            ),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () =>
                               context.push(AppRoutes.subscriptionPlans),
-                          child: const Text('Upgrade'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.workspace_premium,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        l10n.t('upgradeToPro'),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Unlock higher limits and team scaling',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     )
@@ -173,60 +348,7 @@ class DashboardScreen extends ConsumerWidget {
               error: (_, _) => const SizedBox.shrink(),
               loading: () => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Quick Actions',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _QuickActionChip(
-                  key: const Key('qa_add_expense'),
-                  label: l10n.t('addExpense'),
-                  onTap: () => _onQuotaAction(
-                    context,
-                    ref,
-                    LimitType.expensesPerMonth,
-                    AppRoutes.addExpense,
-                  ),
-                ),
-                _QuickActionChip(
-                  key: const Key('qa_add_payment'),
-                  label: l10n.t('addPayment'),
-                  onTap: () => _onQuotaAction(
-                    context,
-                    ref,
-                    LimitType.paymentsPerMonth,
-                    AppRoutes.addPayment,
-                  ),
-                ),
-                _QuickActionChip(
-                  key: const Key('qa_add_worker_entry'),
-                  label: l10n.t('addWorkerEntry'),
-                  onTap: () => _onQuotaAction(
-                    context,
-                    ref,
-                    LimitType.workerEntriesPerMonth,
-                    AppRoutes.workerEntry.replaceFirst(':id', 'new'),
-                  ),
-                ),
-                _QuickActionChip(
-                  key: const Key('qa_create_project'),
-                  label: l10n.t('createProject'),
-                  onTap: () => _onQuotaAction(
-                    context,
-                    ref,
-                    LimitType.activeProjects,
-                    AppRoutes.createProject,
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -264,18 +386,59 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _QuickActionChip extends StatelessWidget {
-  const _QuickActionChip({required this.label, required this.onTap, super.key});
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
+  final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      label: Text(label),
-      avatar: const Icon(Icons.add, size: 18),
-      onPressed: onTap,
+    return Material(
+      color: AppColors.surfaceSolid,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderGrey),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

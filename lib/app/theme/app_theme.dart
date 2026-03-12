@@ -4,9 +4,17 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const BorderRadius radiusSm = BorderRadius.all(Radius.circular(8));
-  static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(10));
-  static const BorderRadius radiusLg = BorderRadius.all(Radius.circular(12));
-  static const BorderRadius radiusXl = BorderRadius.all(Radius.circular(16));
+  static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(12));
+  static const BorderRadius radiusLg = BorderRadius.all(Radius.circular(20));
+  static const BorderRadius radiusXl = BorderRadius.all(Radius.circular(28));
+
+  static List<BoxShadow> get softShadow => [
+    BoxShadow(
+      color: AppColors.textDark.withValues(alpha: 0.05),
+      blurRadius: 10,
+      offset: const Offset(0, 4),
+    ),
+  ];
 
   static ThemeData light(Locale locale) {
     final isArabic = locale.languageCode == 'ar';
@@ -18,37 +26,135 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: const ColorScheme.light(
         primary: AppColors.constructionOrange,
-        secondary: AppColors.darkGray,
-        surface: AppColors.white,
+        secondary: AppColors.textBody,
+        surface: AppColors.surfaceGrey, // Main background
+        surfaceContainer: AppColors.surfaceSolid, // Cards usually sit on this
         error: AppColors.danger,
       ),
-      scaffoldBackgroundColor: AppColors.lightGray,
+      scaffoldBackgroundColor: AppColors.surfaceGrey,
       textTheme: baseFont.copyWith(
-        bodyMedium: baseFont.bodyMedium?.copyWith(color: AppColors.textDark),
+        displayLarge: baseFont.displayLarge?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        displayMedium: baseFont.displayMedium?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        titleLarge: baseFont.titleLarge?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: baseFont.titleMedium?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: baseFont.bodyLarge?.copyWith(
+          color: AppColors.textBody,
+          height: 1.5,
+        ),
+        bodyMedium: baseFont.bodyMedium?.copyWith(
+          color: AppColors.textBody,
+          height: 1.5,
+        ),
+        labelLarge: baseFont.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ), // Buttons
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.surfaceGrey,
         foregroundColor: AppColors.textDark,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: false,
+        titleTextStyle: baseFont.titleLarge?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.w700,
+          fontSize: 22,
+        ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.white,
+        color: AppColors.surfaceSolid,
+        shadowColor: AppColors.textDark.withValues(alpha: 0.05),
+        elevation: 4, // Utilizing Material 3 soft shadows
         shape: RoundedRectangleBorder(borderRadius: radiusLg),
+        margin: EdgeInsets.zero,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.white,
+        fillColor: AppColors.surfaceSolid,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: radiusMd,
-          borderSide: BorderSide(
-            color: AppColors.darkGray.withValues(alpha: 0.2),
+          borderSide: const BorderSide(color: AppColors.borderGrey),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: radiusMd,
+          borderSide: const BorderSide(color: AppColors.borderGrey),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radiusMd,
+          borderSide: const BorderSide(
+            color: AppColors.constructionOrange,
+            width: 2,
           ),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: radiusMd,
+          borderSide: const BorderSide(color: AppColors.danger),
+        ),
+        hintStyle: baseFont.bodyMedium?.copyWith(color: AppColors.borderGrey),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.constructionOrange,
+          foregroundColor: AppColors.surfaceSolid,
+          minimumSize: const Size.fromHeight(56),
+          shape: RoundedRectangleBorder(borderRadius: radiusMd),
+          elevation: 0,
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textDark,
+          minimumSize: const Size.fromHeight(56),
+          side: const BorderSide(color: AppColors.borderGrey),
+          shape: RoundedRectangleBorder(borderRadius: radiusMd),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.constructionOrange,
-        foregroundColor: AppColors.white,
+        foregroundColor: AppColors.surfaceSolid,
+        shape: RoundedRectangleBorder(borderRadius: radiusXl),
+        elevation: 4,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surfaceSolid,
+        elevation: 10,
+        shadowColor: AppColors.textDark.withValues(alpha: 0.1),
+        indicatorColor: AppColors.constructionOrangeLight,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return baseFont.labelSmall?.copyWith(
+              color: AppColors.constructionOrange,
+              fontWeight: FontWeight.bold,
+            );
+          }
+          return baseFont.labelSmall?.copyWith(color: AppColors.textBody);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.constructionOrange);
+          }
+          return const IconThemeData(color: AppColors.textBody);
+        }),
       ),
     );
   }

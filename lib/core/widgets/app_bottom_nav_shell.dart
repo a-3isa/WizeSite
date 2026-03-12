@@ -36,12 +36,23 @@ class AppBottomNavShell extends StatelessWidget {
           ),
           NavigationDestination(
             icon: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.constructionOrange,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.constructionOrange.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              padding: const EdgeInsets.all(8),
-              child: const Icon(Icons.add, color: Colors.white),
+              padding: const EdgeInsets.all(12),
+              child: const Icon(
+                Icons.add,
+                color: AppColors.surfaceSolid,
+                size: 28,
+              ),
             ),
             label: l10n.t('add'),
           ),

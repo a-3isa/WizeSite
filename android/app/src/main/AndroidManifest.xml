@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="buildtrack_app"
+        android:label="Buildozer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

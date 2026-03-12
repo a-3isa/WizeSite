@@ -31,7 +31,7 @@ Under **Variant: debug**, copy the **SHA-1** and **SHA-256** values. (If this fa
 
 1. Open [Firebase Console](https://console.firebase.google.com/) → your project.
 2. Go to **Project settings** (gear) → **Your apps**.
-3. Select your **Android** app (`com.buildtrack.buildtrack_app`).
+3. Select your **Android** app (`com.ahmed.buildozer`).
 4. Click **Add fingerprint** and add:
    - The **SHA-1** from the signing report.
    - The **SHA-256** from the signing report.
@@ -66,7 +66,7 @@ If you see `ConnectionResult{statusCode=DEVELOPER_ERROR}` or `Unknown calling pa
    - Open [Google Cloud Console](https://console.cloud.google.com/) → your project (same as Firebase).
    - Go to **APIs & Services** → **Credentials**.
    - Under **OAuth 2.0 Client IDs**, find the **Android** client (or create one).
-   - Its **Package name** must be exactly: `com.buildtrack.buildtrack_app`.
+   - Its **Package name** must be exactly: `com.ahmed.buildozer`.
    - It must have your app’s **SHA-1** (and ideally SHA-256) added. Edit the client and add the same SHA-1 you added in Firebase.
 
 3. **Download `google-services.json` again** from Firebase (Project settings → Your apps → Android) after adding SHA fingerprints, then replace `android/app/google-services.json`.

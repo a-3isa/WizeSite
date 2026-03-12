@@ -8,5 +8,5 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await FirebaseInitializer.ensureInitialized();
-  runApp(const ProviderScope(child: BuildTrackApp()));
+  runApp(const ProviderScope(child: BuildozerApp()));
 }

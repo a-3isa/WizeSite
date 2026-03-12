@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class BuildTrackApp extends ConsumerWidget {
-  const BuildTrackApp({super.key});
+class BuildozerApp extends ConsumerWidget {
+  const BuildozerApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -15,7 +15,7 @@ class BuildTrackApp extends ConsumerWidget {
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: 'BuildTrack',
+      title: 'Buildozer',
       locale: locale,
       theme: AppTheme.light(locale),
       routerConfig: ref.watch(appRouterProvider),

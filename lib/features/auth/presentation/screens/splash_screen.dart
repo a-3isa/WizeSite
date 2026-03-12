@@ -60,7 +60,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               Icon(Icons.construction, color: Colors.white, size: 72),
               SizedBox(height: 16),
               Text(
-                'BuildTrack',
+                'Buildozer',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 34,
