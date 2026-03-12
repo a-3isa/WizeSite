@@ -1,7 +1,7 @@
 platform :ios, '15.0'
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-use_modular_headers!
+use_frameworks! :linkage => :static
 
 project 'Runner', {
   'Debug' => :debug,

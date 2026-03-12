@@ -131,7 +131,11 @@ workflows:
         script: flutter pub get
 
       - name: Install pods
-        script: find . -name "Podfile" -execdir pod install \;
+        script: |
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod install --repo-update
+          cd ..
 
       - name: Flutter analyze
         script: flutter analyze
@@ -190,7 +194,11 @@ workflows:
         script: flutter pub get
 
       - name: Install pods
-        script: find . -name "Podfile" -execdir pod install \;
+        script: |
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod install --repo-update
+          cd ..
 
       - name: Flutter analyze
         script: flutter analyze
