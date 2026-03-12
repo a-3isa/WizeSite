@@ -1,3 +1,13 @@
+# Codemagic CI/CD for Buildozer
+# Based on the working Hesn Codemagic structure.
+#
+# Before first run:
+# 1. In Codemagic Team -> Integrations, make sure the App Store Connect API key
+#    named "Buildozer Tracker" exists and has access to this app.
+# 2. In Codemagic app -> Code signing, add the iOS distribution certificate and
+#    provisioning profile for com.ahmed.buildozer.
+# 3. Set APP_ID below to the numeric App Store Connect app ID for Buildozer.
+
 workflows:
   android_release_artifact:
     name: Android Release Artifact
@@ -8,7 +18,7 @@ workflows:
       xcode: latest
       cocoapods: default
       android_signing:
-        - buildozer_upload_keystore # Replace with your Android keystore reference in Codemagic.
+        - buildozer_upload_keystore
       vars:
         PACKAGE_NAME: com.ahmed.buildozer
         BUILD_NAME_PREFIX: 1.0
@@ -42,12 +52,12 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - google_play # Must contain GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS.
+        - google_play
       flutter: stable
       xcode: latest
       cocoapods: default
       android_signing:
-        - buildozer_upload_keystore # Replace with your Android keystore reference in Codemagic.
+        - buildozer_upload_keystore
       vars:
         PACKAGE_NAME: com.ahmed.buildozer
         GOOGLE_PLAY_TRACK: internal
@@ -92,19 +102,19 @@ workflows:
     name: iOS Release Artifact
     max_build_duration: 120
     instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: Buildozer Tracker
 
     environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ahmed.buildozer
       vars:
-        BUNDLE_ID: com.ahmed.buildozer
-        BUILD_NAME_PREFIX: 1.0
+        APP_ID: 6760477814
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    integrations:
+      app_store_connect: Buildozer Tracker
 
     cache:
       cache_paths:
@@ -112,8 +122,10 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+      - name: Set up code signing
+        script: |
+          echo "Setting up code signing for iOS release artifact..."
+          xcode-project use-profiles
 
       - name: Get Flutter packages
         script: flutter pub get
@@ -124,11 +136,20 @@ workflows:
       - name: Flutter analyze
         script: flutter analyze
 
+      - name: Resolve next build number
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number --platform=IOS "$APP_ID" 2>/dev/null || echo 0)
+          [ -z "$LATEST" ] && LATEST=0
+          NEXT_BUILD=$((LATEST + 1))
+          [ "$NEXT_BUILD" -lt 1 ] && NEXT_BUILD=1
+          echo "NEXT_BUILD=$NEXT_BUILD" >> $CM_ENV
+          echo ">>> Using build number: $NEXT_BUILD (latest was $LATEST)"
+
       - name: Build signed iOS archive
         script: |
           flutter build ipa --release \
-            --build-name="${BUILD_NAME_PREFIX}.0" \
-            --build-number="${BUILD_NUMBER}" \
+            --build-name=1.0.0 \
+            --build-number=$NEXT_BUILD \
             --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
@@ -140,20 +161,19 @@ workflows:
     name: iOS TestFlight Release
     max_build_duration: 120
     instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: Buildozer Tracker
 
     environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ahmed.buildozer
       vars:
-        BUNDLE_ID: com.ahmed.buildozer
-        APP_STORE_APPLE_ID: 1234567890 # Replace with the numeric Apple app ID from App Store Connect.
-        BUILD_NAME_PREFIX: 1.0
+        APP_ID: 6760477814
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    integrations:
+      app_store_connect: Buildozer Tracker
 
     cache:
       cache_paths:
@@ -161,8 +181,10 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+      - name: Set up code signing
+        script: |
+          echo "Setting up code signing for TestFlight build..."
+          xcode-project use-profiles
 
       - name: Get Flutter packages
         script: flutter pub get
@@ -173,18 +195,20 @@ workflows:
       - name: Flutter analyze
         script: flutter analyze
 
+      - name: Resolve next TestFlight build number
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number --platform=IOS "$APP_ID" 2>/dev/null || echo 0)
+          [ -z "$LATEST" ] && LATEST=0
+          NEXT_BUILD=$((LATEST + 1))
+          [ "$NEXT_BUILD" -lt 1 ] && NEXT_BUILD=1
+          echo "NEXT_BUILD=$NEXT_BUILD" >> $CM_ENV
+          echo ">>> Using build number: $NEXT_BUILD (latest was $LATEST)"
+
       - name: Build signed iOS archive
         script: |
-          LATEST_APP_STORE_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || true)
-          if [ -z "$LATEST_APP_STORE_BUILD_NUMBER" ]; then
-            PROJECT_BUILD_NUMBER="$BUILD_NUMBER"
-          else
-            PROJECT_BUILD_NUMBER=$((LATEST_APP_STORE_BUILD_NUMBER + 1))
-          fi
-
           flutter build ipa --release \
-            --build-name="${BUILD_NAME_PREFIX}.${PROJECT_BUILD_NUMBER}" \
-            --build-number="${PROJECT_BUILD_NUMBER}" \
+            --build-name=1.0.0 \
+            --build-number=$NEXT_BUILD \
             --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
