@@ -78,6 +78,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   }
 
   Future<void> _openPaywall() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _purchasing = true;
       _error = null;
@@ -97,16 +98,13 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           context.go(AppRoutes.subscriptionSuccess);
           break;
         case PaywallPresentationResult.cancelled:
-          setState(() => _statusMessage = 'Purchase was cancelled.');
+          setState(() => _statusMessage = l10n.t('purchaseCancelled'));
           break;
         case PaywallPresentationResult.notSupported:
-          setState(
-            () => _statusMessage =
-                'Native paywall is not supported on this platform.',
-          );
+          setState(() => _statusMessage = l10n.t('nativePaywallNotSupported'));
           break;
         case PaywallPresentationResult.error:
-          setState(() => _error = 'Paywall failed. Please try again.');
+          setState(() => _error = l10n.t('paywallFailed'));
           break;
       }
     } catch (e) {
@@ -119,6 +117,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   }
 
   Future<void> _purchase(OfferingPackage package) async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _purchasing = true;
       _error = null;
@@ -131,7 +130,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
       if (ok && mounted) {
         context.go(AppRoutes.subscriptionSuccess);
       } else if (!ok) {
-        setState(() => _statusMessage = 'Purchase was not completed.');
+        setState(() => _statusMessage = l10n.t('purchaseNotCompleted'));
       }
     } catch (e) {
       setState(() => _error = e.toString());
@@ -157,9 +156,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.auto_awesome),
                     title: Text(l10n.t('proPlan')),
-                    subtitle: const Text(
-                      'WizeSite Pro unlocks higher usage limits and operational scale.',
-                    ),
+                    subtitle: Text(l10n.t('proUnlocksSubtitle')),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -167,9 +164,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.timer),
                     title: Text(l10n.t('freeTrial')),
-                    subtitle: const Text(
-                      '7-day trial starts on first successful subscription purchase.',
-                    ),
+                    subtitle: Text(l10n.t('trialStartsWithPurchase')),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -177,9 +172,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                   onPressed: _purchasing ? null : _openPaywall,
                   icon: const Icon(Icons.workspace_premium),
                   label: Text(
-                    _purchasing
-                        ? 'Loading...'
-                        : 'Continue with RevenueCat Paywall',
+                    _purchasing ? l10n.t('loading') : l10n.t('continueWithPaywall'),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -201,7 +194,9 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                         onPressed: _purchasing
                             ? null
                             : () => _purchase(package),
-                        child: Text(_purchasing ? '...' : l10n.t('continue')),
+                        child: Text(
+                          _purchasing ? l10n.t('loadingShort') : l10n.t('continue'),
+                        ),
                       ),
                     ),
                   ),

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,13 +15,14 @@ class PaymentDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final paymentAsync = ref.watch(paymentDetailsProvider(paymentId));
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment Details')),
+      appBar: AppBar(title: Text(l10n.t('paymentDetails'))),
       body: paymentAsync.when(
         data: (payment) {
           if (payment == null) {
-            return const Center(child: Text('Payment not found.'));
+            return Center(child: Text(l10n.t('paymentNotFound')));
           }
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -31,14 +33,43 @@ class PaymentDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Amount: ${payment.amount.toStringAsFixed(0)}'),
-                      Text('Method: ${payment.paymentMethod}'),
-                      Text('Project: ${payment.projectId}'),
                       Text(
-                        'Date: ${payment.date.toIso8601String().split('T').first}',
+                        l10n.t(
+                          'amountWithValue',
+                          params: {'value': payment.amount.toStringAsFixed(0)},
+                        ),
                       ),
                       Text(
-                        'Notes: ${payment.notes.isEmpty ? '-' : payment.notes}',
+                        l10n.t(
+                          'methodWithValue',
+                          params: {
+                            'value': l10n.paymentMethodLabel(payment.paymentMethod),
+                          },
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'projectWithValue',
+                          params: {'value': payment.projectId},
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'dateWithValue',
+                          params: {
+                            'value': payment.date.toIso8601String().split('T').first,
+                          },
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'notesWithValue',
+                          params: {
+                            'value': payment.notes.isEmpty
+                                ? l10n.t('none')
+                                : payment.notes,
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -47,7 +78,7 @@ class PaymentDetailScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton.tonal(
                 onPressed: () => context.push('/payment/${payment.id}/edit'),
-                child: const Text('Edit'),
+                child: Text(l10n.t('edit')),
               ),
               const SizedBox(height: 8),
               FilledButton(
@@ -60,7 +91,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                   }
                 },
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Archive'),
+                child: Text(l10n.t('archive')),
               ),
             ],
           );

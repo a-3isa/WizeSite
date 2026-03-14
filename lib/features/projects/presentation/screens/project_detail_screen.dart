@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -16,13 +17,14 @@ class ProjectDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final projectAsync = ref.watch(projectDetailsProvider(projectId));
     return Scaffold(
-      appBar: AppBar(title: const Text('Project Details')),
+      appBar: AppBar(title: Text(l10n.t('projectDetails'))),
       body: projectAsync.when(
         data: (project) {
           if (project == null) {
-            return const Center(child: Text('Project not found.'));
+            return Center(child: Text(l10n.t('projectNotFound')));
           }
           final healthColor = project.netProfit >= 0
               ? AppColors.success
@@ -35,7 +37,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                   title: Text(project.name),
                   subtitle: Text(project.clientName),
                   trailing: Chip(
-                    label: Text(project.status),
+                    label: Text(l10n.projectStatusLabel(project.status)),
                     backgroundColor: project.status == 'active'
                         ? Colors.green.withValues(alpha: 0.2)
                         : Colors.grey.withValues(alpha: 0.2),
@@ -50,23 +52,47 @@ class ProjectDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Contract Value: ${project.contractValue.toStringAsFixed(0)}',
+                        l10n.t(
+                          'contractValueLabel',
+                          params: {
+                            'value': project.contractValue.toStringAsFixed(0),
+                          },
+                        ),
                       ),
                       Text(
-                        'Total Expenses: ${project.totalExpenses.toStringAsFixed(0)}',
+                        l10n.t(
+                          'totalExpensesLabel',
+                          params: {
+                            'value': project.totalExpenses.toStringAsFixed(0),
+                          },
+                        ),
                       ),
                       Text(
-                        'Total Income: ${project.totalPayments.toStringAsFixed(0)}',
+                        l10n.t(
+                          'totalIncomeLabel',
+                          params: {
+                            'value': project.totalPayments.toStringAsFixed(0),
+                          },
+                        ),
                       ),
                       Text(
-                        'Net: ${project.netProfit.toStringAsFixed(0)}',
+                        l10n.t(
+                          'netLabel',
+                          params: {'value': project.netProfit.toStringAsFixed(0)},
+                        ),
                         style: TextStyle(
                           color: healthColor,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
-                        'Completion: ${project.completionPercentage.toStringAsFixed(0)}%',
+                        l10n.t(
+                          'completionLabel',
+                          params: {
+                            'value':
+                                project.completionPercentage.toStringAsFixed(0),
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -81,7 +107,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                     onPressed: () =>
                         context.push('/project/${project.id}/edit'),
                     icon: const Icon(Icons.edit),
-                    label: const Text('Edit'),
+                    label: Text(l10n.t('edit')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () async {
@@ -93,37 +119,37 @@ class ProjectDetailScreen extends ConsumerWidget {
                       }
                     },
                     icon: const Icon(Icons.archive),
-                    label: const Text('Archive'),
+                    label: Text(l10n.t('archive')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push(AppRoutes.addExpense),
                     icon: const Icon(Icons.receipt_long),
-                    label: const Text('Add Expense'),
+                    label: Text(l10n.t('addExpense')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push(AppRoutes.addPayment),
                     icon: const Icon(Icons.payments),
-                    label: const Text('Add Payment'),
+                    label: Text(l10n.t('addPayment')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push('/expenses'),
                     icon: const Icon(Icons.list),
-                    label: const Text('Expense List'),
+                    label: Text(l10n.t('expenseList')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push('/payments'),
                     icon: const Icon(Icons.list_alt),
-                    label: const Text('Payment List'),
+                    label: Text(l10n.t('paymentList')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push('/worker-entry/new'),
                     icon: const Icon(Icons.engineering),
-                    label: const Text('Add Worker Entry'),
+                    label: Text(l10n.t('addWorkerEntry')),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: () => context.push(AppRoutes.reports),
                     icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Generate Report'),
+                    label: Text(l10n.t('generateReport')),
                   ),
                 ],
               ),

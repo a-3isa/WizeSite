@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ class _ManageSubscriptionScreenState
   String? _message;
 
   Future<void> _restore() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _restoring = true;
       _message = null;
@@ -27,12 +29,13 @@ class _ManageSubscriptionScreenState
     setState(() {
       _restoring = false;
       _message = ok
-          ? 'Purchases restored successfully.'
-          : 'No active purchases found.';
+          ? l10n.t('purchasesRestoredSuccessfully')
+          : l10n.t('noActivePurchasesFound');
     });
   }
 
   Future<void> _openCustomerCenter() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _openingCustomerCenter = true;
       _message = null;
@@ -40,11 +43,14 @@ class _ManageSubscriptionScreenState
     try {
       await ref.read(purchaseCoordinatorProvider).presentCustomerCenter();
       if (mounted) {
-        setState(() => _message = 'Customer Center closed.');
+        setState(() => _message = l10n.t('customerCenterClosed'));
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _message = 'Customer Center failed: $e');
+        setState(
+          () =>
+              _message = l10n.t('customerCenterFailed', params: {'error': '$e'}),
+        );
       }
     } finally {
       if (mounted) {
@@ -55,37 +61,42 @@ class _ManageSubscriptionScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     ref.watch(revenueCatBootstrapProvider);
     final subAsync = ref.watch(currentSubscriptionProvider);
     final customerInfoAsync = ref.watch(revenueCatCustomerInfoProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Manage Subscription')),
+      appBar: AppBar(title: Text(l10n.t('manageSubscription'))),
       body: subAsync.when(
         data: (sub) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
             Card(
               child: ListTile(
-                title: Text(sub.tier == PlanTier.pro ? 'Pro' : 'Free'),
-                subtitle: Text('Status: ${sub.status.name}'),
+                title: Text(
+                  sub.tier == PlanTier.pro ? l10n.t('tierPro') : l10n.t('tierFree'),
+                ),
+                subtitle: Text(
+                  '${l10n.t('status')}: ${l10n.subscriptionStatusLabel(sub.status.name)}',
+                ),
               ),
             ),
             Card(
               child: ListTile(
-                title: const Text('Trial Ends At'),
+                title: Text(l10n.t('trialEndsAt')),
                 subtitle: Text(sub.trialEndsAt?.toIso8601String() ?? '-'),
               ),
             ),
             Card(
               child: ListTile(
-                title: const Text('Current Period Ends At'),
+                title: Text(l10n.t('currentPeriodEndsAt')),
                 subtitle: Text(sub.periodEndsAt?.toIso8601String() ?? '-'),
               ),
             ),
             Card(
               child: ListTile(
-                title: const Text('Store'),
+                title: Text(l10n.t('store')),
                 subtitle: Text(sub.store),
               ),
             ),
@@ -94,7 +105,7 @@ class _ManageSubscriptionScreenState
                 children: [
                   Card(
                     child: ListTile(
-                      title: const Text('RevenueCat App User ID'),
+                      title: Text(l10n.t('revenueCatAppUserId')),
                       subtitle: Text(
                         info.appUserId.isEmpty ? '-' : info.appUserId,
                       ),
@@ -102,15 +113,17 @@ class _ManageSubscriptionScreenState
                   ),
                   Card(
                     child: ListTile(
-                      title: const Text('WizeSite Pro Entitlement'),
+                      title: Text(l10n.t('wizeSiteProEntitlement')),
                       subtitle: Text(
-                        info.hasProEntitlement ? 'Active' : 'Not active',
+                        info.hasProEntitlement
+                            ? l10n.t('entitlementActive')
+                            : l10n.t('entitlementInactive'),
                       ),
                     ),
                   ),
                   Card(
                     child: ListTile(
-                      title: const Text('Current Product'),
+                      title: Text(l10n.t('currentProduct')),
                       subtitle: Text(
                         info.productIdentifier.isEmpty
                             ? '-'
@@ -120,7 +133,7 @@ class _ManageSubscriptionScreenState
                   ),
                   Card(
                     child: ListTile(
-                      title: const Text('Entitlement Expiration'),
+                      title: Text(l10n.t('entitlementExpiration')),
                       subtitle: Text(
                         info.latestExpirationDate?.toIso8601String() ?? '-',
                       ),
@@ -137,7 +150,9 @@ class _ManageSubscriptionScreenState
             const SizedBox(height: 12),
             FilledButton(
               onPressed: _restoring ? null : _restore,
-              child: Text(_restoring ? 'Restoring...' : 'Restore Purchases'),
+              child: Text(
+                _restoring ? l10n.t('restoring') : l10n.t('restorePurchases'),
+              ),
             ),
             const SizedBox(height: 8),
             FilledButton.tonal(
@@ -146,8 +161,8 @@ class _ManageSubscriptionScreenState
                   : _openCustomerCenter,
               child: Text(
                 _openingCustomerCenter
-                    ? 'Opening Customer Center...'
-                    : 'Open Customer Center',
+                    ? l10n.t('openingCustomerCenter')
+                    : l10n.t('openCustomerCenter'),
               ),
             ),
             if (_message != null) ...[

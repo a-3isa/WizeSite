@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -70,12 +71,13 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final days = double.tryParse(_daysController.text.trim());
     final wage = double.tryParse(_wageController.text.trim());
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (_workerId == null ||
@@ -83,7 +85,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
         days == null ||
         wage == null ||
         days <= 0) {
-      setState(() => _error = 'Fill worker, project, days, and wage.');
+      setState(() => _error = l10n.t('fillWorkerProjectDaysWage'));
       return;
     }
 
@@ -141,12 +143,15 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     final workersAsync = ref.watch(workersProvider);
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.entryId == null ? 'Add Worker Entry' : 'Edit Worker Entry',
+          widget.entryId == null
+              ? l10n.t('addWorkerEntryTitle')
+              : l10n.t('editWorkerEntryTitle'),
         ),
       ),
       body: _prefilling
@@ -167,7 +172,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                           )
                           .toList(),
                       onChanged: (value) => setState(() => _workerId = value),
-                      decoration: const InputDecoration(labelText: 'Worker'),
+                      decoration: InputDecoration(labelText: l10n.t('workerName')),
                     ),
                     error: (e, _) => Text(e.toString()),
                     loading: () =>
@@ -186,7 +191,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         )
                         .toList(),
                     onChanged: (value) => setState(() => _projectId = value),
-                    decoration: const InputDecoration(labelText: 'Project'),
+                    decoration: InputDecoration(labelText: l10n.t('project')),
                   ),
                   error: (e, _) => Text(e.toString()),
                   loading: () =>
@@ -196,19 +201,24 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                 TextField(
                   controller: _daysController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Days Worked'),
+                  decoration: InputDecoration(labelText: l10n.t('daysWorked')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _wageController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Daily Wage'),
+                  decoration: InputDecoration(labelText: l10n.t('dailyWage')),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Date: ${_date.toIso8601String().split('T').first}',
+                    l10n.t(
+                      'dateWithValue',
+                      params: {
+                        'value': _date.toIso8601String().split('T').first,
+                      },
+                    ),
                   ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
@@ -227,7 +237,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                 TextField(
                   controller: _notesController,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Notes'),
+                  decoration: InputDecoration(labelText: l10n.t('notes')),
                 ),
                 const SizedBox(height: 12),
                 if (_error != null)
@@ -242,8 +252,8 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         )
                       : Text(
                           widget.entryId == null
-                              ? 'Save Worker Entry'
-                              : 'Update Worker Entry',
+                              ? l10n.t('saveWorkerEntry')
+                              : l10n.t('updateWorkerEntry'),
                         ),
                 ),
               ],

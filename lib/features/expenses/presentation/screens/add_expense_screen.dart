@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
@@ -66,15 +67,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final amount = double.tryParse(_amountController.text.trim());
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (_projectId == null || amount == null || amount <= 0) {
-      setState(() => _error = 'Select project and enter valid amount.');
+      setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
     }
 
@@ -132,10 +134,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.expenseId == null ? 'Add Expense' : 'Edit Expense'),
+        title: Text(
+          widget.expenseId == null
+              ? l10n.t('addExpenseTitle')
+              : l10n.t('editExpenseTitle'),
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push(AppRoutes.voiceExpense),
@@ -169,7 +176,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               : selected.first.name;
                         });
                       },
-                      decoration: const InputDecoration(labelText: 'Project'),
+                      decoration: InputDecoration(labelText: l10n.t('project')),
                     );
                   },
                   error: (e, _) => Text(e.toString()),
@@ -179,36 +186,49 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _category,
-                  items: const [
-                    DropdownMenuItem(value: 'labor', child: Text('Labor')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'labor',
+                      child: Text(l10n.expenseCategoryLabel('labor')),
+                    ),
                     DropdownMenuItem(
                       value: 'materials',
-                      child: Text('Materials'),
+                      child: Text(l10n.expenseCategoryLabel('materials')),
                     ),
                     DropdownMenuItem(
                       value: 'equipment',
-                      child: Text('Equipment'),
+                      child: Text(l10n.expenseCategoryLabel('equipment')),
                     ),
                     DropdownMenuItem(
                       value: 'transport',
-                      child: Text('Transport'),
+                      child: Text(l10n.expenseCategoryLabel('transport')),
                     ),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                    DropdownMenuItem(
+                      value: 'other',
+                      child: Text(l10n.expenseCategoryLabel('other')),
+                    ),
                   ],
                   onChanged: (value) =>
                       setState(() => _category = value ?? _category),
-                  decoration: const InputDecoration(labelText: 'Category'),
+                  decoration: InputDecoration(labelText: l10n.t('category')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Amount'),
+                  decoration: InputDecoration(labelText: l10n.t('amount')),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(_date.toIso8601String().split('T').first),
+                  title: Text(
+                    l10n.t(
+                      'dateWithValue',
+                      params: {
+                        'value': _date.toIso8601String().split('T').first,
+                      },
+                    ),
+                  ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
                     final date = await showDatePicker(
@@ -225,15 +245,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _supplierController,
-                  decoration: const InputDecoration(
-                    labelText: 'Supplier Name (optional)',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('supplierNameOptional'),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _notesController,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Notes'),
+                  decoration: InputDecoration(labelText: l10n.t('notes')),
                 ),
                 const SizedBox(height: 12),
                 if (_error != null)
@@ -248,8 +268,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         )
                       : Text(
                           widget.expenseId == null
-                              ? 'Save Expense'
-                              : 'Update Expense',
+                              ? l10n.t('saveExpense')
+                              : l10n.t('updateExpense'),
                         ),
                 ),
               ],

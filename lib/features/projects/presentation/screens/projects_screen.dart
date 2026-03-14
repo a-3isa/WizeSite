@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -20,15 +21,16 @@ class ProjectsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Projects')),
+      appBar: AppBar(title: Text(l10n.t('projects'))),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(AppRoutes.createProject),
         icon: const Icon(Icons.add),
-        label: const Text(
-          'New Project',
+        label: Text(
+          l10n.t('newProject'),
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -47,7 +49,7 @@ class ProjectsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No projects yet.',
+                      l10n.t('noProjectsYet'),
                       style: TextStyle(color: AppColors.textBody, fontSize: 16),
                     ),
                   ],
@@ -123,7 +125,7 @@ class ProjectsScreen extends ConsumerWidget {
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        project.status.toUpperCase(),
+                                        l10n.projectStatusLabel(project.status),
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
@@ -151,7 +153,9 @@ class ProjectsScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                positiveProfit ? 'Profit' : 'Loss',
+                                positiveProfit
+                                    ? l10n.t('profit')
+                                    : l10n.t('loss'),
                                 style: TextStyle(
                                   color: AppColors.textBody,
                                   fontSize: 12,

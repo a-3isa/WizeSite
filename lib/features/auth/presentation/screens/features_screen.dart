@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 class _FeatureItem {
-  const _FeatureItem({required this.icon, required this.title, this.subtitle});
+  const _FeatureItem({
+    required this.icon,
+    required this.titleKey,
+    required this.subtitleKey,
+  });
 
   final IconData icon;
-  final String title;
-  final String? subtitle;
+  final String titleKey;
+  final String subtitleKey;
 }
 
 class FeaturesScreen extends StatelessWidget {
@@ -18,33 +22,33 @@ class FeaturesScreen extends StatelessWidget {
   static const _features = [
     _FeatureItem(
       icon: Icons.smartphone_rounded,
-      title: 'Mobile-first operation',
-      subtitle: 'Manage projects and expenses from the field',
+      titleKey: 'featureMobileFirstTitle',
+      subtitleKey: 'featureMobileFirstSubtitle',
     ),
     _FeatureItem(
       icon: Icons.mic_rounded,
-      title: 'Voice expense entry',
-      subtitle: 'Log costs hands-free with speech',
+      titleKey: 'featureVoiceExpenseTitle',
+      subtitleKey: 'featureVoiceExpenseSubtitle',
     ),
     _FeatureItem(
       icon: Icons.pie_chart_rounded,
-      title: 'Real-time profitability',
-      subtitle: 'See project health and margins live',
+      titleKey: 'featureProfitabilityTitle',
+      subtitleKey: 'featureProfitabilitySubtitle',
     ),
     _FeatureItem(
       icon: Icons.translate_rounded,
-      title: 'Arabic / English + RTL',
-      subtitle: 'Full localization and layout support',
+      titleKey: 'featureLocalizationTitle',
+      subtitleKey: 'featureLocalizationSubtitle',
     ),
     _FeatureItem(
       icon: Icons.picture_as_pdf_rounded,
-      title: 'PDF reports',
-      subtitle: 'Export and share professional reports',
+      titleKey: 'featurePdfReportsTitle',
+      subtitleKey: 'featurePdfReportsSubtitle',
     ),
     _FeatureItem(
       icon: Icons.offline_bolt_rounded,
-      title: 'Offline-safe actions',
-      subtitle: 'Work without connection, sync when back',
+      titleKey: 'featureOfflineTitle',
+      subtitleKey: 'featureOfflineSubtitle',
     ),
   ];
 
@@ -93,7 +97,7 @@ class FeaturesScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Buildozer',
+                      l10n.t('appName'),
                       style: theme.textTheme.headlineLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -139,7 +143,7 @@ class FeaturesScreen extends StatelessWidget {
                           12,
                         ),
                         child: Text(
-                          'What you get',
+                          l10n.t('whatYouGet'),
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: AppColors.darkGray.withValues(alpha: 0.8),
                             fontWeight: FontWeight.w600,
@@ -161,8 +165,8 @@ class FeaturesScreen extends StatelessWidget {
                             final feature = _features[index];
                             return _FeatureCard(
                               icon: feature.icon,
-                              title: feature.title,
-                              subtitle: feature.subtitle,
+                              title: l10n.t(feature.titleKey),
+                              subtitle: l10n.t(feature.subtitleKey),
                               iconColor: AppColors.constructionOrange,
                             );
                           },

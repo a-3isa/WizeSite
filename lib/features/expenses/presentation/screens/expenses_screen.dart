@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
@@ -19,18 +20,19 @@ class ExpensesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final expensesAsync = ref.watch(expensesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
+      appBar: AppBar(title: Text(l10n.t('expenses'))),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(AppRoutes.addExpense),
         icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
+        label: Text(l10n.t('addExpense')),
       ),
       body: expensesAsync.when(
         data: (expenses) {
           if (expenses.isEmpty) {
-            return const Center(child: Text('No expenses yet.'));
+            return Center(child: Text(l10n.t('noExpensesYet')));
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),
@@ -43,10 +45,16 @@ class ExpensesScreen extends ConsumerWidget {
                 child: ListTile(
                   onTap: () => context.push('/expense/${expense.id}'),
                   title: Text(
-                    '${expense.amount.toStringAsFixed(0)} ${expense.currency} | ${expense.category.toUpperCase()}',
+                    '${expense.amount.toStringAsFixed(0)} ${expense.currency} | ${l10n.expenseCategoryLabel(expense.category)}',
                   ),
                   subtitle: Text(
-                    '$projectLabel | ${expense.date.toIso8601String().split('T').first}',
+                    l10n.t(
+                      'projectDateWithValue',
+                      params: {
+                        'project': projectLabel,
+                        'date': expense.date.toIso8601String().split('T').first,
+                      },
+                    ),
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) async {
@@ -58,9 +66,15 @@ class ExpensesScreen extends ConsumerWidget {
                             .archiveExpense(expense.id);
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Archive')),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(l10n.t('edit')),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.t('archive')),
+                      ),
                     ],
                   ),
                 ),

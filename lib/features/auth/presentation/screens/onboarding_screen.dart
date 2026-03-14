@@ -1,38 +1,47 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _controller = PageController();
   int _index = 0;
+  String? _selectedLanguageCode;
 
   static const _slides = <(IconData, String, String)>[
     (
       Icons.work,
-      'Track projects',
-      'Create and monitor construction projects instantly from site.',
+      'onboardingTrackProjectsTitle',
+      'onboardingTrackProjectsSubtitle',
     ),
     (
       Icons.receipt_long,
-      'Add expenses quickly',
-      'Log expenses in seconds with smart defaults and recent values.',
+      'onboardingAddExpensesTitle',
+      'onboardingAddExpensesSubtitle',
     ),
     (
       Icons.trending_up,
-      'Know profit instantly',
-      'See real-time project health, risk, and expected final cost.',
+      'onboardingKnowProfitTitle',
+      'onboardingKnowProfitSubtitle',
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final currentLocale = ref.watch(localeControllerProvider);
+    _selectedLanguageCode ??= currentLocale.languageCode;
+    final totalPages = _slides.length + 1;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -41,16 +50,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               alignment: AlignmentDirectional.centerEnd,
               child: TextButton(
                 onPressed: () => context.go(AppRoutes.login),
-                child: const Text('Skip'),
+                child: Text(l10n.t('skip')),
               ),
             ),
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _slides.length,
+                itemCount: totalPages,
                 onPageChanged: (value) => setState(() => _index = value),
                 itemBuilder: (context, index) {
-                  final slide = _slides[index];
+                  if (index == 0) {
+                    return _LanguageStep(
+                      selectedLanguageCode: _selectedLanguageCode!,
+                      onLanguageChanged: (languageCode) {
+                        setState(() => _selectedLanguageCode = languageCode);
+                      },
+                    );
+                  }
+
+                  final slide = _slides[index - 1];
                   return Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -63,12 +81,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          slide.$2,
+                          l10n.t(slide.$2),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 12),
-                        Text(slide.$3, textAlign: TextAlign.center),
+                        Text(l10n.t(slide.$3), textAlign: TextAlign.center),
                       ],
                     ),
                   );
@@ -78,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                _slides.length,
+                totalPages,
                 (idx) => AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: _index == idx ? 20 : 8,
@@ -99,7 +117,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: () {
-                    if (_index < _slides.length - 1) {
+                    if (_index == 0) {
+                      ref
+                          .read(localeControllerProvider.notifier)
+                          .setLocale(Locale(_selectedLanguageCode!));
+                    }
+
+                    if (_index < totalPages - 1) {
                       _controller.nextPage(
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeInOut,
@@ -109,9 +133,116 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     }
                   },
                   child: Text(
-                    _index < _slides.length - 1 ? 'Next' : 'Continue',
+                    _index < totalPages - 1 ? l10n.t('next') : l10n.t('continue'),
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageStep extends StatelessWidget {
+  const _LanguageStep({
+    required this.selectedLanguageCode,
+    required this.onLanguageChanged,
+  });
+
+  final String selectedLanguageCode;
+  final ValueChanged<String> onLanguageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.language, size: 88, color: const Color(0xFFFF7A00)),
+          const SizedBox(height: 24),
+          Text(
+            l10n.t('chooseLanguageTitle'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.t('chooseLanguageSubtitle'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 24),
+          _LanguageOption(
+            selected: selectedLanguageCode == 'en',
+            title: l10n.t('englishLanguage'),
+            subtitle: 'English',
+            onTap: () => onLanguageChanged('en'),
+          ),
+          const SizedBox(height: 12),
+          _LanguageOption(
+            selected: selectedLanguageCode == 'ar',
+            title: l10n.t('arabicLanguage'),
+            subtitle: 'العربية',
+            onTap: () => onLanguageChanged('ar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LanguageOption extends StatelessWidget {
+  const _LanguageOption({
+    required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? const Color(0xFFFF7A00) : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? const Color(0xFFFF7A00) : Colors.grey,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
               ),
             ),
           ],

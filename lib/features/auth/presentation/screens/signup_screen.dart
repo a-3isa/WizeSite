@@ -38,16 +38,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   Future<void> _signup() async {
+    final l10n = AppLocalizations.of(context);
     if (!_emailController.text.contains('@')) {
-      setState(() => _error = 'Invalid email format');
+      setState(() => _error = l10n.t('authInvalidEmailFormat'));
       return;
     }
     if (_passwordController.text.length < 8) {
-      setState(() => _error = 'Password must be at least 8 characters');
+      setState(() => _error = l10n.t('authPasswordMinLength'));
       return;
     }
     if (_passwordController.text != _confirmController.text) {
-      setState(() => _error = 'Passwords do not match');
+      setState(() => _error = l10n.t('authPasswordsDoNotMatch'));
       return;
     }
 
@@ -124,7 +125,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           children: [
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Full Name'),
+              decoration: InputDecoration(labelText: l10n.t('fullName')),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -142,21 +143,21 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             TextField(
               controller: _confirmController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm Password'),
+              decoration: InputDecoration(labelText: l10n.t('confirmPassword')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _companyController,
-              decoration: const InputDecoration(
-                labelText: 'Company Name (optional)',
+              decoration: InputDecoration(
+                labelText: l10n.t('companyNameOptional'),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number (optional)',
+              decoration: InputDecoration(
+                labelText: l10n.t('phoneNumberOptional'),
               ),
             ),
             if (_error != null) ...[

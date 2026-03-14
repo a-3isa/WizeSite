@@ -6,12 +6,14 @@ class MetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     this.color = AppColors.textDark,
+    this.icon,
     super.key,
   });
 
   final String label;
   final String value;
   final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +63,7 @@ class MetricCard extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _getIconForLabel(label),
+                    icon ?? Icons.bar_chart,
                     color: iconColor,
                     size: 16,
                   ),
@@ -84,12 +86,5 @@ class MetricCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  IconData _getIconForLabel(String lbl) {
-    if (lbl.toLowerCase().contains('expense')) return Icons.trending_down;
-    if (lbl.toLowerCase().contains('income')) return Icons.trending_up;
-    if (lbl.toLowerCase().contains('net')) return Icons.account_balance_wallet;
-    return Icons.bar_chart;
   }
 }

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -19,18 +20,19 @@ class WorkersScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final workersAsync = ref.watch(workersProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Workers')),
+      appBar: AppBar(title: Text(l10n.t('workers'))),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(AppRoutes.addWorker),
         icon: const Icon(Icons.add),
-        label: const Text('Add Worker'),
+        label: Text(l10n.t('addWorkerTitle')),
       ),
       body: workersAsync.when(
         data: (workers) {
           if (workers.isEmpty) {
-            return const Center(child: Text('No workers yet.'));
+            return Center(child: Text(l10n.t('noWorkersYet')));
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),
@@ -44,7 +46,7 @@ class WorkersScreen extends ConsumerWidget {
                   leading: const Icon(Icons.engineering),
                   title: Text(worker.name),
                   subtitle: Text(
-                    '${worker.phoneNumber} • Wage: ${worker.dailyWage.toStringAsFixed(0)}',
+                    '${worker.phoneNumber} | ${l10n.t('wageWithValue', params: {'value': worker.dailyWage.toStringAsFixed(0)})}',
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) async {
@@ -56,9 +58,15 @@ class WorkersScreen extends ConsumerWidget {
                             .archiveWorker(worker.id);
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Archive')),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(l10n.t('edit')),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.t('archive')),
+                      ),
                     ],
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -11,7 +12,7 @@ class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
 
   Future<void> _export({
-    required BuildContext context,
+    required AppLocalizations l10n,
     required String workspaceId,
     required Map<String, num> summary,
   }) async {
@@ -23,27 +24,47 @@ class ReportsScreen extends ConsumerWidget {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Buildozer Financial Report',
+              l10n.t('buildozerFinancialReport'),
               style: pw.TextStyle(fontSize: 22),
             ),
             pw.SizedBox(height: 8),
-            pw.Text('Workspace: $workspaceId'),
-            pw.Text('Generated: ${DateTime.now().toIso8601String()}'),
+            pw.Text('${l10n.t('workspace')}: $workspaceId'),
+            pw.Text('${l10n.t('generated')}: ${DateTime.now().toIso8601String()}'),
             pw.SizedBox(height: 20),
             pw.Text(
-              'Total Projects: ${(summary['totalProjects'] ?? 0).toInt()}',
+              l10n.t(
+                'totalProjects',
+                params: {'value': '${(summary['totalProjects'] ?? 0).toInt()}'},
+              ),
             ),
             pw.Text(
-              'Active Projects: ${(summary['activeProjects'] ?? 0).toInt()}',
+              l10n.t(
+                'activeProjectsCount',
+                params: {
+                  'value': '${(summary['activeProjects'] ?? 0).toInt()}',
+                },
+              ),
             ),
             pw.Text(
-              'Total Expenses: ${(summary['totalExpenses'] ?? 0).toStringAsFixed(0)}',
+              l10n.t(
+                'totalExpensesLabel',
+                params: {
+                  'value':
+                      (summary['totalExpenses'] ?? 0).toStringAsFixed(0),
+                },
+              ),
             ),
             pw.Text(
-              'Total Income: ${(summary['totalIncome'] ?? 0).toStringAsFixed(0)}',
+              l10n.t(
+                'totalIncomeLabel',
+                params: {'value': (summary['totalIncome'] ?? 0).toStringAsFixed(0)},
+              ),
             ),
             pw.Text(
-              'Net Profit/Loss: ${(summary['net'] ?? 0).toStringAsFixed(0)}',
+              l10n.t(
+                'netProfitLoss',
+                params: {'value': (summary['net'] ?? 0).toStringAsFixed(0)},
+              ),
             ),
           ],
         ),
@@ -54,6 +75,7 @@ class ReportsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final usageAsync = ref.watch(currentUsageProvider);
     final summaryAsync = workspaceId == null
@@ -61,16 +83,14 @@ class ReportsScreen extends ConsumerWidget {
         : ref.watch(dashboardSummaryProvider(workspaceId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Reports')),
+      appBar: AppBar(title: Text(l10n.t('reports'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
             child: ListTile(
-              title: const Text('Project Financial Report'),
-              subtitle: const Text(
-                'Contract, expenses, payments, net profit/loss',
-              ),
+              title: Text(l10n.t('projectFinancialReport')),
+              subtitle: Text(l10n.t('projectFinancialReportSubtitle')),
               trailing: const Icon(Icons.picture_as_pdf),
               onTap: workspaceId == null
                   ? null
@@ -80,7 +100,7 @@ class ReportsScreen extends ConsumerWidget {
                       );
                       if (context.mounted) {
                         await _export(
-                          context: context,
+                          l10n: l10n,
                           workspaceId: workspaceId,
                           summary: summary,
                         );
@@ -90,15 +110,15 @@ class ReportsScreen extends ConsumerWidget {
           ),
           Card(
             child: ListTile(
-              title: const Text('Expense Report'),
-              subtitle: const Text('Breakdown by category and period'),
+              title: Text(l10n.t('expenseReport')),
+              subtitle: Text(l10n.t('expenseReportSubtitle')),
               trailing: const Icon(Icons.table_chart),
             ),
           ),
           Card(
             child: ListTile(
-              title: const Text('Worker Cost Report'),
-              subtitle: const Text('Labor totals and worker entries'),
+              title: Text(l10n.t('workerCostReport')),
+              subtitle: Text(l10n.t('workerCostReportSubtitle')),
               trailing: const Icon(Icons.groups),
             ),
           ),
@@ -112,22 +132,44 @@ class ReportsScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Current Snapshot',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                          Text(
+                            l10n.t('currentSnapshot'),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Projects: ${summary['totalProjects']?.toInt() ?? 0}',
+                            l10n.t(
+                              'totalProjects',
+                              params: {
+                                'value': '${summary['totalProjects']?.toInt() ?? 0}',
+                              },
+                            ),
                           ),
                           Text(
-                            'Income: ${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
+                            l10n.t(
+                              'totalIncomeLabel',
+                              params: {
+                                'value':
+                                    '${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
+                              },
+                            ),
                           ),
                           Text(
-                            'Expenses: ${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
+                            l10n.t(
+                              'totalExpensesLabel',
+                              params: {
+                                'value':
+                                    '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
+                              },
+                            ),
                           ),
                           Text(
-                            'Net: ${summary['net']?.toStringAsFixed(0) ?? 0}',
+                            l10n.t(
+                              'netLabel',
+                              params: {
+                                'value': '${summary['net']?.toStringAsFixed(0) ?? 0}',
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -139,7 +181,14 @@ class ReportsScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           usageAsync.when(
             data: (usage) => Text(
-              'Usage period: ${usage.periodKey} | expenses ${usage.expensesCount}/${usage.limits.expensesPerMonth}',
+              l10n.t(
+                'usagePeriod',
+                params: {
+                  'period': usage.periodKey,
+                  'count': '${usage.expensesCount}',
+                  'limit': '${usage.limits.expensesPerMonth}',
+                },
+              ),
             ),
             error: (_, _) => const SizedBox.shrink(),
             loading: () => const SizedBox.shrink(),

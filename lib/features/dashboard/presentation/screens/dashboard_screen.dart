@@ -110,7 +110,7 @@ class DashboardScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
             Text(
-              "Overview",
+              l10n.t('overview'),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
@@ -127,9 +127,9 @@ class DashboardScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.borderGrey),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        'No workspace selected yet.',
+                        l10n.t('noWorkspaceSelected'),
                         style: TextStyle(color: AppColors.textBody),
                       ),
                     ),
@@ -148,23 +148,27 @@ class DashboardScreen extends ConsumerWidget {
                       label: l10n.t('activeProjects'),
                       value: '${summary['activeProjects']?.toInt() ?? 0}',
                       color: AppColors.constructionOrange,
+                      icon: Icons.work_outline,
                     ),
                     MetricCard(
-                      label: 'Total Expenses',
+                      label: l10n.t('totalExpenses'),
                       value:
                           '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
                       color: AppColors.danger,
+                      icon: Icons.trending_down,
                     ),
                     MetricCard(
-                      label: 'Total Income',
+                      label: l10n.t('totalIncome'),
                       value:
                           '${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
                       color: AppColors.success,
+                      icon: Icons.trending_up,
                     ),
                     MetricCard(
-                      label: 'Net Profit',
+                      label: l10n.t('netProfit'),
                       value: '${net.toStringAsFixed(0)} EGP',
                       color: net >= 0 ? AppColors.success : AppColors.danger,
+                      icon: Icons.account_balance_wallet_outlined,
                     ),
                   ],
                 );
@@ -182,7 +186,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Quick Actions',
+              l10n.t('quickActions'),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
@@ -193,6 +197,7 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _QuickActionCard(
+                    qaKey: const Key('qa_add_expense'),
                     icon: Icons.receipt_long_outlined,
                     label: l10n.t('addExpense'),
                     color: AppColors.danger,
@@ -207,6 +212,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _QuickActionCard(
+                    qaKey: const Key('qa_add_payment'),
                     icon: Icons.payments_outlined,
                     label: l10n.t('addPayment'),
                     color: AppColors.success,
@@ -225,6 +231,7 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _QuickActionCard(
+                    qaKey: const Key('qa_add_worker_entry'),
                     icon: Icons.engineering_outlined,
                     label: l10n.t('addWorkerEntry'),
                     color: AppColors.warning,
@@ -239,6 +246,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _QuickActionCard(
+                    qaKey: const Key('qa_create_project'),
                     icon: Icons.dashboard_customize_outlined,
                     label: l10n.t('createProject'),
                     color: AppColors.constructionOrange,
@@ -323,8 +331,8 @@ class DashboardScreen extends ConsumerWidget {
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      const Text(
-                                        'Unlock higher limits and team scaling',
+                                      Text(
+                                        l10n.t('unlockHigherLimits'),
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 13,
@@ -388,12 +396,14 @@ class DashboardScreen extends ConsumerWidget {
 
 class _QuickActionCard extends StatelessWidget {
   const _QuickActionCard({
+    this.qaKey,
     required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
   });
 
+  final Key? qaKey;
   final IconData icon;
   final String label;
   final Color color;
@@ -402,6 +412,7 @@ class _QuickActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: qaKey,
       color: AppColors.surfaceSolid,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(

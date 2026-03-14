@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -87,19 +88,20 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
   }
 
   Future<void> _goToProcessing(List<VoiceProjectOption> projects) async {
+    final l10n = AppLocalizations.of(context);
     final userId = ref.read(activeUserIdProvider);
     final audioPath = _readyFilePath;
     final languageHint = Localizations.localeOf(context).languageCode;
     if (userId == null || userId.isEmpty) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (audioPath == null || audioPath.isEmpty) {
-      setState(() => _error = 'Record audio first.');
+      setState(() => _error = l10n.t('recordAudioFirst'));
       return;
     }
     if (!await File(audioPath).exists()) {
-      setState(() => _error = 'Recorded file is missing, please record again.');
+      setState(() => _error = l10n.t('recordedFileMissing'));
       return;
     }
 
@@ -121,9 +123,10 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Voice Expense')),
+      appBar: AppBar(title: Text(l10n.t('voiceExpense'))),
       body: projectsAsync.when(
         data: (projects) {
           final projectOptions = projects
@@ -136,9 +139,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text(
-                'Record a short note (5 to 20 seconds), then review before saving.',
-              ),
+              Text(l10n.t('recordShortNote')),
               const SizedBox(height: 16),
               Center(
                 child: IconButton.filledTonal(
@@ -152,16 +153,24 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
               Center(
                 child: Text(
                   _isRecording
-                      ? 'Recording... $_elapsedSeconds s'
+                      ? l10n.t(
+                          'recording',
+                          params: {'seconds': '$_elapsedSeconds'},
+                        )
                       : (_readyFilePath == null
-                            ? 'Not recording'
-                            : 'Ready to process'),
+                            ? l10n.t('notRecording')
+                            : l10n.t('readyToProcess')),
                 ),
               ),
               if (_readyFilePath != null) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'File: ${_readyFilePath!.split(Platform.pathSeparator).last}',
+                  l10n.t(
+                    'file',
+                    params: {
+                      'name': _readyFilePath!.split(Platform.pathSeparator).last,
+                    },
+                  ),
                 ),
               ],
               if (_error != null) ...[
@@ -174,7 +183,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _isRecording ? _cancelRecording : null,
-                      child: const Text('Cancel / Re-record'),
+                      child: Text(l10n.t('cancelRerecord')),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -183,7 +192,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen> {
                       onPressed: _isRecording || _readyFilePath == null
                           ? null
                           : () => _goToProcessing(projectOptions),
-                      child: const Text('Process Voice'),
+                      child: Text(l10n.t('processVoice')),
                     ),
                   ),
                 ],

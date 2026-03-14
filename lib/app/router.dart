@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/features/add/presentation/screens/add_hub_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
@@ -29,12 +33,42 @@ import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final auth = ref.watch(firebaseAuthProvider);
+  final refresh = _RouterRefreshNotifier(auth.authStateChanges());
+  ref.onDispose(refresh.dispose);
+  ref.listen<String?>(
+    activeWorkspaceIdProvider,
+    (previous, next) => refresh.refresh(),
+  );
+  ref.listen<String?>(
+    activeUserIdProvider,
+    (previous, next) => refresh.refresh(),
+  );
+
   return GoRouter(
     initialLocation: AppRoutes.root,
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      final isSignedIn = auth.currentUser != null;
+      final workspaceId = ref.read(activeWorkspaceIdProvider);
+      final userId = ref.read(activeUserIdProvider);
+      final hasWorkspace =
+          userId != null &&
+          userId.isNotEmpty &&
+          workspaceId != null &&
+          workspaceId.isNotEmpty;
+      return resolveAppRedirect(
+        location: location,
+        isSignedIn: isSignedIn,
+        hasWorkspace: hasWorkspace,
+      );
+    },
     routes: [
       GoRoute(
         path: AppRoutes.root,
@@ -233,3 +267,57 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+String? resolveAppRedirect({
+  required String location,
+  required bool isSignedIn,
+  required bool hasWorkspace,
+}) {
+  final isSplash = location == AppRoutes.root;
+  final isAuthRoute =
+      location == AppRoutes.login ||
+      location == AppRoutes.signup ||
+      location == AppRoutes.forgotPassword;
+  final isPublicDiscovery =
+      location == AppRoutes.features || location == AppRoutes.onboarding;
+  final isPublicRoute = isSplash || isAuthRoute || isPublicDiscovery;
+
+  if (!isSignedIn) {
+    if (!isPublicRoute) {
+      return AppRoutes.features;
+    }
+    return null;
+  }
+
+  if (isAuthRoute) {
+    return AppRoutes.root;
+  }
+
+  if (hasWorkspace && isPublicDiscovery) {
+    return AppRoutes.dashboard;
+  }
+
+  if (!hasWorkspace && !isSplash && !isPublicDiscovery) {
+    return AppRoutes.root;
+  }
+
+  return null;
+}
+
+class _RouterRefreshNotifier extends ChangeNotifier {
+  _RouterRefreshNotifier(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  void refresh() {
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}

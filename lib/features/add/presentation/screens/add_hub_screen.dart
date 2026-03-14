@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -7,51 +8,52 @@ class AddHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Quick Add')),
+      appBar: AppBar(title: Text(l10n.t('quickAdd'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _ActionCard(
             icon: Icons.receipt_long,
-            title: 'Add Expense',
-            subtitle: 'Record a new project expense in seconds.',
+            title: l10n.t('addExpense'),
+            subtitle: l10n.t('addExpenseSubtitle'),
             onTap: () => context.push(AppRoutes.addExpense),
           ),
           _ActionCard(
             icon: Icons.list,
-            title: 'Expense List',
-            subtitle: 'View, edit, and archive expenses.',
+            title: l10n.t('expenseList'),
+            subtitle: l10n.t('expenseListSubtitle'),
             onTap: () => context.push(AppRoutes.expenses),
           ),
           _ActionCard(
             icon: Icons.payments,
-            title: 'Add Payment',
-            subtitle: 'Record client payment and update balance.',
+            title: l10n.t('addPayment'),
+            subtitle: l10n.t('addPaymentSubtitle'),
             onTap: () => context.push(AppRoutes.addPayment),
           ),
           _ActionCard(
             icon: Icons.list_alt,
-            title: 'Payment List',
-            subtitle: 'View, edit, and archive payments.',
+            title: l10n.t('paymentList'),
+            subtitle: l10n.t('paymentListSubtitle'),
             onTap: () => context.push(AppRoutes.payments),
           ),
           _ActionCard(
             icon: Icons.engineering,
-            title: 'Add Worker Entry',
-            subtitle: 'Capture labor days and auto-calculate cost.',
+            title: l10n.t('addWorkerEntry'),
+            subtitle: l10n.t('addWorkerEntrySubtitle'),
             onTap: () => context.push('/worker-entry/new'),
           ),
           _ActionCard(
             icon: Icons.work,
-            title: 'Create Project',
-            subtitle: 'Create a new project with contract details.',
+            title: l10n.t('createProject'),
+            subtitle: l10n.t('createProjectSubtitle'),
             onTap: () => context.push(AppRoutes.createProject),
           ),
           _ActionCard(
             icon: Icons.mic,
-            title: 'Voice Expense',
-            subtitle: 'Speak naturally, confirm parsed result, then save.',
+            title: l10n.t('voiceExpense'),
+            subtitle: l10n.t('voiceExpenseSubtitle'),
             onTap: () => context.push(AppRoutes.voiceExpense),
           ),
         ],

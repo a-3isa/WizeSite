@@ -32,9 +32,7 @@ class SettingsScreen extends ConsumerWidget {
             child: ListTile(
               leading: const Icon(Icons.language),
               title: Text(l10n.t('language')),
-              subtitle: Text(
-                locale.languageCode == 'ar' ? 'العربية' : 'English',
-              ),
+              subtitle: Text(l10n.localeName(locale.languageCode)),
               trailing: SegmentedButton<Locale>(
                 showSelectedIcon: false,
                 segments: const [
@@ -94,7 +92,7 @@ class SettingsScreen extends ConsumerWidget {
                     title: Text(l10n.t('planAndBilling')),
                     subtitle: Text(
                       sub.tier == PlanTier.pro
-                          ? '${l10n.t('proPlan')} (${sub.status.name})'
+                          ? '${l10n.t('proPlan')} (${l10n.subscriptionStatusLabel(sub.status.name)})'
                           : l10n.t('freePlan'),
                     ),
                   ),

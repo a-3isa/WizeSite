@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
@@ -86,32 +87,33 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   }
 
   Future<void> _saveConfirmed() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final amount = double.tryParse(_amountController.text.trim());
     if (workspaceId == null || workspaceId.isEmpty) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (_projectId == null || _projectId!.isEmpty) {
-      setState(() => _error = 'Please select a project.');
+      setState(() => _error = l10n.t('selectProjectRequired'));
       return;
     }
     if (amount == null || amount <= 0) {
-      setState(() => _error = 'Amount must be greater than zero.');
+      setState(() => _error = l10n.t('amountMustBeGreaterThanZero'));
       return;
     }
     if (!_allowedCategories.contains(_category)) {
-      setState(() => _error = 'Please select a valid category.');
+      setState(() => _error = l10n.t('selectValidCategory'));
       return;
     }
     if (!_allowedCurrencies.contains(_currency)) {
-      setState(() => _error = 'Please select a valid currency.');
+      setState(() => _error = l10n.t('selectValidCurrency'));
       return;
     }
 
     final projectName = _projectNameFromId(_projectId!);
     if (projectName.isEmpty) {
-      setState(() => _error = 'Selected project is invalid.');
+      setState(() => _error = l10n.t('selectedProjectInvalid'));
       return;
     }
 
@@ -160,10 +162,11 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final parsed = widget.response.parsed;
     final confidence = widget.response.confidence;
     return Scaffold(
-      appBar: AppBar(title: const Text('Review Voice Expense')),
+      appBar: AppBar(title: Text(l10n.t('reviewVoiceExpense'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -173,19 +176,30 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Transcript',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Text(
+                    l10n.t('transcript'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(widget.response.transcript),
                   const SizedBox(height: 12),
-                  Text('Source: ${widget.response.source}'),
                   Text(
-                    'Confidence - amount ${(confidence.amount * 100).toStringAsFixed(0)}%, '
-                    'category ${(confidence.category * 100).toStringAsFixed(0)}%, '
-                    'project ${(confidence.project * 100).toStringAsFixed(0)}%, '
-                    'overall ${(confidence.overall * 100).toStringAsFixed(0)}%',
+                    l10n.t(
+                      'sourceWithValue',
+                      params: {'value': widget.response.source},
+                    ),
+                  ),
+                  Text(
+                    l10n.t(
+                      'voiceConfidenceSummary',
+                      params: {
+                        'amount': (confidence.amount * 100).toStringAsFixed(0),
+                        'category':
+                            (confidence.category * 100).toStringAsFixed(0),
+                        'project': (confidence.project * 100).toStringAsFixed(0),
+                        'overall': (confidence.overall * 100).toStringAsFixed(0),
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -195,12 +209,12 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount'),
+            decoration: InputDecoration(labelText: l10n.t('amount')),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _currency,
-            decoration: const InputDecoration(labelText: 'Currency'),
+            decoration: InputDecoration(labelText: l10n.t('currencyLabel')),
             items: _allowedCurrencies
                 .map(
                   (currency) =>
@@ -214,11 +228,13 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _category,
-            decoration: const InputDecoration(labelText: 'Category'),
+            decoration: InputDecoration(labelText: l10n.t('category')),
             items: _allowedCategories
                 .map(
-                  (category) =>
-                      DropdownMenuItem(value: category, child: Text(category)),
+                  (category) => DropdownMenuItem(
+                    value: category,
+                    child: Text(l10n.expenseCategoryLabel(category)),
+                  ),
                 )
                 .toList(),
             onChanged: (value) {
@@ -228,7 +244,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _projectId,
-            decoration: const InputDecoration(labelText: 'Project'),
+            decoration: InputDecoration(labelText: l10n.t('project')),
             items: widget.projects
                 .map(
                   (project) => DropdownMenuItem(
@@ -245,7 +261,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           TextField(
             controller: _noteController,
             maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Notes'),
+            decoration: InputDecoration(labelText: l10n.t('notes')),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -257,7 +273,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.t('cancel')),
                 ),
               ),
               const SizedBox(width: 12),
@@ -269,7 +285,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Confirm & Save'),
+                      : Text(l10n.t('confirmAndSave')),
                 ),
               ),
             ],
@@ -278,7 +294,10 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           if (parsed.matchedProjectId == null &&
               parsed.matchedProjectName != null)
             Text(
-              'Detected project name: ${parsed.matchedProjectName}',
+              l10n.t(
+                'detectedProjectName',
+                params: {'name': parsed.matchedProjectName ?? ''},
+              ),
               style: const TextStyle(fontSize: 12),
             ),
         ],

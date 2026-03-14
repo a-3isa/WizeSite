@@ -24,6 +24,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _sendReset() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _loading = true;
       _info = null;
@@ -33,7 +34,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref
           .read(firebaseAuthProvider)
           .sendPasswordResetEmail(email: _emailController.text.trim());
-      setState(() => _info = 'Reset link sent to your email.');
+      setState(() => _info = l10n.t('resetLinkSent'));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -64,7 +65,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       dimension: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Send reset link'),
+                  : Text(l10n.t('sendResetLink')),
             ),
             if (_info != null)
               Padding(

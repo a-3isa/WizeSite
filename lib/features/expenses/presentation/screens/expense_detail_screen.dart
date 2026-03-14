@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,14 +15,15 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final expenseAsync = ref.watch(expenseDetailsProvider(expenseId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Expense Details')),
+      appBar: AppBar(title: Text(l10n.t('expenseDetails'))),
       body: expenseAsync.when(
         data: (expense) {
           if (expense == null) {
-            return const Center(child: Text('Expense not found.'));
+            return Center(child: Text(l10n.t('expenseNotFound')));
           }
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -32,23 +34,74 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Amount: ${expense.amount.toStringAsFixed(0)}'),
-                      Text('Currency: ${expense.currency}'),
-                      Text('Category: ${expense.category}'),
                       Text(
-                        'Project: ${expense.projectName.isEmpty ? expense.projectId : expense.projectName}',
+                        l10n.t(
+                          'amountWithValue',
+                          params: {'value': expense.amount.toStringAsFixed(0)},
+                        ),
                       ),
                       Text(
-                        'Date: ${expense.date.toIso8601String().split('T').first}',
+                        l10n.t(
+                          'currencyWithValue',
+                          params: {'value': expense.currency},
+                        ),
                       ),
                       Text(
-                        'Supplier: ${expense.supplierName.isEmpty ? '-' : expense.supplierName}',
+                        l10n.t(
+                          'categoryWithValue',
+                          params: {
+                            'value': l10n.expenseCategoryLabel(expense.category),
+                          },
+                        ),
                       ),
                       Text(
-                        'Notes: ${expense.notes.isEmpty ? '-' : expense.notes}',
+                        l10n.t(
+                          'projectWithValue',
+                          params: {
+                            'value': expense.projectName.isEmpty
+                                ? expense.projectId
+                                : expense.projectName,
+                          },
+                        ),
                       ),
                       Text(
-                        'Input: ${expense.inputMethod} | Source: ${expense.source.isEmpty ? '-' : expense.source}',
+                        l10n.t(
+                          'dateWithValue',
+                          params: {
+                            'value': expense.date.toIso8601String().split('T').first,
+                          },
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'supplierWithValue',
+                          params: {
+                            'value': expense.supplierName.isEmpty
+                                ? l10n.t('none')
+                                : expense.supplierName,
+                          },
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'notesWithValue',
+                          params: {
+                            'value': expense.notes.isEmpty
+                                ? l10n.t('none')
+                                : expense.notes,
+                          },
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'inputSourceWithValue',
+                          params: {
+                            'input': expense.inputMethod,
+                            'source': expense.source.isEmpty
+                                ? l10n.t('none')
+                                : expense.source,
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -57,7 +110,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton.tonal(
                 onPressed: () => context.push('/expense/${expense.id}/edit'),
-                child: const Text('Edit'),
+                child: Text(l10n.t('edit')),
               ),
               const SizedBox(height: 8),
               FilledButton(
@@ -70,7 +123,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   }
                 },
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Archive'),
+                child: Text(l10n.t('archive')),
               ),
             ],
           );

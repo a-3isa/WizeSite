@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -27,15 +28,16 @@ class WorkerDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final workerAsync = ref.watch(workerDetailsProvider(workerId));
     final entriesAsync = ref.watch(workerEntriesProvider(workerId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Worker Details')),
+      appBar: AppBar(title: Text(l10n.t('workerDetails'))),
       body: workerAsync.when(
         data: (worker) {
           if (worker == null) {
-            return const Center(child: Text('Worker not found.'));
+            return Center(child: Text(l10n.t('workerNotFound')));
           }
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -51,12 +53,27 @@ class WorkerDetailScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 6),
-                      Text('Phone: ${worker.phoneNumber}'),
                       Text(
-                        'Daily Wage: ${worker.dailyWage.toStringAsFixed(0)}',
+                        l10n.t(
+                          'phoneWithValue',
+                          params: {'value': worker.phoneNumber},
+                        ),
                       ),
                       Text(
-                        'Type: ${worker.workerType.isEmpty ? '-' : worker.workerType}',
+                        l10n.t(
+                          'dailyWageWithValue',
+                          params: {'value': worker.dailyWage.toStringAsFixed(0)},
+                        ),
+                      ),
+                      Text(
+                        l10n.t(
+                          'typeWithValue',
+                          params: {
+                            'value': worker.workerType.isEmpty
+                                ? l10n.t('none')
+                                : worker.workerType,
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -67,24 +84,22 @@ class WorkerDetailScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: FilledButton.tonal(
-                      onPressed: () =>
-                          context.push('/worker/${worker.id}/edit'),
-                      child: const Text('Edit Worker'),
+                      onPressed: () => context.push('/worker/${worker.id}/edit'),
+                      child: Text(l10n.t('editWorker')),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton.tonal(
-                      onPressed: () =>
-                          context.push('/worker-entry/${worker.id}'),
-                      child: const Text('Add Entry'),
+                      onPressed: () => context.push('/worker-entry/${worker.id}'),
+                      child: Text(l10n.t('addEntry')),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               Text(
-                'Recent Entries',
+                l10n.t('recentEntries'),
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -93,10 +108,10 @@ class WorkerDetailScreen extends ConsumerWidget {
               entriesAsync.when(
                 data: (entries) {
                   if (entries.isEmpty) {
-                    return const Card(
+                    return Card(
                       child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('No entries yet.'),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(l10n.t('noEntriesYet')),
                       ),
                     );
                   }
@@ -108,7 +123,7 @@ class WorkerDetailScreen extends ConsumerWidget {
                     children: [
                       Card(
                         child: ListTile(
-                          title: const Text('Total Labor Cost'),
+                          title: Text(l10n.t('totalLaborCost')),
                           trailing: Text(total.toStringAsFixed(0)),
                         ),
                       ),
@@ -116,7 +131,14 @@ class WorkerDetailScreen extends ConsumerWidget {
                         (entry) => Card(
                           child: ListTile(
                             title: Text(
-                              '${entry.daysWorked} d × ${entry.dailyWage.toStringAsFixed(0)} = ${entry.totalCost.toStringAsFixed(0)}',
+                              l10n.t(
+                                'workerEntryLine',
+                                params: {
+                                  'days': '${entry.daysWorked}',
+                                  'wage': entry.dailyWage.toStringAsFixed(0),
+                                  'total': entry.totalCost.toStringAsFixed(0),
+                                },
+                              ),
                             ),
                             subtitle: Text(
                               entry.date.toIso8601String().split('T').first,
@@ -134,14 +156,14 @@ class WorkerDetailScreen extends ConsumerWidget {
                                       .archiveEntry(entry.id);
                                 }
                               },
-                              itemBuilder: (_) => const [
+                              itemBuilder: (_) => [
                                 PopupMenuItem(
                                   value: 'edit',
-                                  child: Text('Edit'),
+                                  child: Text(l10n.t('edit')),
                                 ),
                                 PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Archive'),
+                                  child: Text(l10n.t('archive')),
                                 ),
                               ],
                             ),

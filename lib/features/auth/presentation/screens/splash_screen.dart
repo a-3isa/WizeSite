@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -44,6 +45,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -53,24 +55,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             end: Alignment.bottomRight,
           ),
         ),
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.construction, color: Colors.white, size: 72),
-              SizedBox(height: 16),
+              const Icon(Icons.construction, color: Colors.white, size: 72),
+              const SizedBox(height: 16),
               Text(
-                'Buildozer',
-                style: TextStyle(
+                l10n.t('appName'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 34,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
-                'Smart Construction Management',
-                style: TextStyle(color: Colors.white, fontSize: 16),
+                l10n.t('tagline'),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ],
           ),

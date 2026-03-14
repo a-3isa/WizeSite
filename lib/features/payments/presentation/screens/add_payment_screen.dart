@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -61,15 +62,16 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final amount = double.tryParse(_amountController.text.trim());
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (_projectId == null || amount == null || amount <= 0) {
-      setState(() => _error = 'Select project and enter valid amount.');
+      setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
     }
 
@@ -124,10 +126,15 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.paymentId == null ? 'Add Payment' : 'Edit Payment'),
+        title: Text(
+          widget.paymentId == null
+              ? l10n.t('addPaymentTitle')
+              : l10n.t('editPaymentTitle'),
+        ),
       ),
       body: _prefilling
           ? const Center(child: CircularProgressIndicator())
@@ -146,7 +153,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                         )
                         .toList(),
                     onChanged: (value) => setState(() => _projectId = value),
-                    decoration: const InputDecoration(labelText: 'Project'),
+                    decoration: InputDecoration(labelText: l10n.t('project')),
                   ),
                   error: (e, _) => Text(e.toString()),
                   loading: () =>
@@ -156,13 +163,18 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 TextField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Amount'),
+                  decoration: InputDecoration(labelText: l10n.t('amount')),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Date: ${_date.toIso8601String().split('T').first}',
+                    l10n.t(
+                      'dateWithValue',
+                      params: {
+                        'value': _date.toIso8601String().split('T').first,
+                      },
+                    ),
                   ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
@@ -180,25 +192,29 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _method,
-                  items: const [
-                    DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'cash',
+                      child: Text(l10n.paymentMethodLabel('cash')),
+                    ),
                     DropdownMenuItem(
                       value: 'bank',
-                      child: Text('Bank Transfer'),
+                      child: Text(l10n.paymentMethodLabel('bank')),
                     ),
-                    DropdownMenuItem(value: 'check', child: Text('Check')),
+                    DropdownMenuItem(
+                      value: 'check',
+                      child: Text(l10n.paymentMethodLabel('check')),
+                    ),
                   ],
                   onChanged: (value) =>
                       setState(() => _method = value ?? 'cash'),
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Method',
-                  ),
+                  decoration: InputDecoration(labelText: l10n.t('paymentMethod')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _notesController,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Notes'),
+                  decoration: InputDecoration(labelText: l10n.t('notes')),
                 ),
                 const SizedBox(height: 12),
                 if (_error != null)
@@ -213,8 +229,8 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                         )
                       : Text(
                           widget.paymentId == null
-                              ? 'Save Payment'
-                              : 'Update Payment',
+                              ? l10n.t('savePayment')
+                              : l10n.t('updatePayment'),
                         ),
                 ),
               ],

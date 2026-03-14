@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
@@ -29,7 +30,7 @@ class VoiceProcessingScreen extends ConsumerStatefulWidget {
 
 class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
   double _uploadProgress = 0;
-  String _stage = 'Uploading audio...';
+  String _stage = '';
   String? _error;
 
   @override
@@ -39,9 +40,10 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
   }
 
   Future<void> _process() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _uploadProgress = 0;
-      _stage = 'Uploading audio...';
+      _stage = l10n.t('uploadingAudio');
       _error = null;
     });
 
@@ -65,7 +67,7 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _stage = 'Parsing expense...');
+      setState(() => _stage = l10n.t('parsingExpense'));
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) =>
@@ -78,16 +80,17 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
       }
       setState(() {
         _error = e.toString();
-        _stage = 'Failed';
+        _stage = l10n.t('failed');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasError = _error != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Processing Voice')),
+      appBar: AppBar(title: Text(l10n.t('processingVoice'))),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -111,7 +114,7 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: _process, child: const Text('Retry')),
+                FilledButton(onPressed: _process, child: Text(l10n.t('retry'))),
               ],
             ],
           ),

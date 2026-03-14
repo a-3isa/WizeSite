@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,13 +24,14 @@ class NotificationsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final notificationsAsync = ref.watch(notificationItemsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(l10n.t('notificationsTitle'))),
       body: notificationsAsync.when(
         data: (snap) {
           if (snap.docs.isEmpty) {
-            return const Center(child: Text('No notifications yet.'));
+            return Center(child: Text(l10n.t('noNotificationsYet')));
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),

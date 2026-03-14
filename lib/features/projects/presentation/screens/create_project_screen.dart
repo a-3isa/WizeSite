@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -70,10 +71,11 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
 
@@ -81,7 +83,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     if (_nameController.text.trim().isEmpty ||
         contract == null ||
         contract <= 0) {
-      setState(() => _error = 'Please fill required fields.');
+      setState(() => _error = l10n.t('fillRequiredFields'));
       return;
     }
 
@@ -165,10 +167,13 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.projectId == null ? 'Create Project' : 'Edit Project',
+          widget.projectId == null
+              ? l10n.t('createProject')
+              : l10n.t('editProjectTitle'),
         ),
       ),
       body: _prefilling
@@ -178,64 +183,76 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               children: [
                 TextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Project Name *',
+                  decoration: InputDecoration(
+                    labelText: '${l10n.t('projectName')} *',
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _clientController,
-                  decoration: const InputDecoration(labelText: 'Client Name'),
+                  decoration: InputDecoration(labelText: l10n.t('clientName')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _contractController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Contract Value *',
+                  decoration: InputDecoration(
+                    labelText: '${l10n.t('contractValue')} *',
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: InputDecoration(labelText: l10n.t('location')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _descriptionController,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration: InputDecoration(labelText: l10n.t('description')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _budgetController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Budget Limit'),
+                  decoration: InputDecoration(labelText: l10n.t('budgetLimit')),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _status,
-                  items: const [
-                    DropdownMenuItem(value: 'active', child: Text('Active')),
-                    DropdownMenuItem(value: 'paused', child: Text('Paused')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'active',
+                      child: Text(l10n.projectStatusLabel('active')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'paused',
+                      child: Text(l10n.projectStatusLabel('paused')),
+                    ),
                     DropdownMenuItem(
                       value: 'completed',
-                      child: Text('Completed'),
+                      child: Text(l10n.projectStatusLabel('completed')),
                     ),
                     DropdownMenuItem(
                       value: 'cancelled',
-                      child: Text('Cancelled'),
+                      child: Text(l10n.projectStatusLabel('cancelled')),
                     ),
                   ],
                   onChanged: (value) =>
                       setState(() => _status = value ?? 'active'),
-                  decoration: const InputDecoration(labelText: 'Status'),
+                  decoration: InputDecoration(labelText: l10n.t('status')),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Start Date: ${_startDate.toLocal().toIso8601String().split('T').first}',
+                    l10n.t(
+                      'startDateWithValue',
+                      params: {
+                        'value':
+                            _startDate.toLocal().toIso8601String().split('T').first,
+                      },
+                    ),
                   ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () => _pickDate(isStart: true),
@@ -244,14 +261,25 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     _endDate == null
-                        ? 'Expected End Date: Optional'
-                        : 'Expected End Date: ${_endDate!.toLocal().toIso8601String().split('T').first}',
+                        ? l10n.t('expectedEndDateOptional')
+                        : l10n.t(
+                            'expectedEndDateWithValue',
+                            params: {
+                              'value':
+                                  _endDate!.toLocal().toIso8601String().split('T').first,
+                            },
+                          ),
                   ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () => _pickDate(isStart: false),
                 ),
                 const SizedBox(height: 12),
-                Text('Completion: ${_completion.toInt()}%'),
+                Text(
+                  l10n.t(
+                    'completionLabel',
+                    params: {'value': '${_completion.toInt()}'},
+                  ),
+                ),
                 Slider(
                   min: 0,
                   max: 100,
@@ -272,8 +300,8 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                         )
                       : Text(
                           widget.projectId == null
-                              ? 'Save Project'
-                              : 'Update Project',
+                              ? l10n.t('saveProject')
+                              : l10n.t('updateProject'),
                         ),
                 ),
               ],

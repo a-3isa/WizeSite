@@ -33,6 +33,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final l10n = AppLocalizations.of(context);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = l10n.t('pleaseEnterEmailAndPassword'));
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -42,8 +50,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final firestore = ref.read(firestoreProvider);
 
       final cred = await auth.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
       final user = cred.user;
       if (user == null) {
@@ -57,8 +65,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) {
         context.go(AppRoutes.dashboard);
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = _authErrorMessage(l10n, e.code));
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _authErrorMessage(l10n, null));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -66,7 +76,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  String _authErrorMessage(AppLocalizations l10n, String? code) {
+    switch (code) {
+      case 'user-not-found':
+        return l10n.t('authNoAccountFound');
+      case 'wrong-password':
+      case 'invalid-credential':
+        return l10n.t('authIncorrectPassword');
+      case 'invalid-email':
+        return l10n.t('authInvalidEmail');
+      case 'user-disabled':
+        return l10n.t('authAccountDisabled');
+      case 'too-many-requests':
+        return l10n.t('authTooManyAttempts');
+      case 'network-request-failed':
+        return l10n.t('authNetworkError');
+      case 'account-exists-with-different-credential':
+        return l10n.t('authDifferentProvider');
+      default:
+        return l10n.t('authSignInFailed');
+    }
+  }
+
   Future<void> _loginWithGoogle() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _loading = true;
       _error = null;
@@ -81,6 +114,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       final user = credential?.user;
       if (user == null) {
+        if (mounted) {
+          setState(() {
+            _error = l10n.t('signInCancelled');
+            _loading = false;
+          });
+        }
         return;
       }
 
@@ -91,8 +130,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) {
         context.go(AppRoutes.dashboard);
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = _authErrorMessage(l10n, e.code));
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _authErrorMessage(l10n, null));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -215,7 +256,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  l10n.t('login') == 'Login' ? 'Welcome Back' : l10n.t('login'),
+                  l10n.t('welcomeBack'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
                     fontWeight: FontWeight.w900,
@@ -225,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign in to your account to continue',
+                  l10n.t('signInToContinue'),
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
@@ -342,7 +383,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 errorBuilder: (c, e, s) =>
                                     const Icon(Icons.g_mobiledata, size: 24),
                               ),
-                              label: const Text('Continue with Google'),
+                              label: Text(l10n.t('continueWithGoogle')),
                               style: OutlinedButton.styleFrom(
                                 backgroundColor: AppColors.surfaceSolid,
                               ),
@@ -358,8 +399,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      "Don't have an account?",
-                      style: TextStyle(color: AppColors.textBody),
+                      l10n.t('dontHaveAccount'),
+                      style: const TextStyle(color: AppColors.textBody),
                     ),
                     TextButton(
                       onPressed: () => context.go(AppRoutes.signup),

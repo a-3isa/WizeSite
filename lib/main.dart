@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+  await Hive.openBox<String>('app_prefs');
   await FirebaseInitializer.ensureInitialized();
   runApp(const ProviderScope(child: BuildozerApp()));
 }

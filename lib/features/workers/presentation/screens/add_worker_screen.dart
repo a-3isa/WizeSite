@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:flutter/material.dart';
@@ -61,15 +62,16 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final wage = double.tryParse(_wageController.text.trim());
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'Please login first.');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     if (_nameController.text.trim().isEmpty || wage == null || wage <= 0) {
-      setState(() => _error = 'Name and valid daily wage are required.');
+      setState(() => _error = l10n.t('nameAndValidWageRequired'));
       return;
     }
 
@@ -116,9 +118,14 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.workerId == null ? 'Add Worker' : 'Edit Worker'),
+        title: Text(
+          widget.workerId == null
+              ? l10n.t('addWorkerTitle')
+              : l10n.t('editWorkerTitle'),
+        ),
       ),
       body: _prefilling
           ? const Center(child: CircularProgressIndicator())
@@ -127,30 +134,30 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               children: [
                 TextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Worker Name'),
+                  decoration: InputDecoration(labelText: l10n.t('workerName')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone Number'),
+                  decoration: InputDecoration(labelText: l10n.t('phoneNumber')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _wageController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Daily Wage'),
+                  decoration: InputDecoration(labelText: l10n.t('dailyWage')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _typeController,
-                  decoration: const InputDecoration(labelText: 'Worker Type'),
+                  decoration: InputDecoration(labelText: l10n.t('workerType')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _notesController,
                   maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Notes'),
+                  decoration: InputDecoration(labelText: l10n.t('notes')),
                 ),
                 const SizedBox(height: 12),
                 if (_error != null)
@@ -165,8 +172,8 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                         )
                       : Text(
                           widget.workerId == null
-                              ? 'Save Worker'
-                              : 'Update Worker',
+                              ? l10n.t('saveWorker')
+                              : l10n.t('updateWorker'),
                         ),
                 ),
               ],

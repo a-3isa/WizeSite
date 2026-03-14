@@ -15,7 +15,7 @@ class BuildozerApp extends ConsumerWidget {
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: 'Buildozer',
+      title: AppLocalizations(locale).t('appName'),
       locale: locale,
       theme: AppTheme.light(locale),
       routerConfig: ref.watch(appRouterProvider),
