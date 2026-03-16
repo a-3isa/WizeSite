@@ -263,7 +263,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                         _SectionHeader(title: l10n.t('status')),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
-                          value: _status,
+                          initialValue: _status,
                           items: [
                             DropdownMenuItem(value: 'active', child: Text(l10n.projectStatusLabel('active'))),
                             DropdownMenuItem(value: 'paused', child: Text(l10n.projectStatusLabel('paused'))),

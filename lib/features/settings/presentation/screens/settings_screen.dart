@@ -117,7 +117,8 @@ class SettingsScreen extends ConsumerWidget {
                         ref.read(notificationsEnabledProvider.notifier).state =
                             value;
                       },
-                      activeColor: AppColors.constructionOrange,
+                      activeThumbColor: AppColors.constructionOrange,
+                      activeTrackColor: AppColors.constructionOrange,
                     ),
                   ),
                   const SizedBox(height: 20),
