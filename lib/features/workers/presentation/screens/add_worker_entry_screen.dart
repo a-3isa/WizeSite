@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
@@ -129,11 +130,13 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
             '${AppRoutes.subscriptionLimit}?limit=workerEntriesPerMonth',
           );
         }
-      } else {
-        setState(() => _error = e.message ?? e.code);
+      } else if (mounted) {
+        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = l10n.t('unexpectedErrorTryAgain'));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -172,7 +175,9 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                           )
                           .toList(),
                       onChanged: (value) => setState(() => _workerId = value),
-                      decoration: InputDecoration(labelText: l10n.t('workerName')),
+                      decoration: InputDecoration(
+                        labelText: l10n.t('workerName'),
+                      ),
                     ),
                     error: (e, _) => Text(e.toString()),
                     loading: () =>

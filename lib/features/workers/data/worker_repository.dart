@@ -1,7 +1,6 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class WorkerRepository {
@@ -141,10 +140,9 @@ class FirebaseWorkerRepository implements WorkerRepository {
 }
 
 class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
-  FirebaseWorkerEntryRepository(this._firestore, this._functions);
+  FirebaseWorkerEntryRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
 
   @override
   Stream<List<WorkerEntryRecord>> watchEntriesByWorker({
@@ -188,15 +186,21 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     required DateTime date,
     String? notes,
   }) async {
-    await _functions.httpsCallable('createWorkerEntryWithQuota').call({
+    final ref = _firestore.collection('worker_entries').doc();
+    await ref.set({
+      'id': ref.id,
       'workspaceId': workspaceId,
-      'userId': userId,
       'workerId': workerId,
       'projectId': projectId,
       'daysWorked': daysWorked,
       'dailyWage': dailyWage,
-      'date': date.toIso8601String(),
+      'totalCost': daysWorked * dailyWage,
+      'date': Timestamp.fromDate(date),
       'notes': notes ?? '',
+      'createdBy': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isArchived': false,
     });
   }
 
@@ -234,8 +238,5 @@ final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
 });
 
 final workerEntryRepositoryProvider = Provider<WorkerEntryRepository>((ref) {
-  return FirebaseWorkerEntryRepository(
-    ref.watch(firestoreProvider),
-    ref.watch(functionsProvider),
-  );
+  return FirebaseWorkerEntryRepository(ref.watch(firestoreProvider));
 });

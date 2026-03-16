@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -120,11 +121,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=expensesPerMonth');
         }
-      } else {
-        setState(() => _error = e.message ?? e.code);
+      } else if (mounted) {
+        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = l10n.t('unexpectedErrorTryAgain'));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);

@@ -181,7 +181,13 @@ class FeaturesScreen extends StatelessWidget {
                           24,
                         ),
                         child: FilledButton(
-                          onPressed: () => context.go(AppRoutes.onboarding),
+                          onPressed: () {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (context.mounted) {
+                                context.push(AppRoutes.onboarding);
+                              }
+                            });
+                          },
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.constructionOrange,
                             foregroundColor: Colors.white,

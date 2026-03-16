@@ -31,6 +31,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    sourceSets {
+        getByName("profile") {
+            kotlin.srcDirs("src/debug/kotlin")
+        }
+    }
+
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
@@ -76,4 +82,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
+    profileImplementation("com.google.firebase:firebase-appcheck-debug")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
 }

@@ -119,17 +119,26 @@ class AppLocalizations {
         'No account found with this email. Check the address or sign up.',
     'authIncorrectPassword': 'Incorrect password. Please try again.',
     'authInvalidEmail': 'Please enter a valid email address.',
-    'authAccountDisabled':
-        'This account has been disabled. Contact support.',
+    'authAccountDisabled': 'This account has been disabled. Contact support.',
     'authTooManyAttempts': 'Too many attempts. Please try again later.',
     'authNetworkError': 'Network error. Check your connection and try again.',
     'authDifferentProvider':
         'An account already exists with this email. Try signing in with email and password.',
     'authSignInFailed':
         'Sign-in failed. Please check your email and password and try again.',
+    'actionNotAllowed': 'You are not allowed to perform this action.',
+    'featureTemporarilyUnavailable':
+        'This feature is temporarily unavailable. Please try again later.',
+    'serviceUnavailable':
+        'Service is temporarily unavailable. Please try again.',
+    'unexpectedErrorTryAgain': 'Something went wrong. Please try again.',
     'authInvalidEmailFormat': 'Invalid email format',
     'authPasswordMinLength': 'Password must be at least 8 characters',
     'authPasswordsDoNotMatch': 'Passwords do not match',
+    'authEmailAlreadyInUse': 'An account with this email already exists.',
+    'authWeakPassword': 'Password is too weak. Use at least 8 characters.',
+    'authOperationNotAllowed': 'Email sign-up is not enabled. Contact support.',
+    'authSignUpFailed': 'Sign-up failed. Check your connection and try again.',
     'pleaseLoginFirst': 'Please login first.',
     'overview': 'Overview',
     'quickActions': 'Quick Actions',
@@ -149,7 +158,8 @@ class AppLocalizations {
     'paymentListSubtitle': 'View, edit, and archive payments.',
     'addWorkerEntrySubtitle': 'Capture labor days and auto-calculate cost.',
     'createProjectSubtitle': 'Create a new project with contract details.',
-    'voiceExpenseSubtitle': 'Speak naturally, confirm parsed result, then save.',
+    'voiceExpenseSubtitle':
+        'Speak naturally, confirm parsed result, then save.',
     'newProject': 'New Project',
     'editProjectTitle': 'Edit Project',
     'noProjectsYet': 'No projects yet.',
@@ -450,6 +460,10 @@ class AppLocalizations {
     'authInvalidEmailFormat': 'تنسيق البريد الإلكتروني غير صحيح',
     'authPasswordMinLength': 'يجب أن تكون كلمة المرور 8 أحرف على الأقل',
     'authPasswordsDoNotMatch': 'كلمتا المرور غير متطابقتين',
+    'authEmailAlreadyInUse': 'يوجد حساب بهذا البريد مسبقاً.',
+    'authWeakPassword': 'كلمة المرور ضعيفة. استخدم 8 أحرف على الأقل.',
+    'authOperationNotAllowed': 'التسجيل بالبريد غير مفعّل. تواصل مع الدعم.',
+    'authSignUpFailed': 'فشل التسجيل. تحقق من الاتصال وحاول مرة أخرى.',
     'pleaseLoginFirst': 'يرجى تسجيل الدخول أولاً.',
     'overview': 'نظرة عامة',
     'quickActions': 'إجراءات سريعة',
@@ -606,7 +620,8 @@ class AppLocalizations {
     'paywallFailed': 'فشلت شاشة الدفع. حاول مرة أخرى.',
     'continueWithPaywall': 'المتابعة عبر شاشة RevenueCat',
     'purchaseNotCompleted': 'لم تكتمل عملية الشراء.',
-    'proUnlocksSubtitle': 'خطة WizeSite Pro تفتح حدود استخدام أعلى وتوسعاً أكبر.',
+    'proUnlocksSubtitle':
+        'خطة WizeSite Pro تفتح حدود استخدام أعلى وتوسعاً أكبر.',
     'trialStartsWithPurchase':
         'تبدأ التجربة المجانية 7 أيام عند أول عملية اشتراك ناجحة.',
     'purchasesRestoredSuccessfully': 'تمت استعادة المشتريات بنجاح.',
@@ -663,10 +678,7 @@ class AppLocalizations {
     'workerEntryLine': '{days} يوم × {wage} = {total}',
   };
 
-  static final _localized = <String, Map<String, String>>{
-    'en': _en,
-    'ar': _ar,
-  };
+  static final _localized = <String, Map<String, String>>{'en': _en, 'ar': _ar};
 
   String t(String key, {Map<String, String> params = const {}}) {
     var value = _localized[locale.languageCode]?[key] ?? _en[key] ?? key;

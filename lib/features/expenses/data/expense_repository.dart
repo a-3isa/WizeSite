@@ -1,7 +1,6 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class ExpenseRepository {
@@ -35,10 +34,9 @@ abstract interface class ExpenseRepository {
 }
 
 class FirebaseExpenseRepository implements ExpenseRepository {
-  FirebaseExpenseRepository(this._firestore, this._functions);
+  FirebaseExpenseRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
 
   @override
   Stream<List<Expense>> watchExpenses(String workspaceId) {
@@ -78,19 +76,24 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     String? supplierName,
     String? paymentMethod,
   }) async {
-    await _functions.httpsCallable('createExpenseWithQuota').call({
+    final ref = _firestore.collection('expenses').doc();
+    await ref.set({
+      'id': ref.id,
       'workspaceId': workspaceId,
-      'userId': userId,
       'projectId': projectId,
       'projectName': projectName ?? '',
       'category': category,
       'amount': amount,
       'currency': currency ?? 'EGP',
-      'date': date.toIso8601String(),
+      'date': Timestamp.fromDate(date),
       'notes': notes ?? '',
       'supplierName': supplierName ?? '',
       'paymentMethod': paymentMethod ?? '',
       'inputMethod': 'manual',
+      'createdBy': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isArchived': false,
     });
   }
 
@@ -125,8 +128,5 @@ class FirebaseExpenseRepository implements ExpenseRepository {
 }
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  return FirebaseExpenseRepository(
-    ref.watch(firestoreProvider),
-    ref.watch(functionsProvider),
-  );
+  return FirebaseExpenseRepository(ref.watch(firestoreProvider));
 });

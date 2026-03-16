@@ -1,7 +1,6 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class ProjectRepository {
@@ -40,10 +39,9 @@ abstract interface class ProjectRepository {
 }
 
 class FirebaseProjectRepository implements ProjectRepository {
-  FirebaseProjectRepository(this._firestore, this._functions);
+  FirebaseProjectRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
 
   @override
   Stream<List<Project>> watchProjects(String workspaceId) {
@@ -73,19 +71,34 @@ class FirebaseProjectRepository implements ProjectRepository {
     double? budgetLimit,
     double completionPercentage = 0,
   }) async {
-    final callable = _functions.httpsCallable('createProjectWithQuota');
-    await callable.call<Map<String, dynamic>>({
+    final ref = _firestore.collection('projects').doc();
+    await ref.set({
+      'id': ref.id,
       'workspaceId': workspaceId,
-      'userId': userId,
+      'ownerId': userId,
       'name': name,
       'clientName': clientName,
       'contractValue': contractValue,
-      'startDate': startDate.toIso8601String(),
-      'expectedEndDate': expectedEndDate?.toIso8601String(),
-      'location': location,
-      'description': description,
+      'startDate': Timestamp.fromDate(startDate),
+      'expectedEndDate':
+          expectedEndDate == null ? null : Timestamp.fromDate(expectedEndDate),
+      'location': location ?? '',
+      'description': description ?? '',
       'budgetLimit': budgetLimit,
       'completionPercentage': completionPercentage,
+      'status': 'active',
+      'totalExpenses': 0,
+      'totalLaborCost': 0,
+      'totalPayments': 0,
+      'netProfit': 0,
+      'expectedFinalCost': 0,
+      'remainingBalance': contractValue,
+      'riskLevel': 'low',
+      'healthStatus': 'healthy',
+      'createdBy': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isArchived': false,
     });
   }
 
@@ -139,8 +152,5 @@ class FirebaseProjectRepository implements ProjectRepository {
 }
 
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
-  return FirebaseProjectRepository(
-    ref.watch(firestoreProvider),
-    ref.watch(functionsProvider),
-  );
+  return FirebaseProjectRepository(ref.watch(firestoreProvider));
 });

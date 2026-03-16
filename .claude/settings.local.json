@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb devices:*)",
+      "Bash(adb -s emulator-5554 logcat -c)",
+      "Bash(flutter run:*)",
+      "Bash(adb -s emulator-5554 logcat -d)",
+      "Bash(npm install:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET)"
+    ]
+  }
+}

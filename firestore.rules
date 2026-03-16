@@ -36,25 +36,25 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if false; // callable function only
+      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
       allow update, delete: if inWorkspace(resource.data.workspaceId);
     }
 
     match /expenses/{expenseId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if false; // callable function only
+      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
       allow update, delete: if inWorkspace(resource.data.workspaceId);
     }
 
     match /payments/{paymentId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if false; // callable function only
+      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
       allow update, delete: if inWorkspace(resource.data.workspaceId);
     }
 
     match /worker_entries/{entryId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if false; // callable function only
+      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
       allow update, delete: if inWorkspace(resource.data.workspaceId);
     }
 

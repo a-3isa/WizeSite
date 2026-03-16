@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -37,6 +40,31 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
+  static const _signupTimeout = Duration(seconds: 30);
+
+  String _authErrorMessage(Object e, AppLocalizations l10n) {
+    if (e is FirebaseAuthException) {
+      final code = e.code.replaceFirst('firebase_auth/', '');
+      switch (code) {
+        case 'email-already-in-use':
+          return l10n.t('authEmailAlreadyInUse');
+        case 'invalid-email':
+          return l10n.t('authInvalidEmailFormat');
+        case 'weak-password':
+          return l10n.t('authWeakPassword');
+        case 'operation-not-allowed':
+          return l10n.t('authOperationNotAllowed');
+        case 'network-request-failed':
+        case 'too-many-requests':
+          return l10n.t('authNetworkError');
+      }
+    }
+    if (e is TimeoutException) {
+      return l10n.t('authSignUpFailed');
+    }
+    return l10n.t('authSignUpFailed');
+  }
+
   Future<void> _signup() async {
     final l10n = AppLocalizations.of(context);
     if (!_emailController.text.contains('@')) {
@@ -61,10 +89,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       final auth = ref.read(firebaseAuthProvider);
       final firestore = ref.read(firestoreProvider);
 
-      final cred = await auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      final cred = await auth
+          .createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          )
+          .timeout(_signupTimeout);
 
       final uid = cred.user!.uid;
       final workspaceId = const Uuid().v4();
@@ -99,14 +129,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
 
       if (!cred.user!.emailVerified) {
-        await cred.user!.sendEmailVerification();
+        unawaited(cred.user!.sendEmailVerification());
       }
 
       if (mounted) {
         context.go(AppRoutes.dashboard);
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(e, l10n));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);

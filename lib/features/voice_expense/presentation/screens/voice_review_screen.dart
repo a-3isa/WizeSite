@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -148,11 +149,13 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
           return;
         }
         context.push('${AppRoutes.subscriptionLimit}?limit=expensesPerMonth');
-      } else {
-        setState(() => _error = e.message ?? e.code);
+      } else if (mounted) {
+        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = l10n.t('unexpectedErrorTryAgain'));
+      }
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -194,10 +197,15 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                       'voiceConfidenceSummary',
                       params: {
                         'amount': (confidence.amount * 100).toStringAsFixed(0),
-                        'category':
-                            (confidence.category * 100).toStringAsFixed(0),
-                        'project': (confidence.project * 100).toStringAsFixed(0),
-                        'overall': (confidence.overall * 100).toStringAsFixed(0),
+                        'category': (confidence.category * 100).toStringAsFixed(
+                          0,
+                        ),
+                        'project': (confidence.project * 100).toStringAsFixed(
+                          0,
+                        ),
+                        'overall': (confidence.overall * 100).toStringAsFixed(
+                          0,
+                        ),
                       },
                     ),
                   ),

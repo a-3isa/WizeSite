@@ -1,7 +1,6 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class PaymentRepository {
@@ -29,10 +28,9 @@ abstract interface class PaymentRepository {
 }
 
 class FirebasePaymentRepository implements PaymentRepository {
-  FirebasePaymentRepository(this._firestore, this._functions);
+  FirebasePaymentRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
 
   @override
   Stream<List<PaymentRecord>> watchPayments(String workspaceId) {
@@ -68,14 +66,19 @@ class FirebasePaymentRepository implements PaymentRepository {
     required String paymentMethod,
     String? notes,
   }) async {
-    await _functions.httpsCallable('createPaymentWithQuota').call({
+    final ref = _firestore.collection('payments').doc();
+    await ref.set({
+      'id': ref.id,
       'workspaceId': workspaceId,
-      'userId': userId,
       'projectId': projectId,
       'amount': amount,
-      'date': date.toIso8601String(),
+      'date': Timestamp.fromDate(date),
       'paymentMethod': paymentMethod,
       'notes': notes ?? '',
+      'createdBy': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isArchived': false,
     });
   }
 
@@ -106,8 +109,5 @@ class FirebasePaymentRepository implements PaymentRepository {
 }
 
 final paymentRepositoryProvider = Provider<PaymentRepository>((ref) {
-  return FirebasePaymentRepository(
-    ref.watch(firestoreProvider),
-    ref.watch(functionsProvider),
-  );
+  return FirebasePaymentRepository(ref.watch(firestoreProvider));
 });

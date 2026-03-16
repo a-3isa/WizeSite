@@ -7,9 +7,45 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:549941684400:android:2d28c7ee464150228e7375",
+        "mobilesdk_app_id": "1:549941684400:android:77cf1c4dc5666c6e8e7375",
         "android_client_info": {
           "package_name": "com.ahmed.buildozer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "549941684400-p03oaa7s7kf66ndscjshia7b5hb7cheg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCS2KVhchEmxIJBVoS5-YvxV0gG1ayR3hk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "549941684400-p03oaa7s7kf66ndscjshia7b5hb7cheg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "549941684400-hjq57nnh3rrmavc1fgsfrjdebdqd271h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.buildtrack.buildtrackApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:549941684400:android:2d28c7ee464150228e7375",
+        "android_client_info": {
+          "package_name": "com.buildtrack.buildtrack_app"
         }
       },
       "oauth_client": [
@@ -17,7 +53,7 @@
           "client_id": "549941684400-gbfa9mtsd64ft5sq82gsmqmjvi4n0662.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.ahmed.buildozer",
+            "package_name": "com.buildtrack.buildtrack_app",
             "certificate_hash": "3afce5c2b0a6870dfdc4d92d7ab3d52afeda8717"
           }
         },
@@ -42,7 +78,7 @@
               "client_id": "549941684400-hjq57nnh3rrmavc1fgsfrjdebdqd271h.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.ahmed.buildozer"
+                "bundle_id": "com.buildtrack.buildtrackApp"
               }
             }
           ]

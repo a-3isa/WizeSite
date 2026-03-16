@@ -34,9 +34,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref
           .read(firebaseAuthProvider)
           .sendPasswordResetEmail(email: _emailController.text.trim());
-      setState(() => _info = l10n.t('resetLinkSent'));
+      if (mounted) {
+        setState(() => _info = l10n.t('resetLinkSent'));
+      }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);

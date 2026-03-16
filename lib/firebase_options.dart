@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCS2KVhchEmxIJBVoS5-YvxV0gG1ayR3hk',
-    appId: '1:549941684400:android:2d28c7ee464150228e7375',
+    appId: '1:549941684400:android:77cf1c4dc5666c6e8e7375',
     messagingSenderId: '549941684400',
     projectId: 'wize-site',
     storageBucket: 'wize-site.firebasestorage.app',

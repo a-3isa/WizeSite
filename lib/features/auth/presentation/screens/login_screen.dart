@@ -66,9 +66,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go(AppRoutes.dashboard);
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = _authErrorMessage(l10n, e.code));
-    } catch (e) {
-      setState(() => _error = _authErrorMessage(l10n, null));
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(l10n, e.code));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(l10n, null));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -131,9 +135,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go(AppRoutes.dashboard);
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = _authErrorMessage(l10n, e.code));
-    } catch (e) {
-      setState(() => _error = _authErrorMessage(l10n, null));
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(l10n, e.code));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(l10n, null));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);
