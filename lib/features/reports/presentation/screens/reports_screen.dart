@@ -352,7 +352,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       }
                       
                       return DropdownButtonFormField<String>(
-                        value: projects.any((p) => p.id == currentProjectId)
+                        initialValue: projects.any((p) => p.id == currentProjectId)
                             ? currentProjectId
                             : null,
                         hint: Text(
