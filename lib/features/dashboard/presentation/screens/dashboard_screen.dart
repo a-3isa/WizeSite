@@ -1,78 +1,16 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
+import 'package:go_router/go_router.dart';
 import 'package:buildtrack_app/core/widgets/usage_card.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
-final dashboardSummaryProvider =
-    FutureProvider.family<Map<String, num>, String>((ref, workspaceId) async {
-      final firestore = ref.watch(firestoreProvider);
-
-      final projectsCount = await firestore
-          .collection('projects')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .count()
-          .get();
-      final activeProjectsCount = await firestore
-          .collection('projects')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('status', isEqualTo: 'active')
-          .where('isArchived', isEqualTo: false)
-          .count()
-          .get();
-
-      final expensesSnap = await firestore
-          .collection('expenses')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .limit(500)
-          .get();
-      final paymentsSnap = await firestore
-          .collection('payments')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .limit(500)
-          .get();
-      final workerEntriesSnap = await firestore
-          .collection('worker_entries')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .limit(500)
-          .get();
-
-      final expenses = expensesSnap.docs.fold<num>(
-        0,
-        (total, doc) => total + ((doc.data()['amount'] as num?) ?? 0),
-      );
-      final labor = workerEntriesSnap.docs.fold<num>(
-        0,
-        (total, doc) => total + ((doc.data()['totalCost'] as num?) ?? 0),
-      );
-      final income = paymentsSnap.docs.fold<num>(
-        0,
-        (total, doc) => total + ((doc.data()['amount'] as num?) ?? 0),
-      );
-
-      final totalExpenses = expenses + labor;
-      final net = income - totalExpenses;
-
-      return {
-        'totalProjects': projectsCount.count ?? 0,
-        'activeProjects': activeProjectsCount.count ?? 0,
-        'totalExpenses': totalExpenses,
-        'totalIncome': income,
-        'net': net,
-      };
-    });
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -81,7 +19,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
-    final subscriptionAsync = ref.watch(currentSubscriptionProvider);
+    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final usageAsync = ref.watch(currentUsageProvider);
     final summaryAsync = workspaceId == null
         ? const AsyncValue.data(<String, num>{})

@@ -11,10 +11,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class AddWorkerEntryScreen extends ConsumerStatefulWidget {
-  const AddWorkerEntryScreen({required this.workerId, this.entryId, super.key});
+  const AddWorkerEntryScreen({required this.workerId, this.entryId, this.projectId, super.key});
 
   final String workerId;
   final String? entryId;
+  final String? projectId;
 
   @override
   ConsumerState<AddWorkerEntryScreen> createState() =>
@@ -40,6 +41,8 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     }
     if (widget.entryId != null) {
       _prefill();
+    } else if (widget.projectId != null) {
+      _projectId = widget.projectId;
     }
   }
 

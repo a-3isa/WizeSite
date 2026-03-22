@@ -54,7 +54,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.root,
     refreshListenable: refresh,
     redirect: (context, state) {
-      final location = state.matchedLocation;
+      final location = state.uri.path;
       final isSignedIn = auth.currentUser != null;
       final workspaceId = ref.read(activeWorkspaceIdProvider);
       final userId = ref.read(activeUserIdProvider);
@@ -72,26 +72,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.root,
+        name: 'splash',
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: AppRoutes.features,
+        name: 'features',
         builder: (context, state) => const FeaturesScreen(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,
+        name: 'onboarding',
         builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,
+        name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: AppRoutes.signup,
+        name: 'signup',
         builder: (context, state) => const SignUpScreen(),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
+        name: 'forgotPassword',
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       StatefulShellRoute.indexedStack(
@@ -103,6 +109,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.dashboard,
+                name: 'dashboard',
                 builder: (context, state) => const DashboardScreen(),
               ),
             ],
@@ -111,6 +118,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.projects,
+                name: 'projects',
                 builder: (context, state) => const ProjectsScreen(),
               ),
             ],
@@ -119,6 +127,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.add,
+                name: 'add',
                 builder: (context, state) => const AddHubScreen(),
               ),
             ],
@@ -127,7 +136,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.reports,
-                builder: (context, state) => const ReportsScreen(),
+                name: 'reports',
+                builder: (context, state) {
+                  final projectId = state.uri.queryParameters['projectId'];
+                  return ReportsScreen(projectId: projectId);
+                },
               ),
             ],
           ),
@@ -135,6 +148,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.settings,
+                name: 'settings',
                 builder: (context, state) => const SettingsScreen(),
               ),
             ],
@@ -143,10 +157,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.createProject,
+        name: 'createProject',
         builder: (context, state) => const CreateProjectScreen(),
       ),
       GoRoute(
         path: AppRoutes.projectEdit,
+        name: 'projectEdit',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return CreateProjectScreen(projectId: id);
@@ -154,6 +170,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.projectDetail,
+        name: 'projectDetail',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return ProjectDetailScreen(projectId: id);
@@ -161,14 +178,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.expenses,
+        name: 'expenses',
         builder: (context, state) => const ExpensesScreen(),
       ),
       GoRoute(
         path: AppRoutes.addExpense,
-        builder: (context, state) => const AddExpenseScreen(),
+        name: 'addExpense',
+        builder: (context, state) {
+          final projectId = state.uri.queryParameters['projectId'];
+          return AddExpenseScreen(projectId: projectId);
+        },
       ),
       GoRoute(
         path: AppRoutes.expenseDetail,
+        name: 'expenseDetail',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return ExpenseDetailScreen(expenseId: id);
@@ -176,6 +199,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.expenseEdit,
+        name: 'expenseEdit',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return AddExpenseScreen(expenseId: id);
@@ -183,18 +207,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.voiceExpense,
+        name: 'voiceExpense',
         builder: (context, state) => const VoiceExpenseScreen(),
       ),
       GoRoute(
         path: AppRoutes.payments,
+        name: 'payments',
         builder: (context, state) => const PaymentsScreen(),
       ),
       GoRoute(
         path: AppRoutes.addPayment,
-        builder: (context, state) => const AddPaymentScreen(),
+        name: 'addPayment',
+        builder: (context, state) {
+          final projectId = state.uri.queryParameters['projectId'];
+          return AddPaymentScreen(projectId: projectId);
+        },
       ),
       GoRoute(
         path: AppRoutes.paymentDetail,
+        name: 'paymentDetail',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return PaymentDetailScreen(paymentId: id);
@@ -202,6 +233,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.paymentEdit,
+        name: 'paymentEdit',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return AddPaymentScreen(paymentId: id);
@@ -209,10 +241,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.workers,
+        name: 'workers',
         builder: (context, state) => const WorkersScreen(),
       ),
       GoRoute(
         path: AppRoutes.workerDetail,
+        name: 'workerDetail',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return WorkerDetailScreen(workerId: id);
@@ -220,6 +254,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.workerEdit,
+        name: 'workerEdit',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           return AddWorkerScreen(workerId: id);
@@ -227,10 +262,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.addWorker,
+        name: 'addWorker',
         builder: (context, state) => const AddWorkerScreen(),
       ),
       GoRoute(
         path: AppRoutes.workerEntry,
+        name: 'workerEntry',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final extra = state.extra;
@@ -238,19 +275,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (extra is Map<String, dynamic>) {
             entryId = extra['entryId'] as String?;
           }
-          return AddWorkerEntryScreen(workerId: id, entryId: entryId);
+          final projectId = state.uri.queryParameters['projectId'];
+          return AddWorkerEntryScreen(
+            workerId: id,
+            entryId: entryId,
+            projectId: projectId,
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.notifications,
+        name: 'notifications',
         builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: AppRoutes.subscriptionPlans,
+        name: 'subscriptionPlans',
         builder: (context, state) => const PlansScreen(),
       ),
       GoRoute(
         path: AppRoutes.subscriptionLimit,
+        name: 'subscriptionLimit',
         builder: (context, state) {
           final limitType = state.uri.queryParameters['limit'] ?? 'generic';
           return LimitReachedScreen(limitType: limitType);
@@ -258,10 +303,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.subscriptionManage,
+        name: 'subscriptionManage',
         builder: (context, state) => const ManageSubscriptionScreen(),
       ),
       GoRoute(
         path: AppRoutes.subscriptionSuccess,
+        name: 'subscriptionSuccess',
         builder: (context, state) => const SubscriptionSuccessScreen(),
       ),
     ],

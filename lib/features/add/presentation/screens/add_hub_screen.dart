@@ -21,10 +21,10 @@ class AddHubScreen extends StatelessWidget {
                 child: Text(
                   l10n.t('quickAdd'),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: AppColors.textDark,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: AppColors.textDark,
+                  ),
                 ),
               ),
             ),
@@ -46,16 +46,16 @@ class AddHubScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 8),
-                  _ActionCard(
-                    icon: Icons.list_outlined,
-                    title: l10n.t('expenseList'),
-                    subtitle: l10n.t('expenseListSubtitle'),
-                    color: AppColors.danger,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      context.push(AppRoutes.expenses);
-                    },
-                  ),
+                  // _ActionCard(
+                  //   icon: Icons.list_outlined,
+                  //   title: l10n.t('expenseList'),
+                  //   subtitle: l10n.t('expenseListSubtitle'),
+                  //   color: AppColors.danger,
+                  //   onTap: () {
+                  //     HapticFeedback.lightImpact();
+                  //     context.push(AppRoutes.expenses);
+                  //   },
+                  // ),
                   const SizedBox(height: 20),
                   _SectionHeader(title: l10n.t('payments')),
                   const SizedBox(height: 8),
@@ -70,21 +70,43 @@ class AddHubScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 8),
-                  _ActionCard(
-                    icon: Icons.list_alt_outlined,
-                    title: l10n.t('paymentList'),
-                    subtitle: l10n.t('paymentListSubtitle'),
-                    color: AppColors.success,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      context.push(AppRoutes.payments);
-                    },
-                  ),
+                  // _ActionCard(
+                  //   icon: Icons.list_alt_outlined,
+                  //   title: l10n.t('paymentList'),
+                  //   subtitle: l10n.t('paymentListSubtitle'),
+                  //   color: AppColors.success,
+                  //   onTap: () {
+                  //     HapticFeedback.lightImpact();
+                  //     context.push(AppRoutes.payments);
+                  //   },
+                  // ),
                   const SizedBox(height: 20),
                   _SectionHeader(title: l10n.t('workers')),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    icon: Icons.person_add_outlined,
+                    title: l10n.t('addWorkerTitle'),
+                    subtitle: l10n.t('addWorkerSubtitle'), // Wait, check if addWorkerSubtitle exists
+                    color: AppColors.constructionOrange,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      context.push(AppRoutes.addWorker);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ActionCard(
                     icon: Icons.engineering_outlined,
+                    title: l10n.t('workerList'),
+                    subtitle: l10n.t('workerListSubtitle'),
+                    color: AppColors.constructionOrange,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      context.push(AppRoutes.workers);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ActionCard(
+                    icon: Icons.assignment_ind_outlined,
                     title: l10n.t('addWorkerEntry'),
                     subtitle: l10n.t('addWorkerEntrySubtitle'),
                     color: AppColors.constructionOrange,
@@ -96,16 +118,16 @@ class AddHubScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   _SectionHeader(title: l10n.t('projects')),
                   const SizedBox(height: 8),
-                  _ActionCard(
-                    icon: Icons.work_outline,
-                    title: l10n.t('createProject'),
-                    subtitle: l10n.t('createProjectSubtitle'),
-                    color: AppColors.constructionOrange,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      context.push(AppRoutes.createProject);
-                    },
-                  ),
+                  // _ActionCard(
+                  //   icon: Icons.work_outline,
+                  //   title: l10n.t('createProject'),
+                  //   subtitle: l10n.t('createProjectSubtitle'),
+                  //   color: AppColors.constructionOrange,
+                  //   onTap: () {
+                  //     HapticFeedback.lightImpact();
+                  //     context.push(AppRoutes.createProject);
+                  //   },
+                  // ),
                   const SizedBox(height: 20),
                   _SectionHeader(title: l10n.t('voiceExpense')),
                   const SizedBox(height: 8),
@@ -140,10 +162,10 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textBody,
-            letterSpacing: 0.5,
-          ),
+        fontWeight: FontWeight.w700,
+        color: AppColors.textBody,
+        letterSpacing: 0.5,
+      ),
     );
   }
 }
@@ -195,16 +217,16 @@ class _ActionCard extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textDark,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDark,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textBody,
-                          ),
+                        color: AppColors.textBody,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

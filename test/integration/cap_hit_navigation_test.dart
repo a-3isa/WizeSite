@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/subscription/domain/entitlement_guard_service.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
@@ -46,6 +47,14 @@ class _FakeUsageQuotaRepository implements UsageQuotaRepository {
     required PlanLimits limits,
   }) async {
     return UsageSnapshot.empty(limits: limits);
+  }
+
+  @override
+  Stream<UsageSnapshot> watchUsageSnapshot({
+    required String workspaceId,
+    required PlanLimits limits,
+  }) {
+    return Stream.value(UsageSnapshot.empty(limits: limits));
   }
 }
 
@@ -164,34 +173,38 @@ Widget _testApp({
   return ProviderScope(
     overrides: [
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
-      currentSubscriptionProvider.overrideWith(
-        (ref) async => SubscriptionState(
-          tier: PlanTier.free,
-          status: SubscriptionStatus.expired,
-          store: 'none',
-          isAutoRenewing: false,
-          lastSyncedAt: DateTime.now(),
+      currentSubscriptionStreamProvider.overrideWith(
+        (ref) => Stream.value(
+          SubscriptionState(
+            tier: PlanTier.free,
+            status: SubscriptionStatus.expired,
+            store: 'none',
+            isAutoRenewing: false,
+            lastSyncedAt: DateTime.now(),
+          ),
         ),
       ),
       currentUsageProvider.overrideWith(
-        (ref) async => UsageSnapshot(
-          periodKey: '202603',
-          activeProjects: 1,
-          expensesCount: 30,
-          paymentsCount: 10,
-          workerEntriesCount: 10,
-          memberCount: 1,
-          limits: PlanLimits.free(),
+        (ref) => Stream.value(
+          UsageSnapshot(
+            periodKey: '202603',
+            activeProjects: 1,
+            expensesCount: 30,
+            paymentsCount: 10,
+            workerEntriesCount: 10,
+            memberCount: 1,
+            limits: PlanLimits.free(),
+          ),
         ),
       ),
       dashboardSummaryProvider.overrideWith(
-        (ref, workspaceId) async => {
+        (ref, workspaceId) => Stream.value({
           'totalProjects': 1,
           'activeProjects': 1,
           'totalExpenses': 1000,
           'totalIncome': 1200,
           'net': 200,
-        },
+        }),
       ),
       entitlementGuardProvider.overrideWithValue(_FakeEntitlementGuard(result)),
       purchaseCoordinatorProvider.overrideWithValue(

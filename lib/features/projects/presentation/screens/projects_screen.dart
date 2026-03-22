@@ -16,6 +16,14 @@ final projectsProvider = StreamProvider<List<Project>>((ref) {
   return ref.watch(projectRepositoryProvider).watchProjects(workspaceId);
 });
 
+final allProjectsProvider = StreamProvider<List<Project>>((ref) {
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  if (workspaceId == null || workspaceId.isEmpty) {
+    return const Stream.empty();
+  }
+  return ref.watch(projectRepositoryProvider).watchAllProjects(workspaceId);
+});
+
 class ProjectsScreen extends ConsumerWidget {
   const ProjectsScreen({super.key});
 
@@ -159,6 +167,77 @@ class ProjectsScreen extends ConsumerWidget {
                                 style: TextStyle(
                                   color: AppColors.textBody,
                                   fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'delete') {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: Text(l10n.t('delete')),
+                                    content: Text(l10n.t('confirm')),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: Text(l10n.t('cancel')),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: Text(
+                                          l10n.t('delete'),
+                                          style: const TextStyle(
+                                            color: AppColors.danger,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  await ref
+                                      .read(projectRepositoryProvider)
+                                      .deleteProject(project.id);
+                                }
+                              } else if (value == 'archive') {
+                                await ref
+                                    .read(projectRepositoryProvider)
+                                    .archiveProject(project.id);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'archive',
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.archive_outlined, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(l10n.t('archive')),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                      color: AppColors.danger,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      l10n.t('delete'),
+                                      style: const TextStyle(
+                                        color: AppColors.danger,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

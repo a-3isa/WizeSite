@@ -6,6 +6,11 @@ abstract interface class UsageQuotaRepository {
     required PlanLimits limits,
   });
 
+  Stream<UsageSnapshot> watchUsageSnapshot({
+    required String workspaceId,
+    required PlanLimits limits,
+  });
+
   Future<LimitCheckResult> checkLimit({
     required String workspaceId,
     required LimitType type,

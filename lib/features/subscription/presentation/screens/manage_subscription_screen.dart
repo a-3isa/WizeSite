@@ -63,7 +63,7 @@ class _ManageSubscriptionScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     ref.watch(revenueCatBootstrapProvider);
-    final subAsync = ref.watch(currentSubscriptionProvider);
+    final subAsync = ref.watch(currentSubscriptionStreamProvider);
     final customerInfoAsync = ref.watch(revenueCatCustomerInfoProvider);
 
     return Scaffold(

@@ -23,7 +23,7 @@ class SettingsScreen extends ConsumerWidget {
     final locale = ref.watch(localeControllerProvider);
     final currency = ref.watch(selectedCurrencyProvider);
     final notificationsEnabled = ref.watch(notificationsEnabledProvider);
-    final subscriptionAsync = ref.watch(currentSubscriptionProvider);
+    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
 
     return Scaffold(
       body: SafeArea(

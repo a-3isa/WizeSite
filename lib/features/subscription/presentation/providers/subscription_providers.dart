@@ -48,30 +48,29 @@ final subscriptionStreamProvider =
       return repo.watchSubscription(workspaceId);
     });
 
-final currentSubscriptionProvider = FutureProvider<SubscriptionState>((
-  ref,
-) async {
+final currentSubscriptionStreamProvider = StreamProvider<SubscriptionState>((ref) {
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
   if (workspaceId == null || workspaceId.isEmpty) {
-    return SubscriptionState.free();
+    return Stream.value(SubscriptionState.free());
   }
   final repo = ref.watch(subscriptionRepositoryProvider);
-  return repo.getSubscription(workspaceId);
+  return repo.watchSubscription(workspaceId);
 });
 
-final currentUsageProvider = FutureProvider<UsageSnapshot>((ref) async {
+final currentUsageProvider = StreamProvider<UsageSnapshot>((ref) {
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
-  final sub = await ref.watch(currentSubscriptionProvider.future);
+  final subAsync = ref.watch(currentSubscriptionStreamProvider);
 
+  final sub = subAsync.value ?? SubscriptionState.free();
   final limits = sub.isActiveOrTrial && sub.tier == PlanTier.pro
       ? PlanLimits.pro()
       : PlanLimits.free();
 
   if (workspaceId == null || workspaceId.isEmpty) {
-    return UsageSnapshot.empty(limits: limits);
+    return Stream.value(UsageSnapshot.empty(limits: limits));
   }
   final repo = ref.watch(usageQuotaRepositoryProvider);
-  return repo.getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+  return repo.watchUsageSnapshot(workspaceId: workspaceId, limits: limits);
 });
 
 class QuotaRequest {

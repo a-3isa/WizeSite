@@ -39,6 +39,14 @@ class _FakeUsageRepository implements UsageQuotaRepository {
   }) async {
     return UsageSnapshot.empty(limits: limits);
   }
+
+  @override
+  Stream<UsageSnapshot> watchUsageSnapshot({
+    required String workspaceId,
+    required PlanLimits limits,
+  }) {
+    return Stream.value(UsageSnapshot.empty(limits: limits));
+  }
 }
 
 void main() {

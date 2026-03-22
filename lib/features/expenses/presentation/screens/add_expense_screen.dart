@@ -10,9 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  const AddExpenseScreen({this.expenseId, super.key});
+  const AddExpenseScreen({this.expenseId, this.projectId, super.key});
 
   final String? expenseId;
+  final String? projectId;
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -35,6 +36,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.initState();
     if (widget.expenseId != null) {
       _prefill();
+    } else if (widget.projectId != null) {
+      _projectId = widget.projectId;
     }
   }
 
@@ -87,13 +90,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     });
     try {
       if (widget.expenseId == null) {
+        String finalProjectName = _projectName;
+        if (finalProjectName.isEmpty && _projectId != null) {
+          final projects = ref.read(projectsProvider).valueOrNull ?? [];
+          final match = projects.where((p) => p.id == _projectId);
+          if (match.isNotEmpty) {
+            finalProjectName = match.first.name;
+          }
+        }
         await ref
             .read(expenseRepositoryProvider)
             .createExpense(
               workspaceId: workspaceId,
               userId: userId,
               projectId: _projectId!,
-              projectName: _projectName,
+              projectName: finalProjectName,
               category: _category,
               amount: amount,
               currency: 'EGP',

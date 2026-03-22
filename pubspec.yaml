@@ -60,6 +60,7 @@ dependencies:
   connectivity_plus: ^7.0.0
   purchases_ui_flutter: ^9.13.1
   google_sign_in: ^7.2.0
+  fl_chart: ^1.2.0
 
 dev_dependencies:
   flutter_test:

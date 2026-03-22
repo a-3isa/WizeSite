@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class ProjectRepository {
   Stream<List<Project>> watchProjects(String workspaceId);
+  Stream<List<Project>> watchAllProjects(String workspaceId);
   Future<void> createProject({
     required String workspaceId,
     required String userId,
@@ -36,6 +37,7 @@ abstract interface class ProjectRepository {
   });
 
   Future<void> archiveProject(String projectId);
+  Future<void> deleteProject(String projectId);
 }
 
 class FirebaseProjectRepository implements ProjectRepository {
@@ -49,6 +51,19 @@ class FirebaseProjectRepository implements ProjectRepository {
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
         .where('isArchived', isEqualTo: false)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => Project.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  @override
+  Stream<List<Project>> watchAllProjects(String workspaceId) {
+    return _firestore
+        .collection('projects')
+        .where('workspaceId', isEqualTo: workspaceId)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -148,6 +163,11 @@ class FirebaseProjectRepository implements ProjectRepository {
       'isArchived': true,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  @override
+  Future<void> deleteProject(String projectId) async {
+    await _firestore.collection('projects').doc(projectId).delete();
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
   FirebaseUsageQuotaRepository(this._firestore, this._functions);
@@ -48,6 +49,50 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
       memberCount: membersSnap.count ?? 1,
       limits: limits,
     );
+  }
+
+  @override
+  Stream<UsageSnapshot> watchUsageSnapshot({
+    required String workspaceId,
+    required PlanLimits limits,
+  }) async* {
+    final key = _periodKey();
+    final counterId = '${workspaceId}_$key';
+
+    // Initial fetch
+    yield await getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+
+    // Watch for changes in usage counters, projects, and memberships
+    final counterStream =
+        _firestore.collection('usage_counters').doc(counterId).snapshots();
+    final projectsStream = _firestore
+        .collection('projects')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .where('status', isEqualTo: 'active')
+        .where('isArchived', isEqualTo: false)
+        .snapshots();
+    final membershipsStream = _firestore
+        .collection('memberships')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .snapshots();
+
+    final controller = StreamController<void>.broadcast();
+    final subs = [
+      counterStream.listen((_) => controller.add(null)),
+      projectsStream.listen((_) => controller.add(null)),
+      membershipsStream.listen((_) => controller.add(null)),
+    ];
+
+    try {
+      await for (final _ in controller.stream) {
+        yield await getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+      }
+    } finally {
+      for (final s in subs) {
+        await s.cancel();
+      }
+      await controller.close();
+    }
   }
 
   @override

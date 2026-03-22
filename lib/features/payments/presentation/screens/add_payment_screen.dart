@@ -10,9 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class AddPaymentScreen extends ConsumerStatefulWidget {
-  const AddPaymentScreen({this.paymentId, super.key});
+  const AddPaymentScreen({this.paymentId, this.projectId, super.key});
 
   final String? paymentId;
+  final String? projectId;
 
   @override
   ConsumerState<AddPaymentScreen> createState() => _AddPaymentScreenState();
@@ -33,6 +34,8 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     super.initState();
     if (widget.paymentId != null) {
       _prefill();
+    } else if (widget.projectId != null) {
+      _projectId = widget.projectId;
     }
   }
 
