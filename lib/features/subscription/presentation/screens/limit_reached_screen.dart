@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
@@ -63,43 +64,53 @@ class _LimitReachedScreenState extends ConsumerState<LimitReachedScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('upgradeRequired'))),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock, size: 64, color: Colors.orange),
-              const SizedBox(height: 16),
-              Text(
-                l10n.limitTitle(widget.limitType),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.t('freePlanLimitsMessage'),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: _loading ? null : _upgrade,
-                icon: const Icon(Icons.workspace_premium),
-                label: Text(
-                  _loading ? l10n.t('loading') : l10n.t('upgradeToPro'),
+    return AppBackScope(
+      fallbackRoute: AppRoutes.dashboard,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('upgradeRequired'),
+          fallbackRoute: AppRoutes.dashboard,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock, size: 64, color: Colors.orange),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.limitTitle(widget.limitType),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-              ),
-              if (_message != null) ...[
-                const SizedBox(height: 8),
-                Text(_message!),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.t('freePlanLimitsMessage'),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _upgrade,
+                  icon: const Icon(Icons.workspace_premium),
+                  label: Text(
+                    _loading ? l10n.t('loading') : l10n.t('upgradeToPro'),
+                  ),
+                ),
+                if (_message != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_message!),
+                ],
+                TextButton(
+                  onPressed: () => appNavigateBack(
+                    context,
+                    fallbackRoute: AppRoutes.dashboard,
+                  ),
+                  child: Text(l10n.t('maybeLater')),
+                ),
               ],
-              TextButton(
-                onPressed: () => context.pop(),
-                child: Text(l10n.t('maybeLater')),
-              ),
-            ],
+            ),
           ),
         ),
       ),

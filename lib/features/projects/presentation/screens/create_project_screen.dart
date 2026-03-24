@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -129,7 +130,11 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             );
       }
       if (mounted) {
-        context.go(AppRoutes.projects);
+        context.go(
+          widget.projectId == null
+              ? AppRoutes.projects
+              : AppRoutes.projectDetailPath(widget.projectId!),
+        );
       }
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'failed-precondition') {
@@ -165,7 +170,10 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.constructionOrange, width: 2),
+        borderSide: const BorderSide(
+          color: AppColors.constructionOrange,
+          width: 2,
+        ),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -192,213 +200,308 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      body: _prefilling
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                      child: Text(
-                        widget.projectId == null
-                            ? l10n.t('createProject')
-                            : l10n.t('editProjectTitle'),
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                              color: AppColors.textDark,
+    final fallbackRoute = widget.projectId == null
+        ? AppRoutes.projects
+        : AppRoutes.projectDetailPath(widget.projectId!);
+    return AppBackScope(
+      fallbackRoute: fallbackRoute,
+      child: Scaffold(
+        body: _prefilling
+            ? const Center(child: CircularProgressIndicator())
+            : SafeArea(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                        child: Row(
+                          children: [
+                            AppBackButton(fallbackRoute: fallbackRoute),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                widget.projectId == null
+                                    ? l10n.t('createProject')
+                                    : l10n.t('editProjectTitle'),
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                      color: AppColors.textDark,
+                                    ),
+                              ),
                             ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        _SectionHeader(title: l10n.t('projectName')),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _nameController,
-                          decoration: _inputDecoration(l10n.t('projectName'), required: true),
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _clientController,
-                          decoration: _inputDecoration(l10n.t('clientName')),
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _contractController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: _inputDecoration(l10n.t('contractValue'), required: true),
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 20),
-                        _SectionHeader(title: l10n.t('location')),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _locationController,
-                          decoration: _inputDecoration(l10n.t('location')),
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _descriptionController,
-                          maxLines: 3,
-                          decoration: _inputDecoration(l10n.t('description')),
-                          textInputAction: TextInputAction.newline,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _budgetController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: _inputDecoration(l10n.t('budgetLimit')),
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 20),
-                        _SectionHeader(title: l10n.t('status')),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          initialValue: _status,
-                          items: [
-                            DropdownMenuItem(value: 'active', child: Text(l10n.projectStatusLabel('active'))),
-                            DropdownMenuItem(value: 'paused', child: Text(l10n.projectStatusLabel('paused'))),
-                            DropdownMenuItem(value: 'completed', child: Text(l10n.projectStatusLabel('completed'))),
-                            DropdownMenuItem(value: 'cancelled', child: Text(l10n.projectStatusLabel('cancelled'))),
-                          ],
-                          onChanged: (value) {
-                            HapticFeedback.lightImpact();
-                            setState(() => _status = value ?? 'active');
-                          },
-                          decoration: _inputDecoration(l10n.t('status')),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        const SizedBox(height: 20),
-                        _SectionHeader(title: l10n.t('startDate')),
-                        const SizedBox(height: 8),
-                        _DateTile(
-                          label: l10n.t('startDateWithValue', params: {'value': _startDate.toLocal().toIso8601String().split('T').first}),
-                          onTap: () => _pickDate(isStart: true),
-                        ),
-                        const SizedBox(height: 8),
-                        _DateTile(
-                          label: _endDate == null
-                              ? l10n.t('expectedEndDateOptional')
-                              : l10n.t('expectedEndDateWithValue', params: {'value': _endDate!.toLocal().toIso8601String().split('T').first}),
-                          onTap: () => _pickDate(isStart: false),
-                        ),
-                        const SizedBox(height: 20),
-                        _SectionHeader(title: l10n.t('completion')),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSolid,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.borderGrey),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          _SectionHeader(title: l10n.t('projectName')),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _nameController,
+                            decoration: _inputDecoration(
+                              l10n.t('projectName'),
+                              required: true,
+                            ),
+                            textInputAction: TextInputAction.next,
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    l10n.t('completionLabel', params: {'value': '${_completion.toInt()}'}),
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textDark,
-                                        ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.constructionOrange.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '${_completion.toInt()}%',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.constructionOrange,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _clientController,
+                            decoration: _inputDecoration(l10n.t('clientName')),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _contractController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _inputDecoration(
+                              l10n.t('contractValue'),
+                              required: true,
+                            ),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 20),
+                          _SectionHeader(title: l10n.t('location')),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _locationController,
+                            decoration: _inputDecoration(l10n.t('location')),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _descriptionController,
+                            maxLines: 3,
+                            decoration: _inputDecoration(l10n.t('description')),
+                            textInputAction: TextInputAction.newline,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _budgetController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _inputDecoration(l10n.t('budgetLimit')),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 20),
+                          _SectionHeader(title: l10n.t('status')),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            initialValue: _status,
+                            items: [
+                              DropdownMenuItem(
+                                value: 'active',
+                                child: Text(l10n.projectStatusLabel('active')),
                               ),
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  activeTrackColor: AppColors.constructionOrange,
-                                  thumbColor: AppColors.constructionOrange,
-                                  overlayColor: AppColors.constructionOrange.withValues(alpha: 0.2),
+                              DropdownMenuItem(
+                                value: 'paused',
+                                child: Text(l10n.projectStatusLabel('paused')),
+                              ),
+                              DropdownMenuItem(
+                                value: 'completed',
+                                child: Text(
+                                  l10n.projectStatusLabel('completed'),
                                 ),
-                                child: Slider(
-                                  min: 0,
-                                  max: 100,
-                                  value: _completion,
-                                  onChanged: (value) {
-                                    HapticFeedback.selectionClick();
-                                    setState(() => _completion = value);
-                                  },
+                              ),
+                              DropdownMenuItem(
+                                value: 'cancelled',
+                                child: Text(
+                                  l10n.projectStatusLabel('cancelled'),
                                 ),
                               ),
                             ],
+                            onChanged: (value) {
+                              HapticFeedback.lightImpact();
+                              setState(() => _status = value ?? 'active');
+                            },
+                            decoration: _inputDecoration(l10n.t('status')),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.dangerLight,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                          const SizedBox(height: 20),
+                          _SectionHeader(title: l10n.t('startDate')),
+                          const SizedBox(height: 8),
+                          _DateTile(
+                            label: l10n.t(
+                              'startDateWithValue',
+                              params: {
+                                'value': _startDate
+                                    .toLocal()
+                                    .toIso8601String()
+                                    .split('T')
+                                    .first,
+                              },
                             ),
-                            child: Row(
+                            onTap: () => _pickDate(isStart: true),
+                          ),
+                          const SizedBox(height: 8),
+                          _DateTile(
+                            label: _endDate == null
+                                ? l10n.t('expectedEndDateOptional')
+                                : l10n.t(
+                                    'expectedEndDateWithValue',
+                                    params: {
+                                      'value': _endDate!
+                                          .toLocal()
+                                          .toIso8601String()
+                                          .split('T')
+                                          .first,
+                                    },
+                                  ),
+                            onTap: () => _pickDate(isStart: false),
+                          ),
+                          const SizedBox(height: 20),
+                          _SectionHeader(title: l10n.t('completion')),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSolid,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.borderGrey),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.error_outline, color: AppColors.danger, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _error!,
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      l10n.t(
+                                        'completionLabel',
+                                        params: {
+                                          'value': '${_completion.toInt()}',
+                                        },
+                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textDark,
+                                          ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.constructionOrange
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${_completion.toInt()}%',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.constructionOrange,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    activeTrackColor:
+                                        AppColors.constructionOrange,
+                                    thumbColor: AppColors.constructionOrange,
+                                    overlayColor: AppColors.constructionOrange
+                                        .withValues(alpha: 0.2),
+                                  ),
+                                  child: Slider(
+                                    min: 0,
+                                    max: 100,
+                                    value: _completion,
+                                    onChanged: (value) {
+                                      HapticFeedback.selectionClick();
+                                      setState(() => _completion = value);
+                                    },
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                        const SizedBox(height: 24),
-                        FilledButton(
-                          onPressed: _loading ? null : _save,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.constructionOrange,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            elevation: 0,
-                          ),
-                          child: _loading
-                              ? const SizedBox.square(
-                                  dimension: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : Text(
-                                  widget.projectId == null ? l10n.t('saveProject') : l10n.t('updateProject'),
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          if (_error != null) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.dangerLight,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.danger.withValues(
+                                    alpha: 0.3,
+                                  ),
                                 ),
-                        ),
-                        const SizedBox(height: 32),
-                      ]),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: AppColors.danger,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _error!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(color: AppColors.danger),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          FilledButton(
+                            onPressed: _loading ? null : _save,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.constructionOrange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: _loading
+                                ? const SizedBox.square(
+                                    dimension: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    widget.projectId == null
+                                        ? l10n.t('saveProject')
+                                        : l10n.t('updateProject'),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 32),
+                        ]),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -413,10 +516,10 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textBody,
-            letterSpacing: 0.5,
-          ),
+        fontWeight: FontWeight.w700,
+        color: AppColors.textBody,
+        letterSpacing: 0.5,
+      ),
     );
   }
 }
@@ -443,18 +546,26 @@ class _DateTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.calendar_today_outlined, color: AppColors.constructionOrange, size: 22),
+              Icon(
+                Icons.calendar_today_outlined,
+                color: AppColors.constructionOrange,
+                size: 22,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textDark,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: AppColors.textBody.withValues(alpha: 0.6), size: 22),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textBody.withValues(alpha: 0.6),
+                size: 22,
+              ),
             ],
           ),
         ),

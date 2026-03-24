@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/foundation.dart';
 class FirebaseInitializer {
   static bool _initialized = false;
   static bool _appCheckActivated = false;
+  static const String _androidDebugAppCheckToken =
+      '4977E101-6CA1-4EAF-B50D-6B32AD6A1B3B';
   static const bool _enableDevAppCheck = bool.fromEnvironment(
     'ENABLE_APP_CHECK_DEV',
     defaultValue: false,
@@ -19,6 +22,10 @@ class FirebaseInitializer {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
       await _ensureAppCheckActivated();
       _initialized = true;
@@ -39,19 +46,23 @@ class FirebaseInitializer {
       return;
     }
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // Android App Check provider is installed natively in MainApplication.
-      _appCheckActivated = true;
-      return;
-    }
-
-    if (!kReleaseMode && !_enableDevAppCheck) {
+    if (!kReleaseMode &&
+        !_enableDevAppCheck &&
+        defaultTargetPlatform != TargetPlatform.android) {
       _appCheckActivated = true;
       return;
     }
 
     try {
-      if (!kReleaseMode) {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await FirebaseAppCheck.instance.activate(
+          providerAndroid: !kReleaseMode
+              ? const AndroidDebugProvider(
+                  debugToken: _androidDebugAppCheckToken,
+                )
+              : const AndroidPlayIntegrityProvider(),
+        );
+      } else if (!kReleaseMode) {
         await FirebaseAppCheck.instance.activate(
           providerApple: const AppleDebugProvider(),
         );

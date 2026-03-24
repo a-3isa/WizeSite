@@ -1,4 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
@@ -48,8 +50,10 @@ class _ManageSubscriptionScreenState
     } catch (e) {
       if (mounted) {
         setState(
-          () =>
-              _message = l10n.t('customerCenterFailed', params: {'error': '$e'}),
+          () => _message = l10n.t(
+            'customerCenterFailed',
+            params: {'error': '$e'},
+          ),
         );
       }
     } finally {
@@ -66,113 +70,122 @@ class _ManageSubscriptionScreenState
     final subAsync = ref.watch(currentSubscriptionStreamProvider);
     final customerInfoAsync = ref.watch(revenueCatCustomerInfoProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('manageSubscription'))),
-      body: subAsync.when(
-        data: (sub) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: ListTile(
-                title: Text(
-                  sub.tier == PlanTier.pro ? l10n.t('tierPro') : l10n.t('tierFree'),
-                ),
-                subtitle: Text(
-                  '${l10n.t('status')}: ${l10n.subscriptionStatusLabel(sub.status.name)}',
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                title: Text(l10n.t('trialEndsAt')),
-                subtitle: Text(sub.trialEndsAt?.toIso8601String() ?? '-'),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                title: Text(l10n.t('currentPeriodEndsAt')),
-                subtitle: Text(sub.periodEndsAt?.toIso8601String() ?? '-'),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                title: Text(l10n.t('store')),
-                subtitle: Text(sub.store),
-              ),
-            ),
-            customerInfoAsync.when(
-              data: (info) => Column(
-                children: [
-                  Card(
-                    child: ListTile(
-                      title: Text(l10n.t('revenueCatAppUserId')),
-                      subtitle: Text(
-                        info.appUserId.isEmpty ? '-' : info.appUserId,
-                      ),
-                    ),
-                  ),
-                  Card(
-                    child: ListTile(
-                      title: Text(l10n.t('wizeSiteProEntitlement')),
-                      subtitle: Text(
-                        info.hasProEntitlement
-                            ? l10n.t('entitlementActive')
-                            : l10n.t('entitlementInactive'),
-                      ),
-                    ),
-                  ),
-                  Card(
-                    child: ListTile(
-                      title: Text(l10n.t('currentProduct')),
-                      subtitle: Text(
-                        info.productIdentifier.isEmpty
-                            ? '-'
-                            : info.productIdentifier,
-                      ),
-                    ),
-                  ),
-                  Card(
-                    child: ListTile(
-                      title: Text(l10n.t('entitlementExpiration')),
-                      subtitle: Text(
-                        info.latestExpirationDate?.toIso8601String() ?? '-',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              error: (error, _) => Text(error.toString()),
-              loading: () => const Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _restoring ? null : _restore,
-              child: Text(
-                _restoring ? l10n.t('restoring') : l10n.t('restorePurchases'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            FilledButton.tonal(
-              onPressed: kIsWeb || _openingCustomerCenter
-                  ? null
-                  : _openCustomerCenter,
-              child: Text(
-                _openingCustomerCenter
-                    ? l10n.t('openingCustomerCenter')
-                    : l10n.t('openCustomerCenter'),
-              ),
-            ),
-            if (_message != null) ...[
-              const SizedBox(height: 8),
-              Text(_message!),
-            ],
-          ],
+    return AppBackScope(
+      fallbackRoute: AppRoutes.settings,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('manageSubscription'),
+          fallbackRoute: AppRoutes.settings,
         ),
-        error: (error, _) => Center(child: Text(error.toString())),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        body: subAsync.when(
+          data: (sub) => ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: ListTile(
+                  title: Text(
+                    sub.tier == PlanTier.pro
+                        ? l10n.t('tierPro')
+                        : l10n.t('tierFree'),
+                  ),
+                  subtitle: Text(
+                    '${l10n.t('status')}: ${l10n.subscriptionStatusLabel(sub.status.name)}',
+                  ),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  title: Text(l10n.t('trialEndsAt')),
+                  subtitle: Text(sub.trialEndsAt?.toIso8601String() ?? '-'),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  title: Text(l10n.t('currentPeriodEndsAt')),
+                  subtitle: Text(sub.periodEndsAt?.toIso8601String() ?? '-'),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  title: Text(l10n.t('store')),
+                  subtitle: Text(sub.store),
+                ),
+              ),
+              customerInfoAsync.when(
+                data: (info) => Column(
+                  children: [
+                    Card(
+                      child: ListTile(
+                        title: Text(l10n.t('revenueCatAppUserId')),
+                        subtitle: Text(
+                          info.appUserId.isEmpty ? '-' : info.appUserId,
+                        ),
+                      ),
+                    ),
+                    Card(
+                      child: ListTile(
+                        title: Text(l10n.t('wizeSiteProEntitlement')),
+                        subtitle: Text(
+                          info.hasProEntitlement
+                              ? l10n.t('entitlementActive')
+                              : l10n.t('entitlementInactive'),
+                        ),
+                      ),
+                    ),
+                    Card(
+                      child: ListTile(
+                        title: Text(l10n.t('currentProduct')),
+                        subtitle: Text(
+                          info.productIdentifier.isEmpty
+                              ? '-'
+                              : info.productIdentifier,
+                        ),
+                      ),
+                    ),
+                    Card(
+                      child: ListTile(
+                        title: Text(l10n.t('entitlementExpiration')),
+                        subtitle: Text(
+                          info.latestExpirationDate?.toIso8601String() ?? '-',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                error: (error, _) => Text(error.toString()),
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _restoring ? null : _restore,
+                child: Text(
+                  _restoring ? l10n.t('restoring') : l10n.t('restorePurchases'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: kIsWeb || _openingCustomerCenter
+                    ? null
+                    : _openCustomerCenter,
+                child: Text(
+                  _openingCustomerCenter
+                      ? l10n.t('openingCustomerCenter')
+                      : l10n.t('openCustomerCenter'),
+                ),
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 8),
+                Text(_message!),
+              ],
+            ],
+          ),
+          error: (error, _) => Center(child: Text(error.toString())),
+          loading: () => const Center(child: CircularProgressIndicator()),
+        ),
       ),
     );
   }

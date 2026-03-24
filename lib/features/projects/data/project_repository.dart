@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 abstract interface class ProjectRepository {
   Stream<List<Project>> watchProjects(String workspaceId);
   Stream<List<Project>> watchAllProjects(String workspaceId);
+  Stream<List<Project>> watchArchivedProjects(String workspaceId);
   Future<void> createProject({
     required String workspaceId,
     required String userId,
@@ -37,6 +38,7 @@ abstract interface class ProjectRepository {
   });
 
   Future<void> archiveProject(String projectId);
+  Future<void> unarchiveProject(String projectId);
   Future<void> deleteProject(String projectId);
 }
 
@@ -64,6 +66,20 @@ class FirebaseProjectRepository implements ProjectRepository {
     return _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => Project.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  @override
+  Stream<List<Project>> watchArchivedProjects(String workspaceId) {
+    return _firestore
+        .collection('projects')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .where('isArchived', isEqualTo: true)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -161,6 +177,14 @@ class FirebaseProjectRepository implements ProjectRepository {
   Future<void> archiveProject(String projectId) async {
     await _firestore.collection('projects').doc(projectId).update({
       'isArchived': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> unarchiveProject(String projectId) async {
+    await _firestore.collection('projects').doc(projectId).update({
+      'isArchived': false,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

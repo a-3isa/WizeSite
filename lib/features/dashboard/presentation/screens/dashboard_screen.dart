@@ -30,8 +30,8 @@ class DashboardScreen extends ConsumerWidget {
         title: Text(l10n.t('home')),
         actions: [
           IconButton(
-            onPressed: () => context.push(AppRoutes.notifications),
-            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => context.push(AppRoutes.settings),
+            icon: const Icon(Icons.settings_outlined),
             style: IconButton.styleFrom(
               backgroundColor: AppColors.surfaceSolid,
               shape: RoundedRectangleBorder(
@@ -111,10 +111,7 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 );
               },
-              error: (error, _) => Text(
-                error.toString(),
-                style: const TextStyle(color: AppColors.danger),
-              ),
+              error: (e, s) => const SizedBox.shrink(),
               loading: () => const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
@@ -201,10 +198,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             usageAsync.when(
               data: (usage) => UsageCard(usage: usage),
-              error: (error, _) => Text(
-                error.toString(),
-                style: const TextStyle(color: AppColors.danger),
-              ),
+              error: (e, s) => const SizedBox.shrink(),
               loading: () => const Center(child: CircularProgressIndicator()),
             ),
             const SizedBox(height: 16),
@@ -301,34 +295,40 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _onQuotaAction(
+  void _onQuotaAction(
     BuildContext context,
     WidgetRef ref,
     LimitType type,
     String route,
-  ) async {
+  ) {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     if (workspaceId == null || workspaceId.isEmpty) {
       context.push(route);
       return;
     }
 
-    final guard = ref.read(entitlementGuardProvider);
-    final result = await guard.checkQuota(
-      workspaceId: workspaceId,
-      type: type,
-      delta: 1,
-    );
-    if (!result.allowed) {
-      final limit = Uri.encodeComponent(type.name);
-      if (context.mounted) {
-        context.push('${AppRoutes.subscriptionLimit}?limit=$limit');
-      }
+    // Use already-loaded subscription data — no network call needed
+    final sub = ref.read(currentSubscriptionStreamProvider).value;
+    if (sub != null && sub.isActiveOrTrial && sub.tier == PlanTier.pro) {
+      context.push(route);
       return;
     }
-    if (context.mounted) {
-      context.push(route);
+
+    // Use already-loaded usage snapshot — no network call needed
+    final usage = ref.read(currentUsageProvider).value;
+    if (usage == null) {
+      context.push(route); // data not yet loaded, navigate optimistically
+      return;
     }
+
+    final current = usage.currentByType(type);
+    final max = usage.maxByType(type);
+    if (current + 1 > max) {
+      final limit = Uri.encodeComponent(type.name);
+      context.push('${AppRoutes.subscriptionLimit}?limit=$limit');
+      return;
+    }
+    context.push(route);
   }
 }
 

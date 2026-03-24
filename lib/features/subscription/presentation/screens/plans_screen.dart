@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -144,72 +145,83 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('subscription'))),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Card(
-                  color: const Color(0xFFFFF4E8),
-                  child: ListTile(
-                    leading: const Icon(Icons.auto_awesome),
-                    title: Text(l10n.t('proPlan')),
-                    subtitle: Text(l10n.t('proUnlocksSubtitle')),
+    return AppBackScope(
+      fallbackRoute: AppRoutes.settings,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('subscription'),
+          fallbackRoute: AppRoutes.settings,
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
+                    color: const Color(0xFFFFF4E8),
+                    child: ListTile(
+                      leading: const Icon(Icons.auto_awesome),
+                      title: Text(l10n.t('proPlan')),
+                      subtitle: Text(l10n.t('proUnlocksSubtitle')),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.timer),
-                    title: Text(l10n.t('freeTrial')),
-                    subtitle: Text(l10n.t('trialStartsWithPurchase')),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _purchasing ? null : _openPaywall,
-                  icon: const Icon(Icons.workspace_premium),
-                  label: Text(
-                    _purchasing ? l10n.t('loading') : l10n.t('continueWithPaywall'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final package in _packages)
+                  const SizedBox(height: 8),
                   Card(
                     child: ListTile(
-                      title: Text(package.title),
-                      subtitle: Text(
-                        '${package.priceString} / ${package.periodLabel}',
-                      ),
-                      leading: CircleAvatar(
-                        radius: 14,
-                        child: Text(
-                          package.productCode.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(fontSize: 12),
+                      leading: const Icon(Icons.timer),
+                      title: Text(l10n.t('freeTrial')),
+                      subtitle: Text(l10n.t('trialStartsWithPurchase')),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _purchasing ? null : _openPaywall,
+                    icon: const Icon(Icons.workspace_premium),
+                    label: Text(
+                      _purchasing
+                          ? l10n.t('loading')
+                          : l10n.t('continueWithPaywall'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final package in _packages)
+                    Card(
+                      child: ListTile(
+                        title: Text(package.title),
+                        subtitle: Text(
+                          '${package.priceString} / ${package.periodLabel}',
                         ),
-                      ),
-                      trailing: FilledButton(
-                        onPressed: _purchasing
-                            ? null
-                            : () => _purchase(package),
-                        child: Text(
-                          _purchasing ? l10n.t('loadingShort') : l10n.t('continue'),
+                        leading: CircleAvatar(
+                          radius: 14,
+                          child: Text(
+                            package.productCode.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        trailing: FilledButton(
+                          onPressed: _purchasing
+                              ? null
+                              : () => _purchase(package),
+                          child: Text(
+                            _purchasing
+                                ? l10n.t('loadingShort')
+                                : l10n.t('continue'),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  if (_statusMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_statusMessage!),
+                  ],
                 ],
-                if (_statusMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_statusMessage!),
-                ],
-              ],
-            ),
+              ),
+      ),
     );
   }
 }

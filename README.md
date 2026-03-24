@@ -6,7 +6,7 @@ This repository now includes a production-practical **voice expense pipeline**:
 1. Flutter records audio.
 2. Flutter uploads audio to Firebase Storage.
 3. Flutter calls Firebase callable function `processVoiceExpense`.
-4. Cloud Function transcribes audio with OpenAI.
+4. Cloud Function transcribes audio with OpenRouter audio input.
 5. Rule-based parser runs first.
 6. OpenRouter LLM is used only when rules are uncertain.
 7. Flutter shows review/edit confirmation.
@@ -20,11 +20,11 @@ This repository now includes a production-practical **voice expense pipeline**:
 
 ## Security Notes
 
-- No OpenAI/OpenRouter keys in Flutter client.
+- No AI provider keys in Flutter client.
 - Secrets are read on Functions side only:
-  - `OPENAI_API_KEY`
   - `OPENROUTER_API_KEY`
   - `OPENROUTER_MODEL`
+  - `OPENROUTER_TRANSCRIPTION_MODEL`
 - Expense writes remain quota-enforced through callable functions.
 - Voice files are scoped to user path in `storage.rules`.
 
@@ -80,11 +80,16 @@ npm install
 2. Set Firebase secrets (recommended for production):
 
 ```bash
-firebase functions:secrets:set OPENAI_API_KEY
 firebase functions:secrets:set OPENROUTER_API_KEY
 firebase functions:secrets:set OPENROUTER_MODEL
+firebase functions:secrets:set OPENROUTER_TRANSCRIPTION_MODEL
 firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET
 ```
+
+Notes:
+- Voice transcription now uses OpenRouter audio input and defaults to `openai/gpt-audio-mini`.
+- You can override the transcription model with `OPENROUTER_TRANSCRIPTION_MODEL`.
+- Expense parsing still uses `OPENROUTER_MODEL` so you keep the same structured extraction model as before.
 
 3. Build and test functions:
 

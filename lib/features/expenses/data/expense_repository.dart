@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class ExpenseRepository {
-  Stream<List<Expense>> watchExpenses(String workspaceId);
+  Stream<List<Expense>> watchExpenses(String workspaceId, String projectId);
   Future<Expense?> getExpense(String expenseId);
   Future<void> createExpense({
     required String workspaceId,
@@ -39,10 +39,11 @@ class FirebaseExpenseRepository implements ExpenseRepository {
   final FirebaseFirestore _firestore;
 
   @override
-  Stream<List<Expense>> watchExpenses(String workspaceId) {
+  Stream<List<Expense>> watchExpenses(String workspaceId, String projectId) {
     return _firestore
         .collection('expenses')
         .where('workspaceId', isEqualTo: workspaceId)
+        .where('projectId', isEqualTo: projectId)
         .where('isArchived', isEqualTo: false)
         .orderBy('date', descending: true)
         .snapshots()

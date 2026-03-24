@@ -21,32 +21,49 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
   }) async {
     final key = _periodKey();
     final counterId = '${workspaceId}_$key';
-    final counterDoc = await _firestore
-        .collection('usage_counters')
-        .doc(counterId)
-        .get();
-    final activeProjectsSnap = await _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('status', isEqualTo: 'active')
-        .where('isArchived', isEqualTo: false)
-        .count()
-        .get();
-    final membersSnap = await _firestore
-        .collection('memberships')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .count()
-        .get();
 
-    final data = counterDoc.data() ?? const <String, dynamic>{};
+    // Each query is fetched independently so a single failure (e.g. an
+    // aggregate count that doesn't work offline) doesn't blow up the whole
+    // snapshot — it just falls back to 0 / last-cached values.
+    DocumentSnapshot<Map<String, dynamic>>? counterDoc;
+    try {
+      counterDoc = await _firestore
+          .collection('usage_counters')
+          .doc(counterId)
+          .get();
+    } catch (_) {}
+
+    int activeProjects = 0;
+    try {
+      final snap = await _firestore
+          .collection('projects')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('status', isEqualTo: 'active')
+          .where('isArchived', isEqualTo: false)
+          .count()
+          .get();
+      activeProjects = snap.count ?? 0;
+    } catch (_) {}
+
+    int memberCount = 1;
+    try {
+      final snap = await _firestore
+          .collection('memberships')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .count()
+          .get();
+      memberCount = snap.count ?? 1;
+    } catch (_) {}
+
+    final data = counterDoc?.data() ?? const <String, dynamic>{};
 
     return UsageSnapshot(
       periodKey: key,
-      activeProjects: activeProjectsSnap.count ?? 0,
+      activeProjects: activeProjects,
       expensesCount: (data['expensesCount'] as num?)?.toInt() ?? 0,
       paymentsCount: (data['paymentsCount'] as num?)?.toInt() ?? 0,
       workerEntriesCount: (data['workerEntriesCount'] as num?)?.toInt() ?? 0,
-      memberCount: membersSnap.count ?? 1,
+      memberCount: memberCount,
       limits: limits,
     );
   }
@@ -59,10 +76,14 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     final key = _periodKey();
     final counterId = '${workspaceId}_$key';
 
-    // Initial fetch
-    yield await getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+    // Initial fetch — fall back to empty snapshot if offline / no cache.
+    try {
+      yield await getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+    } catch (_) {
+      yield UsageSnapshot.empty(limits: limits);
+    }
 
-    // Watch for changes in usage counters, projects, and memberships
+    // Watch for changes in usage counters, projects, and memberships.
     final counterStream =
         _firestore.collection('usage_counters').doc(counterId).snapshots();
     final projectsStream = _firestore
@@ -78,14 +99,21 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
 
     final controller = StreamController<void>.broadcast();
     final subs = [
-      counterStream.listen((_) => controller.add(null)),
-      projectsStream.listen((_) => controller.add(null)),
-      membershipsStream.listen((_) => controller.add(null)),
+      counterStream.listen((_) => controller.add(null), onError: (_) {}),
+      projectsStream.listen((_) => controller.add(null), onError: (_) {}),
+      membershipsStream.listen((_) => controller.add(null), onError: (_) {}),
     ];
 
     try {
       await for (final _ in controller.stream) {
-        yield await getUsageSnapshot(workspaceId: workspaceId, limits: limits);
+        try {
+          yield await getUsageSnapshot(
+            workspaceId: workspaceId,
+            limits: limits,
+          );
+        } catch (_) {
+          // Keep last emitted value on failed refresh.
+        }
       }
     } finally {
       for (final s in subs) {

@@ -4,10 +4,14 @@ import {HttpsError} from "firebase-functions/v2/https";
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".m4a", ".mp3", ".wav", ".webm", ".aac", ".mp4"]);
 
-const TRANSCRIPTION_PROMPT = "Transcribe this construction-site expense voice note accurately. " +
-  "The language may be Arabic, English, or mixed Arabic-English. " +
-  "Expect vocabulary related to labor, materials, equipment, transport, contractors, workers, projects, and expenses. " +
-  "Preserve numbers and project names exactly.";
+const TRANSCRIPTION_PROMPT = "You are a strict speech-to-text transcription engine for construction expense notes. " +
+  "Transcribe the speech exactly as spoken. " +
+  "Do not translate. Do not summarize. Do not explain. Do not normalize into another language. " +
+  "Preserve the original spoken language and script exactly. " +
+  "If the speaker uses Arabic, return Arabic. If the speaker uses English, return English. " +
+  "If the speaker mixes Arabic and English, preserve the mixed-language transcript. " +
+  "Preserve numbers, currency words, and project names exactly as spoken. " +
+  "Return only the raw transcript text with no intro, no quotes, and no extra commentary.";
 
 function extensionOf(path: string): string {
   const index = path.lastIndexOf(".");
@@ -24,19 +28,152 @@ function assertSupportedAudioPath(storagePath: string): void {
   }
 }
 
+function audioFormatOf(storagePath: string): string {
+  switch (extensionOf(storagePath)) {
+  case ".m4a":
+  case ".mp4":
+    return "m4a";
+  case ".mp3":
+    return "mp3";
+  case ".wav":
+    return "wav";
+  case ".webm":
+    return "webm";
+  case ".aac":
+    return "aac";
+  default:
+    return "m4a";
+  }
+}
+
 function readResponseText(payload: unknown): string {
-  if (payload && typeof payload === "object") {
-    const candidate = (payload as Record<string, unknown>).text;
-    if (typeof candidate === "string") {
-      return candidate.trim();
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const directText = (payload as Record<string, unknown>).text;
+  if (typeof directText === "string") {
+    return directText.trim();
+  }
+
+  const choices = (payload as Record<string, unknown>).choices;
+  if (!Array.isArray(choices) || choices.length == 0) {
+    return "";
+  }
+
+  const firstChoice = choices[0];
+  if (!firstChoice || typeof firstChoice !== "object") {
+    return "";
+  }
+
+  const message = (firstChoice as Record<string, unknown>).message;
+  if (!message || typeof message !== "object") {
+    return "";
+  }
+
+  const content = (message as Record<string, unknown>).content;
+  if (typeof content === "string") {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    const merged = content
+      .map((part) => {
+        if (typeof part === "string") {
+          return part;
+        }
+        if (!part || typeof part !== "object") {
+          return "";
+        }
+        const candidate = (part as Record<string, unknown>).text;
+        return typeof candidate === "string" ? candidate : "";
+      })
+      .join("\n")
+      .trim();
+    if (merged) {
+      return merged;
     }
   }
+
   return "";
+}
+
+function cleanupTranscript(text: string): string {
+  let normalized = text.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  normalized = normalized.replace(/\r\n/g, "\n");
+
+  // Strip common assistant-style wrappers if the model still adds them.
+  normalized = normalized.replace(
+    /^(sure|certainly|here(?:'s| is)|below is|the transcription(?: of the voice note)? is)[:,]?\s*/i,
+    "",
+  );
+  normalized = normalized.replace(
+    /^(?:sure,\s*)?here is the transcription(?: of the voice note)?[:\s]*/i,
+    "",
+  );
+
+  const quotedMatch = normalized.match(/^["'](.*)["']$/s);
+  if (quotedMatch?.[1]) {
+    normalized = quotedMatch[1].trim();
+  }
+
+  return normalized.trim();
+}
+
+function readProviderErrorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const error = (payload as Record<string, unknown>).error;
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const message = (error as Record<string, unknown>).message;
+  return typeof message === "string" ? message.trim() : "";
+}
+
+function transcriptionFailureForStatus(
+  status: number,
+  providerMessage: string,
+): HttpsError {
+  switch (status) {
+  case 401:
+  case 403:
+    return new HttpsError(
+      "failed-precondition",
+      "Voice transcription is not configured correctly. Please check the OpenRouter API key and billing setup.",
+    );
+  case 429:
+    return new HttpsError(
+      "resource-exhausted",
+      "Voice transcription quota has been exceeded. Please top up or enable billing for the OpenRouter API key.",
+    );
+  case 500:
+  case 502:
+  case 503:
+  case 504:
+    return new HttpsError(
+      "unavailable",
+      "Voice transcription is temporarily unavailable. Please try again in a moment.",
+    );
+  default:
+    if (providerMessage) {
+      return new HttpsError("internal", `Voice transcription failed: ${providerMessage}`);
+    }
+    return new HttpsError("internal", "Voice transcription failed");
+  }
 }
 
 export async function transcribeAudioFromStorage(params: {
   storagePath: string;
-  openAiApiKey: string;
+  openRouterApiKey: string;
+  model: string;
   languageHint?: string | null;
 }): Promise<string> {
   const storagePath = params.storagePath.trim();
@@ -60,26 +197,46 @@ export async function transcribeAudioFromStorage(params: {
     throw new HttpsError("invalid-argument", "Audio file is too large");
   }
 
-  const form = new FormData();
-  form.append("model", "whisper-1");
-  form.append("prompt", TRANSCRIPTION_PROMPT);
-  if (params.languageHint && params.languageHint.trim().length > 0) {
-    form.append("language", params.languageHint.trim());
-  }
-
-  const filename = storagePath.split("/").pop() ?? "voice-note.m4a";
-  const bytes = new Uint8Array(buffer);
-  const blob = new Blob([bytes], {type: "audio/mp4"});
-  form.append("file", blob, filename);
+  const base64Audio = buffer.toString("base64");
+  const audioFormat = audioFormatOf(storagePath);
+  const transcriptionInstruction = params.languageHint && params.languageHint.trim().length > 0 ?
+    `${TRANSCRIPTION_PROMPT} The likely spoken language code is ${params.languageHint.trim()}. Keep the transcript in that original spoken language unless the audio is clearly mixed.` :
+    TRANSCRIPTION_PROMPT;
 
   let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${params.openAiApiKey}`,
+        Authorization: `Bearer ${params.openRouterApiKey}`,
+        "Content-Type": "application/json",
       },
-      body: form,
+      body: JSON.stringify({
+        model: params.model,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content: TRANSCRIPTION_PROMPT,
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: transcriptionInstruction,
+              },
+              {
+                type: "input_audio",
+                input_audio: {
+                  data: base64Audio,
+                  format: audioFormat,
+                },
+              },
+            ],
+          },
+        ],
+      }),
     });
   } catch (_error) {
     throw new HttpsError("internal", "Failed to reach transcription provider");
@@ -87,16 +244,21 @@ export async function transcribeAudioFromStorage(params: {
 
   if (!response.ok) {
     const bodyText = await response.text();
-    throw new HttpsError(
-      "internal",
-      `Transcription failed (${response.status}): ${bodyText.slice(0, 180)}`,
-    );
+    let providerMessage = "";
+    try {
+      providerMessage = readProviderErrorMessage(JSON.parse(bodyText));
+    } catch {
+      providerMessage = bodyText.trim().slice(0, 180);
+    }
+
+    throw transcriptionFailureForStatus(response.status, providerMessage);
   }
 
   const payload = await response.json();
-  const transcript = readResponseText(payload);
+  const transcript = cleanupTranscript(readResponseText(payload));
   if (!transcript) {
     throw new HttpsError("failed-precondition", "Transcription was empty");
   }
   return transcript;
 }
+

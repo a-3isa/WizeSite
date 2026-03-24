@@ -3,7 +3,7 @@ import {defineSecret} from "firebase-functions/params";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
-export {processVoiceExpense} from "./voice/process_voice_expense";
+export {processVoiceExpense, processVoiceExpenseHttp} from "./voice/process_voice_expense";
 
 admin.initializeApp();
 setGlobalOptions({region: "us-central1", maxInstances: 10});
@@ -158,6 +158,58 @@ function requireNumber(data: Record<string, unknown>, key: string): number {
   return value;
 }
 
+function payloadFrom(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+  return input as Record<string, unknown>;
+}
+
+function bearerTokenFrom(authorizationHeader: string | undefined): string | null {
+  if (!authorizationHeader) {
+    return null;
+  }
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
+}
+
+function httpStatusFor(code: string): number {
+  switch (code) {
+  case "invalid-argument":
+    return 400;
+  case "unauthenticated":
+    return 401;
+  case "permission-denied":
+    return 403;
+  case "not-found":
+    return 404;
+  case "already-exists":
+    return 409;
+  case "failed-precondition":
+    return 412;
+  case "resource-exhausted":
+    return 429;
+  default:
+    return 500;
+  }
+}
+
+function canonicalCode(code: string): string {
+  return code.replace(/-/g, "_").toUpperCase();
+}
+
+async function maybeVerifyAppCheck(appCheckToken: string | undefined): Promise<void> {
+  if (!appCheckToken) {
+    return;
+  }
+
+  try {
+    await admin.appCheck().verifyToken(appCheckToken);
+  } catch (error) {
+    console.warn("HTTP callable endpoint received an invalid App Check token", error);
+  }
+}
+
 async function getCurrentUsage(workspaceId: string, type: LimitType): Promise<number> {
   if (type === "activeProjects") {
     const snap = await db
@@ -303,9 +355,15 @@ export const createExpenseWithQuota = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
-  const data = request.data as Record<string, unknown>;
+  return createExpenseWithQuotaForUser(request.auth.uid, request.data as Record<string, unknown>);
+});
+
+async function createExpenseWithQuotaForUser(
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<{id: string}> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertMember(workspaceId, uid);
 
   const projectId = requireString(data, "projectId");
   const category = requireString(data, "category");
@@ -372,7 +430,7 @@ export const createExpenseWithQuota = onCall(async (request) => {
       transcript,
       source,
       storagePath,
-      createdBy: request.auth!.uid,
+      createdBy: uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       isArchived: false,
@@ -386,6 +444,60 @@ export const createExpenseWithQuota = onCall(async (request) => {
   });
 
   return {id: expenseRef.id};
+}
+
+export const createExpenseWithQuotaHttp = onRequest(async (request, response) => {
+  response.set("Access-Control-Allow-Origin", "*");
+  response.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Firebase-AppCheck",
+  );
+
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+
+  if (request.method !== "POST") {
+    response.status(405).json({
+      error: {
+        code: "method-not-allowed",
+        status: "METHOD_NOT_ALLOWED",
+        message: "Method not allowed",
+      },
+    });
+    return;
+  }
+
+  try {
+    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+
+    const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
+    if (!bearerToken) {
+      throw new HttpsError("unauthenticated", "Authentication required");
+    }
+
+    const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+    const body = payloadFrom(request.body);
+    const data = Object.keys(payloadFrom(body.data)).length > 0 ?
+      payloadFrom(body.data) :
+      body;
+
+    const result = await createExpenseWithQuotaForUser(decodedToken.uid, data);
+    response.status(200).json({result});
+  } catch (error) {
+    const handled = error instanceof HttpsError ?
+      error :
+      new HttpsError("internal", "Failed to save expense");
+    response.status(httpStatusFor(handled.code)).json({
+      error: {
+        code: handled.code,
+        status: canonicalCode(handled.code),
+        message: handled.message,
+        details: handled.details ?? null,
+      },
+    });
+  }
 });
 
 export const createPaymentWithQuota = onCall(async (request) => {

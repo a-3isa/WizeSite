@@ -22,13 +22,13 @@ class VoiceRecorderService {
 
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = '${tempDir.path}${Platform.pathSeparator}voice_$timestamp.m4a';
+    final path = '${tempDir.path}${Platform.pathSeparator}voice_$timestamp.wav';
 
     await _recorder.start(
       const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 64000,
-        sampleRate: 44100,
+        encoder: AudioEncoder.wav,
+        sampleRate: 16000,
+        numChannels: 1,
       ),
       path: path,
     );

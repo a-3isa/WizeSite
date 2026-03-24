@@ -13,7 +13,7 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) {
 });
 
 final functionsProvider = Provider<FirebaseFunctions>((ref) {
-  return FirebaseFunctions.instance;
+  return FirebaseFunctions.instanceFor(region: 'us-central1');
 });
 
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {

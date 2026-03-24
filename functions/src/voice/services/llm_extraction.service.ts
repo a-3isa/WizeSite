@@ -84,6 +84,8 @@ function buildPrompt(params: {
     "Return VALID JSON only. No prose.",
     "Do not invent project names outside the provided list.",
     "If unknown set value to null.",
+    "Do not translate the transcript.",
+    "If you produce a note, keep it in the same language as the original transcript.",
     "Allowed categories: labor, materials, equipment, transport, other.",
     `Default currency: ${params.defaultCurrency}`,
     "",
@@ -160,7 +162,9 @@ export async function extractExpenseByLlm(params: {
         messages: [
           {
             role: "system",
-            content: "You are an information extraction engine. Return JSON only.",
+            content:
+              "You are an information extraction engine. Return JSON only. " +
+              "Do not translate user content. Preserve the original language in extracted note text.",
           },
           {
             role: "user",
@@ -227,4 +231,3 @@ export function mapLlmProjectNameToProvided(params: {
   }
   return {projectId: null, projectName: null};
 }
-

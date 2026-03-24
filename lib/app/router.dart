@@ -22,6 +22,7 @@ import 'package:buildtrack_app/features/payments/presentation/screens/payment_de
 import 'package:buildtrack_app/features/payments/presentation/screens/payments_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/create_project_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/project_detail_screen.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/archived_projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
@@ -100,6 +101,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'forgotPassword',
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.reports,
+        name: 'reports',
+        builder: (context, state) {
+          final projectId = state.uri.queryParameters['projectId'];
+          return ReportsScreen(projectId: projectId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return AppBottomNavShell(navigationShell: navigationShell);
@@ -117,15 +131,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: AppRoutes.projects,
-                name: 'projects',
-                builder: (context, state) => const ProjectsScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
                 path: AppRoutes.add,
                 name: 'add',
                 builder: (context, state) => const AddHubScreen(),
@@ -135,21 +140,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: AppRoutes.reports,
-                name: 'reports',
-                builder: (context, state) {
-                  final projectId = state.uri.queryParameters['projectId'];
-                  return ReportsScreen(projectId: projectId);
-                },
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.settings,
-                name: 'settings',
-                builder: (context, state) => const SettingsScreen(),
+                path: AppRoutes.projects,
+                name: 'projects',
+                builder: (context, state) => const ProjectsScreen(),
               ),
             ],
           ),
@@ -177,9 +170,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutes.expenses,
-        name: 'expenses',
-        builder: (context, state) => const ExpensesScreen(),
+        path: AppRoutes.archivedProjects,
+        name: 'archivedProjects',
+        builder: (context, state) => const ArchivedProjectsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.projectExpenses,
+        name: 'projectExpenses',
+        builder: (context, state) {
+          final projectId = state.pathParameters['projectId'] ?? '';
+          return ExpensesScreen(projectId: projectId);
+        },
       ),
       GoRoute(
         path: AppRoutes.addExpense,
@@ -194,7 +195,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'expenseDetail',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return ExpenseDetailScreen(expenseId: id);
+          final projectId = state.uri.queryParameters['projectId'];
+          return ExpenseDetailScreen(expenseId: id, projectId: projectId);
         },
       ),
       GoRoute(
@@ -202,7 +204,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'expenseEdit',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return AddExpenseScreen(expenseId: id);
+          final projectId = state.uri.queryParameters['projectId'];
+          return AddExpenseScreen(expenseId: id, projectId: projectId);
         },
       ),
       GoRoute(
@@ -337,7 +340,10 @@ String? resolveAppRedirect({
   }
 
   if (isAuthRoute) {
-    return AppRoutes.root;
+    if (hasWorkspace) {
+      return AppRoutes.dashboard;
+    }
+    return null;
   }
 
   if (hasWorkspace && isPublicDiscovery) {

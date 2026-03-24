@@ -1,9 +1,10 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 class AddWorkerScreen extends ConsumerStatefulWidget {
   const AddWorkerScreen({this.workerId, super.key});
@@ -61,6 +62,13 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
     super.dispose();
   }
 
+  String _fallbackRoute() {
+    if (widget.workerId != null && widget.workerId!.isNotEmpty) {
+      return AppRoutes.workerDetailPath(widget.workerId!);
+    }
+    return AppRoutes.workers;
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
@@ -105,7 +113,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
             );
       }
       if (mounted) {
-        context.pop();
+        appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } catch (e) {
       setState(() => _error = e.toString());
@@ -119,65 +127,74 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.workerId == null
+    return AppBackScope(
+      fallbackRoute: _fallbackRoute(),
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: widget.workerId == null
               ? l10n.t('addWorkerTitle')
               : l10n.t('editWorkerTitle'),
+          fallbackRoute: _fallbackRoute(),
         ),
+        body: _prefilling
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('workerName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('phoneNumber'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _wageController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: l10n.t('dailyWage')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _typeController,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('workerType'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_error != null)
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loading ? null : _save,
+                    child: _loading
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            widget.workerId == null
+                                ? l10n.t('saveWorker')
+                                : l10n.t('updateWorker'),
+                          ),
+                  ),
+                ],
+              ),
       ),
-      body: _prefilling
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: InputDecoration(labelText: l10n.t('workerName')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(labelText: l10n.t('phoneNumber')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _wageController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: l10n.t('dailyWage')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _typeController,
-                  decoration: InputDecoration(labelText: l10n.t('workerType')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  decoration: InputDecoration(labelText: l10n.t('notes')),
-                ),
-                const SizedBox(height: 12),
-                if (_error != null)
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loading ? null : _save,
-                  child: _loading
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          widget.workerId == null
-                              ? l10n.t('saveWorker')
-                              : l10n.t('updateWorker'),
-                        ),
-                ),
-              ],
-            ),
     );
   }
 }

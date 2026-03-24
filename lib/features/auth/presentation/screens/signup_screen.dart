@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -149,68 +150,77 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('signup'))),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(labelText: l10n.t('fullName')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(labelText: l10n.t('email')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(labelText: l10n.t('password')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _confirmController,
-              obscureText: true,
-              decoration: InputDecoration(labelText: l10n.t('confirmPassword')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _companyController,
-              decoration: InputDecoration(
-                labelText: l10n.t('companyNameOptional'),
+    return AppBackScope(
+      fallbackRoute: AppRoutes.login,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('signup'),
+          fallbackRoute: AppRoutes.login,
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(labelText: l10n.t('fullName')),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: l10n.t('phoneNumberOptional'),
-              ),
-            ),
-            if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(labelText: l10n.t('email')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(labelText: l10n.t('password')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: l10n.t('confirmPassword'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _companyController,
+                decoration: InputDecoration(
+                  labelText: l10n.t('companyNameOptional'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: l10n.t('phoneNumberOptional'),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _loading ? null : _signup,
+                child: _loading
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l10n.t('signup')),
+              ),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.login),
+                child: Text(l10n.t('login')),
+              ),
             ],
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _loading ? null : _signup,
-              child: _loading
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(l10n.t('signup')),
-            ),
-            TextButton(
-              onPressed: () => context.go(AppRoutes.login),
-              child: Text(l10n.t('login')),
-            ),
-          ],
+          ),
         ),
       ),
     );

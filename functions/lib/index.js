@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuota = exports.createExpenseWithQuota = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpense = void 0;
+exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 const admin = __importStar(require("firebase-admin"));
 const params_1 = require("firebase-functions/params");
 const v2_1 = require("firebase-functions/v2");
@@ -41,6 +41,7 @@ const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 var process_voice_expense_1 = require("./voice/process_voice_expense");
 Object.defineProperty(exports, "processVoiceExpense", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpense; } });
+Object.defineProperty(exports, "processVoiceExpenseHttp", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpenseHttp; } });
 admin.initializeApp();
 (0, v2_1.setGlobalOptions)({ region: "us-central1", maxInstances: 10 });
 const db = admin.firestore();
@@ -161,6 +162,53 @@ function requireNumber(data, key) {
         throw new https_1.HttpsError("invalid-argument", `Invalid number: ${key}`);
     }
     return value;
+}
+function payloadFrom(input) {
+    if (!input || typeof input !== "object") {
+        return {};
+    }
+    return input;
+}
+function bearerTokenFrom(authorizationHeader) {
+    if (!authorizationHeader) {
+        return null;
+    }
+    const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : null;
+}
+function httpStatusFor(code) {
+    switch (code) {
+        case "invalid-argument":
+            return 400;
+        case "unauthenticated":
+            return 401;
+        case "permission-denied":
+            return 403;
+        case "not-found":
+            return 404;
+        case "already-exists":
+            return 409;
+        case "failed-precondition":
+            return 412;
+        case "resource-exhausted":
+            return 429;
+        default:
+            return 500;
+    }
+}
+function canonicalCode(code) {
+    return code.replace(/-/g, "_").toUpperCase();
+}
+async function maybeVerifyAppCheck(appCheckToken) {
+    if (!appCheckToken) {
+        return;
+    }
+    try {
+        await admin.appCheck().verifyToken(appCheckToken);
+    }
+    catch (error) {
+        console.warn("HTTP callable endpoint received an invalid App Check token", error);
+    }
 }
 async function getCurrentUsage(workspaceId, type) {
     if (type === "activeProjects") {
@@ -294,9 +342,11 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
-    const data = request.data;
+    return createExpenseWithQuotaForUser(request.auth.uid, request.data);
+});
+async function createExpenseWithQuotaForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    await assertMember(workspaceId, uid);
     const projectId = requireString(data, "projectId");
     const category = requireString(data, "category");
     const allowedCategories = ["labor", "materials", "equipment", "transport", "other"];
@@ -355,7 +405,7 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
             transcript,
             source,
             storagePath,
-            createdBy: request.auth.uid,
+            createdBy: uid,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             isArchived: false,
@@ -368,6 +418,51 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
         }, { merge: true });
     });
     return { id: expenseRef.id };
+}
+exports.createExpenseWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
+    if (request.method === "OPTIONS") {
+        response.status(204).send("");
+        return;
+    }
+    if (request.method !== "POST") {
+        response.status(405).json({
+            error: {
+                code: "method-not-allowed",
+                status: "METHOD_NOT_ALLOWED",
+                message: "Method not allowed",
+            },
+        });
+        return;
+    }
+    try {
+        await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
+        if (!bearerToken) {
+            throw new https_1.HttpsError("unauthenticated", "Authentication required");
+        }
+        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const body = payloadFrom(request.body);
+        const data = Object.keys(payloadFrom(body.data)).length > 0 ?
+            payloadFrom(body.data) :
+            body;
+        const result = await createExpenseWithQuotaForUser(decodedToken.uid, data);
+        response.status(200).json({ result });
+    }
+    catch (error) {
+        const handled = error instanceof https_1.HttpsError ?
+            error :
+            new https_1.HttpsError("internal", "Failed to save expense");
+        response.status(httpStatusFor(handled.code)).json({
+            error: {
+                code: handled.code,
+                status: canonicalCode(handled.code),
+                message: handled.message,
+                details: handled.details ?? null,
+            },
+        });
+    }
 });
 exports.createPaymentWithQuota = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {

@@ -86,7 +86,9 @@ class AddHubScreen extends StatelessWidget {
                   _ActionCard(
                     icon: Icons.person_add_outlined,
                     title: l10n.t('addWorkerTitle'),
-                    subtitle: l10n.t('addWorkerSubtitle'), // Wait, check if addWorkerSubtitle exists
+                    subtitle: l10n.t(
+                      'addWorkerSubtitle',
+                    ), // Wait, check if addWorkerSubtitle exists
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
@@ -115,9 +117,9 @@ class AddHubScreen extends StatelessWidget {
                       context.push('/worker-entry/new');
                     },
                   ),
-                  const SizedBox(height: 20),
-                  _SectionHeader(title: l10n.t('projects')),
-                  const SizedBox(height: 8),
+                  // const SizedBox(height: 20),
+                  // _SectionHeader(title: l10n.t('projects')),
+                  // const SizedBox(height: 8),
                   // _ActionCard(
                   //   icon: Icons.work_outline,
                   //   title: l10n.t('createProject'),

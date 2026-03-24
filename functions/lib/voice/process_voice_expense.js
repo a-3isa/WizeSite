@@ -1,13 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processVoiceExpense = exports.openRouterModelSecret = exports.openRouterApiKeySecret = exports.openAiApiKeySecret = void 0;
+exports.processVoiceExpenseHttp = exports.processVoiceExpense = exports.openRouterTranscriptionModelSecret = exports.openRouterModelSecret = exports.openRouterApiKeySecret = void 0;
+const admin = __importStar(require("firebase-admin"));
 const params_1 = require("firebase-functions/params");
 const https_1 = require("firebase-functions/v2/https");
 const transcription_service_1 = require("./services/transcription.service");
 const expense_parser_service_1 = require("./services/expense_parser.service");
-exports.openAiApiKeySecret = (0, params_1.defineSecret)("OPENAI_API_KEY");
 exports.openRouterApiKeySecret = (0, params_1.defineSecret)("OPENROUTER_API_KEY");
 exports.openRouterModelSecret = (0, params_1.defineSecret)("OPENROUTER_MODEL");
+exports.openRouterTranscriptionModelSecret = (0, params_1.defineSecret)("OPENROUTER_TRANSCRIPTION_MODEL");
+const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-audio-mini";
 function parseProjects(input) {
     if (!Array.isArray(input)) {
         return [];
@@ -72,32 +107,74 @@ function emptyResult(storagePath) {
         storagePath,
     };
 }
-exports.processVoiceExpense = (0, https_1.onCall)({
-    timeoutSeconds: 120,
-    memory: "1GiB",
-    secrets: [exports.openAiApiKeySecret, exports.openRouterApiKeySecret, exports.openRouterModelSecret],
-}, async (request) => {
-    if (!request.auth?.uid) {
-        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+function payloadFrom(input) {
+    if (!input || typeof input !== "object") {
+        return {};
     }
-    const payload = (request.data ?? {});
+    return input;
+}
+function bearerTokenFrom(authorizationHeader) {
+    if (!authorizationHeader) {
+        return null;
+    }
+    const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : null;
+}
+function httpStatusFor(code) {
+    switch (code) {
+        case "invalid-argument":
+            return 400;
+        case "unauthenticated":
+            return 401;
+        case "permission-denied":
+            return 403;
+        case "not-found":
+            return 404;
+        case "already-exists":
+            return 409;
+        case "failed-precondition":
+            return 412;
+        case "resource-exhausted":
+            return 429;
+        default:
+            return 500;
+    }
+}
+function canonicalCode(code) {
+    return code.replace(/-/g, "_").toUpperCase();
+}
+async function maybeVerifyAppCheck(appCheckToken) {
+    if (!appCheckToken) {
+        return;
+    }
+    try {
+        await admin.appCheck().verifyToken(appCheckToken);
+    }
+    catch (error) {
+        console.warn("Voice HTTP endpoint received an invalid App Check token", error);
+    }
+}
+async function processVoiceExpenseForUser(uid, payload) {
     const storagePath = `${payload.storagePath ?? ""}`.trim();
     if (!storagePath) {
         throw new https_1.HttpsError("invalid-argument", "storagePath is required");
     }
-    assertVoicePathOwnedByUser(storagePath, request.auth.uid);
+    assertVoicePathOwnedByUser(storagePath, uid);
     const projects = parseProjects(payload.projects);
     const currency = parseCurrency(payload.currency);
     const languageHint = parseLanguageHint(payload.languageHint);
-    const openAiApiKey = exports.openAiApiKeySecret.value() || process.env.OPENAI_API_KEY || "";
-    if (!openAiApiKey) {
-        throw new https_1.HttpsError("failed-precondition", "OPENAI_API_KEY is not configured");
+    const openRouterApiKey = exports.openRouterApiKeySecret.value() || process.env.OPENROUTER_API_KEY || "";
+    if (!openRouterApiKey) {
+        throw new https_1.HttpsError("failed-precondition", "OPENROUTER_API_KEY is not configured");
     }
     let transcript = "";
     try {
         transcript = await (0, transcription_service_1.transcribeAudioFromStorage)({
             storagePath,
-            openAiApiKey,
+            openRouterApiKey,
+            model: exports.openRouterTranscriptionModelSecret.value() ||
+                process.env.OPENROUTER_TRANSCRIPTION_MODEL ||
+                DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL,
             languageHint,
         });
     }
@@ -110,7 +187,6 @@ exports.processVoiceExpense = (0, https_1.onCall)({
     if (!transcript.trim()) {
         return emptyResult(storagePath);
     }
-    const openRouterApiKey = exports.openRouterApiKeySecret.value() || process.env.OPENROUTER_API_KEY || "";
     const openRouterModel = exports.openRouterModelSecret.value() ||
         process.env.OPENROUTER_MODEL ||
         "openai/gpt-4o-mini";
@@ -122,5 +198,72 @@ exports.processVoiceExpense = (0, https_1.onCall)({
         openRouterApiKey,
         openRouterModel,
     });
+}
+exports.processVoiceExpense = (0, https_1.onCall)({
+    timeoutSeconds: 120,
+    memory: "1GiB",
+    secrets: [
+        exports.openRouterApiKeySecret,
+        exports.openRouterModelSecret,
+        exports.openRouterTranscriptionModelSecret,
+    ],
+}, async (request) => {
+    if (!request.auth?.uid) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const payload = payloadFrom(request.data);
+    return processVoiceExpenseForUser(request.auth.uid, payload);
+});
+exports.processVoiceExpenseHttp = (0, https_1.onRequest)({
+    timeoutSeconds: 120,
+    memory: "1GiB",
+    secrets: [
+        exports.openRouterApiKeySecret,
+        exports.openRouterModelSecret,
+        exports.openRouterTranscriptionModelSecret,
+    ],
+}, async (request, response) => {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
+    if (request.method === "OPTIONS") {
+        response.status(204).send("");
+        return;
+    }
+    if (request.method !== "POST") {
+        response.status(405).json({
+            error: {
+                code: "method-not-allowed",
+                status: "METHOD_NOT_ALLOWED",
+                message: "Method not allowed",
+            },
+        });
+        return;
+    }
+    try {
+        await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
+        if (!bearerToken) {
+            throw new https_1.HttpsError("unauthenticated", "Authentication required");
+        }
+        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const body = payloadFrom(request.body);
+        const payload = Object.keys(payloadFrom(body.data)).length > 0 ?
+            payloadFrom(body.data) :
+            body;
+        const result = await processVoiceExpenseForUser(decodedToken.uid, payload);
+        response.status(200).json({ result });
+    }
+    catch (error) {
+        const handled = error instanceof https_1.HttpsError ?
+            error :
+            new https_1.HttpsError("internal", "Failed to process voice expense");
+        response.status(httpStatusFor(handled.code)).json({
+            error: {
+                code: handled.code,
+                status: canonicalCode(handled.code),
+                message: handled.message,
+            },
+        });
+    }
 });
 //# sourceMappingURL=process_voice_expense.js.map

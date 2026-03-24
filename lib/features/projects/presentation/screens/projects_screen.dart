@@ -33,7 +33,15 @@ class ProjectsScreen extends ConsumerWidget {
     final projectsAsync = ref.watch(projectsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('projects'))),
+      appBar: AppBar(
+        title: Text(l10n.t('projects')),
+        actions: [
+          IconButton(
+            onPressed: () => context.push(AppRoutes.archivedProjects),
+            icon: const Icon(Icons.archive_outlined),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(AppRoutes.createProject),
         icon: const Icon(Icons.add),

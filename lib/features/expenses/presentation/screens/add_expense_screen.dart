@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
@@ -70,6 +71,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
+  String _fallbackRoute() {
+    final projectId = _projectId ?? widget.projectId;
+    if (projectId != null && projectId.isNotEmpty) {
+      return AppRoutes.projectExpensesPath(projectId);
+    }
+    return AppRoutes.projects;
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
@@ -125,7 +134,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             );
       }
       if (mounted) {
-        context.pop();
+        appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'failed-precondition') {
@@ -150,144 +159,149 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.expenseId == null
+    return AppBackScope(
+      fallbackRoute: _fallbackRoute(),
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: widget.expenseId == null
               ? l10n.t('addExpenseTitle')
               : l10n.t('editExpenseTitle'),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => context.push(AppRoutes.voiceExpense),
-            icon: const Icon(Icons.mic),
-          ),
-        ],
-      ),
-      body: _prefilling
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                projectsAsync.when(
-                  data: (projects) {
-                    return DropdownButtonFormField<String>(
-                      initialValue: _projectId,
-                      items: projects
-                          .map(
-                            (p) => DropdownMenuItem(
-                              value: p.id,
-                              child: Text(p.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        final selected = projects.where((p) => p.id == value);
-                        setState(() {
-                          _projectId = value;
-                          _projectName = selected.isEmpty
-                              ? ''
-                              : selected.first.name;
-                        });
-                      },
-                      decoration: InputDecoration(labelText: l10n.t('project')),
-                    );
-                  },
-                  error: (e, _) => Text(e.toString()),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  items: [
-                    DropdownMenuItem(
-                      value: 'labor',
-                      child: Text(l10n.expenseCategoryLabel('labor')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'materials',
-                      child: Text(l10n.expenseCategoryLabel('materials')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'equipment',
-                      child: Text(l10n.expenseCategoryLabel('equipment')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'transport',
-                      child: Text(l10n.expenseCategoryLabel('transport')),
-                    ),
-                    DropdownMenuItem(
-                      value: 'other',
-                      child: Text(l10n.expenseCategoryLabel('other')),
-                    ),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _category = value ?? _category),
-                  decoration: InputDecoration(labelText: l10n.t('category')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: l10n.t('amount')),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    l10n.t(
-                      'dateWithValue',
-                      params: {
-                        'value': _date.toIso8601String().split('T').first,
-                      },
-                    ),
-                  ),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                      initialDate: _date,
-                    );
-                    if (date != null) {
-                      setState(() => _date = date);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _supplierController,
-                  decoration: InputDecoration(
-                    labelText: l10n.t('supplierNameOptional'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  decoration: InputDecoration(labelText: l10n.t('notes')),
-                ),
-                const SizedBox(height: 12),
-                if (_error != null)
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loading ? null : _save,
-                  child: _loading
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          widget.expenseId == null
-                              ? l10n.t('saveExpense')
-                              : l10n.t('updateExpense'),
-                        ),
-                ),
-              ],
+          fallbackRoute: _fallbackRoute(),
+          actions: [
+            IconButton(
+              onPressed: () => context.push(AppRoutes.voiceExpense),
+              icon: const Icon(Icons.mic),
             ),
+          ],
+        ),
+        body: _prefilling
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  projectsAsync.when(
+                    data: (projects) {
+                      return DropdownButtonFormField<String>(
+                        initialValue: _projectId,
+                        items: projects
+                            .map(
+                              (p) => DropdownMenuItem(
+                                value: p.id,
+                                child: Text(p.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          final selected = projects.where((p) => p.id == value);
+                          setState(() {
+                            _projectId = value;
+                            _projectName = selected.isEmpty
+                                ? ''
+                                : selected.first.name;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          labelText: l10n.t('project'),
+                        ),
+                      );
+                    },
+                    error: (e, _) => Text(e.toString()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _category,
+                    items: [
+                      DropdownMenuItem(
+                        value: 'labor',
+                        child: Text(l10n.expenseCategoryLabel('labor')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'materials',
+                        child: Text(l10n.expenseCategoryLabel('materials')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'equipment',
+                        child: Text(l10n.expenseCategoryLabel('equipment')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'transport',
+                        child: Text(l10n.expenseCategoryLabel('transport')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'other',
+                        child: Text(l10n.expenseCategoryLabel('other')),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _category = value ?? _category),
+                    decoration: InputDecoration(labelText: l10n.t('category')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: l10n.t('amount')),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      l10n.t(
+                        'dateWithValue',
+                        params: {
+                          'value': _date.toIso8601String().split('T').first,
+                        },
+                      ),
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        initialDate: _date,
+                      );
+                      if (date != null) {
+                        setState(() => _date = date);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _supplierController,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('supplierNameOptional'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_error != null)
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loading ? null : _save,
+                    child: _loading
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            widget.expenseId == null
+                                ? l10n.t('saveExpense')
+                                : l10n.t('updateExpense'),
+                          ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

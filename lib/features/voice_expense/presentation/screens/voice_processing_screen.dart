@@ -1,11 +1,18 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/services/cloud_function_service.dart';
+import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_review_screen.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class VoiceProcessingScreen extends ConsumerStatefulWidget {
   const VoiceProcessingScreen({
@@ -32,10 +39,16 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
   double _uploadProgress = 0;
   String _stage = '';
   String? _error;
+  bool _requiresLogin = false;
+  bool _hasStartedProcessing = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_hasStartedProcessing) {
+      return;
+    }
+    _hasStartedProcessing = true;
     unawaited(_process());
   }
 
@@ -45,6 +58,7 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
       _uploadProgress = 0;
       _stage = l10n.t('uploadingAudio');
       _error = null;
+      _requiresLogin = false;
     });
 
     try {
@@ -79,44 +93,110 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
         return;
       }
       setState(() {
-        _error = e.toString();
+        _error = _messageForError(e, l10n);
         _stage = l10n.t('failed');
+        _requiresLogin = _shouldRouteToLogin(e);
       });
     }
+  }
+
+  bool _isUnauthenticatedError(Object error) {
+    if (error is CloudFunctionServiceException) {
+      return error.code == 'unauthenticated';
+    }
+    if (error is FirebaseFunctionsException) {
+      return error.code == 'unauthenticated';
+    }
+    return false;
+  }
+
+  bool _shouldRouteToLogin(Object error) {
+    if (!_isUnauthenticatedError(error)) {
+      return false;
+    }
+
+    return ref.read(firebaseAuthProvider).currentUser == null;
+  }
+
+  String _messageForError(Object error, AppLocalizations l10n) {
+    if (error is CloudFunctionServiceException) {
+      if (error.code == 'unauthenticated') {
+        final message = error.message.trim();
+        if (message.isNotEmpty) {
+          return message;
+        }
+        if (ref.read(firebaseAuthProvider).currentUser == null) {
+          return l10n.t('pleaseLoginFirst');
+        }
+        return l10n.t('unexpectedErrorTryAgain');
+      }
+      final message = error.message.trim();
+      return message.isEmpty ? l10n.t('unexpectedErrorTryAgain') : message;
+    }
+    if (error is FirebaseFunctionsException) {
+      return firebaseFunctionsErrorMessage(error, l10n);
+    }
+    final message = error.toString().trim();
+    return message.isEmpty ? l10n.t('unexpectedErrorTryAgain') : message;
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final hasError = _error != null;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('processingVoice'))),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!hasError) ...[
-                CircularProgressIndicator(
-                  value: _uploadProgress > 0 && _uploadProgress < 1
-                      ? _uploadProgress
-                      : null,
+    return AppBackScope(
+      fallbackRoute: AppRoutes.voiceExpense,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('processingVoice'),
+          fallbackRoute: AppRoutes.voiceExpense,
+        ),
+        body: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 48,
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!hasError) ...[
+                      CircularProgressIndicator(
+                        value: _uploadProgress > 0 && _uploadProgress < 1
+                            ? _uploadProgress
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(_stage, textAlign: TextAlign.center),
+                    ] else ...[
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 42,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _requiresLogin
+                            ? () => context.go(AppRoutes.login)
+                            : _process,
+                        child: Text(
+                          _requiresLogin ? l10n.t('login') : l10n.t('retry'),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(_stage),
-              ] else ...[
-                const Icon(Icons.error_outline, color: Colors.red, size: 42),
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                FilledButton(onPressed: _process, child: Text(l10n.t('retry'))),
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ),

@@ -1,9 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AppBottomNavShell extends StatelessWidget {
+class AppBottomNavShell extends ConsumerWidget {
   const AppBottomNavShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
@@ -16,10 +18,37 @@ class AppBottomNavShell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final isOffline = ref.watch(isOfflineProvider);
     return Scaffold(
-      body: navigationShell,
+      body: Column(
+        children: [
+          if (isOffline)
+            Material(
+              color: AppColors.warning,
+              child: SafeArea(
+                bottom: false,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      l10n.t('noInternetConnection'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Expanded(child: navigationShell),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _onDestinationSelected,
@@ -28,11 +57,6 @@ class AppBottomNavShell extends StatelessWidget {
             icon: const Icon(Icons.home_outlined),
             selectedIcon: const Icon(Icons.home),
             label: l10n.t('home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.work_outline),
-            selectedIcon: const Icon(Icons.work),
-            label: l10n.t('projects'),
           ),
           NavigationDestination(
             icon: Container(
@@ -57,14 +81,9 @@ class AppBottomNavShell extends StatelessWidget {
             label: l10n.t('add'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.pie_chart_outline),
-            selectedIcon: const Icon(Icons.pie_chart),
-            label: l10n.t('reports'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
-            label: l10n.t('settings'),
+            icon: const Icon(Icons.work_outline),
+            selectedIcon: const Icon(Icons.work),
+            label: l10n.t('projects'),
           ),
         ],
       ),

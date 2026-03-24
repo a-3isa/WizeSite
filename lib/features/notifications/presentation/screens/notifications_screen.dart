@@ -1,4 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -26,31 +28,38 @@ class NotificationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final notificationsAsync = ref.watch(notificationItemsProvider);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('notificationsTitle'))),
-      body: notificationsAsync.when(
-        data: (snap) {
-          if (snap.docs.isEmpty) {
-            return Center(child: Text(l10n.t('noNotificationsYet')));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: snap.docs.length,
-            separatorBuilder: (_, index) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final item = snap.docs[index].data();
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.notification_important),
-                  title: Text(item['title'] as String? ?? ''),
-                  subtitle: Text(item['message'] as String? ?? ''),
-                ),
-              );
-            },
-          );
-        },
-        error: (error, _) => Center(child: Text(error.toString())),
-        loading: () => const Center(child: CircularProgressIndicator()),
+    return AppBackScope(
+      fallbackRoute: AppRoutes.dashboard,
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: l10n.t('notificationsTitle'),
+          fallbackRoute: AppRoutes.dashboard,
+        ),
+        body: notificationsAsync.when(
+          data: (snap) {
+            if (snap.docs.isEmpty) {
+              return Center(child: Text(l10n.t('noNotificationsYet')));
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: snap.docs.length,
+              separatorBuilder: (_, index) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final item = snap.docs[index].data();
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.notification_important),
+                    title: Text(item['title'] as String? ?? ''),
+                    subtitle: Text(item['message'] as String? ?? ''),
+                  ),
+                );
+              },
+            );
+          },
+          error: (error, _) => Center(child: Text(error.toString())),
+          loading: () => const Center(child: CircularProgressIndicator()),
+        ),
       ),
     );
   }

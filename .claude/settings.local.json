@@ -7,7 +7,8 @@
       "Bash(adb -s emulator-5554 logcat -d)",
       "Bash(npm install:*)",
       "Bash(firebase deploy:*)",
-      "Bash(firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET)"
+      "Bash(firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

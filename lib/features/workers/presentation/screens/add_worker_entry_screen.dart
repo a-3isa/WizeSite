@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -11,7 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class AddWorkerEntryScreen extends ConsumerStatefulWidget {
-  const AddWorkerEntryScreen({required this.workerId, this.entryId, this.projectId, super.key});
+  const AddWorkerEntryScreen({
+    required this.workerId,
+    this.entryId,
+    this.projectId,
+    super.key,
+  });
 
   final String workerId;
   final String? entryId;
@@ -74,6 +80,13 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     super.dispose();
   }
 
+  String _fallbackRoute() {
+    if (_workerId != null && _workerId!.isNotEmpty && _workerId != 'new') {
+      return AppRoutes.workerDetailPath(_workerId!);
+    }
+    return AppRoutes.workers;
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
@@ -124,7 +137,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
             );
       }
       if (mounted) {
-        context.pop();
+        appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'failed-precondition') {
@@ -152,120 +165,125 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     final workersAsync = ref.watch(workersProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.entryId == null
+    return AppBackScope(
+      fallbackRoute: _fallbackRoute(),
+      child: Scaffold(
+        appBar: appBackAppBar(
+          context: context,
+          title: widget.entryId == null
               ? l10n.t('addWorkerEntryTitle')
               : l10n.t('editWorkerEntryTitle'),
+          fallbackRoute: _fallbackRoute(),
         ),
-      ),
-      body: _prefilling
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (_workerId == null)
-                  workersAsync.when(
-                    data: (workers) => DropdownButtonFormField<String>(
-                      initialValue: _workerId,
-                      items: workers
+        body: _prefilling
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (_workerId == null)
+                    workersAsync.when(
+                      data: (workers) => DropdownButtonFormField<String>(
+                        initialValue: _workerId,
+                        items: workers
+                            .map(
+                              (worker) => DropdownMenuItem(
+                                value: worker.id,
+                                child: Text(worker.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(() => _workerId = value),
+                        decoration: InputDecoration(
+                          labelText: l10n.t('workerName'),
+                        ),
+                      ),
+                      error: (e, _) => Text(e.toString()),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                    ),
+                  const SizedBox(height: 12),
+                  projectsAsync.when(
+                    data: (projects) => DropdownButtonFormField<String>(
+                      initialValue: _projectId,
+                      items: projects
                           .map(
-                            (worker) => DropdownMenuItem(
-                              value: worker.id,
-                              child: Text(worker.name),
+                            (p) => DropdownMenuItem(
+                              value: p.id,
+                              child: Text(p.name),
                             ),
                           )
                           .toList(),
-                      onChanged: (value) => setState(() => _workerId = value),
-                      decoration: InputDecoration(
-                        labelText: l10n.t('workerName'),
-                      ),
+                      onChanged: (value) => setState(() => _projectId = value),
+                      decoration: InputDecoration(labelText: l10n.t('project')),
                     ),
                     error: (e, _) => Text(e.toString()),
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                   ),
-                const SizedBox(height: 12),
-                projectsAsync.when(
-                  data: (projects) => DropdownButtonFormField<String>(
-                    initialValue: _projectId,
-                    items: projects
-                        .map(
-                          (p) => DropdownMenuItem(
-                            value: p.id,
-                            child: Text(p.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _projectId = value),
-                    decoration: InputDecoration(labelText: l10n.t('project')),
-                  ),
-                  error: (e, _) => Text(e.toString()),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _daysController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: l10n.t('daysWorked')),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _wageController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: l10n.t('dailyWage')),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    l10n.t(
-                      'dateWithValue',
-                      params: {
-                        'value': _date.toIso8601String().split('T').first,
-                      },
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _daysController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('daysWorked'),
                     ),
                   ),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                      initialDate: _date,
-                    );
-                    if (picked != null) {
-                      setState(() => _date = picked);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  decoration: InputDecoration(labelText: l10n.t('notes')),
-                ),
-                const SizedBox(height: 12),
-                if (_error != null)
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _loading ? null : _save,
-                  child: _loading
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          widget.entryId == null
-                              ? l10n.t('saveWorkerEntry')
-                              : l10n.t('updateWorkerEntry'),
-                        ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _wageController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: l10n.t('dailyWage')),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      l10n.t(
+                        'dateWithValue',
+                        params: {
+                          'value': _date.toIso8601String().split('T').first,
+                        },
+                      ),
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        initialDate: _date,
+                      );
+                      if (picked != null) {
+                        setState(() => _date = picked);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_error != null)
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loading ? null : _save,
+                    child: _loading
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            widget.entryId == null
+                                ? l10n.t('saveWorkerEntry')
+                                : l10n.t('updateWorkerEntry'),
+                          ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

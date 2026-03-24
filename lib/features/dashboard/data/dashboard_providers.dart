@@ -91,11 +91,27 @@ final dashboardSummaryProvider =
         };
       }
 
-      yield await calculate();
+      try {
+        yield await calculate();
+      } catch (_) {
+        // Offline or no cache — yield zeros so the UI shows an empty state
+        // instead of an error.
+        yield const {
+          'totalProjects': 0,
+          'activeProjects': 0,
+          'totalExpenses': 0,
+          'totalIncome': 0,
+          'net': 0,
+        };
+      }
 
       try {
         await for (final _ in controller.stream) {
-          yield await calculate();
+          try {
+            yield await calculate();
+          } catch (_) {
+            // Skip failed recalculation; keep the last emitted value.
+          }
         }
       } finally {
         for (final s in subs) {
