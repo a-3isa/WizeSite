@@ -89,32 +89,39 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     try {
       final auth = ref.read(firebaseAuthProvider);
       final firestore = ref.read(firestoreProvider);
+      final email = _emailController.text.trim().toLowerCase();
+      final fullName = _nameController.text.trim();
+      final companyName = _companyController.text.trim();
+      final phoneNumber = _phoneController.text.trim();
 
       final cred = await auth
           .createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
+            email: email,
             password: _passwordController.text,
           )
           .timeout(_signupTimeout);
 
       final uid = cred.user!.uid;
       final workspaceId = const Uuid().v4();
+      await cred.user!.updateDisplayName(fullName);
 
       await firestore.collection('users').doc(uid).set({
         'id': uid,
-        'fullName': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'companyName': _companyController.text.trim(),
+        'fullName': fullName,
+        'email': email,
+        'phoneNumber': phoneNumber,
+        'companyName': companyName,
         'workspaceId': workspaceId,
+        'photoUrl': '',
+        'defaultCurrency': 'EGP',
+        'riskAlertsEnabled': true,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       await firestore.collection('workspaces').doc(workspaceId).set({
         'id': workspaceId,
-        'name': _companyController.text.trim().isEmpty
-            ? '${_nameController.text.trim()} Workspace'
-            : _companyController.text.trim(),
+        'name': companyName.isEmpty ? '$fullName Workspace' : companyName,
         'ownerId': uid,
         'createdAt': FieldValue.serverTimestamp(),
       });

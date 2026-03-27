@@ -5,12 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function myUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function hasWorkspaceClaim(workspaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.workspaceId == workspaceId;
+    }
+
+    function isWorkspaceOwner(workspaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
     function inWorkspace(workspaceId) {
-      return signedIn() && myUser().workspaceId == workspaceId;
+      return hasWorkspaceClaim(workspaceId) || isWorkspaceOwner(workspaceId);
     }
 
     match /users/{userId} {
@@ -70,11 +78,23 @@ service cloud.firestore {
     }
 
     match /usage_counters/{counterId} {
-      allow read: if signedIn();
+      allow read: if inWorkspace(resource.data.workspaceId);
       allow write: if false;
     }
 
     match /notifications/{notificationId} {
+      allow read: if signedIn()
+        && request.auth.uid == resource.data.targetUserId
+        && inWorkspace(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /workspace_metrics/{workspaceId} {
+      allow read: if inWorkspace(workspaceId);
+      allow write: if false;
+    }
+
+    match /project_metrics/{projectId} {
       allow read: if inWorkspace(resource.data.workspaceId);
       allow write: if false;
     }

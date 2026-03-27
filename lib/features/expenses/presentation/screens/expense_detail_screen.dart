@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -145,16 +148,48 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: () async {
-                    await ref
-                        .read(expenseRepositoryProvider)
-                        .archiveExpense(expense.id);
-                    if (context.mounted) {
-                      appNavigateBack(
-                        context,
-                        fallbackRoute: AppRoutes.projectExpensesPath(
-                          expense.projectId,
-                        ),
-                      );
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(l10n.t('archive')),
+                        content: Text(l10n.t('confirmArchiveExpense')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(l10n.t('cancel')),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text(l10n.t('archive')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      final result = await ref
+                          .read(expenseRepositoryProvider)
+                          .archiveExpense(expense.id);
+                      if (result.queued) {
+                        await ref
+                            .read(offlineQueueCoordinatorProvider)
+                            .refreshCounts();
+                        unawaited(
+                          ref.read(offlineQueueCoordinatorProvider).drainNow(),
+                        );
+                        // if (context.mounted) {
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //     SnackBar(content: Text(l10n.t('queuedForSync'))),
+                        //   );
+                        // }
+                      }
+                      if (context.mounted) {
+                        appNavigateBack(
+                          context,
+                          fallbackRoute: AppRoutes.projectExpensesPath(
+                            expense.projectId,
+                          ),
+                        );
+                      }
                     }
                   },
                   style: FilledButton.styleFrom(backgroundColor: Colors.red),

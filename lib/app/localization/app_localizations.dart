@@ -20,7 +20,7 @@ class AppLocalizations {
     return value ?? AppLocalizations(const Locale('en'));
   }
 
-  static const _en = <String, String>{
+  static final _en = <String, String>{
     'appName': 'Buildozer',
     'tagline': 'Smart Construction Management',
     'home': 'Home',
@@ -42,6 +42,40 @@ class AppLocalizations {
     'restorePurchases': 'Restore Purchases',
     'logout': 'Logout',
     'profile': 'Profile',
+    'editProfile': 'Edit Profile',
+    'changePhoto': 'Change Photo',
+    'manageTeam': 'Manage Team',
+    'teamManagement': 'Team Management',
+    'teamMembersTitle': 'Team Members',
+    'noTeamMembersYet': 'No team members yet.',
+    'inviteMember': 'Invite Member',
+    'inviteByEmail': 'Invite by email',
+    'role': 'Role',
+    'memberRole': 'Member',
+    'ownerRole': 'Owner',
+    'allProjectsOption': 'All Projects',
+    'selectProject': 'Select a Project',
+    'selectProjectToViewReport': 'Please select a project to view its report.',
+    'projectReport': 'Project Report',
+    'generatedByBuildozer': 'Generated securely by Buildozer',
+    'notificationTargetedFeed': 'Recent workspace alerts for you',
+    'workerTypeCarpenter': 'Carpenter',
+    'workerTypeElectrician': 'Electrician',
+    'workerTypePlumber': 'Plumber',
+    'workerTypeMason': 'Mason',
+    'workerTypePainter': 'Painter',
+    'workerTypeLaborer': 'Laborer',
+    'workerTypeOperator': 'Operator',
+    'workerTypeOther': 'Other',
+    'search': 'Search',
+    'queuedForSync': 'Saved offline. It will sync automatically when you reconnect.',
+    'offlineSyncPending': '{count} offline actions are waiting to sync.',
+    'offlineSyncFailed': '{count} offline actions failed and need attention.',
+    'confirmArchiveExpense': 'Archive this expense?',
+    'confirmArchivePayment': 'Archive this payment?',
+    'confirmArchiveWorkerEntry': 'Archive this worker entry?',
+    'confirmDeleteProjectCascade':
+        'Delete this project and all linked expenses, payments, worker entries, metrics, and notifications?',
     'archivedProjects': 'Archived Projects',
     'unarchive': 'Unarchive',
     'noArchivedProjects': 'No archived projects found.',
@@ -314,7 +348,7 @@ class AppLocalizations {
     'continueWithPaywall': 'Continue with RevenueCat Paywall',
     'purchaseNotCompleted': 'Purchase was not completed.',
     'proUnlocksSubtitle':
-        'WizeSite Pro unlocks higher usage limits and operational scale.',
+        'Buildozer Pro unlocks higher usage limits and operational scale.',
     'trialStartsWithPurchase':
         '7-day trial starts on first successful subscription purchase.',
     'purchasesRestoredSuccessfully': 'Purchases restored successfully.',
@@ -328,7 +362,7 @@ class AppLocalizations {
     'currentPeriodEndsAt': 'Current Period Ends At',
     'store': 'Store',
     'revenueCatAppUserId': 'RevenueCat App User ID',
-    'wizeSiteProEntitlement': 'WizeSite Pro Entitlement',
+    'wizeSiteProEntitlement': 'Buildozer Pro Entitlement',
     'currentProduct': 'Current Product',
     'entitlementExpiration': 'Entitlement Expiration',
     'entitlementActive': 'Active',
@@ -394,6 +428,40 @@ class AppLocalizations {
     'restorePurchases': 'استعادة المشتريات',
     'logout': 'تسجيل الخروج',
     'profile': 'الملف الشخصي',
+    'editProfile': 'تعديل الملف الشخصي',
+    'changePhoto': 'تغيير الصورة',
+    'manageTeam': 'إدارة الفريق',
+    'teamManagement': 'إدارة الفريق',
+    'teamMembersTitle': 'أعضاء الفريق',
+    'noTeamMembersYet': 'لا يوجد أعضاء فريق بعد.',
+    'inviteMember': 'دعوة عضو',
+    'inviteByEmail': 'دعوة عبر البريد الإلكتروني',
+    'role': 'الدور',
+    'memberRole': 'عضو',
+    'ownerRole': 'مالك',
+    'allProjectsOption': 'كل المشاريع',
+    'selectProject': 'اختر مشروعاً',
+    'selectProjectToViewReport': 'يرجى اختيار مشروع لعرض التقرير.',
+    'projectReport': 'تقرير المشروع',
+    'generatedByBuildozer': 'تم إنشاء هذا التقرير بأمان بواسطة Buildozer',
+    'notificationTargetedFeed': 'أحدث تنبيهات مساحة العمل الخاصة بك',
+    'workerTypeCarpenter': 'نجار',
+    'workerTypeElectrician': 'كهربائي',
+    'workerTypePlumber': 'سباك',
+    'workerTypeMason': 'بنّاء',
+    'workerTypePainter': 'دهان',
+    'workerTypeLaborer': 'عامل',
+    'workerTypeOperator': 'مشغل',
+    'workerTypeOther': 'أخرى',
+    'search': 'بحث',
+    'queuedForSync': 'تم الحفظ بدون اتصال. ستتم المزامنة تلقائياً عند عودة الشبكة.',
+    'offlineSyncPending': 'هناك {count} إجراءات بدون اتصال بانتظار المزامنة.',
+    'offlineSyncFailed': 'فشل {count} إجراءات بدون اتصال وتحتاج إلى مراجعة.',
+    'confirmArchiveExpense': 'هل تريد أرشفة هذا المصروف؟',
+    'confirmArchivePayment': 'هل تريد أرشفة هذه الدفعة؟',
+    'confirmArchiveWorkerEntry': 'هل تريد أرشفة سجل العامل هذا؟',
+    'confirmDeleteProjectCascade':
+        'هل تريد حذف هذا المشروع وكل المصروفات والدفعات وسجلات العمال والمقاييس والإشعارات المرتبطة به؟',
     'archivedProjects': 'المشاريع المؤرشفة',
     'unarchive': 'إلغاء الأرشفة',
     'noArchivedProjects': 'لا توجد مشاريع مؤرشفة.',
@@ -655,7 +723,7 @@ class AppLocalizations {
     'continueWithPaywall': 'المتابعة عبر شاشة RevenueCat',
     'purchaseNotCompleted': 'لم تكتمل عملية الشراء.',
     'proUnlocksSubtitle':
-        'خطة WizeSite Pro تفتح حدود استخدام أعلى وتوسعاً أكبر.',
+        'خطة Buildozer Pro تفتح حدود استخدام أعلى وتوسعاً أكبر.',
     'trialStartsWithPurchase':
         'تبدأ التجربة المجانية 7 أيام عند أول عملية اشتراك ناجحة.',
     'purchasesRestoredSuccessfully': 'تمت استعادة المشتريات بنجاح.',
@@ -669,7 +737,7 @@ class AppLocalizations {
     'currentPeriodEndsAt': 'تنتهي الفترة الحالية في',
     'store': 'المتجر',
     'revenueCatAppUserId': 'معرف مستخدم RevenueCat',
-    'wizeSiteProEntitlement': 'استحقاق WizeSite Pro',
+    'wizeSiteProEntitlement': 'استحقاق Buildozer Pro',
     'currentProduct': 'المنتج الحالي',
     'entitlementExpiration': 'انتهاء الاستحقاق',
     'entitlementActive': 'نشط',
@@ -715,7 +783,9 @@ class AppLocalizations {
   static final _localized = <String, Map<String, String>>{'en': _en, 'ar': _ar};
 
   String t(String key, {Map<String, String> params = const {}}) {
-    var value = _localized[locale.languageCode]?[key] ?? _en[key] ?? key;
+    var value = _localized[locale.languageCode]?[key] ??
+        _en[key] ??
+        key;
     for (final entry in params.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value);
     }
@@ -775,6 +845,29 @@ class AppLocalizations {
         return t('paymentMethodCheck');
       default:
         return method;
+    }
+  }
+
+  String workerTypeLabel(String type) {
+    switch (type) {
+      case 'carpenter':
+        return t('workerTypeCarpenter');
+      case 'electrician':
+        return t('workerTypeElectrician');
+      case 'plumber':
+        return t('workerTypePlumber');
+      case 'mason':
+        return t('workerTypeMason');
+      case 'painter':
+        return t('workerTypePainter');
+      case 'laborer':
+        return t('workerTypeLaborer');
+      case 'operator':
+        return t('workerTypeOperator');
+      case 'other':
+        return t('workerTypeOther');
+      default:
+        return type;
     }
   }
 

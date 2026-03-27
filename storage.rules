@@ -17,9 +17,12 @@ service firebase.storage {
       allow read, write: if owner(userId);
     }
 
+    match /profile-photos/{userId}/{fileName} {
+      allow read, write: if owner(userId);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
   }
 }
-

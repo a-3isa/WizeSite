@@ -44,6 +44,7 @@ class SessionRestoreService {
       final workspaceId =
           membershipSnap.docs.first.data()['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
+        await _syncUserWorkspace(user.uid, workspaceId);
         return workspaceId;
       }
     }
@@ -55,6 +56,13 @@ class SessionRestoreService {
     }
 
     return null;
+  }
+
+  Future<void> _syncUserWorkspace(String userId, String workspaceId) async {
+    await _firestore.collection('users').doc(userId).set({
+      'workspaceId': workspaceId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }
 

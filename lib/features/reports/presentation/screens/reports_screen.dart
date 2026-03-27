@@ -13,10 +13,12 @@ import 'package:buildtrack_app/features/reports/presentation/widgets/monthly_flo
 import 'package:buildtrack_app/features/reports/presentation/widgets/recent_expenses_table.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/recent_payments_table.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/worker_cost_table.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -38,7 +40,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   @override
-  void didUpdateWidget(ReportsScreen oldWidget) {
+  void didUpdateWidget(covariant ReportsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.projectId != widget.projectId) {
       _updateProjectId();
@@ -56,245 +58,170 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _export({
     required AppLocalizations l10n,
     required Project project,
-    required Map<String, num> summary,
+    required ReportMetrics metrics,
+    required String currency,
   }) async {
-    final brandColor = PdfColor.fromHex('#F59E0B'); // constructionOrange
-    final textDark = PdfColor.fromHex('#0F172A');
-    final textBody = PdfColor.fromHex('#64748B');
-    final surfaceGrey = PdfColor.fromHex('#F8FAFC');
-
-    // Load Unicode fonts (Cairo supports both English and Arabic)
     final font = await PdfGoogleFonts.cairoRegular();
     final fontBold = await PdfGoogleFonts.cairoBold();
-
     final document = pw.Document();
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+
+    pw.Widget sectionTitle(String text) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 8, top: 18),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            font: fontBold,
+            fontSize: 16,
+            color: PdfColor.fromHex('#0F172A'),
+          ),
+        ),
+      );
+    }
+
+    pw.Widget twoColumnTable(List<List<String>> rows) {
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey300),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(2),
+          1: pw.FlexColumnWidth(1),
+        },
+        children: rows
+            .map(
+              (row) => pw.TableRow(
+                children: row
+                    .map(
+                      (cell) => pw.Padding(
+                        padding: const pw.EdgeInsets.all(10),
+                        child: pw.Text(
+                          cell,
+                          style: pw.TextStyle(font: font, fontSize: 11),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            )
+            .toList(),
+      );
+    }
 
     document.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // ─── Header ──────────────────────────────────────
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        l10n.t('buildozerFinancialReport').toUpperCase(),
-                        style: pw.TextStyle(
-                          font: fontBold,
-                          fontSize: 24,
-                          color: brandColor,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'WizeSite Analytics',
-                        style: pw.TextStyle(
-                          font: font,
-                          fontSize: 12,
-                          color: textBody,
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: pw.BoxDecoration(
-                      color: surfaceGrey,
-                      borderRadius: const pw.BorderRadius.all(
-                        pw.Radius.circular(8),
-                      ),
-                      border: pw.Border.all(color: PdfColors.grey300),
-                    ),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text(
-                          '${l10n.t('generated')}:',
-                          style: pw.TextStyle(
-                            font: fontBold,
-                            fontSize: 10,
-                            color: textBody,
-                          ),
-                        ),
-                        pw.Text(
-                          DateTime.now().toString().split(
-                            '.',
-                          )[0], // simpler date format
-                          style: pw.TextStyle(
-                            font: font,
-                            fontSize: 10,
-                            color: textDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 32),
-              pw.Divider(color: PdfColors.grey300, thickness: 1),
-              pw.SizedBox(height: 32),
-
-              // ─── Document Title ──────────────────────────────
-              pw.Text(
-                'Project Report', // standard string, hardcoded for simplicity right now
-                style: pw.TextStyle(
-                  font: fontBold,
-                  fontSize: 18,
-                  color: textDark,
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Project: ${project.name}',
-                style: pw.TextStyle(
-                  font: fontBold,
-                  fontSize: 14,
-                  color: textDark,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'Status: ${project.isArchived ? 'Archived' : (project.status == 'active' ? 'Active' : project.status.toUpperCase())}',
-                style: pw.TextStyle(font: font, fontSize: 12, color: textBody),
-              ),
-              pw.SizedBox(height: 24),
-
-              // ─── Financial Table ─────────────────────────────
-              pw.Container(
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: const pw.BorderRadius.all(
-                    pw.Radius.circular(8),
-                  ),
-                ),
-                child: pw.Table(
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(2),
-                    1: const pw.FlexColumnWidth(1),
-                  },
-                  children: [
-                    _buildPdfTableRow(
-                      label: l10n
-                          .t('totalIncomeLabel', params: {'value': ''})
-                          .replaceAll(':', '')
-                          .trim(),
-                      value: (summary['totalIncome'] ?? 0).toStringAsFixed(0),
-                      isHeader: true,
-                      font: font,
-                      fontBold: fontBold,
-                      textColor: textDark,
-                      backgroundColor: surfaceGrey,
-                    ),
-                    _buildPdfTableRow(
-                      label: l10n
-                          .t('totalExpensesLabel', params: {'value': ''})
-                          .replaceAll(':', '')
-                          .trim(),
-                      value: (summary['totalExpenses'] ?? 0).toStringAsFixed(0),
-                      font: font,
-                      fontBold: fontBold,
-                      textColor: textDark,
-                    ),
-                    _buildPdfTableRow(
-                      label: l10n
-                          .t('netProfitLoss', params: {'value': ''})
-                          .replaceAll(':', '')
-                          .trim(),
-                      value: (summary['net'] ?? 0).toStringAsFixed(0),
-                      isFooter: true,
-                      font: font,
-                      fontBold: fontBold,
-                      textColor: (summary['net'] ?? 0) >= 0
-                          ? PdfColor.fromHex('#10B981')
-                          : PdfColor.fromHex('#EF4444'),
-                      backgroundColor: surfaceGrey,
-                    ),
-                  ],
-                ),
-              ),
-
-              pw.Spacer(),
-
-              // ─── Footer ──────────────────────────────────────
-              pw.Divider(color: PdfColors.grey300, thickness: 1),
-              pw.SizedBox(height: 12),
-              pw.Center(
-                child: pw.Text(
-                  'Generated securely by WizeSite App',
-                  style: pw.TextStyle(
-                    font: font,
-                    fontSize: 10,
-                    color: textBody,
-                  ),
-                ),
-              ),
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          pw.Text(
+            l10n.t('buildozerFinancialReport'),
+            style: pw.TextStyle(
+              font: fontBold,
+              fontSize: 24,
+              color: PdfColor.fromHex('#F59E0B'),
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            l10n.t('projectReport'),
+            style: pw.TextStyle(font: font, fontSize: 12),
+          ),
+          pw.SizedBox(height: 12),
+          twoColumnTable([
+            [l10n.t('project'), project.name],
+            [l10n.t('status'), l10n.projectStatusLabel(project.status)],
+            [l10n.t('generated'), dateFormat.format(DateTime.now())],
+          ]),
+          sectionTitle(l10n.t('currentSnapshot')),
+          twoColumnTable([
+            [
+              l10n.t('totalIncome'),
+              '${metrics.totalIncome.toStringAsFixed(0)} $currency',
             ],
-          );
-        },
+            [
+              l10n.t('totalExpenses'),
+              '${metrics.totalExpenses.toStringAsFixed(0)} $currency',
+            ],
+            [l10n.t('netProfit'), '${metrics.net.toStringAsFixed(0)} $currency'],
+          ]),
+          sectionTitle(l10n.t('expenseBreakdown')),
+          twoColumnTable(
+            metrics.categoryTotals.entries
+                .map(
+                  (entry) => [
+                    l10n.expenseCategoryLabel(entry.key),
+                    '${entry.value.toStringAsFixed(0)} $currency',
+                  ],
+                )
+                .toList(),
+          ),
+          sectionTitle(l10n.t('monthlyCashFlow')),
+          twoColumnTable(
+            metrics.monthlyFlow
+                .map(
+                  (entry) => [
+                    DateFormat('yyyy-MM').format(entry.month),
+                    '${entry.income.toStringAsFixed(0)} / ${entry.expenses.toStringAsFixed(0)} $currency',
+                  ],
+                )
+                .toList(),
+          ),
+          sectionTitle(l10n.t('topWorkers')),
+          twoColumnTable(
+            metrics.topWorkers.isEmpty
+                ? [
+                    [l10n.t('workerName'), l10n.t('noDataYet')],
+                  ]
+                : metrics.topWorkers
+                    .map(
+                      (worker) => [
+                        worker.name,
+                        '${worker.totalDays.toStringAsFixed(1)} d / ${worker.totalCost.toStringAsFixed(0)} $currency',
+                      ],
+                    )
+                    .toList(),
+          ),
+          sectionTitle(l10n.t('recentExpenses')),
+          twoColumnTable(
+            metrics.recentExpenses.isEmpty
+                ? [
+                    [l10n.t('expenses'), l10n.t('noDataYet')],
+                  ]
+                : metrics.recentExpenses
+                    .map(
+                      (expense) => [
+                        '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
+                        '${expense.amount.toStringAsFixed(0)} ${expense.currency}',
+                      ],
+                    )
+                    .toList(),
+          ),
+          sectionTitle(l10n.t('recentPayments')),
+          twoColumnTable(
+            metrics.recentPayments.isEmpty
+                ? [
+                    [l10n.t('payments'), l10n.t('noDataYet')],
+                  ]
+                : metrics.recentPayments
+                    .map(
+                      (payment) => [
+                        '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
+                        '${payment.amount.toStringAsFixed(0)} $currency',
+                      ],
+                    )
+                    .toList(),
+          ),
+          pw.SizedBox(height: 18),
+          pw.Center(
+            child: pw.Text(
+              l10n.t('generatedByBuildozer'),
+              style: pw.TextStyle(font: font, fontSize: 10),
+            ),
+          ),
+        ],
       ),
     );
 
     await Printing.layoutPdf(onLayout: (_) async => document.save());
-  }
-
-  pw.TableRow _buildPdfTableRow({
-    required String label,
-    required String value,
-    required pw.Font font,
-    required pw.Font fontBold,
-    required PdfColor textColor,
-    PdfColor? backgroundColor,
-    bool isHeader = false,
-    bool isFooter = false,
-  }) {
-    return pw.TableRow(
-      decoration: pw.BoxDecoration(
-        color: backgroundColor,
-        border: isFooter
-            ? pw.Border(top: pw.BorderSide(color: PdfColors.grey300, width: 2))
-            : null,
-      ),
-      children: [
-        pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(
-              font: isHeader || isFooter ? fontBold : font,
-              fontSize: isHeader || isFooter ? 14 : 12,
-              color: isHeader || isFooter
-                  ? PdfColor.fromHex('#0F172A')
-                  : PdfColor.fromHex('#64748B'),
-            ),
-          ),
-        ),
-        pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: pw.Text(
-            value,
-            textAlign: pw.TextAlign.right,
-            style: pw.TextStyle(
-              font: fontBold,
-              fontSize: isHeader || isFooter ? 14 : 12,
-              color: textColor,
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   @override
@@ -303,11 +230,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final usageAsync = ref.watch(currentUsageProvider);
     final currentProjectId = ref.watch(reportProjectIdProvider);
-    final projectsAsync = ref.watch(allProjectsProvider);
+    final projectsAsync = ref.watch(projectsProvider);
     final summaryAsync = ref.watch(reportSummaryProvider);
+    final metricsAsync = ref.watch(reportMetricsProvider);
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+            'EGP';
     final hasWorkspace = workspaceId != null;
 
-    // Chart data
     final categoryAsync = ref.watch(expensesByCategoryProvider);
     final flowAsync = ref.watch(monthlyFlowProvider);
     final workersAsync = ref.watch(topWorkersProvider);
@@ -323,7 +253,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         body: SafeArea(
           child: CustomScrollView(
             slivers: [
-              // ─── Header ──────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
@@ -354,31 +283,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           label: l10n.t('exportPdf'),
                           onTap: () async {
                             HapticFeedback.lightImpact();
-                            final summaryResult = ref.read(
-                              reportSummaryProvider,
-                            );
-                            final summaryValue = summaryResult.valueOrNull;
-                            final allProjs =
-                                ref.read(allProjectsProvider).valueOrNull ?? [];
-                            final selectedProject = allProjs
-                                .where((p) => p.id == currentProjectId)
+                            final projects = ref.read(projectsProvider).valueOrNull;
+                            final metrics = ref.read(reportMetricsProvider).valueOrNull;
+                            final selectedProject = projects
+                                ?.where((project) => project.id == currentProjectId)
                                 .firstOrNull;
-                            if (summaryValue != null &&
-                                selectedProject != null &&
-                                context.mounted) {
-                              await _export(
-                                l10n: l10n,
-                                project: selectedProject,
-                                summary: summaryValue,
-                              );
+                            if (selectedProject == null || metrics == null) {
+                              return;
                             }
+                            await _export(
+                              l10n: l10n,
+                              project: selectedProject,
+                              metrics: metrics,
+                              currency: currency,
+                            );
                           },
                         ),
                     ],
                   ),
                 ),
               ),
-              // ─── Project Dropdown ────────────────────────────
               if (hasWorkspace)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -391,18 +315,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         if (projects.isEmpty) {
                           return Text(
                             l10n.t('noProjectsYet'),
-                            style: TextStyle(color: AppColors.textBody),
+                            style: const TextStyle(color: AppColors.textBody),
                           );
                         }
 
                         return DropdownButtonFormField<String>(
-                          initialValue:
-                              projects.any((p) => p.id == currentProjectId)
+                          initialValue: projects.any((p) => p.id == currentProjectId)
                               ? currentProjectId
                               : null,
                           hint: Text(
-                            'Select a Project', // Consider moving to localizations later
-                            style: TextStyle(color: AppColors.textBody),
+                            l10n.t('selectProject'),
+                            style: const TextStyle(color: AppColors.textBody),
                           ),
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.symmetric(
@@ -411,90 +334,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
+                              borderSide: const BorderSide(
                                 color: AppColors.borderGrey,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
+                              borderSide: const BorderSide(
                                 color: AppColors.borderGrey,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
+                              borderSide: const BorderSide(
                                 color: AppColors.constructionOrange,
                               ),
                             ),
                           ),
-                          items: projects.map((p) {
-                            final isArchived = p.isArchived;
-                            final isActive =
-                                p.status == 'active' && !isArchived;
-                            final statusLabel = isArchived
-                                ? 'Archived'
-                                : (isActive
-                                      ? 'Active'
-                                      : p.status.toUpperCase());
-                            final statusColor = isActive
-                                ? AppColors.success
-                                : AppColors.danger;
-
-                            return DropdownMenuItem(
-                              value: p.id,
-                              child: Row(
-                                children: [
-                                  Text(
-                                    p.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: statusColor.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      statusLabel,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: statusColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              ref.read(reportProjectIdProvider.notifier).state =
-                                  val;
-                            }
+                          items: projects
+                              .map(
+                                (project) => DropdownMenuItem(
+                                  value: project.id,
+                                  child: Text(project.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            ref.read(reportProjectIdProvider.notifier).state = value;
                           },
                         );
                       },
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
-                      error: (err, _) => Text(err.toString()),
+                      error: (error, _) => Text(error.toString()),
                     ),
                   ),
                 ),
-
-              // ─── If No Project Selected ──────────────────────
               if (currentProjectId == null)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -509,8 +384,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Please select a project to view its report.', // Add to l10n later if needed
-                          style: TextStyle(
+                          l10n.t('selectProjectToViewReport'),
+                          style: const TextStyle(
                             color: AppColors.textBody,
                             fontSize: 16,
                           ),
@@ -524,7 +399,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      // ─── Financial Summary ─────────────────────
                       _SectionHeader(title: l10n.t('currentSnapshot')),
                       const SizedBox(height: 12),
                       summaryAsync.when(
@@ -541,83 +415,94 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   MetricCard(
                                     label: l10n.t('totalExpenses'),
                                     value:
-                                        '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
+                                        '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0} $currency',
                                     color: AppColors.danger,
                                     icon: Icons.trending_down,
                                   ),
                                   MetricCard(
                                     label: l10n.t('totalIncome'),
                                     value:
-                                        '${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
+                                        '${summary['totalIncome']?.toStringAsFixed(0) ?? 0} $currency',
                                     color: AppColors.success,
                                     icon: Icons.trending_up,
                                   ),
                                   MetricCard(
                                     label: l10n.t('netProfit'),
-                                    value: (summary['net'] ?? 0)
-                                        .toStringAsFixed(0),
+                                    value:
+                                        '${(summary['net'] ?? 0).toStringAsFixed(0)} $currency',
                                     color: (summary['net'] ?? 0) >= 0
                                         ? AppColors.success
                                         : AppColors.danger,
-                                    icon: Icons.account_balance_wallet_outlined,
+                                    icon:
+                                        Icons.account_balance_wallet_outlined,
                                   ),
                                 ],
                               ),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Expense Breakdown ─────────────────────
                       const SizedBox(height: 24),
                       categoryAsync.when(
                         data: (data) => CategoryPieChart(data: data),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Monthly Cash Flow ─────────────────────
                       const SizedBox(height: 16),
                       flowAsync.when(
                         data: (data) => MonthlyFlowChart(data: data),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Net Cash Flow Trend ───────────────────
                       const SizedBox(height: 16),
                       flowAsync.when(
                         data: (data) => CashflowLineChart(data: data),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Recent Expenses ───────────────────────
                       const SizedBox(height: 24),
                       expensesAsync.when(
                         data: (expenses) =>
                             RecentExpensesTable(expenses: expenses),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Recent Payments ───────────────────────
                       const SizedBox(height: 16),
                       paymentsAsync.when(
                         data: (payments) =>
                             RecentPaymentsTable(payments: payments),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Worker Cost Summary ───────────────────
                       const SizedBox(height: 16),
                       workersAsync.when(
                         data: (workers) => WorkerCostTable(workers: workers),
-                        error: (e, _) => _ErrorCard(message: e.toString()),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
-
-                      // ─── Usage footer ──────────────────────────
+                      const SizedBox(height: 16),
+                      metricsAsync.when(
+                        data: (metrics) => metrics == null
+                            ? const SizedBox.shrink()
+                            : Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceGrey,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.borderGrey,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${metrics.projectName} • ${l10n.projectStatusLabel(metrics.status)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: AppColors.textBody),
+                                ),
+                              ),
+                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        loading: () => const SizedBox.shrink(),
+                      ),
                       const SizedBox(height: 24),
                       usageAsync.when(
                         data: (usage) => Container(
@@ -632,7 +517,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.pie_chart_outline,
                                 size: 20,
                                 color: AppColors.textBody,
@@ -649,14 +534,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           '${usage.limits.expensesPerMonth}',
                                     },
                                   ),
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
                                       ?.copyWith(color: AppColors.textBody),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        error: (error, stackTrace) => const SizedBox.shrink(),
+                        error: (_, _) => const SizedBox.shrink(),
                         loading: () => const SizedBox.shrink(),
                       ),
                       const SizedBox(height: 32),
@@ -671,10 +558,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 }
 
-// ─── Helper widgets ──────────────────────────────────────────────────
-
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});
+
   final String title;
 
   @override
@@ -682,16 +568,17 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: AppColors.textBody,
-        letterSpacing: 0.5,
-      ),
+            fontWeight: FontWeight.w700,
+            color: AppColors.textBody,
+            letterSpacing: 0.5,
+          ),
     );
   }
 }
 
 class _ExportButton extends StatelessWidget {
   const _ExportButton({required this.label, required this.onTap});
+
   final String label;
   final VoidCallback onTap;
 
@@ -717,9 +604,9 @@ class _ExportButton extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.constructionOrange,
-                ),
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.constructionOrange,
+                    ),
               ),
             ],
           ),
@@ -731,6 +618,7 @@ class _ExportButton extends StatelessWidget {
 
 class _EmptyCard extends StatelessWidget {
   const _EmptyCard({required this.label});
+
   final String label;
 
   @override
@@ -745,9 +633,10 @@ class _EmptyCard extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: AppColors.textBody),
         ),
       ),
     );
@@ -756,11 +645,11 @@ class _EmptyCard extends StatelessWidget {
 
 class _ErrorCard extends StatelessWidget {
   const _ErrorCard({required this.message});
+
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    final isIndexError = message.contains('requires an index');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -768,33 +657,19 @@ class _ErrorCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.error_outline, color: AppColors.danger),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  isIndexError
-                      ? 'Service initialization required. Please check console logs for the index creation link.'
-                      : message,
-                  style: const TextStyle(
-                    color: AppColors.danger,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          const Icon(Icons.error_outline, color: AppColors.danger),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontWeight: FontWeight.bold,
               ),
-            ],
-          ),
-          if (isIndexError) ...[
-            const SizedBox(height: 12),
-            const Text(
-              'Firestore requires a composite index for this report. If you haven\'t already, please click the link in the terminal/console to create it.',
-              style: TextStyle(fontSize: 12, color: AppColors.textBody),
             ),
-          ],
+          ),
         ],
       ),
     );

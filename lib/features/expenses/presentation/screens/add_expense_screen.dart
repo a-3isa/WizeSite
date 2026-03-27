@@ -1,11 +1,14 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +28,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _notesController = TextEditingController();
   final _supplierController = TextEditingController();
   String _category = 'materials';
+  String _currency = 'EGP';
   String? _projectId;
   String _projectName = '';
   DateTime _date = DateTime.now();
@@ -55,6 +59,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         _amountController.text = expense.amount.toStringAsFixed(2);
         _notesController.text = expense.notes;
         _supplierController.text = expense.supplierName;
+        _currency = expense.currency;
         _date = expense.date;
       });
     }
@@ -98,6 +103,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _error = null;
     });
     try {
+      var queued = false;
       if (widget.expenseId == null) {
         String finalProjectName = _projectName;
         if (finalProjectName.isEmpty && _projectId != null) {
@@ -107,7 +113,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             finalProjectName = match.first.name;
           }
         }
-        await ref
+        final result = await ref
             .read(expenseRepositoryProvider)
             .createExpense(
               workspaceId: workspaceId,
@@ -116,11 +122,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               projectName: finalProjectName,
               category: _category,
               amount: amount,
-              currency: 'EGP',
+              currency: _currency,
               date: _date,
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
             );
+        queued = result.queued;
       } else {
         await ref
             .read(expenseRepositoryProvider)
@@ -134,15 +141,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             );
       }
       if (mounted) {
+        if (queued) {
+          final messenger = ScaffoldMessenger.of(context);
+          await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
+          unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
+          if (!mounted) {
+            return;
+          }
+          // messenger.showSnackBar(
+          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
+          // );
+        }
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on CallableClientException catch (e) {
       if (e.code == 'failed-precondition') {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=expensesPerMonth');
         }
       } else if (mounted) {
-        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
+        setState(() => _error = e.message);
       }
     } catch (_) {
       if (mounted) {
@@ -159,6 +177,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
+    final defaultCurrency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
+    if (widget.expenseId == null &&
+        _currency == 'EGP' &&
+        defaultCurrency != 'EGP') {
+      _currency = defaultCurrency;
+    }
     return AppBackScope(
       fallbackRoute: _fallbackRoute(),
       child: Scaffold(
@@ -244,6 +270,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     controller: _amountController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(labelText: l10n.t('amount')),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _currency,
+                    items: const [
+                      DropdownMenuItem(value: 'EGP', child: Text('EGP')),
+                      DropdownMenuItem(value: 'USD', child: Text('USD')),
+                      DropdownMenuItem(value: 'SAR', child: Text('SAR')),
+                      DropdownMenuItem(value: 'AED', child: Text('AED')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _currency = value ?? _currency),
+                    decoration: InputDecoration(
+                      labelText: l10n.t('currencyLabel'),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ListTile(

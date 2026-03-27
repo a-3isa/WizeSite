@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:flutter/material.dart';
@@ -81,7 +84,7 @@ class WorkerDetailScreen extends ConsumerWidget {
                             params: {
                               'value': worker.workerType.isEmpty
                                   ? l10n.t('none')
-                                  : worker.workerType,
+                                  : l10n.workerTypeLabel(worker.workerType),
                             },
                           ),
                         ),
@@ -163,9 +166,56 @@ class WorkerDetailScreen extends ConsumerWidget {
                                       extra: {'entryId': entry.id},
                                     );
                                   } else {
-                                    await ref
-                                        .read(workerEntryRepositoryProvider)
-                                        .archiveEntry(entry.id);
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: Text(l10n.t('archive')),
+                                        content: Text(
+                                          l10n.t('confirmArchiveWorkerEntry'),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: Text(l10n.t('cancel')),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            child: Text(l10n.t('archive')),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed == true) {
+                                      final result = await ref
+                                          .read(workerEntryRepositoryProvider)
+                                          .archiveEntry(entry.id);
+                                      if (result.queued) {
+                                        await ref
+                                            .read(
+                                              offlineQueueCoordinatorProvider,
+                                            )
+                                            .refreshCounts();
+                                        unawaited(
+                                          ref
+                                              .read(
+                                                offlineQueueCoordinatorProvider,
+                                              )
+                                              .drainNow(),
+                                        );
+                                        // if (context.mounted) {
+                                        //   ScaffoldMessenger.of(context)
+                                        //       .showSnackBar(
+                                        //     SnackBar(
+                                        //       content: Text(
+                                        //         l10n.t('queuedForSync'),
+                                        //       ),
+                                        //     ),
+                                        //   );
+                                        // }
+                                      }
+                                    }
                                   }
                                 },
                                 itemBuilder: (_) => [

@@ -9,13 +9,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final notificationItemsProvider = StreamProvider((ref) {
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
-  if (workspaceId == null || workspaceId.isEmpty) {
+  final userId = ref.watch(activeUserIdProvider);
+  if (workspaceId == null ||
+      workspaceId.isEmpty ||
+      userId == null ||
+      userId.isEmpty) {
     return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
   }
   return ref
       .watch(firestoreProvider)
       .collection('notifications')
       .where('workspaceId', isEqualTo: workspaceId)
+      .where('targetUserId', isEqualTo: userId)
       .orderBy('createdAt', descending: true)
       .limit(50)
       .snapshots();
@@ -43,10 +48,19 @@ class NotificationsScreen extends ConsumerWidget {
             }
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: snap.docs.length,
+              itemCount: snap.docs.length + 1,
               separatorBuilder: (_, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final item = snap.docs[index].data();
+                if (index == 0) {
+                  return Text(
+                    l10n.t('notificationTargetedFeed'),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                }
+                final item = snap.docs[index - 1].data();
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.notification_important),

@@ -170,6 +170,24 @@ Widget _testApp({
   PaywallPresentationResult paywallResult =
       PaywallPresentationResult.notSupported,
 }) {
+  final usageSnapshot = UsageSnapshot(
+    periodKey: '202603',
+    activeProjects: result.limitType == LimitType.activeProjects
+        ? result.current
+        : 1,
+    expensesCount: result.limitType == LimitType.expensesPerMonth
+        ? result.current
+        : 10,
+    paymentsCount: result.limitType == LimitType.paymentsPerMonth
+        ? result.current
+        : 10,
+    workerEntriesCount: result.limitType == LimitType.workerEntriesPerMonth
+        ? result.current
+        : 10,
+    memberCount: result.limitType == LimitType.teamMembers ? result.current : 1,
+    limits: PlanLimits.free(),
+  );
+
   return ProviderScope(
     overrides: [
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
@@ -185,17 +203,7 @@ Widget _testApp({
         ),
       ),
       currentUsageProvider.overrideWith(
-        (ref) => Stream.value(
-          UsageSnapshot(
-            periodKey: '202603',
-            activeProjects: 1,
-            expensesCount: 30,
-            paymentsCount: 10,
-            workerEntriesCount: 10,
-            memberCount: 1,
-            limits: PlanLimits.free(),
-          ),
-        ),
+        (ref) => Stream.value(usageSnapshot),
       ),
       dashboardSummaryProvider.overrideWith(
         (ref, workspaceId) => Stream.value({

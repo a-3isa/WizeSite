@@ -44,7 +44,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
             ? const [
                 OfferingPackage(
                   id: 'monthly',
-                  title: 'WizeSite Pro Monthly',
+                  title: 'Buildozer Pro Monthly',
                   priceString: '\$9.99',
                   periodLabel: 'monthly',
                   productCode: 'monthly',
@@ -52,7 +52,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                 ),
                 OfferingPackage(
                   id: 'yearly',
-                  title: 'WizeSite Pro Yearly',
+                  title: 'Buildozer Pro Yearly',
                   priceString: '\$89.99',
                   periodLabel: 'yearly',
                   productCode: 'yearly',
@@ -60,7 +60,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                 ),
                 OfferingPackage(
                   id: 'lifetime',
-                  title: 'WizeSite Pro Lifetime',
+                  title: 'Buildozer Pro Lifetime',
                   priceString: '\$249.99',
                   periodLabel: 'lifetime',
                   productCode: 'lifetime',

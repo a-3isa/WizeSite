@@ -16,11 +16,22 @@ class AddWorkerScreen extends ConsumerStatefulWidget {
 }
 
 class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
+  static const _workerTypes = <String>[
+    'carpenter',
+    'electrician',
+    'plumber',
+    'mason',
+    'painter',
+    'laborer',
+    'operator',
+    'other',
+  ];
+
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _wageController = TextEditingController();
-  final _typeController = TextEditingController();
   final _notesController = TextEditingController();
+  String _workerType = 'other';
   bool _loading = false;
   bool _prefilling = false;
   String? _error;
@@ -43,7 +54,9 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
         _nameController.text = worker.name;
         _phoneController.text = worker.phoneNumber;
         _wageController.text = worker.dailyWage.toStringAsFixed(2);
-        _typeController.text = worker.workerType;
+        _workerType = _workerTypes.contains(worker.workerType)
+            ? worker.workerType
+            : 'other';
         _notesController.text = worker.notes;
       });
     }
@@ -57,7 +70,6 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _wageController.dispose();
-    _typeController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -97,7 +109,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               name: _nameController.text.trim(),
               phoneNumber: _phoneController.text.trim(),
               dailyWage: wage,
-              workerType: _typeController.text.trim(),
+              workerType: _workerType,
               notes: _notesController.text.trim(),
             );
       } else {
@@ -108,7 +120,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               name: _nameController.text.trim(),
               phoneNumber: _phoneController.text.trim(),
               dailyWage: wage,
-              workerType: _typeController.text.trim(),
+              workerType: _workerType,
               notes: _notesController.text.trim(),
             );
       }
@@ -163,8 +175,18 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                     decoration: InputDecoration(labelText: l10n.t('dailyWage')),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _typeController,
+                  DropdownButtonFormField<String>(
+                    initialValue: _workerType,
+                    items: _workerTypes
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(l10n.workerTypeLabel(type)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _workerType = value ?? _workerType),
                     decoration: InputDecoration(
                       labelText: l10n.t('workerType'),
                     ),

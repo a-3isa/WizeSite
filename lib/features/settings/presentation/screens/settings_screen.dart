@@ -5,15 +5,13 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-final selectedCurrencyProvider = StateProvider<String>((ref) => 'EGP');
-final notificationsEnabledProvider = StateProvider<bool>((ref) => true);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -22,8 +20,11 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final locale = ref.watch(localeControllerProvider);
-    final currency = ref.watch(selectedCurrencyProvider);
-    final notificationsEnabled = ref.watch(notificationsEnabledProvider);
+    final settingsAsync = ref.watch(currentUserSettingsProvider);
+    final userId = ref.watch(activeUserIdProvider);
+    final currency = settingsAsync.valueOrNull?.defaultCurrency ?? 'EGP';
+    final notificationsEnabled =
+        settingsAsync.valueOrNull?.riskAlertsEnabled ?? true;
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
 
     return AppBackScope(
@@ -116,8 +117,20 @@ class SettingsScreen extends ConsumerWidget {
                         onChanged: (value) {
                           if (value != null) {
                             HapticFeedback.lightImpact();
-                            ref.read(selectedCurrencyProvider.notifier).state =
-                                value;
+                            if (userId == null || userId.isEmpty) {
+                              return;
+                            }
+                            ref
+                                .read(userSettingsRepositoryProvider)
+                                .updateCurrency(userId, value)
+                                .catchError((error) {
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  // ScaffoldMessenger.of(context).showSnackBar(
+                                  //   SnackBar(content: Text(error.toString())),
+                                  // );
+                                });
                           }
                         },
                       ),
@@ -130,15 +143,48 @@ class SettingsScreen extends ConsumerWidget {
                       color: AppColors.warning,
                       child: Switch.adaptive(
                         value: notificationsEnabled,
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           HapticFeedback.lightImpact();
-                          ref
-                                  .read(notificationsEnabledProvider.notifier)
-                                  .state =
-                              value;
+                          if (userId == null || userId.isEmpty) {
+                            return;
+                          }
+                          try {
+                            await ref
+                                .read(userSettingsRepositoryProvider)
+                                .updateRiskAlerts(userId, value);
+                          } catch (error) {
+                            if (!context.mounted) {
+                              return;
+                            }
+                            // ScaffoldMessenger.of(context).showSnackBar(
+                            //   SnackBar(content: Text(error.toString())),
+                            // );
+                          }
                         },
                         activeThumbColor: AppColors.constructionOrange,
                         activeTrackColor: AppColors.constructionOrange,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _SettingsCard(
+                      icon: Icons.person_outline_rounded,
+                      title: l10n.t('editProfile'),
+                      subtitle: l10n.t('profile'),
+                      color: AppColors.constructionOrange,
+                      child: IconButton(
+                        onPressed: () => context.push(AppRoutes.profileEdit),
+                        icon: const Icon(Icons.chevron_right_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _SettingsCard(
+                      icon: Icons.group_outlined,
+                      title: l10n.t('manageTeam'),
+                      subtitle: l10n.t('teamMembersTitle'),
+                      color: AppColors.success,
+                      child: IconButton(
+                        onPressed: () => context.push(AppRoutes.teamManagement),
+                        icon: const Icon(Icons.chevron_right_rounded),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -495,8 +541,14 @@ class _ProfileSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(firebaseAuthProvider).currentUser;
-    final name = user?.displayName ?? user?.email?.split('@').first ?? 'User';
-    final email = user?.email ?? '';
+    final settings = ref.watch(currentUserSettingsProvider).valueOrNull;
+    final name = settings?.fullName.isNotEmpty == true
+        ? settings!.fullName
+        : user?.displayName ?? user?.email?.split('@').first ?? 'User';
+    final email = settings?.email.isNotEmpty == true
+        ? settings!.email
+        : user?.email ?? '';
+    final photoUrl = settings?.photoUrl ?? user?.photoURL ?? '';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -519,14 +571,7 @@ class _ProfileSection extends ConsumerWidget {
             height: 60,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.constructionOrange,
-                  AppColors.constructionOrange.withValues(alpha: 0.7),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.constructionOrange.withValues(alpha: 0.12),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.constructionOrange.withValues(alpha: 0.3),
@@ -535,9 +580,18 @@ class _ProfileSection extends ConsumerWidget {
                 ),
               ],
             ),
-            child: const Center(
-              child: Icon(Icons.person_rounded, color: Colors.white, size: 32),
-            ),
+            child: photoUrl.isNotEmpty
+                ? ClipOval(
+                    child: Image.network(
+                      photoUrl,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          _ProfileAvatarFallback(label: _initials(name)),
+                    ),
+                  )
+                : Center(child: _ProfileAvatarFallback(label: _initials(name))),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -567,17 +621,63 @@ class _ProfileSection extends ConsumerWidget {
               ],
             ),
           ),
-          // IconButton(
-          //   onPressed: () {
-          //     // Future: Navigate to profile edit
-          //     HapticFeedback.lightImpact();
-          //   },
-          //   // icon: Icon(
-          //   //   Icons.chevron_right_rounded,
-          //   //   color: AppColors.textBody.withValues(alpha: 0.5),
-          //   // ),
-          // ),
+          IconButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.profileEdit);
+            },
+            icon: Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textBody.withValues(alpha: 0.5),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  static String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return 'U';
+    }
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+class _ProfileAvatarFallback extends StatelessWidget {
+  const _ProfileAvatarFallback({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppColors.constructionOrange, AppColors.warning],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }

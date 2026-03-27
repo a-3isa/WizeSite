@@ -1,9 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,13 +18,202 @@ final workersProvider = StreamProvider<List<WorkerProfile>>((ref) {
   return ref.watch(workerRepositoryProvider).watchWorkers(workspaceId);
 });
 
-class WorkersScreen extends ConsumerWidget {
+class WorkersScreen extends ConsumerStatefulWidget {
   const WorkersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WorkersScreen> createState() => _WorkersScreenState();
+}
+
+class _WorkersScreenState extends ConsumerState<WorkersScreen>
+    with RouteAutoRefreshMixin<WorkersScreen> {
+  static const _pageSize = 20;
+
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  final List<WorkerProfile> _workers = [];
+  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _error;
+  bool _isLoadingInitial = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  String? _workspaceId;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_handleSearchChanged);
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Future<void> onScreenVisible() async {
+    if (!mounted) {
+      return;
+    }
+    await _refresh();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients ||
+        _isLoadingInitial ||
+        _isLoadingMore ||
+        !_hasMore) {
+      return;
+    }
+    if (_scrollController.position.extentAfter < 320) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _refresh() async {
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
+    _workspaceId = workspaceId;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _workers.clear();
+        _cursor = null;
+        _error = null;
+        _hasMore = false;
+        _isLoadingInitial = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _workers.clear();
+        _cursor = null;
+        _error = null;
+        _hasMore = true;
+        _isLoadingInitial = true;
+        _isLoadingMore = false;
+      });
+    }
+
+    await _loadMore(reset: true);
+  }
+
+  Future<void> _loadMore({bool reset = false}) async {
+    final workspaceId = _workspaceId ?? ref.read(activeWorkspaceIdProvider);
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return;
+    }
+    if (!reset && (_isLoadingInitial || _isLoadingMore || !_hasMore)) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _error = null;
+        if (reset) {
+          _isLoadingInitial = true;
+          _isLoadingMore = false;
+        } else {
+          _isLoadingMore = true;
+        }
+      });
+    }
+
+    try {
+      final page = await ref.read(workerRepositoryProvider).fetchWorkersPage(
+            workspaceId,
+            cursor: reset ? null : _cursor,
+            pageSize: _pageSize,
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (reset) {
+          _workers
+            ..clear()
+            ..addAll(page.items);
+        } else {
+          _workers.addAll(page.items);
+        }
+        _cursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _error = null;
+        _isLoadingInitial = false;
+        _isLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error;
+        _isLoadingInitial = false;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  Future<void> _openAddWorker() async {
+    await context.push(AppRoutes.addWorker);
+    if (mounted) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _openEditWorker(WorkerProfile worker) async {
+    await context.push(AppRoutes.workerEditPath(worker.id));
+    if (mounted) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _archiveWorker(WorkerProfile worker) async {
+    await ref.read(workerRepositoryProvider).archiveWorker(worker.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _workers.removeWhere((item) => item.id == worker.id);
+    });
+  }
+
+  List<WorkerProfile> _filteredWorkers() {
+    final search = _searchController.text.trim().toLowerCase();
+    if (search.isEmpty) {
+      return List<WorkerProfile>.unmodifiable(_workers);
+    }
+    return _workers.where((worker) {
+      final haystack =
+          '${worker.name} ${worker.phoneNumber} ${worker.workerType}'
+              .toLowerCase();
+      return haystack.contains(search);
+    }).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final workersAsync = ref.watch(workersProvider);
+    final filtered = _filteredWorkers();
+
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,
       child: Scaffold(
@@ -32,59 +223,133 @@ class WorkersScreen extends ConsumerWidget {
           fallbackRoute: AppRoutes.projects,
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => context.push(AppRoutes.addWorker),
+          onPressed: _openAddWorker,
           icon: const Icon(Icons.add),
           label: Text(l10n.t('addWorkerTitle')),
         ),
-        body: workersAsync.when(
-          data: (workers) {
-            if (workers.isEmpty) {
-              return Center(child: Text(l10n.t('noWorkersYet')));
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: workers.length,
-              separatorBuilder: (_, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final worker = workers[index];
-                return Card(
-                  child: ListTile(
-                    onTap: () => context.push('/worker/${worker.id}'),
-                    leading: const Icon(Icons.engineering),
-                    title: Text(worker.name),
-                    subtitle: Text(
-                      '${worker.phoneNumber} | ${l10n.t('wageWithValue', params: {'value': worker.dailyWage.toStringAsFixed(0)})}',
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) async {
-                        if (value == 'edit') {
-                          context.push('/worker/${worker.id}/edit');
-                        } else {
-                          await ref
-                              .read(workerRepositoryProvider)
-                              .archiveWorker(worker.id);
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Text(l10n.t('edit')),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Text(l10n.t('archive')),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const Center(child: CircularProgressIndicator()),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: l10n.t('search'),
+                  prefixIcon: const Icon(Icons.search),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: _buildContent(context, l10n, filtered),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<WorkerProfile> filtered,
+  ) {
+    if (_isLoadingInitial && _workers.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _workers.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 120),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  Text(_error.toString(), textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _refresh,
+                    child: Text(l10n.t('retry')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (filtered.isEmpty) {
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 120),
+          Center(
+            child: Text(
+              _workers.isEmpty ? l10n.t('noWorkersYet') : l10n.t('noDataYet'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final itemCount = filtered.length + (_isLoadingMore ? 1 : 0);
+
+    return ListView.builder(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index >= filtered.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final worker = filtered[index];
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Card(
+            child: ListTile(
+              onTap: () => context.push(AppRoutes.workerDetailPath(worker.id)),
+              leading: const Icon(Icons.engineering),
+              title: Text(worker.name),
+              subtitle: Text(
+                '${worker.phoneNumber} | ${l10n.t('wageWithValue', params: {'value': worker.dailyWage.toStringAsFixed(0)})}',
+              ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    await _openEditWorker(worker);
+                    return;
+                  }
+                  await _archiveWorker(worker);
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(l10n.t('edit')),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(l10n.t('archive')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -25,7 +25,9 @@ import 'package:buildtrack_app/features/projects/presentation/screens/project_de
 import 'package:buildtrack_app/features/projects/presentation/screens/archived_projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/team_management_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/limit_reached_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/manage_subscription_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/plans_screen.dart';
@@ -34,12 +36,16 @@ import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
+  final rootRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+  final dashboardRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+  final addRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+  final projectsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final refresh = _RouterRefreshNotifier(auth.authStateChanges());
   ref.onDispose(refresh.dispose);
   ref.listen<String?>(
@@ -54,6 +60,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.root,
     refreshListenable: refresh,
+    observers: [rootRouteObserver],
     redirect: (context, state) {
       final location = state.uri.path;
       final isSignedIn = auth.currentUser != null;
@@ -114,12 +121,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.profileEdit,
+        name: 'profileEdit',
+        builder: (context, state) => const ProfileEditScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teamManagement,
+        name: 'teamManagement',
+        builder: (context, state) => const TeamManagementScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return AppBottomNavShell(navigationShell: navigationShell);
         },
         branches: [
           StatefulShellBranch(
+            observers: [dashboardRouteObserver],
             routes: [
               GoRoute(
                 path: AppRoutes.dashboard,
@@ -129,6 +147,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            observers: [addRouteObserver],
             routes: [
               GoRoute(
                 path: AppRoutes.add,
@@ -138,6 +157,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            observers: [projectsRouteObserver],
             routes: [
               GoRoute(
                 path: AppRoutes.projects,
@@ -216,7 +236,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.payments,
         name: 'payments',
-        builder: (context, state) => const PaymentsScreen(),
+        builder: (context, state) {
+          final projectId = state.uri.queryParameters['projectId'];
+          return PaymentsScreen(projectId: projectId);
+        },
       ),
       GoRoute(
         path: AppRoutes.addPayment,
@@ -343,7 +366,7 @@ String? resolveAppRedirect({
     if (hasWorkspace) {
       return AppRoutes.dashboard;
     }
-    return null;
+    return AppRoutes.root;
   }
 
   if (hasWorkspace && isPublicDiscovery) {

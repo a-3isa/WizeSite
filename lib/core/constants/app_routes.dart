@@ -12,6 +12,8 @@ class AppRoutes {
   static const String add = '/add';
   static const String reports = '/reports';
   static const String settings = '/settings';
+  static const String profileEdit = '/settings/profile';
+  static const String teamManagement = '/settings/team';
 
   static const String createProject = '/create-project';
   static const String projectDetail = '/project/:id';
@@ -54,6 +56,8 @@ class AppRoutes {
 
   static String addPaymentPath({String? projectId}) =>
       _withOptionalQuery(addPayment, {'projectId': projectId});
+  static String paymentsPath({String? projectId}) =>
+      _withOptionalQuery(payments, {'projectId': projectId});
   static String paymentDetailPath(String id) => '/payment/$id';
   static String paymentEditPath(String id) => '/payment/$id/edit';
 

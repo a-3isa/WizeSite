@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,7 +81,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     if (workspaceId == null || userId == null) {
-      setState(() => _error = 'DEBUG: ws=$workspaceId uid=$userId');
+      setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
 
@@ -96,8 +99,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     });
 
     try {
+      var queued = false;
       if (widget.projectId == null) {
-        await ref
+        final result = await ref
             .read(projectRepositoryProvider)
             .createProject(
               workspaceId: workspaceId,
@@ -112,6 +116,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               budgetLimit: double.tryParse(_budgetController.text.trim()),
               completionPercentage: _completion,
             );
+        queued = result.queued;
       } else {
         await ref
             .read(projectRepositoryProvider)
@@ -130,23 +135,34 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             );
       }
       if (mounted) {
+        if (queued) {
+          final messenger = ScaffoldMessenger.of(context);
+          await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
+          unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
+          if (!mounted) {
+            return;
+          }
+          // messenger.showSnackBar(
+          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
+          // );
+        }
         context.go(
           widget.projectId == null
               ? AppRoutes.projects
               : AppRoutes.projectDetailPath(widget.projectId!),
         );
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on CallableClientException catch (e) {
       if (e.code == 'failed-precondition') {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=activeProjects');
         }
       } else if (mounted) {
-        setState(() => _error = 'FN error: ${e.code} — ${e.message}');
+        setState(() => _error = e.message);
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'catch: $e');
+        setState(() => _error = e.toString());
       }
     } finally {
       if (mounted) {

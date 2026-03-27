@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -94,8 +96,9 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     });
 
     try {
+      var queued = false;
       if (widget.paymentId == null) {
-        await ref
+        final result = await ref
             .read(paymentRepositoryProvider)
             .createPayment(
               workspaceId: workspaceId,
@@ -106,6 +109,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               paymentMethod: _method,
               notes: _notesController.text.trim(),
             );
+        queued = result.queued;
       } else {
         await ref
             .read(paymentRepositoryProvider)
@@ -118,15 +122,26 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
             );
       }
       if (mounted) {
+        if (queued) {
+          final messenger = ScaffoldMessenger.of(context);
+          await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
+          unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
+          if (!mounted) {
+            return;
+          }
+          // messenger.showSnackBar(
+          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
+          // );
+        }
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on CallableClientException catch (e) {
       if (e.code == 'failed-precondition') {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=paymentsPerMonth');
         }
       } else if (mounted) {
-        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
+        setState(() => _error = e.message);
       }
     } catch (_) {
       if (mounted) {

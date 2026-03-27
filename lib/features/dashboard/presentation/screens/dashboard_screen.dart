@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:buildtrack_app/core/widgets/usage_card.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -21,6 +23,11 @@ class DashboardScreen extends ConsumerWidget {
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final usageAsync = ref.watch(currentUsageProvider);
+    final pendingSyncCount = ref.watch(offlinePendingCountProvider);
+    final deadLetterCount = ref.watch(offlineDeadLetterCountProvider);
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+            'EGP';
     final summaryAsync = workspaceId == null
         ? const AsyncValue.data(<String, num>{})
         : ref.watch(dashboardSummaryProvider(workspaceId));
@@ -47,6 +54,27 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
+            if (deadLetterCount > 0) ...[
+              _QueueStatusCard(
+                color: AppColors.danger,
+                icon: Icons.sync_problem_outlined,
+                message: l10n.t(
+                  'offlineSyncFailed',
+                  params: {'count': '$deadLetterCount'},
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else if (pendingSyncCount > 0) ...[
+              _QueueStatusCard(
+                color: AppColors.warning,
+                icon: Icons.cloud_upload_outlined,
+                message: l10n.t(
+                  'offlineSyncPending',
+                  params: {'count': '$pendingSyncCount'},
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Text(
               l10n.t('overview'),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -91,27 +119,51 @@ class DashboardScreen extends ConsumerWidget {
                     MetricCard(
                       label: l10n.t('totalExpenses'),
                       value:
-                          '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0}',
+                          '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0} $currency',
                       color: AppColors.danger,
                       icon: Icons.trending_down,
                     ),
                     MetricCard(
                       label: l10n.t('totalIncome'),
                       value:
-                          '${summary['totalIncome']?.toStringAsFixed(0) ?? 0}',
+                          '${summary['totalIncome']?.toStringAsFixed(0) ?? 0} $currency',
                       color: AppColors.success,
                       icon: Icons.trending_up,
                     ),
                     MetricCard(
                       label: l10n.t('netProfit'),
-                      value: '${net.toStringAsFixed(0)} EGP',
+                      value: '${net.toStringAsFixed(0)} $currency',
                       color: net >= 0 ? AppColors.success : AppColors.danger,
                       icon: Icons.account_balance_wallet_outlined,
                     ),
                   ],
                 );
               },
-              error: (e, s) => const SizedBox.shrink(),
+              error: (e, s) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.danger.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppColors.danger,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        e.toString(),
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               loading: () => const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
@@ -303,21 +355,21 @@ class DashboardScreen extends ConsumerWidget {
   ) {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     if (workspaceId == null || workspaceId.isEmpty) {
-      context.push(route);
+      context.go(route);
       return;
     }
 
     // Use already-loaded subscription data — no network call needed
     final sub = ref.read(currentSubscriptionStreamProvider).value;
     if (sub != null && sub.isActiveOrTrial && sub.tier == PlanTier.pro) {
-      context.push(route);
+      context.go(route);
       return;
     }
 
     // Use already-loaded usage snapshot — no network call needed
     final usage = ref.read(currentUsageProvider).value;
     if (usage == null) {
-      context.push(route); // data not yet loaded, navigate optimistically
+      context.go(route); // data not yet loaded, navigate optimistically
       return;
     }
 
@@ -328,7 +380,46 @@ class DashboardScreen extends ConsumerWidget {
       context.push('${AppRoutes.subscriptionLimit}?limit=$limit');
       return;
     }
-    context.push(route);
+    context.go(route);
+  }
+}
+
+class _QueueStatusCard extends StatelessWidget {
+  const _QueueStatusCard({
+    required this.color,
+    required this.icon,
+    required this.message,
+  });
+
+  final Color color;
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

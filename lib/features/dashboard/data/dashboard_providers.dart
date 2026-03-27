@@ -1,122 +1,132 @@
-import 'dart:async';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
+import 'package:buildtrack_app/core/services/offline_action_queue.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final dashboardSummaryProvider =
-    StreamProvider.family<Map<String, num>, String>((ref, workspaceId) async* {
-      final firestore = ref.watch(firestoreProvider);
+    StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {
+  final firestore = ref.watch(firestoreProvider);
+  final queue = ref.watch(offlineActionQueueProvider);
+  return _projectsSummaryStream(
+    firestore: firestore,
+    queue: queue,
+    workspaceId: workspaceId,
+  );
+});
 
-      final streams = [
-        firestore
-            .collection('projects')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .snapshots(),
-        firestore
-            .collection('expenses')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .snapshots(),
-        firestore
-            .collection('payments')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .snapshots(),
-        firestore
-            .collection('worker_entries')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .snapshots(),
-      ];
+Stream<Map<String, num>> _projectsSummaryStream(
+  {required FirebaseFirestore firestore,
+  required OfflineActionQueue queue,
+  required String workspaceId}
+) {
+  final projectsStream = firestore
+      .collection('projects')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .snapshots();
 
-      final controller = StreamController<void>.broadcast();
-      final subs =
-          streams.map((s) => s.listen((_) => controller.add(null))).toList();
+  final queueStream = queue.watch();
 
-      // Helper to calculate summary from fresh data
-      Future<Map<String, num>> calculate() async {
-        final projectsCount = await firestore
-            .collection('projects')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .count()
-            .get();
-        final activeProjectsCount = await firestore
-            .collection('projects')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('status', isEqualTo: 'active')
-            .where('isArchived', isEqualTo: false)
-            .count()
-            .get();
+  return Stream.multi((controller) {
+    QuerySnapshot<Map<String, dynamic>>? latestProjects;
+    List<OfflineAction> latestActions = const [];
 
-        final expensesSnap = await firestore
-            .collection('expenses')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .limit(500)
-            .get();
-        final paymentsSnap = await firestore
-            .collection('payments')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .limit(500)
-            .get();
-        final workerEntriesSnap = await firestore
-            .collection('worker_entries')
-            .where('workspaceId', isEqualTo: workspaceId)
-            .where('isArchived', isEqualTo: false)
-            .limit(500)
-            .get();
+    void emit() {
+      final projects = latestProjects?.docs ?? const [];
+      num totalExpenses = 0;
+      num totalIncome = 0;
+      num totalNet = 0;
+      var activeProjects = 0;
 
-        final expenses = expensesSnap.docs.fold<num>(
-          0,
-          (total, doc) => total + ((doc.data()['amount'] as num?) ?? 0),
-        );
-        final labor = workerEntriesSnap.docs.fold<num>(
-          0,
-          (total, doc) => total + ((doc.data()['totalCost'] as num?) ?? 0),
-        );
-        final income = paymentsSnap.docs.fold<num>(
-          0,
-          (total, doc) => total + ((doc.data()['amount'] as num?) ?? 0),
-        );
-
-        final totalExpenses = expenses + labor;
-        return {
-          'totalProjects': projectsCount.count ?? 0,
-          'activeProjects': activeProjectsCount.count ?? 0,
-          'totalExpenses': totalExpenses,
-          'totalIncome': income,
-          'net': income - totalExpenses,
-        };
-      }
-
-      try {
-        yield await calculate();
-      } catch (_) {
-        // Offline or no cache — yield zeros so the UI shows an empty state
-        // instead of an error.
-        yield const {
-          'totalProjects': 0,
-          'activeProjects': 0,
-          'totalExpenses': 0,
-          'totalIncome': 0,
-          'net': 0,
-        };
-      }
-
-      try {
-        await for (final _ in controller.stream) {
-          try {
-            yield await calculate();
-          } catch (_) {
-            // Skip failed recalculation; keep the last emitted value.
-          }
+      for (final doc in projects) {
+        final data = doc.data();
+        final expenses = (data['totalExpenses'] as num?) ?? 0;
+        final income =
+            (data['totalPayments'] as num?) ?? (data['totalIncome'] as num?) ?? 0;
+        final net = (data['netProfit'] as num?) ?? (data['net'] as num?) ?? 0;
+        totalExpenses += expenses;
+        totalIncome += income;
+        totalNet += net;
+        if ('${data['status'] ?? 'active'}' == 'active') {
+          activeProjects += 1;
         }
-      } finally {
-        for (final s in subs) {
-          await s.cancel();
-        }
-        await controller.close();
       }
-    });
+
+      final pending = _workspacePendingDelta(
+        actions: latestActions,
+        workspaceId: workspaceId,
+      );
+
+      controller.add(<String, num>{
+        'totalProjects': projects.length + pending.pendingProjects,
+        'activeProjects': activeProjects + pending.pendingProjects,
+        'totalExpenses': totalExpenses + pending.pendingExpenses,
+        'totalIncome': totalIncome + pending.pendingIncome,
+        'net': totalNet + pending.pendingIncome - pending.pendingExpenses,
+      });
+    }
+
+    final projectSub = projectsStream.listen(
+      (snapshot) {
+        latestProjects = snapshot;
+        emit();
+      },
+      onError: controller.addError,
+    );
+    final queueSub = queueStream.listen(
+      (actions) {
+        latestActions = actions;
+        emit();
+      },
+      onError: controller.addError,
+    );
+
+    controller.onCancel = () async {
+      await projectSub.cancel();
+      await queueSub.cancel();
+    };
+  });
+}
+
+({int pendingProjects, num pendingExpenses, num pendingIncome})
+    _workspacePendingDelta({
+  required List<OfflineAction> actions,
+  required String workspaceId,
+}) {
+  var pendingProjects = 0;
+  num pendingExpenses = 0;
+  num pendingIncome = 0;
+
+  for (final action in actions) {
+    final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
+    if (payloadWorkspaceId != workspaceId) {
+      continue;
+    }
+    switch (action.type) {
+      case OfflineActionTypes.createProject:
+        pendingProjects += 1;
+        break;
+      case OfflineActionTypes.createExpense:
+        pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+        break;
+      case OfflineActionTypes.createWorkerEntry:
+        final daysWorked = (action.payload['daysWorked'] as num?) ?? 0;
+        final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
+        pendingExpenses += daysWorked * dailyWage;
+        break;
+      case OfflineActionTypes.createPayment:
+        pendingIncome += (action.payload['amount'] as num?) ?? 0;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return (
+    pendingProjects: pendingProjects,
+    pendingExpenses: pendingExpenses,
+    pendingIncome: pendingIncome,
+  );
+}

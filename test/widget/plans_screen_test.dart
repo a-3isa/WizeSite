@@ -54,9 +54,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('WizeSite Pro Monthly'), findsOneWidget);
-    expect(find.text('WizeSite Pro Yearly'), findsOneWidget);
-    expect(find.text('WizeSite Pro Lifetime'), findsOneWidget);
+    expect(find.text('Buildozer Pro Monthly'), findsOneWidget);
+    expect(find.text('Buildozer Pro Yearly'), findsOneWidget);
+    expect(find.text('Buildozer Pro Lifetime'), findsOneWidget);
     expect(
       find.text(
         '7-day trial starts on first successful subscription purchase.',

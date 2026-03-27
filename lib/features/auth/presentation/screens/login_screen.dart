@@ -34,7 +34,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     final l10n = AppLocalizations.of(context);
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = l10n.t('pleaseEnterEmailAndPassword'));
@@ -57,6 +57,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (user == null) {
         throw Exception('User not found');
       }
+
+      await firestore.collection('users').doc(user.uid).set({
+        'email': email,
+        'fullName': user.displayName ?? '',
+        'photoUrl': user.photoURL ?? '',
+        'defaultCurrency': 'EGP',
+        'riskAlertsEnabled': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       final workspaceId = await _resolveWorkspaceId(firestore, user);
       ref.read(activeUserIdProvider.notifier).state = user.uid;
@@ -127,6 +136,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
 
+      await firestore.collection('users').doc(user.uid).set({
+        'email': (user.email ?? '').trim().toLowerCase(),
+        'fullName': user.displayName ?? '',
+        'photoUrl': user.photoURL ?? '',
+        'defaultCurrency': 'EGP',
+        'riskAlertsEnabled': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
       final workspaceId = await _resolveWorkspaceId(firestore, user);
       ref.read(activeUserIdProvider.notifier).state = user.uid;
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
@@ -161,6 +179,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (snap.docs.isNotEmpty) {
       final workspaceId = snap.docs.first.data()['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
+        await _syncUserWorkspace(
+          firestore: firestore,
+          user: user,
+          workspaceId: workspaceId,
+        );
         return workspaceId;
       }
     }
@@ -199,10 +222,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     batch.set(firestore.collection('users').doc(user.uid), {
       'id': user.uid,
       'fullName': displayName ?? '',
-      'email': user.email ?? '',
+      'email': (user.email ?? '').trim().toLowerCase(),
       'phoneNumber': user.phoneNumber ?? '',
       'workspaceId': workspaceId,
+      'photoUrl': user.photoURL ?? '',
+      'defaultCurrency': 'EGP',
+      'riskAlertsEnabled': true,
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     batch.set(firestore.collection('workspaces').doc(workspaceId), {
       'id': workspaceId,
@@ -219,6 +246,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await batch.commit();
 
     return workspaceId;
+  }
+
+  Future<void> _syncUserWorkspace({
+    required FirebaseFirestore firestore,
+    required User user,
+    required String workspaceId,
+  }) async {
+    await firestore.collection('users').doc(user.uid).set({
+      'workspaceId': workspaceId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _ensureWorkspaceExists({

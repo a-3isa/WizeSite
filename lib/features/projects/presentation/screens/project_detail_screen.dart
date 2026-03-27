@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-final projectDetailsProvider = FutureProvider.family((ref, String projectId) {
-  return ref.watch(projectRepositoryProvider).getProject(projectId);
+final projectDetailsProvider = StreamProvider.family((ref, String projectId) {
+  return ref.watch(projectRepositoryProvider).watchProject(projectId);
 });
 
 class ProjectDetailScreen extends ConsumerWidget {
@@ -55,7 +55,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                         title: Text(l10n.t('archive')),
                         content: Text(
                           l10n.t('confirm'),
-                        ), // Should use a better message if available
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
@@ -85,7 +85,9 @@ class ProjectDetailScreen extends ConsumerWidget {
                   ),
                   onViewExpenses: () =>
                       context.push(AppRoutes.projectExpensesPath(project.id)),
-                  onViewPayments: () => context.push(AppRoutes.payments),
+                  onViewPayments: () => context.push(
+                    AppRoutes.paymentsPath(projectId: project.id),
+                  ),
                   onAddWorkerEntry: () => context.push(
                     AppRoutes.workerEntryPath('new', projectId: project.id),
                   ),
@@ -98,8 +100,8 @@ class ProjectDetailScreen extends ConsumerWidget {
                       builder: (context) => AlertDialog(
                         title: Text(l10n.t('delete')),
                         content: Text(
-                          l10n.t('confirm'),
-                        ), // Should use a better message if available
+                          l10n.t('confirmDeleteProjectCascade'),
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),

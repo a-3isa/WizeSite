@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -34,6 +35,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   String _currency = 'EGP';
   String _category = 'other';
   String? _projectId;
+  DateTime _date = DateTime.now();
   bool _saving = false;
   String? _error;
 
@@ -170,7 +172,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
             transcript: widget.response.transcript,
             source: widget.response.source,
             storagePath: widget.response.storagePath,
-            date: DateTime.now(),
+            date: _date,
           );
       if (!mounted) {
         return;
@@ -226,6 +228,14 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final l10n = AppLocalizations.of(context);
     final parsed = widget.response.parsed;
     final confidence = widget.response.confidence;
+    final defaultCurrency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+            'EGP';
+    if (_currency == 'EGP' &&
+        (parsed.currency == null || parsed.currency!.isEmpty) &&
+        defaultCurrency != 'EGP') {
+      _currency = defaultCurrency;
+    }
     return AppBackScope(
       fallbackRoute: AppRoutes.voiceExpense,
       child: Scaffold(
@@ -332,6 +342,28 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                   .toList(),
               onChanged: (value) {
                 setState(() => _projectId = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.t(
+                  'dateWithValue',
+                  params: {'value': _date.toIso8601String().split('T').first},
+                ),
+              ),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                  initialDate: _date,
+                );
+                if (picked != null) {
+                  setState(() => _date = picked);
+                }
               },
             ),
             const SizedBox(height: 12),
