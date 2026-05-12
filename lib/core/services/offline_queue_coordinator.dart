@@ -99,6 +99,7 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
     with WidgetsBindingObserver {
   ProviderSubscription<AsyncValue<bool>>? _connectivitySubscription;
   ProviderSubscription<OfflineSyncNotice?>? _syncNoticeSubscription;
+  ProviderSubscription<AppUiNotice?>? _appNoticeSubscription;
 
   @override
   void initState() {
@@ -131,9 +132,16 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
             'Queued sync requires sign-in. Please log in again.',
           OfflineSyncFailureType.generic => 'A queued action failed to sync.',
         };
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text(message)),
-        // );
+        _showNotice(message);
+      },
+    );
+    _appNoticeSubscription = ref.listenManual<AppUiNotice?>(
+      appUiNoticeProvider,
+      (previous, next) {
+        if (next == null || previous?.id == next.id || !mounted) {
+          return;
+        }
+        _showNotice(next.message);
       },
     );
   }
@@ -143,6 +151,7 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
     WidgetsBinding.instance.removeObserver(this);
     _connectivitySubscription?.close();
     _syncNoticeSubscription?.close();
+    _appNoticeSubscription?.close();
     super.dispose();
   }
 
@@ -156,5 +165,10 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
   @override
   Widget build(BuildContext context) {
     return widget.child;
+  }
+
+  void _showNotice(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 }

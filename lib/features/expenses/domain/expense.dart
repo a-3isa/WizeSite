@@ -41,16 +41,23 @@ class Expense {
         return value;
       }
       if (value is String) {
-        return DateTime.tryParse(value) ?? DateTime.now();
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return parsed;
+        }
+        throw FormatException('Invalid expense date for $id: $value');
       }
       if (value != null) {
         try {
-          return (value as dynamic).toDate() as DateTime;
+          final converted = (value as dynamic).toDate();
+          if (converted is DateTime) {
+            return converted;
+          }
         } catch (_) {
           // ignored
         }
       }
-      return DateTime.now();
+      throw FormatException('Missing expense date for $id');
     }
 
     return Expense(

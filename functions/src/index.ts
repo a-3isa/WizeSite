@@ -1,5 +1,5 @@
 import * as admin from "firebase-admin";
-import {defineSecret} from "firebase-functions/params";
+import {defineBoolean, defineSecret} from "firebase-functions/params";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
@@ -10,6 +10,7 @@ setGlobalOptions({region: "us-central1", maxInstances: 10});
 
 const db = admin.firestore();
 const revenuecatWebhookSecret = defineSecret("REVENUECAT_WEBHOOK_SECRET");
+const enforceHttpAppCheck = defineBoolean("ENFORCE_HTTP_APP_CHECK");
 
 type LimitType =
   | "activeProjects"
@@ -122,6 +123,11 @@ function hasUnlimitedQuota(subscription: SubscriptionDoc): boolean {
 }
 
 async function roleForUser(workspaceId: string, userId: string): Promise<string | null> {
+  const deterministicMembership = await membershipRef(workspaceId, userId).get();
+  if (deterministicMembership.exists) {
+    return `${deterministicMembership.data()?.role ?? "member"}`;
+  }
+
   const membershipSnap = await db
     .collection("memberships")
     .where("workspaceId", "==", workspaceId)
@@ -131,7 +137,18 @@ async function roleForUser(workspaceId: string, userId: string): Promise<string 
   if (membershipSnap.empty) {
     return null;
   }
-  return `${membershipSnap.docs[0].data().role ?? "member"}`;
+  const legacyData = membershipSnap.docs[0].data();
+  await membershipRef(workspaceId, userId).set(
+    {
+      workspaceId,
+      userId,
+      role: `${legacyData.role ?? "member"}`,
+      createdAt: legacyData.createdAt ?? admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    {merge: true},
+  );
+  return `${legacyData.role ?? "member"}`;
 }
 
 async function assertMember(workspaceId: string, userId: string): Promise<string> {
@@ -198,14 +215,29 @@ function canonicalCode(code: string): string {
   return code.replace(/-/g, "_").toUpperCase();
 }
 
-async function maybeVerifyAppCheck(appCheckToken: string | undefined): Promise<void> {
+function membershipDocId(workspaceId: string, userId: string): string {
+  return `${workspaceId}_${userId}`;
+}
+
+function membershipRef(workspaceId: string, userId: string) {
+  return db.collection("memberships").doc(membershipDocId(workspaceId, userId));
+}
+
+async function verifyHttpAppCheck(appCheckToken: string | undefined): Promise<void> {
+  const enforce = enforceHttpAppCheck.value();
   if (!appCheckToken) {
+    if (enforce) {
+      throw new HttpsError("failed-precondition", "Missing App Check token");
+    }
     return;
   }
 
   try {
     await admin.appCheck().verifyToken(appCheckToken);
   } catch (error) {
+    if (enforce) {
+      throw new HttpsError("failed-precondition", "Invalid App Check token");
+    }
     console.warn("HTTP callable endpoint received an invalid App Check token", error);
   }
 }
@@ -265,6 +297,193 @@ function asBooleanOrUndefined(input: unknown): boolean | undefined {
   return undefined;
 }
 
+type TriggerDocData = Record<string, unknown>;
+
+type TriggerSnapshotLike = {
+  data: () => TriggerDocData | undefined;
+};
+
+type FirestoreWrittenEventLike<TParams extends Record<string, string | undefined>> = {
+  data?: {
+    before?: TriggerSnapshotLike;
+    after?: TriggerSnapshotLike;
+  };
+  params: TParams;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function asComparable(value: unknown): unknown {
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toMillis();
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (value && typeof value === "object" && "toMillis" in value && typeof (value as {toMillis?: unknown}).toMillis === "function") {
+    return (value as {toMillis: () => number}).toMillis();
+  }
+  return value;
+}
+
+export function shallowEqualDerivedState(left: unknown, right: unknown): boolean {
+  const a = asComparable(left);
+  const b = asComparable(right);
+  if (a === b) {
+    return true;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) {
+      return false;
+    }
+    return a.every((item, index) => shallowEqualDerivedState(item, b[index]));
+  }
+  if (!isRecord(a) || !isRecord(b)) {
+    return false;
+  }
+  const keysA = Object.keys(a).sort();
+  const keysB = Object.keys(b).sort();
+  if (keysA.length !== keysB.length) {
+    return false;
+  }
+  for (let index = 0; index < keysA.length; index += 1) {
+    if (keysA[index] !== keysB[index]) {
+      return false;
+    }
+    if (!shallowEqualDerivedState(a[keysA[index]], b[keysB[index]])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasSubsetChanged(current: TriggerDocData, next: TriggerDocData): boolean {
+  return Object.entries(next).some(([key, value]) => !shallowEqualDerivedState(current[key], value));
+}
+
+export async function writeIfChanged(
+  ref: admin.firestore.DocumentReference,
+  nextData: TriggerDocData,
+  merge = true,
+): Promise<boolean> {
+  const currentSnap = await ref.get();
+  const current = currentSnap.data() ?? {};
+  if (!hasSubsetChanged(current as TriggerDocData, nextData)) {
+    return false;
+  }
+
+  await ref.set(
+    {
+      ...nextData,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    {merge},
+  );
+  return true;
+}
+
+function changedString(before: TriggerDocData, after: TriggerDocData, key: string): boolean {
+  return `${before[key] ?? ""}` !== `${after[key] ?? ""}`;
+}
+
+function changedBoolean(before: TriggerDocData, after: TriggerDocData, key: string): boolean {
+  return Boolean(before[key]) !== Boolean(after[key]);
+}
+
+function changedNumber(before: TriggerDocData, after: TriggerDocData, key: string): boolean {
+  return Number(before[key] ?? 0) !== Number(after[key] ?? 0);
+}
+
+function changedTimestamp(before: TriggerDocData, after: TriggerDocData, key: string): boolean {
+  const beforeMillis = parseTimestamp(before[key])?.toMillis() ?? null;
+  const afterMillis = parseTimestamp(after[key])?.toMillis() ?? null;
+  return beforeMillis !== afterMillis;
+}
+
+export function hasRelevantProjectFieldsChanged(
+  before: TriggerDocData,
+  after: TriggerDocData,
+): boolean {
+  return changedString(before, after, "workspaceId") ||
+    changedString(before, after, "name") ||
+    changedString(before, after, "status") ||
+    changedBoolean(before, after, "isArchived") ||
+    changedNumber(before, after, "contractValue") ||
+    changedNumber(before, after, "completionPercentage") ||
+    changedNumber(before, after, "budgetLimit") ||
+    changedTimestamp(before, after, "expectedEndDate");
+}
+
+export function hasRelevantExpenseFieldsChanged(
+  before: TriggerDocData,
+  after: TriggerDocData,
+): boolean {
+  return changedString(before, after, "workspaceId") ||
+    changedString(before, after, "projectId") ||
+    changedString(before, after, "category") ||
+    changedNumber(before, after, "amount") ||
+    changedBoolean(before, after, "isArchived") ||
+    changedTimestamp(before, after, "date");
+}
+
+export function hasRelevantPaymentFieldsChanged(
+  before: TriggerDocData,
+  after: TriggerDocData,
+): boolean {
+  return changedString(before, after, "workspaceId") ||
+    changedString(before, after, "projectId") ||
+    changedNumber(before, after, "amount") ||
+    changedBoolean(before, after, "isArchived") ||
+    changedTimestamp(before, after, "date");
+}
+
+export function hasRelevantWorkerEntryFieldsChanged(
+  before: TriggerDocData,
+  after: TriggerDocData,
+): boolean {
+  return changedString(before, after, "workspaceId") ||
+    changedString(before, after, "projectId") ||
+    changedString(before, after, "workerId") ||
+    changedNumber(before, after, "daysWorked") ||
+    changedNumber(before, after, "totalCost") ||
+    changedBoolean(before, after, "isArchived") ||
+    changedTimestamp(before, after, "date");
+}
+
+type AggregateTarget = {
+  workspaceId: string;
+  projectId: string;
+};
+
+function aggregateTargetFromDoc(data: TriggerDocData | undefined): AggregateTarget | null {
+  if (!data || data.isArchived === true) {
+    return null;
+  }
+  const workspaceId = `${data.workspaceId ?? ""}`.trim();
+  const projectId = `${data.projectId ?? ""}`.trim();
+  if (!workspaceId || !projectId) {
+    return null;
+  }
+  return {workspaceId, projectId};
+}
+
+function aggregateTargetsFromChange(
+  before: TriggerDocData | undefined,
+  after: TriggerDocData | undefined,
+): AggregateTarget[] {
+  const targets = new Map<string, AggregateTarget>();
+  for (const item of [before, after]) {
+    const target = aggregateTargetFromDoc(item);
+    if (!target) {
+      continue;
+    }
+    targets.set(`${target.workspaceId}::${target.projectId}`, target);
+  }
+  return [...targets.values()];
+}
+
 async function membershipDocs(workspaceId: string) {
   return db.collection("memberships").where("workspaceId", "==", workspaceId).get();
 }
@@ -279,20 +498,27 @@ async function notificationRecipients(workspaceId: string, requireRiskAlerts = f
     .map((doc) => `${doc.data().userId ?? ""}`.trim())
     .filter((id) => id.length > 0);
 
-  const recipients: string[] = [];
-  await Promise.all(userIds.map(async (userId: string) => {
-    if (!requireRiskAlerts) {
-      recipients.push(userId);
-      return;
-    }
-    const userSnap = await db.collection("users").doc(userId).get();
-    const data = userSnap.data() ?? {};
-    if (data.riskAlertsEnabled !== false) {
-      recipients.push(userId);
-    }
-  }));
+  if (!requireRiskAlerts) {
+    return userIds;
+  }
+  return riskAlertRecipientsFromMembers(userIds);
+}
 
-  return recipients;
+async function riskAlertRecipientsFromMembers(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
+  const refs = userIds.map((userId) => db.collection("users").doc(userId));
+  const snaps = await db.getAll(...refs);
+  return snaps
+    .map((snap, index) => {
+      const data = snap.data() ?? {};
+      if (data.riskAlertsEnabled === false) {
+        return null;
+      }
+      return userIds[index];
+    })
+    .filter((id): id is string => !!id);
 }
 
 async function upsertNotificationForUsers({
@@ -343,33 +569,118 @@ function compareRisk(current: string): number {
   }
 }
 
+async function workerNameMapForEntries(
+  workspaceId: string,
+  workerIds: string[],
+): Promise<Map<string, string>> {
+  if (workerIds.length === 0) {
+    return new Map<string, string>();
+  }
+  const workerRefs = workerIds.map((workerId) => db.collection("workers").doc(workerId));
+  const workerSnaps = await db.getAll(...workerRefs);
+  const map = new Map<string, string>();
+  for (const snap of workerSnaps) {
+    if (!snap.exists) {
+      continue;
+    }
+    const data = snap.data() ?? {};
+    if (`${data.workspaceId ?? ""}` !== workspaceId || data.isArchived === true) {
+      continue;
+    }
+    map.set(snap.id, `${data.name ?? snap.id}`);
+  }
+  return map;
+}
+
+type MonthlyFlowPoint = {
+  month: string;
+  expenses: number;
+  income: number;
+};
+
+type TopWorkerMetric = {
+  workerId: string;
+  name: string;
+  totalCost: number;
+  totalDays: number;
+};
+
+function buildProjectMetricsPayload(input: {
+  workspaceId: string;
+  projectId: string;
+  project: TriggerDocData;
+  contractValue: number;
+  completionPercentage: number;
+  budgetLimit: number | null;
+  budgetExceeded: boolean;
+  totalExpenses: number;
+  laborExpenses: number;
+  totalPayments: number;
+  netProfit: number;
+  remainingBalance: number;
+  expectedFinalCost: number;
+  riskLevel: string;
+  healthStatus: string;
+  categoryTotals: Record<string, number>;
+  monthlyFlow: MonthlyFlowPoint[];
+  topWorkers: TopWorkerMetric[];
+  recentExpenses: Record<string, unknown>[];
+  recentPayments: Record<string, unknown>[];
+}): TriggerDocData {
+  return {
+    workspaceId: input.workspaceId,
+    projectId: input.projectId,
+    projectName: `${input.project.name ?? ""}`,
+    status: `${input.project.status ?? "active"}`,
+    isArchived: input.project.isArchived === true,
+    contractValue: input.contractValue,
+    completionPercentage: input.completionPercentage,
+    budgetLimit: input.budgetLimit,
+    budgetExceeded: input.budgetExceeded,
+    totalExpenses: input.totalExpenses,
+    totalLaborCost: input.laborExpenses,
+    totalPayments: input.totalPayments,
+    totalIncome: input.totalPayments,
+    net: input.totalPayments - input.totalExpenses,
+    netProfit: input.netProfit,
+    remainingBalance: input.remainingBalance,
+    expectedFinalCost: input.expectedFinalCost,
+    riskLevel: input.riskLevel,
+    healthStatus: input.healthStatus,
+    categoryTotals: input.categoryTotals,
+    monthlyFlow: input.monthlyFlow,
+    topWorkers: input.topWorkers,
+    recentExpenses: input.recentExpenses,
+    recentPayments: input.recentPayments,
+  };
+}
+
 async function recomputeWorkspaceMetrics(workspaceId: string): Promise<void> {
-  const projectsSnap = await db
-    .collection("projects")
+  const projectMetricsSnap = await db
+    .collection("project_metrics")
     .where("workspaceId", "==", workspaceId)
     .where("isArchived", "==", false)
     .get();
 
-  const projects = projectsSnap.docs.map((doc) => doc.data());
-  const activeProjects = projects.filter((project) => `${project.status ?? "active"}` === "active").length;
-  const totalExpenses = projects.reduce(
+  const metrics = projectMetricsSnap.docs.map((doc) => doc.data());
+  const activeProjects = metrics.filter((project) => `${project.status ?? "active"}` === "active").length;
+  const totalExpenses = metrics.reduce(
     (sum, project) => sum + Number(project.totalExpenses ?? 0),
     0,
   );
-  const totalIncome = projects.reduce(
-    (sum, project) => sum + Number(project.totalPayments ?? 0),
+  const totalIncome = metrics.reduce(
+    (sum, project) => sum + Number(project.totalIncome ?? 0),
     0,
   );
 
-  await db.collection("workspace_metrics").doc(workspaceId).set({
+  await writeIfChanged(db.collection("workspace_metrics").doc(workspaceId), {
     workspaceId,
-    totalProjects: projects.length,
+    totalProjects: metrics.length,
     activeProjects,
     totalExpenses,
     totalIncome,
     net: totalIncome - totalExpenses,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+  });
 }
 
 export const checkLimit = onCall(async (request) => {
@@ -456,14 +767,6 @@ async function createProjectWithQuotaForUser(
     budgetLimit,
     completionPercentage,
     status: "active",
-    totalExpenses: 0,
-    totalLaborCost: 0,
-    totalPayments: 0,
-    netProfit: 0,
-    expectedFinalCost: 0,
-    remainingBalance: contractValue,
-    riskLevel: "low",
-    healthStatus: "healthy",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: uid,
@@ -504,7 +807,7 @@ export const createProjectWithQuotaHttp = onRequest(async (request, response) =>
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
 
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
@@ -653,7 +956,7 @@ export const createExpenseWithQuotaHttp = onRequest(async (request, response) =>
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
 
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
@@ -766,7 +1069,7 @@ export const createPaymentWithQuotaHttp = onRequest(async (request, response) =>
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
 
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
@@ -890,7 +1193,7 @@ export const createWorkerEntryWithQuotaHttp = onRequest(async (request, response
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
 
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
@@ -991,7 +1294,7 @@ export const archiveExpenseWithQuotaRefundHttp = onRequest(async (request, respo
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
       throw new HttpsError("unauthenticated", "Authentication required");
@@ -1089,7 +1392,7 @@ export const archivePaymentWithQuotaRefundHttp = onRequest(async (request, respo
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
       throw new HttpsError("unauthenticated", "Authentication required");
@@ -1187,7 +1490,7 @@ export const archiveWorkerEntryWithQuotaRefundHttp = onRequest(async (request, r
   }
 
   try {
-    await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+    await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
     const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
     if (!bearerToken) {
       throw new HttpsError("unauthenticated", "Authentication required");
@@ -1332,6 +1635,11 @@ export const inviteMemberByEmail = onCall(async (request) => {
   }
 
   const userId = userSnap.docs[0].id;
+  const deterministicMembership = await membershipRef(workspaceId, userId).get();
+  if (deterministicMembership.exists) {
+    throw new HttpsError("already-exists", "User is already a member of this workspace");
+  }
+
   const existingMembership = await db
     .collection("memberships")
     .where("workspaceId", "==", workspaceId)
@@ -1351,13 +1659,19 @@ export const inviteMemberByEmail = onCall(async (request) => {
     }
   }
 
-  await db.collection("memberships").add({
+  await membershipRef(workspaceId, userId).set({
     workspaceId,
     userId,
     role,
     createdBy: request.auth.uid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  await db.collection("users").doc(userId).set({
+    workspaceId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
 
   await upsertNotificationForUsers({
     workspaceId,
@@ -1381,6 +1695,20 @@ export const inviteMemberWithQuota = onCall(async (request) => {
 
   const newUserId = requireString(data, "userId");
   const memberRole = `${data.role ?? "member"}`;
+  const deterministicMembership = await membershipRef(workspaceId, newUserId).get();
+  if (deterministicMembership.exists) {
+    throw new HttpsError("already-exists", "User is already a member of this workspace");
+  }
+  const legacyMembership = await db
+    .collection("memberships")
+    .where("workspaceId", "==", workspaceId)
+    .where("userId", "==", newUserId)
+    .limit(1)
+    .get();
+  if (!legacyMembership.empty) {
+    throw new HttpsError("already-exists", "User is already a member of this workspace");
+  }
+
   const subscription = await getSubscription(workspaceId);
   if (!hasUnlimitedQuota(subscription)) {
     const current = await getCurrentUsage(workspaceId, "teamMembers");
@@ -1390,13 +1718,19 @@ export const inviteMemberWithQuota = onCall(async (request) => {
     }
   }
 
-  await db.collection("memberships").add({
+  await membershipRef(workspaceId, newUserId).set({
     workspaceId,
     userId: newUserId,
     role: memberRole,
     createdBy: request.auth.uid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  await db.collection("users").doc(newUserId).set({
+    workspaceId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
 
   return {ok: true};
 });
@@ -1466,8 +1800,10 @@ export const revenuecatWebhook = onRequest(
 );
 
 async function recomputeProjectSummary(workspaceId: string, projectId: string): Promise<void> {
-  const [projectSnap, expensesSnap, paymentsSnap, workerEntriesSnap, workersSnap] = await Promise.all([
+  const projectMetricsRef = db.collection("project_metrics").doc(projectId);
+  const [projectSnap, projectMetricsSnap, expensesSnap, paymentsSnap, workerEntriesSnap] = await Promise.all([
     db.collection("projects").doc(projectId).get(),
+    projectMetricsRef.get(),
     db.collection("expenses")
       .where("workspaceId", "==", workspaceId)
       .where("projectId", "==", projectId)
@@ -1483,10 +1819,6 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
       .where("projectId", "==", projectId)
       .where("isArchived", "==", false)
       .get(),
-    db.collection("workers")
-      .where("workspaceId", "==", workspaceId)
-      .where("isArchived", "==", false)
-      .get(),
   ]);
 
   if (!projectSnap.exists) {
@@ -1496,8 +1828,9 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
   const contractValue = Number(project.contractValue ?? 0);
   const completionPercentage = Math.max(0, Number(project.completionPercentage ?? 0));
   const budgetLimit = Number(project.budgetLimit ?? 0) || null;
-  const previousRiskLevel = `${project.riskLevel ?? "low"}`;
-  const previousHealthStatus = `${project.healthStatus ?? "healthy"}`;
+  const previousMetrics = projectMetricsSnap.data() ?? {};
+  const previousRiskLevel = `${previousMetrics.riskLevel ?? "low"}`;
+  const previousHealthStatus = `${previousMetrics.healthStatus ?? "healthy"}`;
 
   const manualExpenses = expensesSnap.docs.reduce((sum, doc) => sum + Number(doc.data().amount ?? 0), 0);
   const laborExpenses = workerEntriesSnap.docs.reduce((sum, doc) => sum + Number(doc.data().totalCost ?? 0), 0);
@@ -1520,18 +1853,6 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
     healthStatus = "warning";
   }
   const budgetExceeded = budgetLimit != null && totalExpenses > budgetLimit;
-
-  await db.collection("projects").doc(projectId).set({
-    totalExpenses,
-    totalLaborCost: laborExpenses,
-    totalPayments,
-    netProfit,
-    remainingBalance,
-    expectedFinalCost,
-    riskLevel,
-    healthStatus,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
 
   const categoryTotals = expensesSnap.docs.reduce<Record<string, number>>((map, doc) => {
     const category = `${doc.data().category ?? "other"}`;
@@ -1585,10 +1906,10 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
     }
   }
 
-  const workerNameMap = new Map<string, string>();
-  for (const doc of workersSnap.docs) {
-    workerNameMap.set(doc.id, `${doc.data().name ?? doc.id}`);
-  }
+  const workerIdsInEntries = Array.from(
+    new Set(workerEntriesSnap.docs.map((doc) => `${doc.data().workerId ?? ""}`.trim()).filter((id) => id.length > 0)),
+  );
+  const workerNameMap = await workerNameMapForEntries(workspaceId, workerIdsInEntries);
   const workerCosts = workerEntriesSnap.docs.reduce<Record<string, {name: string; totalCost: number; totalDays: number}>>((map, doc) => {
     const workerId = `${doc.data().workerId ?? ""}`;
     const current = map[workerId] ?? {
@@ -1627,29 +1948,35 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
     })
     .slice(0, 5);
 
-  await db.collection("project_metrics").doc(projectId).set({
+  await writeIfChanged(projectMetricsRef, buildProjectMetricsPayload({
     workspaceId,
     projectId,
-    projectName: `${project.name ?? ""}`,
-    status: `${project.status ?? "active"}`,
-    isArchived: project.isArchived === true,
+    project,
+    contractValue,
+    completionPercentage,
+    budgetLimit,
+    budgetExceeded,
     totalExpenses,
-    totalIncome: totalPayments,
-    net: totalPayments - totalExpenses,
+    laborExpenses,
+    totalPayments,
+    netProfit,
+    remainingBalance,
+    expectedFinalCost,
+    riskLevel,
+    healthStatus,
     categoryTotals,
     monthlyFlow,
     topWorkers,
     recentExpenses,
     recentPayments,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+  }));
 
   await recomputeWorkspaceMetrics(workspaceId);
 
   const memberIds = (await membershipDocs(workspaceId)).docs
     .map((doc) => `${doc.data().userId ?? ""}`.trim())
     .filter((id) => id.length > 0);
-  const riskAlertRecipients = await notificationRecipients(workspaceId, true);
+  const riskAlertRecipients = await riskAlertRecipientsFromMembers(memberIds);
 
   if (budgetExceeded) {
     await upsertNotificationForUsers({
@@ -1700,65 +2027,97 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
   }
 }
 
+type ExpenseWrittenParams = {expenseId?: string};
+type PaymentWrittenParams = {paymentId?: string};
+type WorkerEntryWrittenParams = {entryId?: string};
+
+export async function handleExpenseWriteRecompute(
+  event: FirestoreWrittenEventLike<ExpenseWrittenParams>,
+): Promise<void> {
+  const after = event.data?.after?.data();
+  const before = event.data?.before?.data();
+  if (before && after && !hasRelevantExpenseFieldsChanged(before, after)) {
+    return;
+  }
+  const targets = aggregateTargetsFromChange(before, after);
+  if (targets.length === 0) {
+    return;
+  }
+  await Promise.all(targets.map(({workspaceId, projectId}) => recomputeProjectSummary(workspaceId, projectId)));
+}
+
+export async function handlePaymentWriteRecompute(
+  event: FirestoreWrittenEventLike<PaymentWrittenParams>,
+): Promise<void> {
+  const after = event.data?.after?.data();
+  const before = event.data?.before?.data();
+  if (before && after && !hasRelevantPaymentFieldsChanged(before, after)) {
+    return;
+  }
+  const targets = aggregateTargetsFromChange(before, after);
+  if (targets.length === 0) {
+    return;
+  }
+  await Promise.all(targets.map(({workspaceId, projectId}) => recomputeProjectSummary(workspaceId, projectId)));
+}
+
+export async function handleWorkerEntryWriteRecompute(
+  event: FirestoreWrittenEventLike<WorkerEntryWrittenParams>,
+): Promise<void> {
+  const after = event.data?.after?.data();
+  const before = event.data?.before?.data();
+  if (before && after && !hasRelevantWorkerEntryFieldsChanged(before, after)) {
+    return;
+  }
+  const targets = aggregateTargetsFromChange(before, after);
+  if (targets.length === 0) {
+    return;
+  }
+  await Promise.all(targets.map(({workspaceId, projectId}) => recomputeProjectSummary(workspaceId, projectId)));
+}
+
 export const onExpenseWriteRecompute = onDocumentWritten(
   "expenses/{expenseId}",
-  async (event) => {
-    const after = event.data?.after?.data();
-    const before = event.data?.before?.data();
-    const workspaceId = `${after?.workspaceId ?? before?.workspaceId ?? ""}`;
-    const projectId = `${after?.projectId ?? before?.projectId ?? ""}`;
-    if (!workspaceId || !projectId) {
-      return;
-    }
-    await recomputeProjectSummary(workspaceId, projectId);
-  },
+  handleExpenseWriteRecompute,
 );
 
 export const onPaymentWriteRecompute = onDocumentWritten(
   "payments/{paymentId}",
-  async (event) => {
-    const after = event.data?.after?.data();
-    const before = event.data?.before?.data();
-    const workspaceId = `${after?.workspaceId ?? before?.workspaceId ?? ""}`;
-    const projectId = `${after?.projectId ?? before?.projectId ?? ""}`;
-    if (!workspaceId || !projectId) {
-      return;
-    }
-    await recomputeProjectSummary(workspaceId, projectId);
-  },
+  handlePaymentWriteRecompute,
 );
 
 export const onWorkerEntryWriteRecompute = onDocumentWritten(
   "worker_entries/{entryId}",
-  async (event) => {
-    const after = event.data?.after?.data();
-    const before = event.data?.before?.data();
-    const workspaceId = `${after?.workspaceId ?? before?.workspaceId ?? ""}`;
-    const projectId = `${after?.projectId ?? before?.projectId ?? ""}`;
-    if (!workspaceId || !projectId) {
-      return;
-    }
-    await recomputeProjectSummary(workspaceId, projectId);
-  },
+  handleWorkerEntryWriteRecompute,
 );
+
+type ProjectWrittenParams = {projectId?: string};
+
+export async function handleProjectWriteRecompute(
+  event: FirestoreWrittenEventLike<ProjectWrittenParams>,
+): Promise<void> {
+  const after = event.data?.after?.data();
+  const before = event.data?.before?.data();
+  const workspaceId = `${after?.workspaceId ?? before?.workspaceId ?? ""}`;
+  const projectId = `${event.params.projectId ?? ""}`;
+  if (!workspaceId || !projectId) {
+    return;
+  }
+
+  if (!after) {
+    await db.collection("project_metrics").doc(projectId).delete().catch(() => undefined);
+    await recomputeWorkspaceMetrics(workspaceId);
+    return;
+  }
+
+  if (before && !hasRelevantProjectFieldsChanged(before, after)) {
+    return;
+  }
+
+  await recomputeProjectSummary(workspaceId, projectId);
+}
 
 export const onProjectWriteRecompute = onDocumentWritten(
   "projects/{projectId}",
-  async (event) => {
-    const after = event.data?.after?.data();
-    const before = event.data?.before?.data();
-    const workspaceId = `${after?.workspaceId ?? before?.workspaceId ?? ""}`;
-    const projectId = `${event.params.projectId ?? ""}`;
-    if (!workspaceId || !projectId) {
-      return;
-    }
-
-    if (!after) {
-      await db.collection("project_metrics").doc(projectId).delete().catch(() => undefined);
-      await recomputeWorkspaceMetrics(workspaceId);
-      return;
-    }
-
-    await recomputeProjectSummary(workspaceId, projectId);
-  },
+  handleProjectWriteRecompute,
 );

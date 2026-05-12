@@ -5,10 +5,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function hasWorkspaceClaim(workspaceId) {
+    function membershipDocId(workspaceId, userId) {
+      return workspaceId + "_" + userId;
+    }
+
+    function hasMembership(workspaceId) {
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.workspaceId == workspaceId;
+        && exists(
+          /databases/$(database)/documents/memberships/$(membershipDocId(workspaceId, request.auth.uid))
+        );
     }
 
     function isWorkspaceOwner(workspaceId) {
@@ -18,17 +23,35 @@ service cloud.firestore {
     }
 
     function inWorkspace(workspaceId) {
-      return hasWorkspaceClaim(workspaceId) || isWorkspaceOwner(workspaceId);
+      return hasMembership(workspaceId) || isWorkspaceOwner(workspaceId);
+    }
+
+    function canCreateUserDoc(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && (
+          request.resource.data.workspaceId == null
+          || (
+            request.resource.data.workspaceId is string
+            && request.resource.data.workspaceId.size() > 0
+            && isWorkspaceOwner(request.resource.data.workspaceId)
+          )
+        );
     }
 
     match /users/{userId} {
-      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if canCreateUserDoc(userId);
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.workspaceId == resource.data.workspaceId;
       allow delete: if false;
     }
 
     match /workspaces/{workspaceId} {
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow read, update: if inWorkspace(workspaceId);
+      allow read: if inWorkspace(workspaceId);
+      allow update: if isWorkspaceOwner(workspaceId);
       allow delete: if false;
     }
 
@@ -38,7 +61,17 @@ service cloud.firestore {
         inWorkspace(resource.data.workspaceId) ||
         resource.data.userId == request.auth.uid
       );
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.workspaceId is string
+        && request.resource.data.workspaceId.size() > 0
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() > 0
+        && request.resource.data.role in ["owner", "member"]
+        && membershipId == membershipDocId(
+          request.resource.data.workspaceId,
+          request.resource.data.userId
+        )
+        && isWorkspaceOwner(request.resource.data.workspaceId);
       allow update, delete: if false;
     }
 
@@ -100,7 +133,9 @@ service cloud.firestore {
     }
 
     match /drafts/{draftId} {
-      allow read, write: if inWorkspace(resource.data.workspaceId);
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if inWorkspace(request.resource.data.workspaceId);
+      allow update, delete: if inWorkspace(resource.data.workspaceId);
     }
   }
 }

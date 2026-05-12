@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:flutter/material.dart';
@@ -130,11 +131,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                         unawaited(
                           ref.read(offlineQueueCoordinatorProvider).drainNow(),
                         );
-                        // if (context.mounted) {
-                        //   ScaffoldMessenger.of(context).showSnackBar(
-                        //     SnackBar(content: Text(l10n.t('queuedForSync'))),
-                        //   );
-                        // }
+                        pushAppUiNotice(ref, l10n.t('queuedForSync'));
                       }
                       if (context.mounted) {
                         appNavigateBack(

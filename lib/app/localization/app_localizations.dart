@@ -82,6 +82,8 @@ class AppLocalizations {
     'limitReached': 'Limit Reached',
     'continue': 'Continue',
     'confirm': 'Confirm',
+    'notNow': 'Not now',
+    'openSettings': 'Open Settings',
     'save': 'Save',
     'cancel': 'Cancel',
     'freeTrial': '7-day free trial',
@@ -322,6 +324,15 @@ class AppLocalizations {
     'detectedProjectName': 'Detected project name: {name}',
     'recordAudioFirst': 'Record audio first.',
     'recordedFileMissing': 'Recorded file is missing, please record again.',
+    'microphonePermissionTitle': 'Allow microphone access',
+    'microphonePermissionMessage':
+        'Buildozer needs microphone access to record your voice expense note and turn it into a project expense.',
+    'microphonePermissionContinue': 'Continue',
+    'microphonePermissionDenied':
+        'Microphone access is required to record voice expenses.',
+    'microphonePermissionSettingsTitle': 'Microphone access is off',
+    'microphonePermissionSettingsMessage':
+        'Enable Microphone in iOS Settings to record voice expenses.',
     'selectProjectRequired': 'Please select a project.',
     'amountMustBeGreaterThanZero': 'Amount must be greater than zero.',
     'selectValidCategory': 'Please select a valid category.',

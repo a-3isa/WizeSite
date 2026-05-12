@@ -238,7 +238,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     AppLocalizations l10n,
     PaymentRecord payment,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -277,9 +276,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       if (!mounted) {
         return;
       }
-      // messenger.showSnackBar(
-      //   SnackBar(content: Text(l10n.t('queuedForSync'))),
-      // );
+      pushAppUiNotice(ref, l10n.t('queuedForSync'));
     }
   }
 

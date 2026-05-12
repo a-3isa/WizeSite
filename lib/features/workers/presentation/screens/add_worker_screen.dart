@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -40,28 +42,42 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   void initState() {
     super.initState();
     if (widget.workerId != null) {
-      _prefill();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_prefill());
+      });
     }
   }
 
   Future<void> _prefill() async {
     setState(() => _prefilling = true);
-    final worker = await ref
-        .read(workerRepositoryProvider)
-        .getWorker(widget.workerId!);
-    if (worker != null && mounted) {
-      setState(() {
-        _nameController.text = worker.name;
-        _phoneController.text = worker.phoneNumber;
-        _wageController.text = worker.dailyWage.toStringAsFixed(2);
-        _workerType = _workerTypes.contains(worker.workerType)
-            ? worker.workerType
-            : 'other';
-        _notesController.text = worker.notes;
-      });
-    }
-    if (mounted) {
-      setState(() => _prefilling = false);
+    try {
+      final worker = await ref
+          .read(workerRepositoryProvider)
+          .getWorker(widget.workerId!);
+      if (worker != null && mounted) {
+        setState(() {
+          _nameController.text = worker.name;
+          _phoneController.text = worker.phoneNumber;
+          _wageController.text = worker.dailyWage.toStringAsFixed(2);
+          _workerType = _workerTypes.contains(worker.workerType)
+              ? worker.workerType
+              : 'other';
+          _notesController.text = worker.notes;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).t('unexpectedErrorTryAgain');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _prefilling = false);
+      }
     }
   }
 

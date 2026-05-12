@@ -25,14 +25,21 @@ class PaymentRecord {
         return value;
       }
       if (value is String) {
-        return DateTime.tryParse(value) ?? DateTime.now();
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return parsed;
+        }
+        throw FormatException('Invalid payment date for $id: $value');
       }
       if (value != null) {
         try {
-          return (value as dynamic).toDate() as DateTime;
+          final converted = (value as dynamic).toDate();
+          if (converted is DateTime) {
+            return converted;
+          }
         } catch (_) {}
       }
-      return DateTime.now();
+      throw FormatException('Missing payment date for $id');
     }
 
     return PaymentRecord(

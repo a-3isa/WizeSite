@@ -236,7 +236,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     AppLocalizations l10n,
     Expense expense,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -275,9 +274,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       if (!mounted) {
         return;
       }
-      // messenger.showSnackBar(
-      //   SnackBar(content: Text(l10n.t('queuedForSync'))),
-      // );
+      pushAppUiNotice(ref, l10n.t('queuedForSync'));
     }
   }
 

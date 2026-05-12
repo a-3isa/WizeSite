@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
@@ -36,7 +37,12 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   void initState() {
     super.initState();
     if (widget.paymentId != null) {
-      _prefill();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_prefill());
+      });
     } else if (widget.projectId != null) {
       _projectId = widget.projectId;
     }
@@ -44,20 +50,29 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
 
   Future<void> _prefill() async {
     setState(() => _prefilling = true);
-    final payment = await ref
-        .read(paymentRepositoryProvider)
-        .getPayment(widget.paymentId!);
-    if (payment != null && mounted) {
-      setState(() {
-        _projectId = payment.projectId;
-        _amountController.text = payment.amount.toStringAsFixed(2);
-        _method = payment.paymentMethod;
-        _notesController.text = payment.notes;
-        _date = payment.date;
-      });
-    }
-    if (mounted) {
-      setState(() => _prefilling = false);
+    try {
+      final payment = await ref
+          .read(paymentRepositoryProvider)
+          .getPayment(widget.paymentId!);
+      if (payment != null && mounted) {
+        setState(() {
+          _projectId = payment.projectId;
+          _amountController.text = payment.amount.toStringAsFixed(2);
+          _method = payment.paymentMethod;
+          _notesController.text = payment.notes;
+          _date = payment.date;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).t('unexpectedErrorTryAgain');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _prefilling = false);
+      }
     }
   }
 
@@ -123,15 +138,12 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
       }
       if (mounted) {
         if (queued) {
-          final messenger = ScaffoldMessenger.of(context);
           await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
           unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
           if (!mounted) {
             return;
           }
-          // messenger.showSnackBar(
-          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
-          // );
+          pushAppUiNotice(ref, l10n.t('queuedForSync'));
         }
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }

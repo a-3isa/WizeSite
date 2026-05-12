@@ -44,7 +44,6 @@ class SessionRestoreService {
       final workspaceId =
           membershipSnap.docs.first.data()['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
-        await _syncUserWorkspace(user.uid, workspaceId);
         return workspaceId;
       }
     }
@@ -52,15 +51,38 @@ class SessionRestoreService {
     final userDoc = await _firestore.collection('users').doc(user.uid).get();
     final workspaceId = userDoc.data()?['workspaceId'] as String?;
     if (workspaceId != null && workspaceId.isNotEmpty) {
+      await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
       return workspaceId;
     }
 
     return null;
   }
 
-  Future<void> _syncUserWorkspace(String userId, String workspaceId) async {
-    await _firestore.collection('users').doc(userId).set({
+  Future<void> _ensureOwnerMembership({
+    required User user,
+    required String workspaceId,
+  }) async {
+    final workspaceSnap = await _firestore
+        .collection('workspaces')
+        .doc(workspaceId)
+        .get();
+    final ownerId = workspaceSnap.data()?['ownerId'] as String?;
+    if (ownerId != user.uid) {
+      return;
+    }
+    final membershipRef = _firestore
+        .collection('memberships')
+        .doc('${workspaceId}_${user.uid}');
+    final membershipSnap = await membershipRef.get();
+    if (membershipSnap.exists) {
+      return;
+    }
+
+    await membershipRef.set({
       'workspaceId': workspaceId,
+      'userId': user.uid,
+      'role': 'owner',
+      'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

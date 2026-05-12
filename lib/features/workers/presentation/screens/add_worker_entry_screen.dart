@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
@@ -48,7 +49,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       _workerId = widget.workerId;
     }
     if (widget.entryId != null) {
-      _prefill();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_prefill());
+      });
     } else if (widget.projectId != null) {
       _projectId = widget.projectId;
     }
@@ -56,21 +62,30 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
 
   Future<void> _prefill() async {
     setState(() => _prefilling = true);
-    final entry = await ref
-        .read(workerEntryRepositoryProvider)
-        .getEntry(widget.entryId!);
-    if (entry != null && mounted) {
-      setState(() {
-        _workerId = entry.workerId;
-        _projectId = entry.projectId;
-        _daysController.text = entry.daysWorked.toStringAsFixed(2);
-        _wageController.text = entry.dailyWage.toStringAsFixed(2);
-        _notesController.text = entry.notes;
-        _date = entry.date;
-      });
-    }
-    if (mounted) {
-      setState(() => _prefilling = false);
+    try {
+      final entry = await ref
+          .read(workerEntryRepositoryProvider)
+          .getEntry(widget.entryId!);
+      if (entry != null && mounted) {
+        setState(() {
+          _workerId = entry.workerId;
+          _projectId = entry.projectId;
+          _daysController.text = entry.daysWorked.toStringAsFixed(2);
+          _wageController.text = entry.dailyWage.toStringAsFixed(2);
+          _notesController.text = entry.notes;
+          _date = entry.date;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).t('unexpectedErrorTryAgain');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _prefilling = false);
+      }
     }
   }
 
@@ -142,15 +157,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       }
       if (mounted) {
         if (queued) {
-          final messenger = ScaffoldMessenger.of(context);
           await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
           unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
           if (!mounted) {
             return;
           }
-          // messenger.showSnackBar(
-          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
-          // );
+          pushAppUiNotice(ref, l10n.t('queuedForSync'));
         }
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }

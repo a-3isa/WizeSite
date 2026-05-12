@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
@@ -42,26 +43,40 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   void initState() {
     super.initState();
     if (widget.projectId != null) {
-      _prefill();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_prefill());
+      });
     }
   }
 
   Future<void> _prefill() async {
     setState(() => _prefilling = true);
-    final project = await ref
-        .read(projectRepositoryProvider)
-        .getProject(widget.projectId!);
-    if (project != null && mounted) {
-      setState(() {
-        _nameController.text = project.name;
-        _clientController.text = project.clientName;
-        _contractController.text = project.contractValue.toStringAsFixed(2);
-        _completion = project.completionPercentage;
-        _status = project.status;
-      });
-    }
-    if (mounted) {
-      setState(() => _prefilling = false);
+    try {
+      final project = await ref
+          .read(projectRepositoryProvider)
+          .getProject(widget.projectId!);
+      if (project != null && mounted) {
+        setState(() {
+          _nameController.text = project.name;
+          _clientController.text = project.clientName;
+          _contractController.text = project.contractValue.toStringAsFixed(2);
+          _completion = project.completionPercentage;
+          _status = project.status;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).t('unexpectedErrorTryAgain');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _prefilling = false);
+      }
     }
   }
 
@@ -136,15 +151,12 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       }
       if (mounted) {
         if (queued) {
-          final messenger = ScaffoldMessenger.of(context);
           await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
           unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
           if (!mounted) {
             return;
           }
-          // messenger.showSnackBar(
-          //   SnackBar(content: Text(l10n.t('queuedForSync'))),
-          // );
+          pushAppUiNotice(ref, l10n.t('queuedForSync'));
         }
         context.go(
           widget.projectId == null

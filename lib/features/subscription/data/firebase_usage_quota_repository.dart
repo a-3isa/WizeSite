@@ -8,11 +8,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 
+String usagePeriodKey(DateTime now) => DateFormat('yyyyMM').format(now.toUtc());
+
 class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
-  FirebaseUsageQuotaRepository(this._firestore, this._functions);
+  FirebaseUsageQuotaRepository(
+    this._firestore,
+    this._functions, {
+    DateTime Function()? nowProvider,
+  }) : _nowProvider = nowProvider ?? DateTime.now;
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
+  final DateTime Function() _nowProvider;
 
   @override
   Future<UsageSnapshot> getUsageSnapshot({
@@ -84,8 +91,10 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     }
 
     // Watch for changes in usage counters, projects, and memberships.
-    final counterStream =
-        _firestore.collection('usage_counters').doc(counterId).snapshots();
+    final counterStream = _firestore
+        .collection('usage_counters')
+        .doc(counterId)
+        .snapshots();
     final projectsStream = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -161,7 +170,7 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     }
   }
 
-  String _periodKey() => DateFormat('yyyyMM').format(DateTime.now());
+  String _periodKey() => usagePeriodKey(_nowProvider());
 }
 
 final usageQuotaRepositoryProvider = Provider<UsageQuotaRepository>((ref) {

@@ -105,6 +105,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       final workspaceId = const Uuid().v4();
       await cred.user!.updateDisplayName(fullName);
 
+      await firestore.collection('workspaces').doc(workspaceId).set({
+        'id': workspaceId,
+        'name': companyName.isEmpty ? '$fullName Workspace' : companyName,
+        'ownerId': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
       await firestore.collection('users').doc(uid).set({
         'id': uid,
         'fullName': fullName,
@@ -119,14 +126,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      await firestore.collection('workspaces').doc(workspaceId).set({
-        'id': workspaceId,
-        'name': companyName.isEmpty ? '$fullName Workspace' : companyName,
-        'ownerId': uid,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await firestore.collection('memberships').add({
+      await firestore.collection('memberships').doc('${workspaceId}_$uid').set({
         'workspaceId': workspaceId,
         'userId': uid,
         'role': 'owner',

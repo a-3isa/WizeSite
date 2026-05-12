@@ -147,40 +147,51 @@ class OfflineActionQueue {
     _activeDrain = completer.future;
 
     try {
-      final now = DateTime.now();
-      final actions = await list();
-      for (final action in actions) {
-        if (action.nextAttemptAt != null &&
-            action.nextAttemptAt!.isAfter(now)) {
-          continue;
-        }
-        try {
-          await handler(action);
-          await _box.delete(action.id);
-        } catch (error) {
-          final errorText = error.toString();
-          final isTerminalFailure = _isTerminalFailure(errorText);
-          final nextRetryCount = action.retryCount + 1;
-          if (isTerminalFailure || nextRetryCount >= maxRetries) {
-            await save(
-              action.copyWith(
-                retryCount: nextRetryCount,
-                lastError: errorText,
-                status: OfflineActionStatus.deadLetter,
-                clearNextAttemptAt: true,
-              ),
-            );
-          } else {
-            await save(
-              action.copyWith(
-                retryCount: nextRetryCount,
-                lastError: errorText,
-                status: OfflineActionStatus.failed,
-                nextAttemptAt: DateTime.now().add(retryBackoff),
-              ),
-            );
+      var blockedByFailure = false;
+      while (!blockedByFailure) {
+        final now = DateTime.now();
+        final actions = await list();
+        var processedAny = false;
+
+        for (final action in actions) {
+          if (action.nextAttemptAt != null &&
+              action.nextAttemptAt!.isAfter(now)) {
+            continue;
           }
-          // Stop on first failure to keep ordering guarantees.
+          processedAny = true;
+          try {
+            await handler(action);
+            await _box.delete(action.id);
+          } catch (error) {
+            final errorText = error.toString();
+            final isTerminalFailure = _isTerminalFailure(errorText);
+            final nextRetryCount = action.retryCount + 1;
+            if (isTerminalFailure || nextRetryCount >= maxRetries) {
+              await save(
+                action.copyWith(
+                  retryCount: nextRetryCount,
+                  lastError: errorText,
+                  status: OfflineActionStatus.deadLetter,
+                  clearNextAttemptAt: true,
+                ),
+              );
+            } else {
+              await save(
+                action.copyWith(
+                  retryCount: nextRetryCount,
+                  lastError: errorText,
+                  status: OfflineActionStatus.failed,
+                  nextAttemptAt: DateTime.now().add(retryBackoff),
+                ),
+              );
+            }
+            // Stop on first failure to keep ordering guarantees.
+            blockedByFailure = true;
+            break;
+          }
+        }
+
+        if (!processedAny) {
           break;
         }
       }

@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/core/services/voice_recorder_service.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
@@ -54,6 +55,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
   }
 
   Future<void> _startRecording() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _error = null;
       _readyFilePath = null;
@@ -61,6 +63,11 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
     });
 
     try {
+      final hasPermission = await _ensureMicrophonePermission(l10n);
+      if (!hasPermission) {
+        return;
+      }
+
       final path = await ref.read(voiceRecorderServiceProvider).start();
       _pulseController.repeat(reverse: true);
       _timer?.cancel();
@@ -79,6 +86,81 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
       });
     } catch (e) {
       setState(() => _error = e.toString());
+    }
+  }
+
+  Future<bool> _ensureMicrophonePermission(AppLocalizations l10n) async {
+    final permissionService = ref.read(microphonePermissionServiceProvider);
+    final currentStatus = await permissionService.status();
+    if (currentStatus == MicrophonePermissionStatus.granted) {
+      return true;
+    }
+    if (currentStatus == MicrophonePermissionStatus.blocked) {
+      await _showMicrophoneSettingsDialog(l10n);
+      return false;
+    }
+
+    if (!mounted) {
+      return false;
+    }
+    final shouldRequest = await showAdaptiveDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog.adaptive(
+        title: Text(l10n.t('microphonePermissionTitle')),
+        content: Text(l10n.t('microphonePermissionMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.t('notNow')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.t('microphonePermissionContinue')),
+          ),
+        ],
+      ),
+    );
+    if (shouldRequest != true) {
+      return false;
+    }
+
+    final requestedStatus = await permissionService.request();
+    if (requestedStatus == MicrophonePermissionStatus.granted) {
+      return true;
+    }
+    if (requestedStatus == MicrophonePermissionStatus.blocked) {
+      await _showMicrophoneSettingsDialog(l10n);
+      return false;
+    }
+    if (mounted) {
+      setState(() => _error = l10n.t('microphonePermissionDenied'));
+    }
+    return false;
+  }
+
+  Future<void> _showMicrophoneSettingsDialog(AppLocalizations l10n) async {
+    if (!mounted) {
+      return;
+    }
+    final openSettings = await showAdaptiveDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog.adaptive(
+        title: Text(l10n.t('microphonePermissionSettingsTitle')),
+        content: Text(l10n.t('microphonePermissionSettingsMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.t('notNow')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.t('openSettings')),
+          ),
+        ],
+      ),
+    );
+    if (openSettings == true) {
+      await ref.read(microphonePermissionServiceProvider).openSettings();
     }
   }
 

@@ -179,11 +179,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (snap.docs.isNotEmpty) {
       final workspaceId = snap.docs.first.data()['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
-        await _syncUserWorkspace(
-          firestore: firestore,
-          user: user,
-          workspaceId: workspaceId,
-        );
         return workspaceId;
       }
     }
@@ -196,12 +191,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         workspaceId: userWorkspaceId,
         user: user,
       );
-      await firestore.collection('memberships').add({
-        'workspaceId': userWorkspaceId,
-        'userId': user.uid,
-        'role': 'owner',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await _ensureOwnerMembership(
+        firestore: firestore,
+        workspaceId: userWorkspaceId,
+        user: user,
+      );
       return userWorkspaceId;
     }
 
@@ -218,8 +212,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ? '$displayName Workspace'
         : 'New Workspace';
 
-    final batch = firestore.batch();
-    batch.set(firestore.collection('users').doc(user.uid), {
+    await firestore.collection('workspaces').doc(workspaceId).set({
+      'id': workspaceId,
+      'name': workspaceName,
+      'ownerId': user.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await firestore.collection('users').doc(user.uid).set({
       'id': user.uid,
       'fullName': displayName ?? '',
       'email': (user.email ?? '').trim().toLowerCase(),
@@ -231,31 +231,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    batch.set(firestore.collection('workspaces').doc(workspaceId), {
-      'id': workspaceId,
-      'name': workspaceName,
-      'ownerId': user.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    batch.set(firestore.collection('memberships').doc(), {
+    await _membershipDocRef(
+      firestore: firestore,
+      workspaceId: workspaceId,
+      userId: user.uid,
+    ).set({
       'workspaceId': workspaceId,
       'userId': user.uid,
       'role': 'owner',
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await batch.commit();
 
     return workspaceId;
   }
 
-  Future<void> _syncUserWorkspace({
+  Future<void> _ensureOwnerMembership({
     required FirebaseFirestore firestore,
-    required User user,
     required String workspaceId,
+    required User user,
   }) async {
-    await firestore.collection('users').doc(user.uid).set({
+    final existing = await firestore
+        .collection('memberships')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .where('userId', isEqualTo: user.uid)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      return;
+    }
+
+    final workspace = await firestore
+        .collection('workspaces')
+        .doc(workspaceId)
+        .get();
+    final ownerId = workspace.data()?['ownerId'] as String?;
+    if (ownerId != user.uid) {
+      return;
+    }
+
+    await _membershipDocRef(
+      firestore: firestore,
+      workspaceId: workspaceId,
+      userId: user.uid,
+    ).set({
       'workspaceId': workspaceId,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'userId': user.uid,
+      'role': 'owner',
+      'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -275,6 +297,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       'ownerId': user.uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  DocumentReference<Map<String, dynamic>> _membershipDocRef({
+    required FirebaseFirestore firestore,
+    required String workspaceId,
+    required String userId,
+  }) {
+    return firestore.collection('memberships').doc('${workspaceId}_$userId');
   }
 
   @override
