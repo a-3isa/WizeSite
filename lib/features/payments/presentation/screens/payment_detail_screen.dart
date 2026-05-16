@@ -5,7 +5,9 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +25,10 @@ class PaymentDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final paymentAsync = ref.watch(paymentDetailsProvider(paymentId));
+    final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
     return AppBackScope(
       fallbackRoute: AppRoutes.payments,
       child: Scaffold(
@@ -49,7 +55,11 @@ class PaymentDetailScreen extends ConsumerWidget {
                           l10n.t(
                             'amountWithValue',
                             params: {
-                              'value': payment.amount.toStringAsFixed(0),
+                              'value': Formatters.money(
+                                payment.amount,
+                                currencyCode: currency,
+                                locale: locale,
+                              ),
                             },
                           ),
                         ),

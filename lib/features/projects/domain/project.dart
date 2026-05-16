@@ -26,6 +26,16 @@ class Project {
   final bool isArchived;
 
   factory Project.fromMap(String id, Map<String, dynamic> map) {
+    final totalExpenses = (map['totalExpenses'] as num?)?.toDouble() ?? 0;
+    final totalPayments =
+        (map['totalPayments'] as num?)?.toDouble() ??
+        (map['totalIncome'] as num?)?.toDouble() ??
+        0;
+    final netProfit =
+        (map['netProfit'] as num?)?.toDouble() ??
+        (map['net'] as num?)?.toDouble() ??
+        totalPayments - totalExpenses;
+
     return Project(
       id: id,
       workspaceId: map['workspaceId'] as String? ?? '',
@@ -35,9 +45,9 @@ class Project {
       status: map['status'] as String? ?? 'active',
       completionPercentage:
           (map['completionPercentage'] as num?)?.toDouble() ?? 0,
-      totalExpenses: (map['totalExpenses'] as num?)?.toDouble() ?? 0,
-      totalPayments: (map['totalPayments'] as num?)?.toDouble() ?? 0,
-      netProfit: (map['netProfit'] as num?)?.toDouble() ?? 0,
+      totalExpenses: totalExpenses,
+      totalPayments: totalPayments,
+      netProfit: netProfit,
       isArchived: map['isArchived'] as bool? ?? false,
     );
   }

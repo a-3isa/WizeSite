@@ -7,9 +7,11 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -300,6 +302,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
     final filtered = _filteredPayments();
+    final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
     final fallbackRoute =
         _selectedProjectId == null || _selectedProjectId!.isEmpty
         ? AppRoutes.projects
@@ -368,7 +374,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
-                child: _buildContent(context, l10n, filtered),
+                child: _buildContent(context, l10n, filtered, currency, locale),
               ),
             ),
           ],
@@ -381,6 +387,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     BuildContext context,
     AppLocalizations l10n,
     List<PaymentRecord> filtered,
+    String currency,
+    String locale,
   ) {
     if (_isLoadingInitial && _payments.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -445,7 +453,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
               onTap: () =>
                   context.push(AppRoutes.paymentDetailPath(payment.id)),
               title: Text(
-                '${payment.amount.toStringAsFixed(0)} | ${l10n.paymentMethodLabel(payment.paymentMethod)}',
+                '${Formatters.money(payment.amount, currencyCode: currency, locale: locale)} | ${l10n.paymentMethodLabel(payment.paymentMethod)}',
               ),
               subtitle: Text(
                 l10n.t(

@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -297,6 +298,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredExpenses();
+    final locale = Localizations.localeOf(context).languageCode;
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projectDetailPath(widget.projectId),
@@ -327,7 +329,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
-                child: _buildContent(context, l10n, filtered),
+                child: _buildContent(context, l10n, filtered, locale),
               ),
             ),
           ],
@@ -340,6 +342,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     BuildContext context,
     AppLocalizations l10n,
     List<Expense> filtered,
+    String locale,
   ) {
     if (_isLoadingInitial && _expenses.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -415,7 +418,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                 ),
               ),
               title: Text(
-                '${expense.amount.toStringAsFixed(0)} ${expense.currency} | ${l10n.expenseCategoryLabel(expense.category)}',
+                '${Formatters.money(expense.amount, currencyCode: expense.currency, locale: locale)} | ${l10n.expenseCategoryLabel(expense.category)}',
               ),
               subtitle: Text(
                 l10n.t(

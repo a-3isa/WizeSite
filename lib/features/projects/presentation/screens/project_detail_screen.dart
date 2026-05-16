@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,9 @@ class ProjectDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final projectAsync = ref.watch(projectDetailsProvider(projectId));
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,
@@ -43,7 +47,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               children: [
                 ProjectHeader(project: project),
                 const SizedBox(height: 24),
-                FinancialGrid(project: project),
+                FinancialGrid(project: project, currency: currency),
                 const SizedBox(height: 32),
                 ActionGrid(
                   onEdit: () =>
@@ -53,9 +57,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: Text(l10n.t('archive')),
-                        content: Text(
-                          l10n.t('confirm'),
-                        ),
+                        content: Text(l10n.t('confirm')),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
@@ -99,9 +101,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: Text(l10n.t('delete')),
-                        content: Text(
-                          l10n.t('confirmDeleteProjectCascade'),
-                        ),
+                        content: Text(l10n.t('confirmDeleteProjectCascade')),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),

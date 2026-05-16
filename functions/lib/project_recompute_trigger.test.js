@@ -303,6 +303,29 @@ else {
         strict_1.default.equal(Number(metricsData.totalExpenses ?? 0), 350);
         strict_1.default.equal(Number(metricsData.totalIncome ?? 0), 300);
         strict_1.default.equal(Number(metricsData.netProfit ?? 0), -50);
+        strict_1.default.equal(Number(metricsData.categoryTotals.materials ?? 0), 250);
+        strict_1.default.equal(Number(metricsData.categoryTotals.labor ?? 0), 100);
+    });
+    (0, node_test_1.default)("worker entry recompute derives labor cost when legacy totalCost is missing", async () => {
+        await seedRecomputeInputs();
+        const workerEntryRef = db.collection("worker_entries").doc("entry_1");
+        const beforeEntry = (await workerEntryRef.get()).data();
+        const afterEntry = {
+            ...beforeEntry,
+            daysWorked: 2,
+            dailyWage: 125,
+            totalCost: admin.firestore.FieldValue.delete(),
+        };
+        await workerEntryRef.update(afterEntry);
+        const currentEntry = (await workerEntryRef.get()).data();
+        await handleWorkerEntryWriteRecompute(workerEntryWriteEvent(beforeEntry, currentEntry));
+        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsData = metricsSnap.data() ?? {};
+        const categoryTotals = metricsData.categoryTotals;
+        const topWorkers = metricsData.topWorkers;
+        strict_1.default.equal(Number(metricsData.totalExpenses ?? 0), 450);
+        strict_1.default.equal(Number(categoryTotals.labor ?? 0), 250);
+        strict_1.default.equal(Number(topWorkers[0].totalCost ?? 0), 250);
     });
 }
 //# sourceMappingURL=project_recompute_trigger.test.js.map

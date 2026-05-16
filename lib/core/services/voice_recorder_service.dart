@@ -8,6 +8,8 @@ class VoiceRecorderService {
   VoiceRecorderService({AudioRecorder? recorder})
     : _recorder = recorder ?? AudioRecorder();
 
+  static const recordingFileExtension = '.m4a';
+
   final AudioRecorder _recorder;
 
   Future<bool> hasPermission() {
@@ -22,11 +24,11 @@ class VoiceRecorderService {
 
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = '${tempDir.path}${Platform.pathSeparator}voice_$timestamp.wav';
+    final path = buildRecordingPath(tempDir.path, timestamp);
 
     await _recorder.start(
       const RecordConfig(
-        encoder: AudioEncoder.wav,
+        encoder: AudioEncoder.aacLc,
         sampleRate: 16000,
         numChannels: 1,
       ),
@@ -34,6 +36,12 @@ class VoiceRecorderService {
     );
 
     return path;
+  }
+
+  static String buildRecordingPath(String directoryPath, int timestamp) {
+    final trimmed = directoryPath.replaceAll(RegExp(r'[\\/]$'), '');
+    final separator = trimmed.contains('/') ? '/' : Platform.pathSeparator;
+    return '$trimmed${separator}voice_$timestamp$recordingFileExtension';
   }
 
   Future<String?> stop() {

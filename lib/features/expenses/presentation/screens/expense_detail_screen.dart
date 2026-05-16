@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final expenseAsync = ref.watch(expenseDetailsProvider(expenseId));
+    final locale = Localizations.localeOf(context).languageCode;
     final fallbackProjectId = projectId ?? expenseAsync.valueOrNull?.projectId;
     final fallbackRoute =
         fallbackProjectId != null && fallbackProjectId.isNotEmpty
@@ -60,7 +62,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
                           l10n.t(
                             'amountWithValue',
                             params: {
-                              'value': expense.amount.toStringAsFixed(0),
+                              'value': Formatters.money(
+                                expense.amount,
+                                currencyCode: expense.currency,
+                                locale: locale,
+                              ),
                             },
                           ),
                         ),

@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:flutter/material.dart';
@@ -32,23 +33,29 @@ class ProjectHeader extends StatelessWidget {
                   children: [
                     Text(
                       project.name,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark,
-                        letterSpacing: -0.5,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textDark,
+                            letterSpacing: -0.5,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.person_outline, size: 16, color: AppColors.textBody),
+                        const Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: AppColors.textBody,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           project.clientName,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textBody,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.textBody,
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                       ],
                     ),
@@ -56,7 +63,10 @@ class ProjectHeader extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.success.withValues(alpha: 0.1)
@@ -123,8 +133,12 @@ class _CompletionProgress extends StatelessWidget {
           child: LinearProgressIndicator(
             value: percentage / 100,
             minHeight: 8,
-            backgroundColor: AppColors.constructionOrange.withValues(alpha: 0.1),
-            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.constructionOrange),
+            backgroundColor: AppColors.constructionOrange.withValues(
+              alpha: 0.1,
+            ),
+            valueColor: const AlwaysStoppedAnimation<Color>(
+              AppColors.constructionOrange,
+            ),
           ),
         ),
       ],
@@ -133,12 +147,18 @@ class _CompletionProgress extends StatelessWidget {
 }
 
 class FinancialGrid extends StatelessWidget {
-  const FinancialGrid({required this.project, super.key});
+  const FinancialGrid({
+    required this.project,
+    required this.currency,
+    super.key,
+  });
   final Project project;
+  final String currency;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).languageCode;
     return GridView.count(
       crossAxisCount: 2,
       mainAxisSpacing: 12,
@@ -149,25 +169,41 @@ class FinancialGrid extends StatelessWidget {
       children: [
         MetricCard(
           label: l10n.t('contractValue'),
-          value: project.contractValue.toStringAsFixed(0),
+          value: Formatters.money(
+            project.contractValue,
+            currencyCode: currency,
+            locale: locale,
+          ),
           color: AppColors.constructionOrange,
           icon: Icons.assignment_outlined,
         ),
         MetricCard(
           label: l10n.t('totalExpenses'),
-          value: project.totalExpenses.toStringAsFixed(0),
+          value: Formatters.money(
+            project.totalExpenses,
+            currencyCode: currency,
+            locale: locale,
+          ),
           color: AppColors.danger,
           icon: Icons.trending_down,
         ),
         MetricCard(
           label: l10n.t('totalIncome'),
-          value: project.totalPayments.toStringAsFixed(0),
+          value: Formatters.money(
+            project.totalPayments,
+            currencyCode: currency,
+            locale: locale,
+          ),
           color: AppColors.success,
           icon: Icons.trending_up,
         ),
         MetricCard(
           label: l10n.t('netProfit'),
-          value: project.netProfit.toStringAsFixed(0),
+          value: Formatters.money(
+            project.netProfit,
+            currencyCode: currency,
+            locale: locale,
+          ),
           color: project.netProfit >= 0 ? AppColors.success : AppColors.danger,
           icon: Icons.account_balance_wallet_outlined,
         ),
@@ -224,7 +260,7 @@ class ActionGrid extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           childAspectRatio: 2.2,
           children: [
-             _ActionCard(
+            _ActionCard(
               icon: Icons.receipt_long_outlined,
               label: l10n.t('addExpense'),
               color: AppColors.danger,
@@ -248,13 +284,13 @@ class ActionGrid extends StatelessWidget {
               color: AppColors.constructionOrange,
               onTap: onViewWorkers,
             ),
-             _ActionCard(
+            _ActionCard(
               icon: Icons.picture_as_pdf_outlined,
               label: l10n.t('generateReport'),
               color: AppColors.constructionOrange,
               onTap: onGenerateReport,
             ),
-             _ActionCard(
+            _ActionCard(
               icon: Icons.list_outlined,
               label: l10n.t('expenseList'),
               color: AppColors.textBody,
@@ -266,7 +302,7 @@ class ActionGrid extends StatelessWidget {
               color: AppColors.textBody,
               onTap: onViewPayments,
             ),
-             _ActionCard(
+            _ActionCard(
               icon: Icons.edit_outlined,
               label: l10n.t('edit'),
               color: AppColors.textBody,

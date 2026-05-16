@@ -1,17 +1,35 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class CashflowLineChart extends StatelessWidget {
-  const CashflowLineChart({required this.data, super.key});
+  const CashflowLineChart({
+    required this.data,
+    required this.currency,
+    required this.locale,
+    super.key,
+  });
 
   final List<MonthlyFlowData> data;
+  final String currency;
+  final String locale;
 
   static const _monthAbbr = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -32,9 +50,9 @@ class CashflowLineChart extends StatelessWidget {
           Text(
             l10n.t('cashFlowTrend'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                ),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
           ),
           const SizedBox(height: 16),
           if (!hasData)
@@ -43,9 +61,9 @@ class CashflowLineChart extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textBody,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
                 ),
               ),
             )
@@ -58,10 +76,8 @@ class CashflowLineChart extends StatelessWidget {
                     show: true,
                     drawVerticalLine: false,
                     horizontalInterval: _interval(),
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: AppColors.borderGrey,
-                      strokeWidth: 1,
-                    ),
+                    getDrawingHorizontalLine: (value) =>
+                        FlLine(color: AppColors.borderGrey, strokeWidth: 1),
                   ),
                   titlesData: FlTitlesData(
                     bottomTitles: AxisTitles(
@@ -117,7 +133,11 @@ class CashflowLineChart extends StatelessWidget {
                       getTooltipItems: (spots) => spots.map((spot) {
                         final net = spot.y;
                         return LineTooltipItem(
-                          net.toStringAsFixed(0),
+                          Formatters.money(
+                            net,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
                           TextStyle(
                             color: net >= 0
                                 ? AppColors.success
@@ -144,13 +164,13 @@ class CashflowLineChart extends StatelessWidget {
                         show: true,
                         getDotPainter: (spot, xPercentage, bar, index) =>
                             FlDotCirclePainter(
-                          radius: 4,
-                          color: spot.y >= 0
-                              ? AppColors.success
-                              : AppColors.danger,
-                          strokeWidth: 2,
-                          strokeColor: AppColors.surfaceSolid,
-                        ),
+                              radius: 4,
+                              color: spot.y >= 0
+                                  ? AppColors.success
+                                  : AppColors.danger,
+                              strokeWidth: 2,
+                              strokeColor: AppColors.surfaceSolid,
+                            ),
                       ),
                       belowBarData: BarAreaData(
                         show: true,
@@ -178,7 +198,9 @@ class CashflowLineChart extends StatelessWidget {
 
   Color _netColor() {
     final totalNet = data.fold<double>(
-        0, (sum, d) => sum + d.income - d.expenses);
+      0,
+      (sum, d) => sum + d.income - d.expenses,
+    );
     return totalNet >= 0 ? AppColors.success : AppColors.danger;
   }
 
@@ -207,12 +229,6 @@ class CashflowLineChart extends StatelessWidget {
   }
 
   String _formatCompact(double value) {
-    if (value.abs() >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    if (value.abs() >= 1000) {
-      return '${(value / 1000).toStringAsFixed(0)}K';
-    }
-    return value.toStringAsFixed(0);
+    return Formatters.compactNumber(value, locale: locale);
   }
 }

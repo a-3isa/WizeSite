@@ -1,17 +1,35 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class MonthlyFlowChart extends StatelessWidget {
-  const MonthlyFlowChart({required this.data, super.key});
+  const MonthlyFlowChart({
+    required this.data,
+    required this.currency,
+    required this.locale,
+    super.key,
+  });
 
   final List<MonthlyFlowData> data;
+  final String currency;
+  final String locale;
 
   static const _monthAbbr = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -32,16 +50,19 @@ class MonthlyFlowChart extends StatelessWidget {
           Text(
             l10n.t('monthlyCashFlow'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                ),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               _DotLabel(color: AppColors.success, label: l10n.t('totalIncome')),
               const SizedBox(width: 16),
-              _DotLabel(color: AppColors.danger, label: l10n.t('totalExpenses')),
+              _DotLabel(
+                color: AppColors.danger,
+                label: l10n.t('totalExpenses'),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -51,9 +72,9 @@ class MonthlyFlowChart extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textBody,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
                 ),
               ),
             )
@@ -71,7 +92,11 @@ class MonthlyFlowChart extends StatelessWidget {
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final isIncome = rodIndex == 0;
                         return BarTooltipItem(
-                          rod.toY.toStringAsFixed(0),
+                          Formatters.money(
+                            rod.toY,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
                           TextStyle(
                             color: isIncome
                                 ? AppColors.success
@@ -135,10 +160,8 @@ class MonthlyFlowChart extends StatelessWidget {
                     show: true,
                     drawVerticalLine: false,
                     horizontalInterval: _maxY() / 4,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: AppColors.borderGrey,
-                      strokeWidth: 1,
-                    ),
+                    getDrawingHorizontalLine: (value) =>
+                        FlLine(color: AppColors.borderGrey, strokeWidth: 1),
                   ),
                   borderData: FlBorderData(show: false),
                   barGroups: List.generate(data.length, (i) {
@@ -200,9 +223,7 @@ class MonthlyFlowChart extends StatelessWidget {
   }
 
   String _formatCompact(double value) {
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}K';
-    return value.toStringAsFixed(0);
+    return Formatters.compactNumber(value, locale: locale);
   }
 }
 
@@ -225,9 +246,9 @@ class _DotLabel extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textBody,
-                fontWeight: FontWeight.w500,
-              ),
+            color: AppColors.textBody,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );

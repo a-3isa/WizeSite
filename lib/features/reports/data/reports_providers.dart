@@ -59,6 +59,16 @@ class ReportMetrics {
   final List<PaymentRecord> recentPayments;
 
   factory ReportMetrics.fromMap(String id, Map<String, dynamic> map) {
+    final totalExpenses = (map['totalExpenses'] as num?)?.toDouble() ?? 0;
+    final totalIncome =
+        (map['totalIncome'] as num?)?.toDouble() ??
+        (map['totalPayments'] as num?)?.toDouble() ??
+        0;
+    final net =
+        (map['net'] as num?)?.toDouble() ??
+        (map['netProfit'] as num?)?.toDouble() ??
+        totalIncome - totalExpenses;
+
     final categoryMap = <String, double>{};
     final rawCategoryTotals = map['categoryTotals'];
     if (rawCategoryTotals is Map) {
@@ -130,9 +140,9 @@ class ReportMetrics {
       projectName: '${map['projectName'] ?? ''}',
       status: '${map['status'] ?? 'active'}',
       isArchived: map['isArchived'] as bool? ?? false,
-      totalExpenses: (map['totalExpenses'] as num?)?.toDouble() ?? 0,
-      totalIncome: (map['totalIncome'] as num?)?.toDouble() ?? 0,
-      net: (map['net'] as num?)?.toDouble() ?? 0,
+      totalExpenses: totalExpenses,
+      totalIncome: totalIncome,
+      net: net,
       categoryTotals: categoryMap,
       monthlyFlow: flow,
       topWorkers: workers,
@@ -162,36 +172,37 @@ final reportMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
 });
 
 final reportExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
-  return ref.watch(reportMetricsProvider).whenData(
-        (metrics) => metrics?.recentExpenses ?? const [],
-      );
+  return ref
+      .watch(reportMetricsProvider)
+      .whenData((metrics) => metrics?.recentExpenses ?? const []);
 });
 
 final reportPaymentsProvider = Provider<AsyncValue<List<PaymentRecord>>>((ref) {
-  return ref.watch(reportMetricsProvider).whenData(
-        (metrics) => metrics?.recentPayments ?? const [],
-      );
+  return ref
+      .watch(reportMetricsProvider)
+      .whenData((metrics) => metrics?.recentPayments ?? const []);
 });
 
-final expensesByCategoryProvider =
-    Provider<AsyncValue<Map<String, double>>>((ref) {
-  return ref.watch(reportMetricsProvider).whenData(
+final expensesByCategoryProvider = Provider<AsyncValue<Map<String, double>>>((
+  ref,
+) {
+  return ref
+      .watch(reportMetricsProvider)
+      .whenData(
         (metrics) => metrics?.categoryTotals ?? const <String, double>{},
       );
 });
 
-final monthlyFlowProvider =
-    Provider<AsyncValue<List<MonthlyFlowData>>>((ref) {
-  return ref.watch(reportMetricsProvider).whenData(
-        (metrics) => metrics?.monthlyFlow ?? const <MonthlyFlowData>[],
-      );
+final monthlyFlowProvider = Provider<AsyncValue<List<MonthlyFlowData>>>((ref) {
+  return ref
+      .watch(reportMetricsProvider)
+      .whenData((metrics) => metrics?.monthlyFlow ?? const <MonthlyFlowData>[]);
 });
 
-final topWorkersProvider =
-    Provider<AsyncValue<List<WorkerCostData>>>((ref) {
-  return ref.watch(reportMetricsProvider).whenData(
-        (metrics) => metrics?.topWorkers ?? const <WorkerCostData>[],
-      );
+final topWorkersProvider = Provider<AsyncValue<List<WorkerCostData>>>((ref) {
+  return ref
+      .watch(reportMetricsProvider)
+      .whenData((metrics) => metrics?.topWorkers ?? const <WorkerCostData>[]);
 });
 
 final reportSummaryProvider = Provider<AsyncValue<Map<String, num>>>((ref) {
@@ -204,7 +215,9 @@ final reportSummaryProvider = Provider<AsyncValue<Map<String, num>>>((ref) {
       'totalIncome': metrics.totalIncome,
       'net': metrics.net,
       'totalProjects': 1,
-      'activeProjects': metrics.status == 'active' && !metrics.isArchived ? 1 : 0,
+      'activeProjects': metrics.status == 'active' && !metrics.isArchived
+          ? 1
+          : 0,
     };
   });
 });

@@ -3,6 +3,8 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -138,7 +140,9 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     }
 
     try {
-      final page = await ref.read(workerRepositoryProvider).fetchWorkersPage(
+      final page = await ref
+          .read(workerRepositoryProvider)
+          .fetchWorkersPage(
             workspaceId,
             cursor: reset ? null : _cursor,
             pageSize: _pageSize,
@@ -201,18 +205,24 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     if (search.isEmpty) {
       return List<WorkerProfile>.unmodifiable(_workers);
     }
-    return _workers.where((worker) {
-      final haystack =
-          '${worker.name} ${worker.phoneNumber} ${worker.workerType}'
-              .toLowerCase();
-      return haystack.contains(search);
-    }).toList(growable: false);
+    return _workers
+        .where((worker) {
+          final haystack =
+              '${worker.name} ${worker.phoneNumber} ${worker.workerType}'
+                  .toLowerCase();
+          return haystack.contains(search);
+        })
+        .toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredWorkers();
+    final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,
@@ -243,7 +253,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
-                child: _buildContent(context, l10n, filtered),
+                child: _buildContent(context, l10n, filtered, currency, locale),
               ),
             ),
           ],
@@ -256,6 +266,8 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     BuildContext context,
     AppLocalizations l10n,
     List<WorkerProfile> filtered,
+    String currency,
+    String locale,
   ) {
     if (_isLoadingInitial && _workers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -325,7 +337,10 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
               leading: const Icon(Icons.engineering),
               title: Text(worker.name),
               subtitle: Text(
-                '${worker.phoneNumber} | ${l10n.t('wageWithValue', params: {'value': worker.dailyWage.toStringAsFixed(0)})}',
+                '${worker.phoneNumber} | ${l10n.t(
+                  'wageWithValue',
+                  params: {'value': Formatters.money(worker.dailyWage, currencyCode: currency, locale: locale)},
+                )}',
               ),
               trailing: PopupMenuButton<String>(
                 onSelected: (value) async {
@@ -336,10 +351,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
                   await _archiveWorker(worker);
                 },
                 itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Text(l10n.t('edit')),
-                  ),
+                  PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
                   PopupMenuItem(
                     value: 'delete',
                     child: Text(l10n.t('archive')),

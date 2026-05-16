@@ -58,7 +58,7 @@ class StorageUploadService {
 
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final extension = _extensionOf(localFilePath).isEmpty
-        ? '.wav'
+        ? '.m4a'
         : _extensionOf(localFilePath);
     final storagePath = 'voice-expenses/$userId/$timestamp$extension';
     final ref = _storage.ref(storagePath);
@@ -95,9 +95,7 @@ class StorageUploadService {
         downloadUrl: downloadUrl,
       );
     } on FirebaseException catch (e) {
-      throw StorageUploadException(
-        _toUserMessage(e),
-      );
+      throw StorageUploadException(_toUserMessage(e));
     } finally {
       await progressSubscription?.cancel();
     }

@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,18 +71,12 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   @override
   Stream<List<Project>> watchProjects(String workspaceId) {
-    final baseStream = _firestore
+    final query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => Project.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-    return _watchProjectsWithOptimistic(
-      baseStream: baseStream,
+        .where('isArchived', isEqualTo: false);
+    return _watchProjectQueryWithMetrics(
+      query: query,
       workspaceId: workspaceId,
       includePendingCreates: true,
     );
@@ -89,17 +84,11 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   @override
   Stream<List<Project>> watchAllProjects(String workspaceId) {
-    final baseStream = _firestore
+    final query = _firestore
         .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => Project.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-    return _watchProjectsWithOptimistic(
-      baseStream: baseStream,
+        .where('workspaceId', isEqualTo: workspaceId);
+    return _watchProjectQueryWithMetrics(
+      query: query,
       workspaceId: workspaceId,
       includePendingCreates: true,
     );
@@ -107,18 +96,12 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   @override
   Stream<List<Project>> watchArchivedProjects(String workspaceId) {
-    final baseStream = _firestore
+    final query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: true)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => Project.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-    return _watchProjectsWithOptimistic(
-      baseStream: baseStream,
+        .where('isArchived', isEqualTo: true);
+    return _watchProjectQueryWithMetrics(
+      query: query,
       workspaceId: workspaceId,
       includePendingCreates: false,
     );
@@ -140,46 +123,52 @@ class FirebaseProjectRepository implements ProjectRepository {
       });
     }
 
-    final baseStream = _firestore.collection('projects').doc(projectId).snapshots().map((
-      snap,
-    ) {
-      if (!snap.exists) {
-        return null;
-      }
-      return Project.fromMap(snap.id, snap.data() ?? const {});
-    });
-
+    final projectStream = _firestore
+        .collection('projects')
+        .doc(projectId)
+        .snapshots();
+    final metricsStream = _firestore
+        .collection('project_metrics')
+        .doc(projectId)
+        .snapshots();
     final queueStream = _queue.watch();
     return Stream.multi((controller) {
-      Project? currentProject;
+      DocumentSnapshot<Map<String, dynamic>>? currentProjectSnap;
+      Map<String, dynamic>? currentMetrics;
       List<OfflineAction> currentActions = const [];
 
       void emit() {
-        final baseProject = currentProject;
-        if (baseProject == null) {
+        final projectSnap = currentProjectSnap;
+        if (projectSnap == null || !projectSnap.exists) {
           controller.add(null);
           return;
         }
+        final baseProject = Project.fromMap(
+          projectSnap.id,
+          mergeProjectMetricsData(
+            projectData: projectSnap.data() ?? const {},
+            metricsData: currentMetrics,
+          ),
+        );
         controller.add(_applyPendingDeltas(baseProject, currentActions));
       }
 
-      final projectSub = baseStream.listen(
-        (project) {
-          currentProject = project;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (actions) {
-          currentActions = actions;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final projectSub = projectStream.listen((snapshot) {
+        currentProjectSnap = snapshot;
+        emit();
+      }, onError: controller.addError);
+      final metricsSub = metricsStream.listen((snapshot) {
+        currentMetrics = snapshot.exists ? snapshot.data() : null;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((actions) {
+        currentActions = actions;
+        emit();
+      }, onError: controller.addError);
 
       controller.onCancel = () async {
         await projectSub.cancel();
+        await metricsSub.cancel();
         await queueSub.cancel();
       };
     });
@@ -203,8 +192,19 @@ class FirebaseProjectRepository implements ProjectRepository {
     }
 
     final snap = await query.get();
+    final metricsByProjectId = await _fetchMetricsForProjectIds(
+      snap.docs.map((doc) => doc.id),
+    );
     final items = snap.docs
-        .map((doc) => Project.fromMap(doc.id, doc.data()))
+        .map(
+          (doc) => Project.fromMap(
+            doc.id,
+            mergeProjectMetricsData(
+              projectData: doc.data(),
+              metricsData: metricsByProjectId[doc.id],
+            ),
+          ),
+        )
         .toList();
     final actions = await _queue.list();
     final mergedItems = _applyOptimisticProjectList(
@@ -239,8 +239,19 @@ class FirebaseProjectRepository implements ProjectRepository {
     }
 
     final snap = await query.get();
+    final metricsByProjectId = await _fetchMetricsForProjectIds(
+      snap.docs.map((doc) => doc.id),
+    );
     final items = snap.docs
-        .map((doc) => Project.fromMap(doc.id, doc.data()))
+        .map(
+          (doc) => Project.fromMap(
+            doc.id,
+            mergeProjectMetricsData(
+              projectData: doc.data(),
+              metricsData: metricsByProjectId[doc.id],
+            ),
+          ),
+        )
         .toList();
     final actions = await _queue.list();
     final mergedItems = _applyOptimisticProjectList(
@@ -287,11 +298,22 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   @override
   Future<Project?> getProject(String projectId) async {
-    final snap = await _firestore.collection('projects').doc(projectId).get();
+    final results = await Future.wait([
+      _firestore.collection('projects').doc(projectId).get(),
+      _firestore.collection('project_metrics').doc(projectId).get(),
+    ]);
+    final snap = results[0];
     if (!snap.exists) {
       return null;
     }
-    return Project.fromMap(snap.id, snap.data() ?? const {});
+    final metricsSnap = results[1];
+    return Project.fromMap(
+      snap.id,
+      mergeProjectMetricsData(
+        projectData: snap.data() ?? const {},
+        metricsData: metricsSnap.exists ? metricsSnap.data() : null,
+      ),
+    );
   }
 
   @override
@@ -353,20 +375,41 @@ class FirebaseProjectRepository implements ProjectRepository {
     );
   }
 
-  Stream<List<Project>> _watchProjectsWithOptimistic({
-    required Stream<List<Project>> baseStream,
+  Stream<List<Project>> _watchProjectQueryWithMetrics({
+    required Query<Map<String, dynamic>> query,
     required String workspaceId,
     required bool includePendingCreates,
   }) {
+    final projectsStream = query.snapshots();
+    final metricsStream = _firestore
+        .collection('project_metrics')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .snapshots();
     final queueStream = _queue.watch();
     return Stream.multi((controller) {
-      List<Project> currentProjects = const [];
+      QuerySnapshot<Map<String, dynamic>>? currentProjects;
+      QuerySnapshot<Map<String, dynamic>>? currentMetrics;
       List<OfflineAction> currentActions = const [];
 
       void emit() {
+        final metricsByProjectId = {
+          for (final doc in currentMetrics?.docs ?? const [])
+            doc.id: doc.data(),
+        };
+        final projects = (currentProjects?.docs ?? const [])
+            .map(
+              (doc) => Project.fromMap(
+                doc.id,
+                mergeProjectMetricsData(
+                  projectData: doc.data(),
+                  metricsData: metricsByProjectId[doc.id],
+                ),
+              ),
+            )
+            .toList(growable: false);
         controller.add(
           _applyOptimisticProjectList(
-            baseItems: currentProjects,
+            baseItems: projects,
             actions: currentActions,
             workspaceId: workspaceId,
             includePendingCreates: includePendingCreates,
@@ -374,26 +417,41 @@ class FirebaseProjectRepository implements ProjectRepository {
         );
       }
 
-      final baseSub = baseStream.listen(
-        (projects) {
-          currentProjects = projects;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (actions) {
-          currentActions = actions;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final projectSub = projectsStream.listen((snapshot) {
+        currentProjects = snapshot;
+        emit();
+      }, onError: controller.addError);
+      final metricsSub = metricsStream.listen((snapshot) {
+        currentMetrics = snapshot;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((actions) {
+        currentActions = actions;
+        emit();
+      }, onError: controller.addError);
 
       controller.onCancel = () async {
-        await baseSub.cancel();
+        await projectSub.cancel();
+        await metricsSub.cancel();
         await queueSub.cancel();
       };
     });
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _fetchMetricsForProjectIds(
+    Iterable<String> projectIds,
+  ) async {
+    final ids = projectIds.toSet();
+    if (ids.isEmpty) {
+      return const {};
+    }
+    final snaps = await Future.wait(
+      ids.map((id) => _firestore.collection('project_metrics').doc(id).get()),
+    );
+    return {
+      for (final snap in snaps)
+        if (snap.exists) snap.id: snap.data() ?? const {},
+    };
   }
 
   List<Project> _applyOptimisticProjectList({

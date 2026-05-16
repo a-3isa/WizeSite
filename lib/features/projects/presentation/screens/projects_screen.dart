@@ -6,8 +6,10 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -183,7 +185,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
 
     try {
-      final page = await ref.read(projectRepositoryProvider).fetchProjectsPage(
+      final page = await ref
+          .read(projectRepositoryProvider)
+          .fetchProjectsPage(
             workspaceId,
             cursor: reset ? null : _cursor,
             pageSize: _pageSize,
@@ -273,17 +277,24 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     if (search.isEmpty) {
       return List<Project>.unmodifiable(_projects);
     }
-    return _projects.where((project) {
-      final haystack =
-          '${project.name} ${project.clientName} ${project.status}'.toLowerCase();
-      return haystack.contains(search);
-    }).toList(growable: false);
+    return _projects
+        .where((project) {
+          final haystack =
+              '${project.name} ${project.clientName} ${project.status}'
+                  .toLowerCase();
+          return haystack.contains(search);
+        })
+        .toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredProjects();
+    final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
 
     return Scaffold(
       appBar: AppBar(
@@ -320,7 +331,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
-                child: _buildContent(context, l10n, filtered),
+                child: _buildContent(context, l10n, filtered, currency, locale),
               ),
             ),
           ],
@@ -333,6 +344,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     BuildContext context,
     AppLocalizations l10n,
     List<Project> filtered,
+    String currency,
+    String locale,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -383,7 +396,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _projects.isEmpty ? l10n.t('noProjectsYet') : l10n.t('noDataYet'),
+                  _projects.isEmpty
+                      ? l10n.t('noProjectsYet')
+                      : l10n.t('noDataYet'),
                   style: const TextStyle(
                     color: AppColors.textBody,
                     fontSize: 16,
@@ -422,7 +437,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           child: Card(
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () => context.push(AppRoutes.projectDetailPath(project.id)),
+              onTap: () =>
+                  context.push(AppRoutes.projectDetailPath(project.id)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -430,7 +446,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.constructionOrange.withValues(alpha: 0.1),
+                        color: AppColors.constructionOrange.withValues(
+                          alpha: 0.1,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
@@ -499,7 +517,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '${project.netProfit.toStringAsFixed(0)} EGP',
+                          Formatters.money(
+                            project.netProfit,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
                           style: TextStyle(
                             color: profitColor,
                             fontWeight: FontWeight.bold,

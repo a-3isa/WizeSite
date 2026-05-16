@@ -1,12 +1,20 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class CategoryPieChart extends StatefulWidget {
-  const CategoryPieChart({required this.data, super.key});
+  const CategoryPieChart({
+    required this.data,
+    required this.currency,
+    required this.locale,
+    super.key,
+  });
 
   final Map<String, double> data;
+  final String currency;
+  final String locale;
 
   @override
   State<CategoryPieChart> createState() => _CategoryPieChartState();
@@ -50,9 +58,9 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
           Text(
             l10n.t('expenseBreakdown'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                ),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
           ),
           const SizedBox(height: 20),
           SizedBox(
@@ -68,8 +76,8 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
                         _touchedIndex = -1;
                         return;
                       }
-                      _touchedIndex = pieTouchResponse
-                          .touchedSection!.touchedSectionIndex;
+                      _touchedIndex =
+                          pieTouchResponse.touchedSection!.touchedSectionIndex;
                     });
                   },
                 ),
@@ -104,7 +112,11 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
               return _LegendItem(
                 color: _colorFor(entry.key),
                 label: l10n.expenseCategoryLabel(entry.key),
-                value: entry.value.toStringAsFixed(0),
+                value: Formatters.money(
+                  entry.value,
+                  currencyCode: widget.currency,
+                  locale: widget.locale,
+                ),
               );
             }).toList(),
           ),
@@ -141,9 +153,9 @@ class _LegendItem extends StatelessWidget {
         Text(
           '$label ($value)',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textBody,
-                fontWeight: FontWeight.w500,
-              ),
+            color: AppColors.textBody,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
@@ -166,9 +178,9 @@ class _EmptyChartCard extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textBody,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
         ),
       ),
     );

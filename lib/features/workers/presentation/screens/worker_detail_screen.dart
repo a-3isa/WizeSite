@@ -5,6 +5,8 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +38,10 @@ class WorkerDetailScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final workerAsync = ref.watch(workerDetailsProvider(workerId));
     final entriesAsync = ref.watch(workerEntriesProvider(workerId));
+    final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.workers,
@@ -74,7 +80,11 @@ class WorkerDetailScreen extends ConsumerWidget {
                           l10n.t(
                             'dailyWageWithValue',
                             params: {
-                              'value': worker.dailyWage.toStringAsFixed(0),
+                              'value': Formatters.money(
+                                worker.dailyWage,
+                                currencyCode: currency,
+                                locale: locale,
+                              ),
                             },
                           ),
                         ),
@@ -139,7 +149,13 @@ class WorkerDetailScreen extends ConsumerWidget {
                         Card(
                           child: ListTile(
                             title: Text(l10n.t('totalLaborCost')),
-                            trailing: Text(total.toStringAsFixed(0)),
+                            trailing: Text(
+                              Formatters.money(
+                                total,
+                                currencyCode: currency,
+                                locale: locale,
+                              ),
+                            ),
                           ),
                         ),
                         ...entries.map(
@@ -150,8 +166,16 @@ class WorkerDetailScreen extends ConsumerWidget {
                                   'workerEntryLine',
                                   params: {
                                     'days': '${entry.daysWorked}',
-                                    'wage': entry.dailyWage.toStringAsFixed(0),
-                                    'total': entry.totalCost.toStringAsFixed(0),
+                                    'wage': Formatters.money(
+                                      entry.dailyWage,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
+                                    'total': Formatters.money(
+                                      entry.totalCost,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
                                   },
                                 ),
                               ),

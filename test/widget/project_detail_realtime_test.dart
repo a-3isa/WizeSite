@@ -197,7 +197,7 @@ void main() {
 
     expect(find.text('Project Alpha'), findsOneWidget);
     expect(find.text('Client One'), findsOneWidget);
-    expect(find.text('1500'), findsOneWidget);
+    expect(find.text('1,500 EGP'), findsOneWidget);
 
     controller.add(
       _project(
@@ -212,6 +212,6 @@ void main() {
     expect(find.text('Client One'), findsNothing);
     expect(find.text('Project Beta'), findsOneWidget);
     expect(find.text('Client Two'), findsOneWidget);
-    expect(find.text('3200'), findsOneWidget);
+    expect(find.text('3,200 EGP'), findsOneWidget);
   });
 }

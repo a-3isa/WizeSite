@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:go_router/go_router.dart';
 import 'package:buildtrack_app/core/widgets/usage_card.dart';
@@ -27,7 +28,8 @@ class DashboardScreen extends ConsumerWidget {
     final deadLetterCount = ref.watch(offlineDeadLetterCountProvider);
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-            'EGP';
+        'EGP';
+    final locale = Localizations.localeOf(context).languageCode;
     final summaryAsync = workspaceId == null
         ? const AsyncValue.data(<String, num>{})
         : ref.watch(dashboardSummaryProvider(workspaceId));
@@ -118,21 +120,31 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                     MetricCard(
                       label: l10n.t('totalExpenses'),
-                      value:
-                          '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0} $currency',
+                      value: Formatters.money(
+                        summary['totalExpenses'] ?? 0,
+                        currencyCode: currency,
+                        locale: locale,
+                      ),
                       color: AppColors.danger,
                       icon: Icons.trending_down,
                     ),
                     MetricCard(
                       label: l10n.t('totalIncome'),
-                      value:
-                          '${summary['totalIncome']?.toStringAsFixed(0) ?? 0} $currency',
+                      value: Formatters.money(
+                        summary['totalIncome'] ?? 0,
+                        currencyCode: currency,
+                        locale: locale,
+                      ),
                       color: AppColors.success,
                       icon: Icons.trending_up,
                     ),
                     MetricCard(
                       label: l10n.t('netProfit'),
-                      value: '${net.toStringAsFixed(0)} $currency',
+                      value: Formatters.money(
+                        net,
+                        currencyCode: currency,
+                        locale: locale,
+                      ),
                       color: net >= 0 ? AppColors.success : AppColors.danger,
                       icon: Icons.account_balance_wallet_outlined,
                     ),
@@ -150,10 +162,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: AppColors.danger,
-                    ),
+                    const Icon(Icons.error_outline, color: AppColors.danger),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -412,9 +421,9 @@ class _QueueStatusCard extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

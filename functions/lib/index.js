@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.onProjectWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.updateUserProfile = exports.deleteProjectCascade = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
 exports.writeIfChanged = writeIfChanged;
+exports.workerEntryTotalCost = workerEntryTotalCost;
 exports.hasRelevantProjectFieldsChanged = hasRelevantProjectFieldsChanged;
 exports.hasRelevantExpenseFieldsChanged = hasRelevantExpenseFieldsChanged;
 exports.hasRelevantPaymentFieldsChanged = hasRelevantPaymentFieldsChanged;
@@ -363,6 +364,19 @@ function changedBoolean(before, after, key) {
 function changedNumber(before, after, key) {
     return Number(before[key] ?? 0) !== Number(after[key] ?? 0);
 }
+function finiteNumber(input) {
+    const value = Number(input ?? 0);
+    return Number.isFinite(value) ? value : 0;
+}
+function workerEntryTotalCost(data) {
+    if (data.totalCost != null) {
+        const explicitTotal = Number(data.totalCost);
+        if (Number.isFinite(explicitTotal)) {
+            return explicitTotal;
+        }
+    }
+    return finiteNumber(data.daysWorked) * finiteNumber(data.dailyWage);
+}
 function changedTimestamp(before, after, key) {
     const beforeMillis = parseTimestamp(before[key])?.toMillis() ?? null;
     const afterMillis = parseTimestamp(after[key])?.toMillis() ?? null;
@@ -398,6 +412,7 @@ function hasRelevantWorkerEntryFieldsChanged(before, after) {
         changedString(before, after, "projectId") ||
         changedString(before, after, "workerId") ||
         changedNumber(before, after, "daysWorked") ||
+        changedNumber(before, after, "dailyWage") ||
         changedNumber(before, after, "totalCost") ||
         changedBoolean(before, after, "isArchived") ||
         changedTimestamp(before, after, "date");
@@ -543,14 +558,16 @@ async function recomputeWorkspaceMetrics(workspaceId) {
     const metrics = projectMetricsSnap.docs.map((doc) => doc.data());
     const activeProjects = metrics.filter((project) => `${project.status ?? "active"}` === "active").length;
     const totalExpenses = metrics.reduce((sum, project) => sum + Number(project.totalExpenses ?? 0), 0);
-    const totalIncome = metrics.reduce((sum, project) => sum + Number(project.totalIncome ?? 0), 0);
+    const totalIncome = metrics.reduce((sum, project) => sum + Number(project.totalIncome ?? project.totalPayments ?? 0), 0);
     await writeIfChanged(db.collection("workspace_metrics").doc(workspaceId), {
         workspaceId,
         totalProjects: metrics.length,
         activeProjects,
         totalExpenses,
         totalIncome,
+        totalPayments: totalIncome,
         net: totalIncome - totalExpenses,
+        netProfit: totalIncome - totalExpenses,
     });
 }
 exports.checkLimit = (0, https_1.onCall)(async (request) => {
@@ -1540,7 +1557,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
     const previousRiskLevel = `${previousMetrics.riskLevel ?? "low"}`;
     const previousHealthStatus = `${previousMetrics.healthStatus ?? "healthy"}`;
     const manualExpenses = expensesSnap.docs.reduce((sum, doc) => sum + Number(doc.data().amount ?? 0), 0);
-    const laborExpenses = workerEntriesSnap.docs.reduce((sum, doc) => sum + Number(doc.data().totalCost ?? 0), 0);
+    const laborExpenses = workerEntriesSnap.docs.reduce((sum, doc) => sum + workerEntryTotalCost(doc.data()), 0);
     const totalExpenses = manualExpenses + laborExpenses;
     const totalPayments = paymentsSnap.docs.reduce((sum, doc) => sum + Number(doc.data().amount ?? 0), 0);
     const netProfit = totalPayments - totalExpenses;
@@ -1564,6 +1581,9 @@ async function recomputeProjectSummary(workspaceId, projectId) {
         map[category] = (map[category] ?? 0) + Number(doc.data().amount ?? 0);
         return map;
     }, {});
+    if (laborExpenses > 0) {
+        categoryTotals.labor = (categoryTotals.labor ?? 0) + laborExpenses;
+    }
     const now = new Date();
     const monthlyFlow = Array.from({ length: 6 }).map((_, index) => {
         const monthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - index), 1));
@@ -1594,7 +1614,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
         const key = `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}`;
         const index = monthlyIndex.get(key);
         if (index != null) {
-            monthlyFlow[index].expenses += Number(doc.data().totalCost ?? 0);
+            monthlyFlow[index].expenses += workerEntryTotalCost(doc.data());
         }
     }
     for (const doc of paymentsSnap.docs) {
@@ -1617,7 +1637,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
             totalCost: 0,
             totalDays: 0,
         };
-        current.totalCost += Number(doc.data().totalCost ?? 0);
+        current.totalCost += workerEntryTotalCost(doc.data());
         current.totalDays += Number(doc.data().daysWorked ?? 0);
         map[workerId] = current;
         return map;

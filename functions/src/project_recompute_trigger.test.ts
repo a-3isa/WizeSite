@@ -411,5 +411,35 @@ if (!emulatorHost) {
     assert.equal(Number(metricsData.totalExpenses ?? 0), 350);
     assert.equal(Number(metricsData.totalIncome ?? 0), 300);
     assert.equal(Number(metricsData.netProfit ?? 0), -50);
+    assert.equal(Number((metricsData.categoryTotals as TriggerData).materials ?? 0), 250);
+    assert.equal(Number((metricsData.categoryTotals as TriggerData).labor ?? 0), 100);
+  });
+
+  test("worker entry recompute derives labor cost when legacy totalCost is missing", async () => {
+    await seedRecomputeInputs();
+
+    const workerEntryRef = db.collection("worker_entries").doc("entry_1");
+    const beforeEntry = (await workerEntryRef.get()).data() as TriggerData;
+    const afterEntry = {
+      ...beforeEntry,
+      daysWorked: 2,
+      dailyWage: 125,
+      totalCost: admin.firestore.FieldValue.delete(),
+    };
+    await workerEntryRef.update(afterEntry);
+
+    const currentEntry = (await workerEntryRef.get()).data() as TriggerData;
+    await handleWorkerEntryWriteRecompute(
+      workerEntryWriteEvent(beforeEntry, currentEntry),
+    );
+
+    const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+    const metricsData = metricsSnap.data() ?? {};
+    const categoryTotals = metricsData.categoryTotals as TriggerData;
+    const topWorkers = metricsData.topWorkers as TriggerData[];
+
+    assert.equal(Number(metricsData.totalExpenses ?? 0), 450);
+    assert.equal(Number(categoryTotals.labor ?? 0), 250);
+    assert.equal(Number(topWorkers[0].totalCost ?? 0), 250);
   });
 }

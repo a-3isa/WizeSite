@@ -1,13 +1,19 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class RecentExpensesTable extends StatelessWidget {
-  const RecentExpensesTable({required this.expenses, super.key});
+  const RecentExpensesTable({
+    required this.expenses,
+    required this.locale,
+    super.key,
+  });
 
   final List<Expense> expenses;
+  final String locale;
 
   static const _categoryColors = <String, Color>{
     'labor': AppColors.constructionOrange,
@@ -36,9 +42,9 @@ class RecentExpensesTable extends StatelessWidget {
             child: Text(
               l10n.t('recentExpenses'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
             ),
           ),
           if (items.isEmpty)
@@ -47,9 +53,9 @@ class RecentExpensesTable extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textBody,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
                 ),
               ),
             )
@@ -58,22 +64,19 @@ class RecentExpensesTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(
-                  AppColors.surfaceGrey,
-                ),
+                headingRowColor: WidgetStateProperty.all(AppColors.surfaceGrey),
                 dataRowMinHeight: 48,
                 dataRowMaxHeight: 56,
                 columnSpacing: 20,
-                headingTextStyle:
-                    Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textBody,
-                        ),
-                dataTextStyle:
-                    Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textDark,
-                          fontWeight: FontWeight.w500,
-                        ),
+                headingTextStyle: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textBody,
+                    ),
+                dataTextStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w500,
+                ),
                 columns: [
                   DataColumn(label: Text(l10n.t('date'))),
                   DataColumn(label: Text(l10n.t('category'))),
@@ -83,45 +86,53 @@ class RecentExpensesTable extends StatelessWidget {
                 rows: items.map((e) {
                   final color =
                       _categoryColors[e.category] ?? const Color(0xFF94A3B8);
-                  return DataRow(cells: [
-                    DataCell(Text(DateFormat('dd/MM').format(e.date))),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          l10n.expenseCategoryLabel(e.category),
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(DateFormat('dd/MM').format(e.date))),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            l10n.expenseCategoryLabel(e.category),
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    DataCell(
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 100),
-                        child: Text(
-                          e.projectName.isEmpty ? '-' : e.projectName,
-                          overflow: TextOverflow.ellipsis,
+                      DataCell(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 100),
+                          child: Text(
+                            e.projectName.isEmpty ? '-' : e.projectName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                    ),
-                    DataCell(
-                      Text(
-                        e.amount.toStringAsFixed(0),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.danger,
+                      DataCell(
+                        Text(
+                          Formatters.money(
+                            e.amount,
+                            currencyCode: e.currency,
+                            locale: locale,
+                          ),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.danger,
+                          ),
                         ),
                       ),
-                    ),
-                  ]);
+                    ],
+                  );
                 }).toList(),
               ),
             ),

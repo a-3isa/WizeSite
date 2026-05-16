@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -65,6 +66,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final fontBold = await PdfGoogleFonts.cairoBold();
     final document = pw.Document();
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final locale = l10n.locale.languageCode;
 
     pw.Widget sectionTitle(String text) {
       return pw.Padding(
@@ -135,13 +137,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           twoColumnTable([
             [
               l10n.t('totalIncome'),
-              '${metrics.totalIncome.toStringAsFixed(0)} $currency',
+              Formatters.money(
+                metrics.totalIncome,
+                currencyCode: currency,
+                locale: locale,
+              ),
             ],
             [
               l10n.t('totalExpenses'),
-              '${metrics.totalExpenses.toStringAsFixed(0)} $currency',
+              Formatters.money(
+                metrics.totalExpenses,
+                currencyCode: currency,
+                locale: locale,
+              ),
             ],
-            [l10n.t('netProfit'), '${metrics.net.toStringAsFixed(0)} $currency'],
+            [
+              l10n.t('netProfit'),
+              Formatters.money(
+                metrics.net,
+                currencyCode: currency,
+                locale: locale,
+              ),
+            ],
           ]),
           sectionTitle(l10n.t('expenseBreakdown')),
           twoColumnTable(
@@ -149,7 +166,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 .map(
                   (entry) => [
                     l10n.expenseCategoryLabel(entry.key),
-                    '${entry.value.toStringAsFixed(0)} $currency',
+                    Formatters.money(
+                      entry.value,
+                      currencyCode: currency,
+                      locale: locale,
+                    ),
                   ],
                 )
                 .toList(),
@@ -160,7 +181,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 .map(
                   (entry) => [
                     DateFormat('yyyy-MM').format(entry.month),
-                    '${entry.income.toStringAsFixed(0)} / ${entry.expenses.toStringAsFixed(0)} $currency',
+                    '${Formatters.money(entry.income, currencyCode: currency, locale: locale)} / ${Formatters.money(entry.expenses, currencyCode: currency, locale: locale)}',
                   ],
                 )
                 .toList(),
@@ -172,13 +193,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     [l10n.t('workerName'), l10n.t('noDataYet')],
                   ]
                 : metrics.topWorkers
-                    .map(
-                      (worker) => [
-                        worker.name,
-                        '${worker.totalDays.toStringAsFixed(1)} d / ${worker.totalCost.toStringAsFixed(0)} $currency',
-                      ],
-                    )
-                    .toList(),
+                      .map(
+                        (worker) => [
+                          worker.name,
+                          '${worker.totalDays.toStringAsFixed(1)} d / ${Formatters.money(worker.totalCost, currencyCode: currency, locale: locale)}',
+                        ],
+                      )
+                      .toList(),
           ),
           sectionTitle(l10n.t('recentExpenses')),
           twoColumnTable(
@@ -187,13 +208,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     [l10n.t('expenses'), l10n.t('noDataYet')],
                   ]
                 : metrics.recentExpenses
-                    .map(
-                      (expense) => [
-                        '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
-                        '${expense.amount.toStringAsFixed(0)} ${expense.currency}',
-                      ],
-                    )
-                    .toList(),
+                      .map(
+                        (expense) => [
+                          '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
+                          Formatters.money(
+                            expense.amount,
+                            currencyCode: expense.currency,
+                            locale: locale,
+                          ),
+                        ],
+                      )
+                      .toList(),
           ),
           sectionTitle(l10n.t('recentPayments')),
           twoColumnTable(
@@ -202,13 +227,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     [l10n.t('payments'), l10n.t('noDataYet')],
                   ]
                 : metrics.recentPayments
-                    .map(
-                      (payment) => [
-                        '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
-                        '${payment.amount.toStringAsFixed(0)} $currency',
-                      ],
-                    )
-                    .toList(),
+                      .map(
+                        (payment) => [
+                          '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
+                          Formatters.money(
+                            payment.amount,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
+                        ],
+                      )
+                      .toList(),
           ),
           pw.SizedBox(height: 18),
           pw.Center(
@@ -235,7 +264,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final metricsAsync = ref.watch(reportMetricsProvider);
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-            'EGP';
+        'EGP';
+    final locale = Localizations.localeOf(context).languageCode;
     final hasWorkspace = workspaceId != null;
 
     final categoryAsync = ref.watch(expensesByCategoryProvider);
@@ -283,10 +313,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           label: l10n.t('exportPdf'),
                           onTap: () async {
                             HapticFeedback.lightImpact();
-                            final projects = ref.read(projectsProvider).valueOrNull;
-                            final metrics = ref.read(reportMetricsProvider).valueOrNull;
+                            final projects = ref
+                                .read(projectsProvider)
+                                .valueOrNull;
+                            final metrics = ref
+                                .read(reportMetricsProvider)
+                                .valueOrNull;
                             final selectedProject = projects
-                                ?.where((project) => project.id == currentProjectId)
+                                ?.where(
+                                  (project) => project.id == currentProjectId,
+                                )
                                 .firstOrNull;
                             if (selectedProject == null || metrics == null) {
                               return;
@@ -320,7 +356,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         }
 
                         return DropdownButtonFormField<String>(
-                          initialValue: projects.any((p) => p.id == currentProjectId)
+                          initialValue:
+                              projects.any((p) => p.id == currentProjectId)
                               ? currentProjectId
                               : null,
                           hint: Text(
@@ -360,7 +397,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               )
                               .toList(),
                           onChanged: (value) {
-                            ref.read(reportProjectIdProvider.notifier).state = value;
+                            ref.read(reportProjectIdProvider.notifier).state =
+                                value;
                           },
                         );
                       },
@@ -414,69 +452,105 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 children: [
                                   MetricCard(
                                     label: l10n.t('totalExpenses'),
-                                    value:
-                                        '${summary['totalExpenses']?.toStringAsFixed(0) ?? 0} $currency',
+                                    value: Formatters.money(
+                                      summary['totalExpenses'] ?? 0,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
                                     color: AppColors.danger,
                                     icon: Icons.trending_down,
                                   ),
                                   MetricCard(
                                     label: l10n.t('totalIncome'),
-                                    value:
-                                        '${summary['totalIncome']?.toStringAsFixed(0) ?? 0} $currency',
+                                    value: Formatters.money(
+                                      summary['totalIncome'] ?? 0,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
                                     color: AppColors.success,
                                     icon: Icons.trending_up,
                                   ),
                                   MetricCard(
                                     label: l10n.t('netProfit'),
-                                    value:
-                                        '${(summary['net'] ?? 0).toStringAsFixed(0)} $currency',
+                                    value: Formatters.money(
+                                      summary['net'] ?? 0,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
                                     color: (summary['net'] ?? 0) >= 0
                                         ? AppColors.success
                                         : AppColors.danger,
-                                    icon:
-                                        Icons.account_balance_wallet_outlined,
+                                    icon: Icons.account_balance_wallet_outlined,
                                   ),
                                 ],
                               ),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 24),
                       categoryAsync.when(
-                        data: (data) => CategoryPieChart(data: data),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (data) => CategoryPieChart(
+                          data: data,
+                          currency: currency,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 16),
                       flowAsync.when(
-                        data: (data) => MonthlyFlowChart(data: data),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (data) => MonthlyFlowChart(
+                          data: data,
+                          currency: currency,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 16),
                       flowAsync.when(
-                        data: (data) => CashflowLineChart(data: data),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (data) => CashflowLineChart(
+                          data: data,
+                          currency: currency,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 24),
                       expensesAsync.when(
-                        data: (expenses) =>
-                            RecentExpensesTable(expenses: expenses),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (expenses) => RecentExpensesTable(
+                          expenses: expenses,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 16),
                       paymentsAsync.when(
-                        data: (payments) =>
-                            RecentPaymentsTable(payments: payments),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (payments) => RecentPaymentsTable(
+                          payments: payments,
+                          currency: currency,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 16),
                       workersAsync.when(
-                        data: (workers) => WorkerCostTable(workers: workers),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        data: (workers) => WorkerCostTable(
+                          workers: workers,
+                          currency: currency,
+                          locale: locale,
+                        ),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const _LoadingWidget(),
                       ),
                       const SizedBox(height: 16),
@@ -494,13 +568,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                                 child: Text(
                                   '${metrics.projectName} • ${l10n.projectStatusLabel(metrics.status)}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(color: AppColors.textBody),
                                 ),
                               ),
-                        error: (error, _) => _ErrorCard(message: error.toString()),
+                        error: (error, _) =>
+                            _ErrorCard(message: error.toString()),
                         loading: () => const SizedBox.shrink(),
                       ),
                       const SizedBox(height: 24),
@@ -534,9 +607,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           '${usage.limits.expensesPerMonth}',
                                     },
                                   ),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(color: AppColors.textBody),
                                 ),
                               ),
@@ -568,10 +639,10 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textBody,
-            letterSpacing: 0.5,
-          ),
+        fontWeight: FontWeight.w700,
+        color: AppColors.textBody,
+        letterSpacing: 0.5,
+      ),
     );
   }
 }
@@ -604,9 +675,9 @@ class _ExportButton extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.constructionOrange,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.constructionOrange,
+                ),
               ),
             ],
           ),
@@ -633,10 +704,9 @@ class _EmptyCard extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: AppColors.textBody),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
         ),
       ),
     );
