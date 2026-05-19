@@ -49,6 +49,34 @@ function parseTimestamp(input: unknown): admin.firestore.Timestamp | null {
   if (input == null) {
     return null;
   }
+  if (input instanceof admin.firestore.Timestamp) {
+    return input;
+  }
+  if (input instanceof Date) {
+    return admin.firestore.Timestamp.fromDate(input);
+  }
+  if (typeof input === "object" && input !== null) {
+    const candidate = input as {
+      toDate?: () => Date;
+      seconds?: unknown;
+      nanoseconds?: unknown;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+    };
+
+    if (typeof candidate.toDate === "function") {
+      const converted = candidate.toDate();
+      if (converted instanceof Date && !Number.isNaN(converted.getTime())) {
+        return admin.firestore.Timestamp.fromDate(converted);
+      }
+    }
+
+    const seconds = Number(candidate.seconds ?? candidate._seconds);
+    const nanoseconds = Number(candidate.nanoseconds ?? candidate._nanoseconds ?? 0);
+    if (Number.isFinite(seconds) && Number.isFinite(nanoseconds)) {
+      return new admin.firestore.Timestamp(seconds, nanoseconds);
+    }
+  }
   if (typeof input === "string") {
     const parsed = Date.parse(input);
     if (Number.isNaN(parsed)) {
@@ -295,6 +323,25 @@ function asBooleanOrUndefined(input: unknown): boolean | undefined {
     return input;
   }
   return undefined;
+}
+
+function userWorkspaceName(input: string): string {
+  const trimmed = input.trim();
+  return trimmed.length > 0 ? `${trimmed} Workspace` : "New Workspace";
+}
+
+function nonEmptyStringOrUndefined(input: string): string | undefined {
+  return input.trim().length > 0 ? input.trim() : undefined;
+}
+
+function assignIfDefined(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  if (value !== undefined) {
+    target[key] = value;
+  }
 }
 
 type TriggerDocData = Record<string, unknown>;
@@ -744,7 +791,7 @@ export const checkLimit = onCall(async (request) => {
 async function createProjectWithQuotaForUser(
   uid: string,
   data: Record<string, unknown>,
-): Promise<{id: string}> {
+): Promise<{id: string; clientMutationId?: string}> {
   const workspaceId = requireString(data, "workspaceId");
   const role = await assertMember(workspaceId, uid);
   if (role !== "owner" && role !== "member") {
@@ -785,13 +832,16 @@ async function createProjectWithQuotaForUser(
     budgetLimit,
     completionPercentage,
     status: "active",
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: uid,
     isArchived: false,
   });
 
-  return {id: projectRef.id};
+  return {id: projectRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
 
 export const createProjectWithQuota = onCall(async (request) => {
@@ -855,6 +905,72 @@ export const createProjectWithQuotaHttp = onRequest(async (request, response) =>
   }
 });
 
+export const updateProject = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const projectId = requireString(data, "projectId");
+  const projectRef = db.collection("projects").doc(projectId);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+  if (project.isArchived === true) {
+    throw new HttpsError("failed-precondition", "Archived projects cannot be edited.");
+  }
+
+  await projectRef.update({
+    name: requireString(data, "name"),
+    clientName: `${data.clientName ?? ""}`.trim(),
+    contractValue: requireNumber(data, "contractValue"),
+    startDate: parseTimestamp(data.startDate) ?? admin.firestore.Timestamp.now(),
+    expectedEndDate: parseTimestamp(data.expectedEndDate),
+    location: `${data.location ?? ""}`.trim(),
+    description: `${data.description ?? ""}`.trim(),
+    budgetLimit: Number(data.budgetLimit ?? 0) || null,
+    completionPercentage: Number(data.completionPercentage ?? 0),
+    status: `${data.status ?? "active"}`.trim() || "active",
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+export const archiveProject = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const projectId = requireString(data, "projectId");
+  const projectRef = db.collection("projects").doc(projectId);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+
+  await projectRef.update({
+    isArchived: true,
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
 export const createExpenseWithQuota = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -865,7 +981,7 @@ export const createExpenseWithQuota = onCall(async (request) => {
 async function createExpenseWithQuotaForUser(
   uid: string,
   data: Record<string, unknown>,
-): Promise<{id: string}> {
+): Promise<{id: string; clientMutationId?: string}> {
   const workspaceId = requireString(data, "workspaceId");
   await assertMember(workspaceId, uid);
 
@@ -934,6 +1050,9 @@ async function createExpenseWithQuotaForUser(
       transcript,
       source,
       storagePath,
+      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
       createdBy: uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -947,7 +1066,7 @@ async function createExpenseWithQuotaForUser(
     }, {merge: true});
   });
 
-  return {id: expenseRef.id};
+  return {id: expenseRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
 
 export const createExpenseWithQuotaHttp = onRequest(async (request, response) => {
@@ -1004,10 +1123,10 @@ export const createExpenseWithQuotaHttp = onRequest(async (request, response) =>
   }
 });
 
-async function createPaymentWithQuotaForUser(
+export async function createPaymentWithQuotaForUser(
   uid: string,
   data: Record<string, unknown>,
-): Promise<{id: string}> {
+): Promise<{id: string; clientMutationId?: string}> {
   const workspaceId = requireString(data, "workspaceId");
   await assertMember(workspaceId, uid);
 
@@ -1017,8 +1136,18 @@ async function createPaymentWithQuotaForUser(
     throw new HttpsError("invalid-argument", "Amount must be greater than zero");
   }
   const projectSnap = await db.collection("projects").doc(projectId).get();
-  if (!projectSnap.exists || `${projectSnap.data()?.workspaceId ?? ""}` !== workspaceId) {
+  if (!projectSnap.exists) {
     throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const projectData = projectSnap.data() ?? {};
+  if (`${projectData.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  if (projectData.isArchived === true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Project is archived and can no longer accept payments.",
+    );
   }
 
   const subscription = await getSubscription(workspaceId);
@@ -1041,6 +1170,9 @@ async function createPaymentWithQuotaForUser(
       date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
       paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
       notes: `${data.notes ?? ""}`.trim(),
+      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
       createdBy: uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1053,7 +1185,7 @@ async function createPaymentWithQuotaForUser(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
   });
-  return {id: paymentRef.id};
+  return {id: paymentRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
 
 export const createPaymentWithQuota = onCall(async (request) => {
@@ -1117,10 +1249,10 @@ export const createPaymentWithQuotaHttp = onRequest(async (request, response) =>
   }
 });
 
-async function createWorkerEntryWithQuotaForUser(
+export async function createWorkerEntryWithQuotaForUser(
   uid: string,
   data: Record<string, unknown>,
-): Promise<{id: string}> {
+): Promise<{id: string; clientMutationId?: string}> {
   const workspaceId = requireString(data, "workspaceId");
   await assertMember(workspaceId, uid);
 
@@ -1136,11 +1268,31 @@ async function createWorkerEntryWithQuotaForUser(
     db.collection("workers").doc(workerId).get(),
     db.collection("projects").doc(projectId).get(),
   ]);
-  if (!workerSnap.exists || `${workerSnap.data()?.workspaceId ?? ""}` !== workspaceId) {
+  if (!workerSnap.exists) {
     throw new HttpsError("invalid-argument", "Worker does not exist");
   }
-  if (!projectSnap.exists || `${projectSnap.data()?.workspaceId ?? ""}` !== workspaceId) {
+  const workerData = workerSnap.data() ?? {};
+  if (`${workerData.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("invalid-argument", "Worker does not exist");
+  }
+  if (workerData.isArchived === true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Worker is archived and can no longer accept new entries.",
+    );
+  }
+  if (!projectSnap.exists) {
     throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const projectData = projectSnap.data() ?? {};
+  if (`${projectData.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  if (projectData.isArchived === true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Project is archived and can no longer accept worker entries.",
+    );
   }
 
   const subscription = await getSubscription(workspaceId);
@@ -1165,6 +1317,9 @@ async function createWorkerEntryWithQuotaForUser(
       totalCost,
       date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
       notes: `${data.notes ?? ""}`.trim(),
+      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
       createdBy: uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1177,7 +1332,7 @@ async function createWorkerEntryWithQuotaForUser(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
   });
-  return {id: entryRef.id};
+  return {id: entryRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
 
 export const createWorkerEntryWithQuota = onCall(async (request) => {
@@ -1535,6 +1690,260 @@ export const archiveWorkerEntryWithQuotaRefundHttp = onRequest(async (request, r
   }
 });
 
+export const updateExpense = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const expenseId = requireString(data, "expenseId");
+  const projectId = requireString(data, "projectId");
+  const category = requireString(data, "category");
+  const amount = requireNumber(data, "amount");
+  if (amount <= 0) {
+    throw new HttpsError("invalid-argument", "Amount must be greater than zero");
+  }
+
+  const [expenseSnap, projectSnap] = await Promise.all([
+    db.collection("expenses").doc(expenseId).get(),
+    db.collection("projects").doc(projectId).get(),
+  ]);
+  if (!expenseSnap.exists) {
+    throw new HttpsError("not-found", "Expense not found");
+  }
+  const expense = expenseSnap.data() ?? {};
+  if (`${expense.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Expense is not available in this workspace");
+  }
+  if (expense.isArchived === true) {
+    throw new HttpsError("failed-precondition", "Archived expenses cannot be edited.");
+  }
+  if (!projectSnap.exists) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId || project.isArchived === true) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+
+  await expenseSnap.ref.update({
+    projectId,
+    category,
+    amount,
+    date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+    notes: `${data.notes ?? ""}`.trim(),
+    supplierName: `${data.supplierName ?? ""}`.trim(),
+    paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+export const updatePayment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const paymentId = requireString(data, "paymentId");
+  const projectId = requireString(data, "projectId");
+  const amount = requireNumber(data, "amount");
+  if (amount <= 0) {
+    throw new HttpsError("invalid-argument", "Amount must be greater than zero");
+  }
+
+  const [paymentSnap, projectSnap] = await Promise.all([
+    db.collection("payments").doc(paymentId).get(),
+    db.collection("projects").doc(projectId).get(),
+  ]);
+  if (!paymentSnap.exists) {
+    throw new HttpsError("not-found", "Payment not found");
+  }
+  const payment = paymentSnap.data() ?? {};
+  if (`${payment.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Payment is not available in this workspace");
+  }
+  if (payment.isArchived === true) {
+    throw new HttpsError("failed-precondition", "Archived payments cannot be edited.");
+  }
+  if (!projectSnap.exists) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId || project.isArchived === true) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+
+  await paymentSnap.ref.update({
+    projectId,
+    amount,
+    date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+    paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
+    notes: `${data.notes ?? ""}`.trim(),
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+export const createWorker = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const name = requireString(data, "name");
+  const dailyWage = requireNumber(data, "dailyWage");
+  if (dailyWage <= 0) {
+    throw new HttpsError("invalid-argument", "Daily wage must be greater than zero");
+  }
+
+  const workerRef = db.collection("workers").doc();
+  await workerRef.set({
+    id: workerRef.id,
+    workspaceId,
+    name,
+    phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
+    dailyWage,
+    workerType: `${data.workerType ?? ""}`.trim(),
+    notes: `${data.notes ?? ""}`.trim(),
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    createdBy: request.auth.uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    isArchived: false,
+  });
+
+  return {id: workerRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
+});
+
+export const updateWorker = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const workerId = requireString(data, "workerId");
+  const name = requireString(data, "name");
+  const dailyWage = requireNumber(data, "dailyWage");
+  if (dailyWage <= 0) {
+    throw new HttpsError("invalid-argument", "Daily wage must be greater than zero");
+  }
+
+  const workerRef = db.collection("workers").doc(workerId);
+  const workerSnap = await workerRef.get();
+  if (!workerSnap.exists) {
+    throw new HttpsError("not-found", "Worker not found");
+  }
+  const worker = workerSnap.data() ?? {};
+  if (`${worker.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Worker is not available in this workspace");
+  }
+  if (worker.isArchived === true) {
+    throw new HttpsError("failed-precondition", "Archived workers cannot be edited.");
+  }
+
+  await workerRef.update({
+    name,
+    phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
+    dailyWage,
+    workerType: `${data.workerType ?? ""}`.trim(),
+    notes: `${data.notes ?? ""}`.trim(),
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+export const archiveWorker = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const workerId = requireString(data, "workerId");
+  const workerRef = db.collection("workers").doc(workerId);
+  const workerSnap = await workerRef.get();
+  if (!workerSnap.exists) {
+    throw new HttpsError("not-found", "Worker not found");
+  }
+  const worker = workerSnap.data() ?? {};
+  if (`${worker.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Worker is not available in this workspace");
+  }
+  await workerRef.update({
+    isArchived: true,
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+export const updateWorkerEntry = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const entryId = requireString(data, "entryId");
+  const projectId = requireString(data, "projectId");
+  const daysWorked = requireNumber(data, "daysWorked");
+  const dailyWage = requireNumber(data, "dailyWage");
+  if (daysWorked <= 0 || dailyWage <= 0) {
+    throw new HttpsError("invalid-argument", "Days worked and daily wage must be > 0");
+  }
+
+  const [entrySnap, projectSnap] = await Promise.all([
+    db.collection("worker_entries").doc(entryId).get(),
+    db.collection("projects").doc(projectId).get(),
+  ]);
+  if (!entrySnap.exists) {
+    throw new HttpsError("not-found", "Worker entry not found");
+  }
+  const entry = entrySnap.data() ?? {};
+  if (`${entry.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Worker entry is not available in this workspace");
+  }
+  if (entry.isArchived === true) {
+    throw new HttpsError("failed-precondition", "Archived worker entries cannot be edited.");
+  }
+  if (!projectSnap.exists) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("invalid-argument", "Project does not exist");
+  }
+  if (project.isArchived === true) {
+    throw new HttpsError("permission-denied", "Project is archived and can no longer accept worker entries.");
+  }
+
+  await entrySnap.ref.update({
+    projectId,
+    daysWorked,
+    dailyWage,
+    totalCost: daysWorked * dailyWage,
+    date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+    notes: `${data.notes ?? ""}`.trim(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
 export const deleteProjectCascade = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -1632,6 +2041,155 @@ export const updateUserProfile = onCall(async (request) => {
     ...(riskAlertsEnabled == null ? {} : {riskAlertsEnabled}),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, {merge: true});
+});
+
+export async function bootstrapWorkspaceForUser(input: {
+  uid: string;
+  email?: string | null;
+  fullName?: string | null;
+  photoUrl?: string | null;
+}): Promise<{workspaceId: string; created: boolean}> {
+  const uid = input.uid.trim();
+  if (!uid) {
+    throw new HttpsError("invalid-argument", "Missing authenticated user");
+  }
+
+  const email = normalizeEmail(`${input.email ?? ""}`);
+  const fullName = `${input.fullName ?? ""}`.trim();
+  const photoUrl = `${input.photoUrl ?? ""}`.trim();
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  const existingUser = userSnap.data() ?? {};
+  const incomingEmail = nonEmptyStringOrUndefined(email);
+  const incomingFullName = nonEmptyStringOrUndefined(fullName);
+  const incomingPhotoUrl = nonEmptyStringOrUndefined(photoUrl);
+  const existingEmail = nonEmptyStringOrUndefined(`${existingUser.email ?? ""}`);
+  const existingFullName = nonEmptyStringOrUndefined(`${existingUser.fullName ?? ""}`);
+  const existingPhotoUrl = nonEmptyStringOrUndefined(`${existingUser.photoUrl ?? ""}`);
+  const existingDefaultCurrency = nonEmptyStringOrUndefined(`${existingUser.defaultCurrency ?? ""}`);
+  const existingRiskAlertsEnabled = asBooleanOrUndefined(existingUser.riskAlertsEnabled);
+
+  function existingUserPayload(workspaceId: string): Record<string, unknown> {
+    const payload: Record<string, unknown> = {
+      id: uid,
+      workspaceId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    assignIfDefined(payload, "email", existingEmail ?? incomingEmail);
+    assignIfDefined(payload, "fullName", existingFullName ?? incomingFullName);
+    assignIfDefined(payload, "photoUrl", existingPhotoUrl ?? incomingPhotoUrl);
+    assignIfDefined(payload, "defaultCurrency", existingDefaultCurrency);
+    assignIfDefined(payload, "riskAlertsEnabled", existingRiskAlertsEnabled);
+    return payload;
+  }
+
+  function newUserPayload(workspaceId: string): Record<string, unknown> {
+    const payload: Record<string, unknown> = {
+      id: uid,
+      workspaceId,
+      defaultCurrency: "EGP",
+      riskAlertsEnabled: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    assignIfDefined(payload, "email", incomingEmail);
+    assignIfDefined(payload, "fullName", incomingFullName);
+    assignIfDefined(payload, "photoUrl", incomingPhotoUrl);
+    return payload;
+  }
+
+  const membershipSnap = await db
+    .collection("memberships")
+    .where("userId", "==", uid)
+    .limit(1)
+    .get();
+  if (!membershipSnap.empty) {
+    const workspaceId = `${membershipSnap.docs[0].data().workspaceId ?? ""}`.trim();
+    if (workspaceId) {
+      await userRef.set(
+        userSnap.exists ? existingUserPayload(workspaceId) : newUserPayload(workspaceId),
+        {merge: true},
+      );
+      return {workspaceId, created: false};
+    }
+  }
+
+  const legacyWorkspaceId = `${userSnap.data()?.workspaceId ?? ""}`.trim();
+  if (legacyWorkspaceId) {
+    const legacyWorkspaceRef = db.collection("workspaces").doc(legacyWorkspaceId);
+    const legacyWorkspaceSnap = await legacyWorkspaceRef.get();
+    const legacyOwnerId = `${legacyWorkspaceSnap.data()?.ownerId ?? ""}`.trim();
+
+    if (!legacyWorkspaceSnap.exists) {
+      await legacyWorkspaceRef.set({
+        id: legacyWorkspaceId,
+        name: userWorkspaceName(fullName),
+        ownerId: uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+
+    if (legacyWorkspaceSnap.exists && legacyOwnerId !== uid) {
+      const legacyRole = await roleForUser(legacyWorkspaceId, uid);
+      if (!legacyRole) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Legacy workspace points to a workspace owned by another user without a valid membership.",
+        );
+      }
+    } else {
+      await membershipRef(legacyWorkspaceId, uid).set({
+        workspaceId: legacyWorkspaceId,
+        userId: uid,
+        role: "owner",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+
+    await userRef.set(
+      userSnap.exists ? existingUserPayload(legacyWorkspaceId) : newUserPayload(legacyWorkspaceId),
+      {merge: true},
+    );
+    return {workspaceId: legacyWorkspaceId, created: false};
+  }
+
+  const workspaceRef = db.collection("workspaces").doc();
+  const workspaceId = workspaceRef.id;
+  const batch = db.batch();
+  batch.set(workspaceRef, {
+    id: workspaceId,
+    name: userWorkspaceName(fullName),
+    ownerId: uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  batch.set(membershipRef(workspaceId, uid), {
+    workspaceId,
+    userId: uid,
+    role: "owner",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  batch.set(userRef, {
+    ...newUserPayload(workspaceId),
+  }, {merge: true});
+  await batch.commit();
+  return {workspaceId, created: true};
+}
+
+export const ensureUserWorkspaceBootstrap = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  return bootstrapWorkspaceForUser({
+    uid: request.auth.uid,
+    email: `${request.auth.token.email ?? ""}`,
+    fullName: `${request.auth.token.name ?? ""}`,
+    photoUrl: `${request.auth.token.picture ?? ""}`,
+  });
 });
 
 export const inviteMemberByEmail = onCall(async (request) => {
@@ -1881,51 +2439,42 @@ async function recomputeProjectSummary(workspaceId: string, projectId: string): 
     categoryTotals.labor = (categoryTotals.labor ?? 0) + laborExpenses;
   }
 
-  const now = new Date();
-  const monthlyFlow = Array.from({length: 6}).map((_, index) => {
-    const monthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - index), 1));
-    const monthKey = `${monthDate.getUTCFullYear()}-${`${monthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
-    return {
-      month: monthKey,
-      expenses: 0,
-      income: 0,
-    };
-  });
-  const monthlyIndex = new Map(monthlyFlow.map((item, index) => [item.month, index]));
+  const monthlyMap = new Map<string, MonthlyFlowPoint>();
+  const pointFor = (date: Date): MonthlyFlowPoint => {
+    const monthKey = `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const existing = monthlyMap.get(monthKey);
+    if (existing) {
+      return existing;
+    }
+    const point = {month: monthKey, expenses: 0, income: 0};
+    monthlyMap.set(monthKey, point);
+    return point;
+  };
 
   for (const doc of expensesSnap.docs) {
     const date = parseTimestamp(doc.data().date)?.toDate();
     if (!date) {
       continue;
     }
-    const key = `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}`;
-    const index = monthlyIndex.get(key);
-    if (index != null) {
-      monthlyFlow[index].expenses += Number(doc.data().amount ?? 0);
-    }
+    pointFor(date).expenses += Number(doc.data().amount ?? 0);
   }
   for (const doc of workerEntriesSnap.docs) {
     const date = parseTimestamp(doc.data().date)?.toDate();
     if (!date) {
       continue;
     }
-    const key = `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}`;
-    const index = monthlyIndex.get(key);
-    if (index != null) {
-      monthlyFlow[index].expenses += workerEntryTotalCost(doc.data());
-    }
+    pointFor(date).expenses += workerEntryTotalCost(doc.data());
   }
   for (const doc of paymentsSnap.docs) {
     const date = parseTimestamp(doc.data().date)?.toDate();
     if (!date) {
       continue;
     }
-    const key = `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}`;
-    const index = monthlyIndex.get(key);
-    if (index != null) {
-      monthlyFlow[index].income += Number(doc.data().amount ?? 0);
-    }
+    pointFor(date).income += Number(doc.data().amount ?? 0);
   }
+  const monthlyFlow = Array.from(monthlyMap.values()).sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
 
   const workerIdsInEntries = Array.from(
     new Set(workerEntriesSnap.docs.map((doc) => `${doc.data().workerId ?? ""}`.trim()).filter((id) => id.length > 0)),

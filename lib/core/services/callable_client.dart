@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -11,11 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 class CallableClient {
-  const CallableClient(this._functions, this._auth, this._appCheck);
+  const CallableClient(this._functions, this._auth, this._appCheck, this._telemetry);
 
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
   final FirebaseAppCheck _appCheck;
+  final AppTelemetry _telemetry;
 
   Future<T> call<T>({
     required String functionName,
@@ -35,11 +37,17 @@ class CallableClient {
     await _refreshCallableSession(currentUser, functionName);
 
     try {
+      await _telemetry.log('callable.request', {'function': functionName});
       final response = await _functions
           .httpsCallable(functionName)
           .call<Map<String, dynamic>>(payload);
+      await _telemetry.log('callable.success', {'function': functionName});
       return parseResult(response.data);
     } on FirebaseFunctionsException catch (error) {
+      await _telemetry.log('callable.error', {
+        'function': functionName,
+        'code': error.code,
+      });
       if (error.code == 'unauthenticated') {
         final refreshedUser = await _authenticatedUser();
         if (refreshedUser == null) {
@@ -52,11 +60,17 @@ class CallableClient {
         await _refreshCallableSession(refreshedUser, functionName);
 
         try {
+          await _telemetry.log('callable.retry', {'function': functionName});
           final response = await _functions
               .httpsCallable(functionName)
               .call<Map<String, dynamic>>(payload);
+          await _telemetry.log('callable.retry_success', {'function': functionName});
           return parseResult(response.data);
         } on FirebaseFunctionsException catch (retryError) {
+          await _telemetry.log('callable.retry_error', {
+            'function': functionName,
+            'code': retryError.code,
+          });
           if (retryError.code == 'unauthenticated' &&
               httpFunctionName != null &&
               httpFunctionName.isNotEmpty) {
@@ -238,5 +252,6 @@ final callableClientProvider = Provider<CallableClient>((ref) {
     ref.watch(functionsProvider),
     ref.watch(firebaseAuthProvider),
     FirebaseAppCheck.instance,
+    ref.watch(appTelemetryProvider),
   );
 });

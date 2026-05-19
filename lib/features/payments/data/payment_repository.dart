@@ -186,13 +186,21 @@ class FirebasePaymentRepository implements PaymentRepository {
     required String paymentMethod,
     String? notes,
   }) async {
-    await _firestore.collection('payments').doc(paymentId).update({
-      'amount': amount,
-      'date': Timestamp.fromDate(date),
-      'paymentMethod': paymentMethod,
-      'notes': notes ?? '',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final payment = await getPayment(paymentId);
+    if (payment == null) {
+      return;
+    }
+    await _mutationService.updatePayment(
+      workspaceId: payment.workspaceId,
+      paymentId: paymentId,
+      projectId: payment.projectId,
+      amount: amount,
+      date: date,
+      paymentMethod: paymentMethod,
+      notes: notes,
+      previousAmount: payment.amount,
+      previousDate: payment.date,
+    );
   }
 
   @override
@@ -204,6 +212,9 @@ class FirebasePaymentRepository implements PaymentRepository {
     return _mutationService.archivePayment(
       workspaceId: payment.workspaceId,
       paymentId: paymentId,
+      projectId: payment.projectId,
+      amount: payment.amount,
+      date: payment.date,
     );
   }
 
@@ -233,9 +244,55 @@ class FirebasePaymentRepository implements PaymentRepository {
       items.removeWhere((item) => archivedIds.contains(item.id));
     }
 
+    for (final action in actions) {
+      if (action.type != OfflineActionTypes.updatePayment) {
+        continue;
+      }
+      final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
+      final payloadProjectId = '${action.payload['projectId'] ?? ''}';
+      final paymentId = '${action.payload['paymentId'] ?? ''}';
+      if (payloadWorkspaceId != workspaceId || paymentId.isEmpty) {
+        continue;
+      }
+      if (projectId != null &&
+          projectId.isNotEmpty &&
+          payloadProjectId != projectId) {
+        continue;
+      }
+      final index = items.indexWhere((item) => item.id == paymentId);
+      if (index < 0) {
+        continue;
+      }
+      final current = items[index];
+      items[index] = PaymentRecord(
+        id: current.id,
+        workspaceId: current.workspaceId,
+        projectId: current.projectId,
+        amount:
+            (action.payload['amount'] as num?)?.toDouble() ?? current.amount,
+        date:
+            DateTime.tryParse('${action.payload['date'] ?? ''}') ??
+            current.date,
+        paymentMethod:
+            '${action.payload['paymentMethod'] ?? current.paymentMethod}',
+        notes: '${action.payload['notes'] ?? current.notes}',
+        isArchived: current.isArchived,
+        clientMutationId: current.clientMutationId,
+      );
+    }
+
     if (includePendingCreates) {
+      final liveMutationIds = items
+          .map((item) => item.clientMutationId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
       for (final action in actions) {
         if (action.type != OfflineActionTypes.createPayment) {
+          continue;
+        }
+        final clientMutationId = '${action.payload['clientMutationId'] ?? ''}';
+        if (clientMutationId.isNotEmpty &&
+            liveMutationIds.contains(clientMutationId)) {
           continue;
         }
         final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
@@ -273,6 +330,7 @@ class FirebasePaymentRepository implements PaymentRepository {
       paymentMethod: '${payload['paymentMethod'] ?? 'cash'}',
       notes: '${payload['notes'] ?? ''}',
       isArchived: false,
+      clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );
   }
 }

@@ -32,4 +32,24 @@ void main() {
 
     expect(redirect, AppRoutes.dashboard);
   });
+
+  test('signed-in user without workspace is kept on splash for recovery', () {
+    final redirect = resolveAppRedirect(
+      location: AppRoutes.dashboard,
+      isSignedIn: true,
+      hasWorkspace: false,
+    );
+
+    expect(redirect, AppRoutes.root);
+  });
+
+  test('signed-out user can stay on public discovery routes', () {
+    final redirect = resolveAppRedirect(
+      location: AppRoutes.features,
+      isSignedIn: false,
+      hasWorkspace: false,
+    );
+
+    expect(redirect, isNull);
+  });
 }

@@ -16,6 +16,7 @@ class Expense {
     required this.source,
     required this.storagePath,
     required this.isArchived,
+    this.clientMutationId = '',
   });
 
   final String id;
@@ -34,6 +35,7 @@ class Expense {
   final String source;
   final String storagePath;
   final bool isArchived;
+  final String clientMutationId;
 
   factory Expense.fromMap(String id, Map<String, dynamic> map) {
     DateTime parseDate(dynamic value) {
@@ -77,6 +79,7 @@ class Expense {
       source: map['source'] as String? ?? '',
       storagePath: map['storagePath'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,
+      clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
 }

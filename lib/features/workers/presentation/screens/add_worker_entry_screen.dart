@@ -207,10 +207,19 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  if (_workerId == null)
-                    workersAsync.when(
-                      data: (workers) => DropdownButtonFormField<String>(
-                        initialValue: _workerId,
+                  workersAsync.when(
+                    data: (workers) {
+                      final selectedWorkerId = _resolvedWorkerId(workers);
+                      final fixedWorkerId = widget.workerId == 'new'
+                          ? null
+                          : widget.workerId;
+                      final showWorkerPicker =
+                          fixedWorkerId == null || selectedWorkerId == null;
+                      if (!showWorkerPicker) {
+                        return const SizedBox.shrink();
+                      }
+                      return DropdownButtonFormField<String>(
+                        initialValue: selectedWorkerId,
                         items: workers
                             .map(
                               (worker) => DropdownMenuItem(
@@ -223,11 +232,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         decoration: InputDecoration(
                           labelText: l10n.t('workerName'),
                         ),
-                      ),
-                      error: (e, _) => Text(e.toString()),
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                    ),
+                      );
+                    },
+                    error: (e, _) => Text(e.toString()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                  ),
                   const SizedBox(height: 12),
                   projectsAsync.when(
                     data: (projects) => DropdownButtonFormField<String>(
@@ -312,5 +322,24 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
               ),
       ),
     );
+  }
+
+  String? _resolvedWorkerId(List<dynamic> workers) {
+    final currentWorkerId = _workerId;
+    if (currentWorkerId == null ||
+        currentWorkerId.isEmpty ||
+        currentWorkerId == 'new') {
+      return null;
+    }
+    final exists = workers.any((worker) => worker.id == currentWorkerId);
+    if (exists) {
+      return currentWorkerId;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _workerId == currentWorkerId) {
+        setState(() => _workerId = null);
+      }
+    });
+    return null;
   }
 }

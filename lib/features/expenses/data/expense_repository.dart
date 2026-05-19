@@ -193,15 +193,24 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     String? supplierName,
     String? paymentMethod,
   }) async {
-    await _firestore.collection('expenses').doc(expenseId).update({
-      'category': category,
-      'amount': amount,
-      'date': Timestamp.fromDate(date),
-      'notes': notes ?? '',
-      'supplierName': supplierName ?? '',
-      'paymentMethod': paymentMethod ?? '',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final expense = await getExpense(expenseId);
+    if (expense == null) {
+      return;
+    }
+    await _mutationService.updateExpense(
+      workspaceId: expense.workspaceId,
+      expenseId: expenseId,
+      projectId: expense.projectId,
+      category: category,
+      amount: amount,
+      date: date,
+      notes: notes,
+      supplierName: supplierName,
+      paymentMethod: paymentMethod,
+      previousAmount: expense.amount,
+      previousDate: expense.date,
+      previousCategory: expense.category,
+    );
   }
 
   @override
@@ -213,6 +222,10 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     return _mutationService.archiveExpense(
       workspaceId: expense.workspaceId,
       expenseId: expenseId,
+      projectId: expense.projectId,
+      category: expense.category,
+      amount: expense.amount,
+      date: expense.date,
     );
   }
 
@@ -247,9 +260,61 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       items.removeWhere((item) => archivedIds.contains(item.id));
     }
 
+    for (final action in actions) {
+      if (action.type != OfflineActionTypes.updateExpense) {
+        continue;
+      }
+      final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
+      final payloadProjectId = '${action.payload['projectId'] ?? ''}';
+      final expenseId = '${action.payload['expenseId'] ?? ''}';
+      if (payloadWorkspaceId != workspaceId ||
+          payloadProjectId != projectId ||
+          expenseId.isEmpty) {
+        continue;
+      }
+      final index = items.indexWhere((item) => item.id == expenseId);
+      if (index < 0) {
+        continue;
+      }
+      final current = items[index];
+      items[index] = Expense(
+        id: current.id,
+        workspaceId: current.workspaceId,
+        projectId: current.projectId,
+        projectName: current.projectName,
+        category: '${action.payload['category'] ?? current.category}',
+        amount:
+            (action.payload['amount'] as num?)?.toDouble() ?? current.amount,
+        currency: current.currency,
+        date:
+            DateTime.tryParse('${action.payload['date'] ?? ''}') ??
+            current.date,
+        notes: '${action.payload['notes'] ?? current.notes}',
+        supplierName:
+            '${action.payload['supplierName'] ?? current.supplierName}',
+        paymentMethod:
+            '${action.payload['paymentMethod'] ?? current.paymentMethod}',
+        inputMethod: current.inputMethod,
+        transcript: current.transcript,
+        source: current.source,
+        storagePath: current.storagePath,
+        isArchived: current.isArchived,
+        clientMutationId: current.clientMutationId,
+      );
+    }
+
     if (includePendingCreates) {
+      final liveMutationIds = items
+          .map((item) => item.clientMutationId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
       for (final action in actions) {
         if (action.type != OfflineActionTypes.createExpense) {
+          continue;
+        }
+        final clientMutationId = '${action.payload['clientMutationId'] ?? ''}';
+        if (clientMutationId.isNotEmpty &&
+            liveMutationIds.contains(clientMutationId)) {
           continue;
         }
         final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
@@ -290,6 +355,7 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       source: 'pending',
       storagePath: '',
       isArchived: false,
+      clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );
   }
 }

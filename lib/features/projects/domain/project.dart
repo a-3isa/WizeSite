@@ -11,6 +11,7 @@ class Project {
     required this.totalPayments,
     required this.netProfit,
     required this.isArchived,
+    this.clientMutationId = '',
   });
 
   final String id;
@@ -24,6 +25,7 @@ class Project {
   final double totalPayments;
   final double netProfit;
   final bool isArchived;
+  final String clientMutationId;
 
   factory Project.fromMap(String id, Map<String, dynamic> map) {
     final totalExpenses = (map['totalExpenses'] as num?)?.toDouble() ?? 0;
@@ -49,6 +51,7 @@ class Project {
       totalPayments: totalPayments,
       netProfit: netProfit,
       isArchived: map['isArchived'] as bool? ?? false,
+      clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
 }

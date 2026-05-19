@@ -5,6 +5,7 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import * as admin from "firebase-admin";
+import {HttpsError} from "firebase-functions/v2/https";
 
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 
@@ -53,6 +54,20 @@ function expenseWriteEvent(
   };
 }
 
+function paymentWriteEvent(
+  before: TriggerData | undefined,
+  after: TriggerData | undefined,
+  paymentId = "payment_1",
+) {
+  return {
+    data: {
+      before: snapshotOf(before),
+      after: snapshotOf(after),
+    },
+    params: {paymentId},
+  };
+}
+
 function workerEntryWriteEvent(
   before: TriggerData | undefined,
   after: TriggerData | undefined,
@@ -83,9 +98,23 @@ if (!emulatorHost) {
   let db: admin.firestore.Firestore;
   let handleProjectWriteRecompute: RecomputeHandler<{projectId?: string}>;
   let handleExpenseWriteRecompute: RecomputeHandler<{expenseId?: string}>;
+  let handlePaymentWriteRecompute: RecomputeHandler<{paymentId?: string}>;
   let handleWorkerEntryWriteRecompute: RecomputeHandler<{entryId?: string}>;
+  let createPaymentWithQuotaForUser: (
+    uid: string,
+    data: Record<string, unknown>,
+  ) => Promise<{id: string}>;
+  let createWorkerEntryWithQuotaForUser: (
+    uid: string,
+    data: Record<string, unknown>,
+  ) => Promise<{id: string}>;
 
   const workspaceId = "workspace_1";
+  const now = new Date();
+  const currentMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 10));
+  const previousMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 12));
+  const twoMonthsAgoDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 8));
+  const oldHistoryDate = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), 5));
   const baseProject = {
     id: "project_1",
     workspaceId,
@@ -107,7 +136,7 @@ if (!emulatorHost) {
       projectId: "project_1",
       category: "materials",
       amount: 200,
-      date: admin.firestore.Timestamp.now(),
+      date: admin.firestore.Timestamp.fromDate(previousMonthDate),
       isArchived: false,
     });
     await db.collection("payments").doc("payment_1").set({
@@ -115,7 +144,7 @@ if (!emulatorHost) {
       workspaceId,
       projectId: "project_1",
       amount: 300,
-      date: admin.firestore.Timestamp.now(),
+      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
       isArchived: false,
     });
     await db.collection("workers").doc("worker_1").set({
@@ -132,7 +161,7 @@ if (!emulatorHost) {
       daysWorked: 1,
       dailyWage: 100,
       totalCost: 100,
-      date: admin.firestore.Timestamp.now(),
+      date: admin.firestore.Timestamp.fromDate(twoMonthsAgoDate),
       isArchived: false,
     });
     await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
@@ -159,7 +188,10 @@ if (!emulatorHost) {
     const indexModule = await import("./index");
     handleProjectWriteRecompute = indexModule.handleProjectWriteRecompute;
     handleExpenseWriteRecompute = indexModule.handleExpenseWriteRecompute;
+    handlePaymentWriteRecompute = indexModule.handlePaymentWriteRecompute;
     handleWorkerEntryWriteRecompute = indexModule.handleWorkerEntryWriteRecompute;
+    createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
+    createWorkerEntryWithQuotaForUser = indexModule.createWorkerEntryWithQuotaForUser;
     db = admin.firestore();
   });
 
@@ -441,5 +473,165 @@ if (!emulatorHost) {
     assert.equal(Number(metricsData.totalExpenses ?? 0), 450);
     assert.equal(Number(categoryTotals.labor ?? 0), 250);
     assert.equal(Number(topWorkers[0].totalCost ?? 0), 250);
+  });
+
+  test("recompute monthly flow preserves timestamp-dated expenses payments and worker entries", async () => {
+    await seedRecomputeInputs();
+
+    const projectData = (await db.collection("projects").doc("project_1").get()).data() as TriggerData;
+    await handleProjectWriteRecompute(projectWriteEvent(undefined, projectData));
+
+    const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+    const monthlyFlow = (metricsSnap.data()?.monthlyFlow ?? []) as Array<Record<string, unknown>>;
+
+    const previousKey = `${previousMonthDate.getUTCFullYear()}-${`${previousMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const currentKey = `${currentMonthDate.getUTCFullYear()}-${`${currentMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const twoMonthsAgoKey = `${twoMonthsAgoDate.getUTCFullYear()}-${`${twoMonthsAgoDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+
+    const flowPointFor = (monthKey: string) =>
+      monthlyFlow.find((item) => item["month"] === monthKey) ?? {};
+
+    const previousMonthPoint = flowPointFor(previousKey);
+    const currentMonthPoint = flowPointFor(currentKey);
+    const twoMonthsAgoPoint = flowPointFor(twoMonthsAgoKey);
+
+    assert.equal(Number(previousMonthPoint["expenses"] ?? 0), 200);
+    assert.equal(Number(currentMonthPoint["income"] ?? 0), 300);
+    assert.equal(Number(twoMonthsAgoPoint["expenses"] ?? 0), 100);
+  });
+
+  test("recompute monthly flow includes active finance records outside the latest six months", async () => {
+    await seedRecomputeInputs();
+    await db.collection("expenses").doc("old_expense").set({
+      id: "old_expense",
+      workspaceId,
+      projectId: "project_1",
+      category: "equipment",
+      amount: 75,
+      date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+      isArchived: false,
+    });
+    await db.collection("payments").doc("old_payment").set({
+      id: "old_payment",
+      workspaceId,
+      projectId: "project_1",
+      amount: 125,
+      date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+      isArchived: false,
+    });
+
+    const projectData = (await db.collection("projects").doc("project_1").get()).data() as TriggerData;
+    await handleProjectWriteRecompute(projectWriteEvent(undefined, projectData));
+
+    const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+    const monthlyFlow = (metricsSnap.data()?.monthlyFlow ?? []) as Array<Record<string, unknown>>;
+    const oldMonthKey = `${oldHistoryDate.getUTCFullYear()}-${`${oldHistoryDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const oldPoint = monthlyFlow.find((item) => item["month"] === oldMonthKey) ?? {};
+
+    assert.equal(Number(oldPoint["expenses"] ?? 0), 75);
+    assert.equal(Number(oldPoint["income"] ?? 0), 125);
+    assert.deepEqual(
+      monthlyFlow.map((item) => item["month"]),
+      [...monthlyFlow].map((item) => item["month"]).sort(),
+      "monthly flow should remain chronological",
+    );
+  });
+
+  test("payment trigger recomputes when only the date changes", async () => {
+    await seedRecomputeInputs();
+
+    const paymentRef = db.collection("payments").doc("payment_1");
+    const beforePayment = (await paymentRef.get()).data() as TriggerData;
+    await handlePaymentWriteRecompute(paymentWriteEvent(undefined, beforePayment));
+
+    const targetDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 20));
+    const afterPayment = {
+      ...beforePayment,
+      date: admin.firestore.Timestamp.fromDate(targetDate),
+    };
+    await paymentRef.set(afterPayment, {merge: true});
+
+    const metricsBefore = await db.collection("project_metrics").doc("project_1").get();
+    await handlePaymentWriteRecompute(paymentWriteEvent(beforePayment, afterPayment));
+    const metricsAfter = await db.collection("project_metrics").doc("project_1").get();
+
+    const monthlyFlow = (metricsAfter.data()?.monthlyFlow ?? []) as Array<Record<string, unknown>>;
+    const movedMonthKey = `${targetDate.getUTCFullYear()}-${`${targetDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const originalMonthKey = `${currentMonthDate.getUTCFullYear()}-${`${currentMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
+    const movedPoint = monthlyFlow.find((item) => item["month"] === movedMonthKey) ?? {};
+    const originalPoint = monthlyFlow.find((item) => item["month"] === originalMonthKey) ?? {};
+
+    assert.notEqual(
+      metricsAfter.updateTime?.toMillis(),
+      metricsBefore.updateTime?.toMillis(),
+      "payment date-only changes must trigger a recompute",
+    );
+    assert.equal(Number(movedPoint["income"] ?? 0), 300);
+    assert.equal(Number(originalPoint["income"] ?? 0), 0);
+  });
+
+  test("payment creation rejects archived projects", async () => {
+    await seedRecomputeInputs();
+    await db.collection("projects").doc("project_1").update({isArchived: true});
+
+    await assert.rejects(
+      () => createPaymentWithQuotaForUser("user_1", {
+        workspaceId,
+        projectId: "project_1",
+        amount: 300,
+        date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+        paymentMethod: "cash",
+      }),
+      (error: unknown) => {
+        const handled = error as HttpsError;
+        return handled instanceof HttpsError &&
+          handled.code === "permission-denied" &&
+          handled.message.includes("Project is archived");
+      },
+    );
+  });
+
+  test("worker entry creation rejects archived projects", async () => {
+    await seedRecomputeInputs();
+    await db.collection("projects").doc("project_1").update({isArchived: true});
+
+    await assert.rejects(
+      () => createWorkerEntryWithQuotaForUser("user_1", {
+        workspaceId,
+        workerId: "worker_1",
+        projectId: "project_1",
+        daysWorked: 2,
+        dailyWage: 125,
+        date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      }),
+      (error: unknown) => {
+        const handled = error as HttpsError;
+        return handled instanceof HttpsError &&
+          handled.code === "permission-denied" &&
+          handled.message.includes("Project is archived");
+      },
+    );
+  });
+
+  test("worker entry creation rejects archived workers", async () => {
+    await seedRecomputeInputs();
+    await db.collection("workers").doc("worker_1").update({isArchived: true});
+
+    await assert.rejects(
+      () => createWorkerEntryWithQuotaForUser("user_1", {
+        workspaceId,
+        workerId: "worker_1",
+        projectId: "project_1",
+        daysWorked: 2,
+        dailyWage: 125,
+        date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      }),
+      (error: unknown) => {
+        const handled = error as HttpsError;
+        return handled instanceof HttpsError &&
+          handled.code === "permission-denied" &&
+          handled.message.includes("Worker is archived");
+      },
+    );
   });
 }

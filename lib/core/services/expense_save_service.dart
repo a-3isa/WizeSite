@@ -1,10 +1,10 @@
-import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ExpenseSaveService {
-  const ExpenseSaveService(this._client);
+  const ExpenseSaveService(this._mutationService);
 
-  final CallableClient _client;
+  final WorkspaceMutationService _mutationService;
 
   Future<String?> saveVoiceExpense({
     required String workspaceId,
@@ -19,37 +19,23 @@ class ExpenseSaveService {
     required String source,
     required String storagePath,
   }) async {
-    try {
-      return await _client.call<String?>(
-        functionName: 'createExpenseWithQuota',
-        httpFunctionName: 'createExpenseWithQuotaHttp',
-        payload: {
-          'workspaceId': workspaceId,
-          'projectId': projectId,
-          'projectName': projectName,
-          'category': category,
-          'amount': amount,
-          'currency': currency,
-          'date': date.toIso8601String(),
-          'notes': notes,
-          'supplierName': '',
-          'paymentMethod': '',
-          'inputMethod': 'voice',
-          'transcript': transcript,
-          'source': source,
-          'storagePath': storagePath,
-        },
-        parseResult: (result) {
-          if (result is Map<String, dynamic>) {
-            return result['id'] as String?;
-          }
-          return null;
-        },
-        defaultErrorMessage: 'Failed to save expense.',
-      );
-    } on CallableClientException catch (error) {
-      throw ExpenseSaveServiceException(error.message, code: error.code);
-    }
+    final result = await _mutationService.createManualExpense(
+      workspaceId: workspaceId,
+      projectId: projectId,
+      projectName: projectName,
+      category: category,
+      amount: amount,
+      currency: currency,
+      date: date,
+      notes: notes,
+      supplierName: '',
+      paymentMethod: '',
+      inputMethod: 'voice',
+      transcript: transcript,
+      source: source,
+      storagePath: storagePath,
+    );
+    return result.id;
   }
 }
 
@@ -64,5 +50,5 @@ class ExpenseSaveServiceException implements Exception {
 }
 
 final expenseSaveServiceProvider = Provider<ExpenseSaveService>((ref) {
-  return ExpenseSaveService(ref.watch(callableClientProvider));
+  return ExpenseSaveService(ref.watch(workspaceMutationServiceProvider));
 });

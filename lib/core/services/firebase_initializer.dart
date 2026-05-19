@@ -4,15 +4,19 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+enum AppCheckActivationMode {
+  skip,
+  androidDebug,
+  androidRelease,
+  appleDebug,
+  appleRelease,
+}
+
 class FirebaseInitializer {
   static bool _initialized = false;
   static bool _appCheckActivated = false;
   static const String _androidDebugAppCheckToken =
       '4977E101-6CA1-4EAF-B50D-6B32AD6A1B3B';
-  static const bool _enableDevAppCheck = bool.fromEnvironment(
-    'ENABLE_APP_CHECK_DEV',
-    defaultValue: false,
-  );
 
   static Future<void> ensureInitialized() async {
     if (_initialized) {
@@ -42,27 +46,31 @@ class FirebaseInitializer {
   }
 
   static Future<void> _ensureAppCheckActivated() async {
-    if (_appCheckActivated || kIsWeb) {
+    if (_appCheckActivated) {
       return;
     }
-
-    if (!kReleaseMode &&
-        !_enableDevAppCheck &&
-        defaultTargetPlatform != TargetPlatform.android) {
+    final mode = appCheckActivationMode(
+      isWeb: kIsWeb,
+      isReleaseMode: kReleaseMode,
+      platform: defaultTargetPlatform,
+    );
+    if (mode == AppCheckActivationMode.skip) {
       _appCheckActivated = true;
       return;
     }
 
     try {
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (mode == AppCheckActivationMode.androidDebug) {
         await FirebaseAppCheck.instance.activate(
-          providerAndroid: !kReleaseMode
-              ? const AndroidDebugProvider(
-                  debugToken: _androidDebugAppCheckToken,
-                )
-              : const AndroidPlayIntegrityProvider(),
+          providerAndroid: const AndroidDebugProvider(
+            debugToken: _androidDebugAppCheckToken,
+          ),
         );
-      } else if (!kReleaseMode) {
+      } else if (mode == AppCheckActivationMode.androidRelease) {
+        await FirebaseAppCheck.instance.activate(
+          providerAndroid: const AndroidPlayIntegrityProvider(),
+        );
+      } else if (mode == AppCheckActivationMode.appleDebug) {
         await FirebaseAppCheck.instance.activate(
           providerApple: const AppleDebugProvider(),
         );
@@ -80,6 +88,32 @@ class FirebaseInitializer {
           context: ErrorDescription('while activating Firebase App Check'),
         ),
       );
+    }
+  }
+
+  @visibleForTesting
+  static AppCheckActivationMode appCheckActivationMode({
+    required bool isWeb,
+    required bool isReleaseMode,
+    required TargetPlatform platform,
+  }) {
+    if (isWeb) {
+      return AppCheckActivationMode.skip;
+    }
+    switch (platform) {
+      case TargetPlatform.android:
+        return isReleaseMode
+            ? AppCheckActivationMode.androidRelease
+            : AppCheckActivationMode.androidDebug;
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return isReleaseMode
+            ? AppCheckActivationMode.appleRelease
+            : AppCheckActivationMode.appleDebug;
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        return AppCheckActivationMode.skip;
     }
   }
 }

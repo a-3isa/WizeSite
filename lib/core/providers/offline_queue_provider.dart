@@ -11,7 +11,13 @@ final offlinePendingCountProvider = StateProvider<int>((ref) => 0);
 
 final offlineDeadLetterCountProvider = StateProvider<int>((ref) => 0);
 
-enum OfflineSyncFailureType { quota, unauthenticated, generic }
+enum OfflineSyncFailureType {
+  quota,
+  unauthenticated,
+  invalidTarget,
+  permission,
+  generic,
+}
 
 class OfflineSyncNotice {
   const OfflineSyncNotice({required this.actionId, required this.type});

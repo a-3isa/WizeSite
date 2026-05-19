@@ -71,6 +71,15 @@ class AppLocalizations {
     'queuedForSync': 'Saved offline. It will sync automatically when you reconnect.',
     'offlineSyncPending': '{count} offline actions are waiting to sync.',
     'offlineSyncFailed': '{count} offline actions failed and need attention.',
+    'offlineSyncFailureQuota':
+        'Queued action was rejected because your plan limit has been reached.',
+    'offlineSyncFailureUnauthenticated':
+        'Queued sync requires sign-in. Please log in again.',
+    'offlineSyncFailureInvalidTarget':
+        'Queued action is no longer valid because the target item was archived, removed, or is no longer available.',
+    'offlineSyncFailurePermission':
+        'Queued action was rejected because it no longer has permission to sync.',
+    'offlineSyncFailureGeneric': 'A queued action failed to sync.',
     'confirmArchiveExpense': 'Archive this expense?',
     'confirmArchivePayment': 'Archive this payment?',
     'confirmArchiveWorkerEntry': 'Archive this worker entry?',
@@ -151,6 +160,11 @@ class AppLocalizations {
     'companyNameOptional': 'Company Name (optional)',
     'phoneNumberOptional': 'Phone Number (optional)',
     'phoneNumber': 'Phone Number',
+    'pickFromContacts': 'Pick from Contacts',
+    'contactsPermissionDenied':
+        'Contacts access is needed to import a worker name and phone number.',
+    'contactsNoPhoneNumber':
+        'The selected contact does not have a phone number.',
     'sendResetLink': 'Send reset link',
     'resetLinkSent': 'Reset link sent to your email.',
     'signInCancelled': 'Sign-in was cancelled or could not complete.',

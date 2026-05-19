@@ -10,11 +10,17 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 Future<void> main() async {
   await runZonedGuarded(() async {
+    final coldStart = Stopwatch()..start();
     WidgetsFlutterBinding.ensureInitialized();
     await Hive.initFlutter();
     await Hive.openBox<String>('app_prefs');
     await Hive.openBox<String>('offline_actions');
     await FirebaseInitializer.ensureInitialized();
+    await FirebaseCrashlytics.instance.log('app.start firebase_initialized');
+    coldStart.stop();
+    await FirebaseCrashlytics.instance.log(
+      'app.start bootstrap_complete duration_ms=${coldStart.elapsedMilliseconds}',
+    );
 
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
       !kDebugMode,

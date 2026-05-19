@@ -8,7 +8,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import {doc, getDoc, setDoc} from "firebase/firestore";
+import {deleteDoc, doc, getDoc, setDoc, updateDoc} from "firebase/firestore";
 
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 
@@ -21,6 +21,12 @@ if (!emulatorHost) {
 } else {
   const projectId = "buildtrack-rules-test";
   let env: RulesTestEnvironment;
+  let bootstrapWorkspaceForUser: (input: {
+    uid: string;
+    email?: string | null;
+    fullName?: string | null;
+    photoUrl?: string | null;
+  }) => Promise<{workspaceId: string; created: boolean}>;
 
   async function seedBaseData() {
     await env.clearFirestore();
@@ -49,10 +55,53 @@ if (!emulatorHost) {
       await setDoc(doc(db, "projects", "project_other"), {
         id: "project_other",
         workspaceId: "workspace_other",
+        name: "Other Project",
+        clientName: "Other Client",
+        contractValue: 900,
+        startDate: new Date().toISOString(),
+        completionPercentage: 5,
+        status: "active",
+        isArchived: false,
       });
       await setDoc(doc(db, "projects", "project_owner"), {
         id: "project_owner",
         workspaceId: "workspace_owner",
+        name: "Owner Project",
+        clientName: "Client",
+        contractValue: 1200,
+        startDate: new Date().toISOString(),
+        completionPercentage: 10,
+        status: "active",
+        isArchived: false,
+      });
+      await setDoc(doc(db, "expenses", "expense_owner"), {
+        id: "expense_owner",
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        category: "materials",
+        amount: 100,
+        date: new Date().toISOString(),
+        isArchived: false,
+      });
+      await setDoc(doc(db, "payments", "payment_owner"), {
+        id: "payment_owner",
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        amount: 120,
+        date: new Date().toISOString(),
+        paymentMethod: "cash",
+        isArchived: false,
+      });
+      await setDoc(doc(db, "worker_entries", "entry_owner"), {
+        id: "entry_owner",
+        workspaceId: "workspace_owner",
+        workerId: "worker_1",
+        projectId: "project_owner",
+        daysWorked: 1,
+        dailyWage: 90,
+        totalCost: 90,
+        date: new Date().toISOString(),
+        isArchived: false,
       });
       await setDoc(doc(db, "memberships", "workspace_owner_member_1"), {
         workspaceId: "workspace_owner",
@@ -63,6 +112,8 @@ if (!emulatorHost) {
   }
 
   test.before(async () => {
+    process.env.GCLOUD_PROJECT = projectId;
+    process.env.FIREBASE_CONFIG = JSON.stringify({projectId});
     env = await initializeTestEnvironment({
       projectId,
       firestore: {
@@ -74,6 +125,9 @@ if (!emulatorHost) {
         ),
       },
     });
+
+    const indexModule = await import("./index");
+    bootstrapWorkspaceForUser = indexModule.bootstrapWorkspaceForUser;
   });
 
   test.after(async () => {
@@ -144,5 +198,242 @@ if (!emulatorHost) {
         role: "member",
       }),
     );
+  });
+
+  test("direct project create is denied even for workspace members", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      setDoc(doc(memberDb, "projects", "project_new"), {
+        id: "project_new",
+        workspaceId: "workspace_owner",
+        name: "New Project",
+        clientName: "Client",
+        contractValue: 500,
+        startDate: new Date().toISOString(),
+        completionPercentage: 0,
+        status: "active",
+        isArchived: false,
+      }),
+    );
+  });
+
+  test("direct expense create is denied", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      setDoc(doc(memberDb, "expenses", "expense_new"), {
+        id: "expense_new",
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        category: "materials",
+        amount: -10,
+        date: new Date().toISOString(),
+        isArchived: false,
+      }),
+    );
+  });
+
+  test("direct payment delete is denied", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(deleteDoc(doc(memberDb, "payments", "payment_owner")));
+  });
+
+  test("expense update cannot move records across workspaces", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      updateDoc(doc(memberDb, "expenses", "expense_owner"), {
+        workspaceId: "workspace_other",
+      }),
+    );
+  });
+
+  test("worker entry update rejects negative fields", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      updateDoc(doc(memberDb, "worker_entries", "entry_owner"), {
+        daysWorked: -1,
+      }),
+    );
+  });
+
+  test("bootstrap function creates workspace user and membership for first-time auth user", async () => {
+    await env.clearFirestore();
+
+    const result = await bootstrapWorkspaceForUser({
+      uid: "google_user_1",
+      email: "google@example.com",
+      fullName: "Google User",
+      photoUrl: "https://example.com/photo.png",
+    });
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const workspaceSnap = await getDoc(doc(db, "workspaces", result.workspaceId));
+      const userSnap = await getDoc(doc(db, "users", "google_user_1"));
+      const membershipSnap = await getDoc(
+        doc(db, "memberships", `${result.workspaceId}_google_user_1`),
+      );
+
+      assert.equal(result.created, true);
+      assert.equal(workspaceSnap.exists(), true);
+      assert.equal(userSnap.data()?.workspaceId, result.workspaceId);
+      assert.equal(membershipSnap.data()?.role, "owner");
+    });
+  });
+
+  test("bootstrap preserves existing user settings and profile fields", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "existing_user"), {
+        id: "existing_user",
+        workspaceId: "legacy_workspace",
+        email: "saved@example.com",
+        fullName: "Saved Name",
+        photoUrl: "https://example.com/saved.png",
+        defaultCurrency: "USD",
+        riskAlertsEnabled: false,
+      });
+      await setDoc(doc(db, "workspaces", "legacy_workspace"), {
+        id: "legacy_workspace",
+        ownerId: "existing_user",
+        name: "Existing Workspace",
+      });
+    });
+
+    const result = await bootstrapWorkspaceForUser({
+      uid: "existing_user",
+      email: "incoming@example.com",
+      fullName: "Incoming Name",
+      photoUrl: "https://example.com/incoming.png",
+    });
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "existing_user"));
+      const membershipSnap = await getDoc(
+        doc(db, "memberships", `${result.workspaceId}_existing_user`),
+      );
+
+      assert.equal(result.workspaceId, "legacy_workspace");
+      assert.equal(userSnap.data()?.defaultCurrency, "USD");
+      assert.equal(userSnap.data()?.riskAlertsEnabled, false);
+      assert.equal(userSnap.data()?.fullName, "Saved Name");
+      assert.equal(userSnap.data()?.photoUrl, "https://example.com/saved.png");
+      assert.equal(userSnap.data()?.email, "saved@example.com");
+      assert.equal(membershipSnap.data()?.role, "owner");
+    });
+  });
+
+  test("bootstrap omits missing optional profile fields for new users", async () => {
+    await env.clearFirestore();
+
+    const result = await bootstrapWorkspaceForUser({
+      uid: "minimal_user",
+      email: "minimal@example.com",
+      fullName: null,
+      photoUrl: null,
+    });
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "minimal_user"));
+
+      assert.equal(result.created, true);
+      assert.equal(userSnap.data()?.email, "minimal@example.com");
+      assert.equal("fullName" in (userSnap.data() ?? {}), false);
+      assert.equal("photoUrl" in (userSnap.data() ?? {}), false);
+    });
+  });
+
+  test("bootstrap preserves missing default currency on existing users without writing undefined", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "existing_without_currency"), {
+        id: "existing_without_currency",
+        workspaceId: "legacy_workspace",
+        riskAlertsEnabled: false,
+      });
+      await setDoc(doc(db, "workspaces", "legacy_workspace"), {
+        id: "legacy_workspace",
+        ownerId: "existing_without_currency",
+        name: "Legacy Workspace",
+      });
+    });
+
+    const result = await bootstrapWorkspaceForUser({
+      uid: "existing_without_currency",
+      email: "existing@example.com",
+      fullName: "",
+      photoUrl: "",
+    });
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "existing_without_currency"));
+
+      assert.equal(result.workspaceId, "legacy_workspace");
+      assert.equal(userSnap.data()?.riskAlertsEnabled, false);
+      assert.equal("defaultCurrency" in (userSnap.data() ?? {}), false);
+      assert.equal("fullName" in (userSnap.data() ?? {}), false);
+      assert.equal("photoUrl" in (userSnap.data() ?? {}), false);
+      assert.equal(userSnap.data()?.email, "existing@example.com");
+    });
+  });
+
+  test("bootstrap fails when legacy workspace belongs to someone else without membership", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "legacy_user"), {
+        id: "legacy_user",
+        workspaceId: "shared_workspace",
+        defaultCurrency: "USD",
+        riskAlertsEnabled: false,
+      });
+      await setDoc(doc(db, "workspaces", "shared_workspace"), {
+        id: "shared_workspace",
+        ownerId: "different_owner",
+        name: "Shared Workspace",
+      });
+    });
+
+    await assert.rejects(
+      bootstrapWorkspaceForUser({
+        uid: "legacy_user",
+        email: "legacy@example.com",
+        fullName: "Legacy User",
+        photoUrl: "https://example.com/legacy.png",
+      }),
+      (error: unknown) => {
+        assert.equal((error as {code?: string}).code, "failed-precondition");
+        assert.match(
+          `${(error as {message?: string}).message ?? ""}`,
+          /legacy workspace/i,
+        );
+        return true;
+      },
+    );
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const workspaceSnap = await getDoc(doc(db, "workspaces", "shared_workspace"));
+      const membershipSnap = await getDoc(doc(db, "memberships", "shared_workspace_legacy_user"));
+      const userSnap = await getDoc(doc(db, "users", "legacy_user"));
+
+      assert.equal(workspaceSnap.data()?.ownerId, "different_owner");
+      assert.equal(membershipSnap.exists(), false);
+      assert.equal(userSnap.data()?.workspaceId, "shared_workspace");
+    });
   });
 }

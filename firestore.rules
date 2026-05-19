@@ -39,6 +39,160 @@ service cloud.firestore {
         );
     }
 
+    function validProjectStatus(status) {
+      return status in ["active", "paused", "completed", "cancelled"];
+    }
+
+    function validExpenseCategory(category) {
+      return category in ["labor", "materials", "equipment", "transport", "other"];
+    }
+
+    function validPaymentMethod(method) {
+      return method in ["cash", "bank", "check"];
+    }
+
+    function validProjectUpdate(projectId) {
+      return inWorkspace(resource.data.workspaceId)
+        && request.resource.data.id == projectId
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.clientName is string
+        && request.resource.data.contractValue is number
+        && request.resource.data.contractValue > 0
+        && request.resource.data.startDate is timestamp
+        && (
+          request.resource.data.expectedEndDate == null
+          || request.resource.data.expectedEndDate is timestamp
+        )
+        && request.resource.data.location is string
+        && request.resource.data.description is string
+        && (
+          request.resource.data.budgetLimit == null
+          || (
+            request.resource.data.budgetLimit is number
+            && request.resource.data.budgetLimit > 0
+          )
+        )
+        && request.resource.data.completionPercentage is number
+        && request.resource.data.completionPercentage >= 0
+        && request.resource.data.completionPercentage <= 100
+        && validProjectStatus(request.resource.data.status)
+        && request.resource.data.isArchived is bool
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "clientName",
+          "contractValue",
+          "startDate",
+          "expectedEndDate",
+          "location",
+          "description",
+          "budgetLimit",
+          "completionPercentage",
+          "status",
+          "isArchived",
+          "updatedAt"
+        ]);
+    }
+
+    function validExpenseUpdate(expenseId) {
+      return inWorkspace(resource.data.workspaceId)
+        && request.resource.data.id == expenseId
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.projectName == resource.data.projectName
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.isArchived == resource.data.isArchived
+        && validExpenseCategory(request.resource.data.category)
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.date is timestamp
+        && request.resource.data.notes is string
+        && request.resource.data.supplierName is string
+        && request.resource.data.paymentMethod is string
+        && request.resource.data.inputMethod == resource.data.inputMethod
+        && request.resource.data.transcript == resource.data.transcript
+        && request.resource.data.source == resource.data.source
+        && request.resource.data.storagePath == resource.data.storagePath
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "category",
+          "amount",
+          "date",
+          "notes",
+          "supplierName",
+          "paymentMethod",
+          "updatedAt"
+        ]);
+    }
+
+    function validPaymentUpdate(paymentId) {
+      return inWorkspace(resource.data.workspaceId)
+        && request.resource.data.id == paymentId
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.isArchived == resource.data.isArchived
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.date is timestamp
+        && validPaymentMethod(request.resource.data.paymentMethod)
+        && request.resource.data.notes is string
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "amount",
+          "date",
+          "paymentMethod",
+          "notes",
+          "updatedAt"
+        ]);
+    }
+
+    function validWorkerWrite(workerId) {
+      return inWorkspace(request.resource.data.workspaceId)
+        && request.resource.data.workspaceId is string
+        && request.resource.data.workspaceId.size() > 0
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.dailyWage is number
+        && request.resource.data.dailyWage > 0
+        && request.resource.data.workerType is string
+        && request.resource.data.notes is string
+        && request.resource.data.isArchived is bool;
+    }
+
+    function validWorkerUpdate(workerId) {
+      return inWorkspace(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.dailyWage is number
+        && request.resource.data.dailyWage > 0
+        && request.resource.data.workerType is string
+        && request.resource.data.notes is string
+        && request.resource.data.isArchived is bool
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "phoneNumber",
+          "dailyWage",
+          "workerType",
+          "notes",
+          "isArchived",
+          "updatedAt"
+        ]);
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create: if canCreateUserDoc(userId);
@@ -77,32 +231,32 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow create, delete: if false;
+      allow update: if validProjectUpdate(projectId);
     }
 
     match /expenses/{expenseId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow create, delete: if false;
+      allow update: if validExpenseUpdate(expenseId);
     }
 
     match /payments/{paymentId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow create, delete: if false;
+      allow update: if validPaymentUpdate(paymentId);
     }
 
     match /worker_entries/{entryId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow create, update, delete: if false;
     }
 
     match /workers/{workerId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if signedIn() && inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow create: if validWorkerWrite(workerId);
+      allow update: if validWorkerUpdate(workerId);
+      allow delete: if false;
     }
 
     match /subscriptions/{workspaceId} {

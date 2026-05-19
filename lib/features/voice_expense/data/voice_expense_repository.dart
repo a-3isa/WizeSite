@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/cloud_function_service.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
@@ -9,13 +10,16 @@ class VoiceExpenseRepository {
     required StorageUploadService uploadService,
     required CloudFunctionService cloudFunctionService,
     required ExpenseSaveService expenseSaveService,
+    required AppTelemetry telemetry,
   }) : _uploadService = uploadService,
        _cloudFunctionService = cloudFunctionService,
-       _expenseSaveService = expenseSaveService;
+       _expenseSaveService = expenseSaveService,
+       _telemetry = telemetry;
 
   final StorageUploadService _uploadService;
   final CloudFunctionService _cloudFunctionService;
   final ExpenseSaveService _expenseSaveService;
+  final AppTelemetry _telemetry;
 
   Future<VoiceExpenseParseResponse> processVoiceRecording({
     required String userId,
@@ -25,18 +29,28 @@ class VoiceExpenseRepository {
     required String languageHint,
     void Function(double progress)? onUploadProgress,
   }) async {
-    final uploaded = await _uploadService.uploadVoiceExpenseAudio(
-      userId: userId,
-      localFilePath: localAudioPath,
-      onProgress: onUploadProgress,
+    return _telemetry.trace(
+      'voice_expense.process',
+      () async {
+        final uploaded = await _uploadService.uploadVoiceExpenseAudio(
+          userId: userId,
+          localFilePath: localAudioPath,
+          onProgress: onUploadProgress,
+        );
+        final result = await _cloudFunctionService.processVoiceExpense(
+          storagePath: uploaded.storagePath,
+          projects: projects.map((project) => project.toMap()).toList(),
+          currency: currency,
+          languageHint: languageHint,
+        );
+        return VoiceExpenseParseResponse.fromMap(result);
+      },
+      details: {
+        'project_count': projects.length,
+        'currency': currency,
+        'language': languageHint,
+      },
     );
-    final result = await _cloudFunctionService.processVoiceExpense(
-      storagePath: uploaded.storagePath,
-      projects: projects.map((project) => project.toMap()).toList(),
-      currency: currency,
-      languageHint: languageHint,
-    );
-    return VoiceExpenseParseResponse.fromMap(result);
   }
 
   Future<String?> saveConfirmedVoiceExpense({
@@ -52,18 +66,26 @@ class VoiceExpenseRepository {
     required String storagePath,
     required DateTime date,
   }) {
-    return _expenseSaveService.saveVoiceExpense(
-      workspaceId: workspaceId,
-      projectId: projectId,
-      projectName: projectName,
-      amount: amount,
-      currency: currency,
-      category: category,
-      date: date,
-      notes: notes,
-      transcript: transcript,
-      source: source,
-      storagePath: storagePath,
+    return _telemetry.trace(
+      'voice_expense.save',
+      () => _expenseSaveService.saveVoiceExpense(
+        workspaceId: workspaceId,
+        projectId: projectId,
+        projectName: projectName,
+        amount: amount,
+        currency: currency,
+        category: category,
+        date: date,
+        notes: notes,
+        transcript: transcript,
+        source: source,
+        storagePath: storagePath,
+      ),
+      details: {
+        'workspace_id': workspaceId,
+        'project_id': projectId,
+        'category': category,
+      },
     );
   }
 }
@@ -73,5 +95,6 @@ final voiceExpenseRepositoryProvider = Provider<VoiceExpenseRepository>((ref) {
     uploadService: ref.watch(storageUploadServiceProvider),
     cloudFunctionService: ref.watch(cloudFunctionServiceProvider),
     expenseSaveService: ref.watch(expenseSaveServiceProvider),
+    telemetry: ref.watch(appTelemetryProvider),
   );
 });

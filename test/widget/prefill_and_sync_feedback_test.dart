@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
@@ -8,6 +9,7 @@ import 'package:buildtrack_app/features/projects/presentation/screens/projects_s
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -59,9 +61,9 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('AppBootstrapScope surfaces dead-letter sync failures to users', (
-    tester,
-  ) async {
+  testWidgets(
+    'AppBootstrapScope surfaces localized dead-letter sync failures to users',
+    (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -71,6 +73,14 @@ void main() {
           connectivityProvider.overrideWith((ref) => Stream.value(false)),
         ],
         child: const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
           home: AppBootstrapScope(child: Scaffold(body: Text('bootstrap'))),
         ),
       ),
@@ -86,11 +96,16 @@ void main() {
         .read(offlineSyncNoticeProvider.notifier)
         .state = const OfflineSyncNotice(
       actionId: 'dead_1',
-      type: OfflineSyncFailureType.generic,
+      type: OfflineSyncFailureType.invalidTarget,
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('A queued action failed to sync.'), findsOneWidget);
+    expect(
+      find.text(
+        'Queued action is no longer valid because the target item was archived, removed, or is no longer available.',
+      ),
+      findsOneWidget,
+    );
   });
 }

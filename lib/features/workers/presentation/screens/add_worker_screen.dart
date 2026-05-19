@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/contacts_service.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   final _notesController = TextEditingController();
   String _workerType = 'other';
   bool _loading = false;
+  bool _importingContact = false;
   bool _prefilling = false;
   String? _error;
 
@@ -152,6 +154,54 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
     }
   }
 
+  Future<void> _importFromContacts() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _importingContact = true;
+      _error = null;
+    });
+    try {
+      final contactsService = ref.read(contactsServiceProvider);
+      final permission = await contactsService.requestPermission();
+      if (permission != ContactPermissionStatus.granted) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _error = l10n.t('contactsPermissionDenied'));
+        return;
+      }
+      final picked = await contactsService.pickContact();
+      if (!mounted) {
+        return;
+      }
+      switch (picked.status) {
+        case PickedContactStatus.cancelled:
+          return;
+        case PickedContactStatus.missingPhoneNumber:
+          setState(() => _error = l10n.t('contactsNoPhoneNumber'));
+          return;
+        case PickedContactStatus.selected:
+          final contact = picked.contact!;
+          setState(() {
+            if (contact.name.trim().isNotEmpty) {
+              _nameController.text = contact.name;
+            }
+            _phoneController.text = contact.phoneNumber;
+            _error = null;
+          });
+          return;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = l10n.t('unexpectedErrorTryAgain'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _importingContact = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -175,6 +225,19 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                     decoration: InputDecoration(
                       labelText: l10n.t('workerName'),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _loading || _importingContact
+                        ? null
+                        : _importFromContacts,
+                    icon: _importingContact
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.contacts_rounded),
+                    label: Text(l10n.t('pickFromContacts')),
                   ),
                   const SizedBox(height: 12),
                   TextField(

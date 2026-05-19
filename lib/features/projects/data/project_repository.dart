@@ -330,29 +330,36 @@ class FirebaseProjectRepository implements ProjectRepository {
     double? completionPercentage,
     String? status,
   }) async {
-    await _firestore.collection('projects').doc(projectId).update({
-      'name': name,
-      'clientName': clientName,
-      'contractValue': contractValue,
-      'startDate': Timestamp.fromDate(startDate),
-      'expectedEndDate': expectedEndDate == null
-          ? null
-          : Timestamp.fromDate(expectedEndDate),
-      'location': location ?? '',
-      'description': description ?? '',
-      'budgetLimit': budgetLimit,
-      'completionPercentage': completionPercentage ?? 0,
-      'status': status ?? 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final project = await getProject(projectId);
+    if (project == null) {
+      return;
+    }
+    await _mutationService.updateProject(
+      workspaceId: project.workspaceId,
+      projectId: projectId,
+      name: name,
+      clientName: clientName,
+      contractValue: contractValue,
+      completionPercentage: completionPercentage ?? 0,
+      startDate: startDate,
+      expectedEndDate: expectedEndDate,
+      location: location,
+      description: description,
+      budgetLimit: budgetLimit,
+      status: status ?? 'active',
+    );
   }
 
   @override
   Future<void> archiveProject(String projectId) async {
-    await _firestore.collection('projects').doc(projectId).update({
-      'isArchived': true,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final project = await getProject(projectId);
+    if (project == null) {
+      return;
+    }
+    await _mutationService.archiveProject(
+      workspaceId: project.workspaceId,
+      projectId: projectId,
+    );
   }
 
   @override
@@ -464,13 +471,64 @@ class FirebaseProjectRepository implements ProjectRepository {
         .map((project) => _applyPendingDeltas(project, actions))
         .toList(growable: true);
 
+    final archivedProjectIds = actions
+        .where(
+          (action) =>
+              action.type == OfflineActionTypes.archiveProject &&
+              '${action.payload['workspaceId'] ?? ''}' == workspaceId,
+        )
+        .map((action) => '${action.payload['projectId'] ?? ''}')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    items.removeWhere((project) => archivedProjectIds.contains(project.id));
+
+    for (final action in actions) {
+      if (action.type != OfflineActionTypes.updateProject ||
+          '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+        continue;
+      }
+      final projectId = '${action.payload['projectId'] ?? ''}';
+      final index = items.indexWhere((project) => project.id == projectId);
+      if (index < 0) {
+        continue;
+      }
+      final current = items[index];
+      items[index] = Project(
+        id: current.id,
+        workspaceId: current.workspaceId,
+        name: '${action.payload['name'] ?? current.name}',
+        clientName: '${action.payload['clientName'] ?? current.clientName}',
+        contractValue:
+            (action.payload['contractValue'] as num?)?.toDouble() ??
+            current.contractValue,
+        status: '${action.payload['status'] ?? current.status}',
+        completionPercentage:
+            (action.payload['completionPercentage'] as num?)?.toDouble() ??
+            current.completionPercentage,
+        totalExpenses: current.totalExpenses,
+        totalPayments: current.totalPayments,
+        netProfit: current.netProfit,
+        isArchived: current.isArchived,
+        clientMutationId: current.clientMutationId,
+      );
+    }
+
     if (includePendingCreates) {
       final pendingProjects = <Project>[];
+      final liveMutationIds = items
+          .map((item) => item.clientMutationId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
       for (final action in actions) {
         if (action.type != OfflineActionTypes.createProject) {
           continue;
         }
         if ('${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+          continue;
+        }
+        final clientMutationId = '${action.payload['clientMutationId'] ?? ''}';
+        if (clientMutationId.isNotEmpty &&
+            liveMutationIds.contains(clientMutationId)) {
           continue;
         }
         pendingProjects.add(_projectFromCreateAction(action));
@@ -498,12 +556,20 @@ class FirebaseProjectRepository implements ProjectRepository {
         case OfflineActionTypes.createExpense:
           pendingExpenses += (action.payload['amount'] as num?) ?? 0;
           break;
+        case OfflineActionTypes.updateExpense:
+          pendingExpenses -= (action.payload['previousAmount'] as num?) ?? 0;
+          pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+          break;
         case OfflineActionTypes.createWorkerEntry:
           final daysWorked = (action.payload['daysWorked'] as num?) ?? 0;
           final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
           pendingExpenses += daysWorked * dailyWage;
           break;
         case OfflineActionTypes.createPayment:
+          pendingIncome += (action.payload['amount'] as num?) ?? 0;
+          break;
+        case OfflineActionTypes.updatePayment:
+          pendingIncome -= (action.payload['previousAmount'] as num?) ?? 0;
           pendingIncome += (action.payload['amount'] as num?) ?? 0;
           break;
         default:
@@ -529,6 +595,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       totalPayments: totalPayments,
       netProfit: totalPayments - totalExpenses,
       isArchived: project.isArchived,
+      clientMutationId: project.clientMutationId,
     );
   }
 
@@ -546,6 +613,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       totalPayments: 0,
       netProfit: 0,
       isArchived: false,
+      clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
     );
   }
 }

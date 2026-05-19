@@ -8,6 +8,7 @@ class WorkerProfile {
     required this.workerType,
     required this.notes,
     required this.isArchived,
+    this.clientMutationId = '',
   });
 
   final String id;
@@ -18,6 +19,7 @@ class WorkerProfile {
   final String workerType;
   final String notes;
   final bool isArchived;
+  final String clientMutationId;
 
   factory WorkerProfile.fromMap(String id, Map<String, dynamic> map) {
     return WorkerProfile(
@@ -29,6 +31,7 @@ class WorkerProfile {
       workerType: map['workerType'] as String? ?? '',
       notes: map['notes'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,
+      clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
 }
@@ -45,6 +48,7 @@ class WorkerEntryRecord {
     required this.date,
     required this.notes,
     required this.isArchived,
+    this.clientMutationId = '',
   });
 
   final String id;
@@ -57,6 +61,7 @@ class WorkerEntryRecord {
   final DateTime date;
   final String notes;
   final bool isArchived;
+  final String clientMutationId;
 
   factory WorkerEntryRecord.fromMap(String id, Map<String, dynamic> map) {
     DateTime parseDate(dynamic value) {
@@ -92,6 +97,7 @@ class WorkerEntryRecord {
       date: parseDate(map['date']),
       notes: map['notes'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,
+      clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
 }

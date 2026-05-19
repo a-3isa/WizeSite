@@ -69,13 +69,15 @@ abstract interface class WorkerEntryRepository {
 }
 
 class FirebaseWorkerRepository implements WorkerRepository {
-  FirebaseWorkerRepository(this._firestore);
+  FirebaseWorkerRepository(this._firestore, this._mutationService, this._queue);
 
   final FirebaseFirestore _firestore;
+  final WorkspaceMutationService _mutationService;
+  final OfflineActionQueue _queue;
 
   @override
   Stream<List<WorkerProfile>> watchWorkers(String workspaceId) {
-    return _firestore
+    final baseStream = _firestore
         .collection('workers')
         .where('workspaceId', isEqualTo: workspaceId)
         .where('isArchived', isEqualTo: false)
@@ -85,6 +87,34 @@ class FirebaseWorkerRepository implements WorkerRepository {
               .map((doc) => WorkerProfile.fromMap(doc.id, doc.data()))
               .toList(),
         );
+    final queueStream = _queue.watch();
+    return Stream.multi((controller) {
+      List<WorkerProfile> current = const [];
+      List<OfflineAction> actions = const [];
+
+      void emit() {
+        controller.add(_applyPendingWorkers(current, actions, workspaceId));
+      }
+
+      final baseSub = baseStream.listen(
+        (items) {
+          current = items;
+          emit();
+        },
+        onError: controller.addError,
+      );
+      final queueSub = queueStream.listen(
+        (value) {
+          actions = value;
+          emit();
+        },
+        onError: controller.addError,
+      );
+      controller.onCancel = () async {
+        await baseSub.cancel();
+        await queueSub.cancel();
+      };
+    });
   }
 
   @override
@@ -135,18 +165,14 @@ class FirebaseWorkerRepository implements WorkerRepository {
     String? workerType,
     String? notes,
   }) async {
-    await _firestore.collection('workers').add({
-      'workspaceId': workspaceId,
-      'name': name,
-      'phoneNumber': phoneNumber,
-      'dailyWage': dailyWage,
-      'workerType': workerType ?? '',
-      'notes': notes ?? '',
-      'createdBy': userId,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'isArchived': false,
-    });
+    await _mutationService.createWorker(
+      workspaceId: workspaceId,
+      name: name,
+      phoneNumber: phoneNumber,
+      dailyWage: dailyWage,
+      workerType: workerType,
+      notes: notes,
+    );
   }
 
   @override
@@ -158,22 +184,117 @@ class FirebaseWorkerRepository implements WorkerRepository {
     String? workerType,
     String? notes,
   }) async {
-    await _firestore.collection('workers').doc(workerId).update({
-      'name': name,
-      'phoneNumber': phoneNumber,
-      'dailyWage': dailyWage,
-      'workerType': workerType ?? '',
-      'notes': notes ?? '',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final worker = await getWorker(workerId);
+    if (worker == null) {
+      return;
+    }
+    await _mutationService.updateWorker(
+      workspaceId: worker.workspaceId,
+      workerId: workerId,
+      name: name,
+      phoneNumber: phoneNumber,
+      dailyWage: dailyWage,
+      workerType: workerType,
+      notes: notes,
+    );
   }
 
   @override
   Future<void> archiveWorker(String workerId) async {
-    await _firestore.collection('workers').doc(workerId).update({
-      'isArchived': true,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final worker = await getWorker(workerId);
+    if (worker == null) {
+      return;
+    }
+    await _mutationService.archiveWorker(
+      workspaceId: worker.workspaceId,
+      workerId: workerId,
+    );
+  }
+
+  List<WorkerProfile> _applyPendingWorkers(
+    List<WorkerProfile> baseItems,
+    List<OfflineAction> actions,
+    String workspaceId,
+  ) {
+    final items = List<WorkerProfile>.from(baseItems);
+    final archivedIds = <String>{};
+
+    for (final action in actions) {
+      if ('${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+        continue;
+      }
+      if (action.type == OfflineActionTypes.archiveWorker) {
+        final workerId = '${action.payload['workerId'] ?? ''}';
+        if (workerId.isNotEmpty) {
+          archivedIds.add(workerId);
+        }
+      }
+    }
+    items.removeWhere((item) => archivedIds.contains(item.id));
+
+    for (final action in actions) {
+      if (action.type != OfflineActionTypes.updateWorker ||
+          '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+        continue;
+      }
+      final workerId = '${action.payload['workerId'] ?? ''}';
+      final index = items.indexWhere((item) => item.id == workerId);
+      if (index < 0) {
+        continue;
+      }
+      final current = items[index];
+      items[index] = WorkerProfile(
+        id: current.id,
+        workspaceId: current.workspaceId,
+        name: '${action.payload['name'] ?? current.name}',
+        phoneNumber: '${action.payload['phoneNumber'] ?? current.phoneNumber}',
+        dailyWage:
+            (action.payload['dailyWage'] as num?)?.toDouble() ??
+            current.dailyWage,
+        workerType: '${action.payload['workerType'] ?? current.workerType}',
+        notes: '${action.payload['notes'] ?? current.notes}',
+        isArchived: current.isArchived,
+        clientMutationId: current.clientMutationId,
+      );
+    }
+
+    final liveMutationIds = items
+        .map((item) => item.clientMutationId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    for (final action in actions) {
+      if (action.type != OfflineActionTypes.createWorker ||
+          '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+        continue;
+      }
+      final clientMutationId = '${action.payload['clientMutationId'] ?? ''}';
+      if (clientMutationId.isNotEmpty &&
+          liveMutationIds.contains(clientMutationId)) {
+        continue;
+      }
+      items.insert(0, _workerFromCreateAction(action));
+    }
+
+    final deduped = <String, WorkerProfile>{};
+    for (final item in items) {
+      deduped[item.id] = item;
+    }
+    return deduped.values.toList(growable: false);
+  }
+
+  WorkerProfile _workerFromCreateAction(OfflineAction action) {
+    final payload = action.payload;
+    return WorkerProfile(
+      id: 'pending_${action.id}',
+      workspaceId: '${payload['workspaceId'] ?? ''}',
+      name: '${payload['name'] ?? ''}',
+      phoneNumber: '${payload['phoneNumber'] ?? ''}',
+      dailyWage: (payload['dailyWage'] as num?)?.toDouble() ?? 0,
+      workerType: '${payload['workerType'] ?? ''}',
+      notes: '${payload['notes'] ?? ''}',
+      isArchived: false,
+      clientMutationId: '${payload['clientMutationId'] ?? action.id}',
+    );
   }
 }
 
@@ -285,15 +406,19 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     required DateTime date,
     String? notes,
   }) async {
-    await _firestore.collection('worker_entries').doc(entryId).update({
-      'projectId': projectId,
-      'daysWorked': daysWorked,
-      'dailyWage': dailyWage,
-      'totalCost': daysWorked * dailyWage,
-      'date': Timestamp.fromDate(date),
-      'notes': notes ?? '',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final entry = await getEntry(entryId);
+    if (entry == null) {
+      return;
+    }
+    await _mutationService.updateWorkerEntry(
+      workspaceId: entry.workspaceId,
+      entryId: entryId,
+      projectId: projectId,
+      daysWorked: daysWorked,
+      dailyWage: dailyWage,
+      date: date,
+      notes: notes,
+    );
   }
 
   @override
@@ -305,6 +430,11 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     return _mutationService.archiveWorkerEntry(
       workspaceId: entry.workspaceId,
       entryId: entryId,
+      projectId: entry.projectId,
+      daysWorked: entry.daysWorked,
+      dailyWage: entry.dailyWage,
+      totalCost: entry.totalCost,
+      date: entry.date,
     );
   }
 
@@ -335,7 +465,50 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     }
 
     for (final action in actions) {
+      if (action.type != OfflineActionTypes.updateWorkerEntry ||
+          '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+        continue;
+      }
+      final entryId = '${action.payload['entryId'] ?? ''}';
+      final index = items.indexWhere((item) => item.id == entryId);
+      if (index < 0) {
+        continue;
+      }
+      final current = items[index];
+      final daysWorked =
+          (action.payload['daysWorked'] as num?)?.toDouble() ??
+          current.daysWorked;
+      final dailyWage =
+          (action.payload['dailyWage'] as num?)?.toDouble() ??
+          current.dailyWage;
+      items[index] = WorkerEntryRecord(
+        id: current.id,
+        workspaceId: current.workspaceId,
+        workerId: current.workerId,
+        projectId: '${action.payload['projectId'] ?? current.projectId}',
+        daysWorked: daysWorked,
+        dailyWage: dailyWage,
+        totalCost: daysWorked * dailyWage,
+        date:
+            DateTime.tryParse('${action.payload['date'] ?? ''}') ??
+            current.date,
+        notes: '${action.payload['notes'] ?? current.notes}',
+        isArchived: current.isArchived,
+        clientMutationId: current.clientMutationId,
+      );
+    }
+
+    for (final action in actions) {
       if (action.type != OfflineActionTypes.createWorkerEntry) {
+        continue;
+      }
+      final liveMutationIds = items
+          .map((item) => item.clientMutationId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final clientMutationId = '${action.payload['clientMutationId'] ?? ''}';
+      if (clientMutationId.isNotEmpty &&
+          liveMutationIds.contains(clientMutationId)) {
         continue;
       }
       final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
@@ -371,12 +544,17 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       date: parsedDate ?? action.createdAt,
       notes: '${payload['notes'] ?? ''}',
       isArchived: false,
+      clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );
   }
 }
 
 final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
-  return FirebaseWorkerRepository(ref.watch(firestoreProvider));
+  return FirebaseWorkerRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(workspaceMutationServiceProvider),
+    ref.watch(offlineActionQueueProvider),
+  );
 });
 
 final workerEntryRepositoryProvider = Provider<WorkerEntryRepository>((ref) {

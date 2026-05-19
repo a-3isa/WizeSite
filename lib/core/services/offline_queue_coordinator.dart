@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
+import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,11 +38,14 @@ class OfflineQueueCoordinator {
 
     _draining = true;
     try {
-      await _ref
-          .read(offlineActionQueueProvider)
-          .drain(
-            _ref.read(workspaceMutationServiceProvider).processQueuedAction,
-          );
+      await _ref.read(appTelemetryProvider).trace(
+        'offline_sync.drain',
+        () => _ref
+            .read(offlineActionQueueProvider)
+            .drain(
+              _ref.read(workspaceMutationServiceProvider).processQueuedAction,
+            ),
+      );
     } finally {
       _draining = false;
       await refreshCounts();
@@ -58,7 +64,10 @@ class OfflineQueueCoordinator {
       return;
     }
 
-    final type = _failureTypeFor(latest.lastError);
+    final type = _failureTypeFor(
+      code: latest.lastErrorCode,
+      message: latest.lastError,
+    );
     _ref.read(offlineSyncNoticeProvider.notifier).state = OfflineSyncNotice(
       actionId: latest.id,
       type: type,
@@ -67,16 +76,22 @@ class OfflineQueueCoordinator {
         latest.id;
   }
 
-  OfflineSyncFailureType _failureTypeFor(String? rawError) {
-    final text = rawError?.toLowerCase() ?? '';
-    if (text.contains('limit_reached') ||
-        text.contains('failed-precondition')) {
-      return OfflineSyncFailureType.quota;
+  OfflineSyncFailureType _failureTypeFor({
+    String? code,
+    String? message,
+  }) {
+    switch (SyncErrorClassifier.categoryFrom(code: code, message: message)) {
+      case SyncFailureCategory.quota:
+        return OfflineSyncFailureType.quota;
+      case SyncFailureCategory.unauthenticated:
+        return OfflineSyncFailureType.unauthenticated;
+      case SyncFailureCategory.invalidTarget:
+        return OfflineSyncFailureType.invalidTarget;
+      case SyncFailureCategory.permission:
+        return OfflineSyncFailureType.permission;
+      case SyncFailureCategory.generic:
+        return OfflineSyncFailureType.generic;
     }
-    if (text.contains('unauthenticated')) {
-      return OfflineSyncFailureType.unauthenticated;
-    }
-    return OfflineSyncFailureType.generic;
   }
 }
 
@@ -125,13 +140,7 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
         if (next == null || previous?.actionId == next.actionId || !mounted) {
           return;
         }
-        final message = switch (next.type) {
-          OfflineSyncFailureType.quota =>
-            'Queued action was rejected: plan limit reached.',
-          OfflineSyncFailureType.unauthenticated =>
-            'Queued sync requires sign-in. Please log in again.',
-          OfflineSyncFailureType.generic => 'A queued action failed to sync.',
-        };
+        final message = _messageForNotice(next.type);
         _showNotice(message);
       },
     );
@@ -170,5 +179,26 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
   void _showNotice(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _messageForNotice(OfflineSyncFailureType type) {
+    final localizations = AppLocalizations.of(context);
+    return switch (type) {
+      OfflineSyncFailureType.quota => localizations.t(
+        'offlineSyncFailureQuota',
+      ),
+      OfflineSyncFailureType.unauthenticated => localizations.t(
+        'offlineSyncFailureUnauthenticated',
+      ),
+      OfflineSyncFailureType.invalidTarget => localizations.t(
+        'offlineSyncFailureInvalidTarget',
+      ),
+      OfflineSyncFailureType.permission => localizations.t(
+        'offlineSyncFailurePermission',
+      ),
+      OfflineSyncFailureType.generic => localizations.t(
+        'offlineSyncFailureGeneric',
+      ),
+    };
   }
 }

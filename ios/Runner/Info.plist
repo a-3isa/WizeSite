@@ -37,6 +37,12 @@
 		<true/>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Buildozer uses the microphone to record voice expense notes and turn them into project expenses.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Buildozer uses your photo library to attach receipt photos to project expenses.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Buildozer uses your camera to capture receipt photos for project expenses.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>Buildozer uses your contacts so you can import a worker's name and phone number into the worker form.</string>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>

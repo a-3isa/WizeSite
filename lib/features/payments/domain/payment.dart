@@ -8,6 +8,7 @@ class PaymentRecord {
     required this.paymentMethod,
     required this.notes,
     required this.isArchived,
+    this.clientMutationId = '',
   });
 
   final String id;
@@ -18,6 +19,7 @@ class PaymentRecord {
   final String paymentMethod;
   final String notes;
   final bool isArchived;
+  final String clientMutationId;
 
   factory PaymentRecord.fromMap(String id, Map<String, dynamic> map) {
     DateTime parseDate(dynamic value) {
@@ -51,6 +53,7 @@ class PaymentRecord {
       paymentMethod: map['paymentMethod'] as String? ?? 'cash',
       notes: map['notes'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,
+      clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
 }

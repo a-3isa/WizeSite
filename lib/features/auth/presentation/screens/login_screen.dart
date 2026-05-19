@@ -2,12 +2,11 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
 
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/app/theme/app_theme.dart';
@@ -47,7 +46,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final auth = ref.read(firebaseAuthProvider);
-      final firestore = ref.read(firestoreProvider);
 
       final cred = await auth.signInWithEmailAndPassword(
         email: email,
@@ -58,16 +56,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         throw Exception('User not found');
       }
 
-      await firestore.collection('users').doc(user.uid).set({
-        'email': email,
-        'fullName': user.displayName ?? '',
-        'photoUrl': user.photoURL ?? '',
-        'defaultCurrency': 'EGP',
-        'riskAlertsEnabled': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      final workspaceId = await _resolveWorkspaceId(firestore, user);
+      final workspaceId = await ref
+          .read(workspaceMutationServiceProvider)
+          .ensureUserWorkspaceBootstrap();
       ref.read(activeUserIdProvider.notifier).state = user.uid;
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
 
@@ -120,7 +111,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       final auth = ref.read(firebaseAuthProvider);
-      final firestore = ref.read(firestoreProvider);
       final credential = await ref
           .read(googleAuthServiceProvider)
           .signInWithGoogle(auth: auth);
@@ -136,16 +126,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
 
-      await firestore.collection('users').doc(user.uid).set({
-        'email': (user.email ?? '').trim().toLowerCase(),
-        'fullName': user.displayName ?? '',
-        'photoUrl': user.photoURL ?? '',
-        'defaultCurrency': 'EGP',
-        'riskAlertsEnabled': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      final workspaceId = await _resolveWorkspaceId(firestore, user);
+      final workspaceId = await ref
+          .read(workspaceMutationServiceProvider)
+          .ensureUserWorkspaceBootstrap();
       ref.read(activeUserIdProvider.notifier).state = user.uid;
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
 
@@ -165,146 +148,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() => _loading = false);
       }
     }
-  }
-
-  Future<String> _resolveWorkspaceId(
-    FirebaseFirestore firestore,
-    User user,
-  ) async {
-    final snap = await firestore
-        .collection('memberships')
-        .where('userId', isEqualTo: user.uid)
-        .limit(1)
-        .get();
-    if (snap.docs.isNotEmpty) {
-      final workspaceId = snap.docs.first.data()['workspaceId'] as String?;
-      if (workspaceId != null && workspaceId.isNotEmpty) {
-        return workspaceId;
-      }
-    }
-
-    final userDoc = await firestore.collection('users').doc(user.uid).get();
-    final userWorkspaceId = userDoc.data()?['workspaceId'] as String?;
-    if (userWorkspaceId != null && userWorkspaceId.isNotEmpty) {
-      await _ensureWorkspaceExists(
-        firestore: firestore,
-        workspaceId: userWorkspaceId,
-        user: user,
-      );
-      await _ensureOwnerMembership(
-        firestore: firestore,
-        workspaceId: userWorkspaceId,
-        user: user,
-      );
-      return userWorkspaceId;
-    }
-
-    return _createWorkspaceForUser(firestore: firestore, user: user);
-  }
-
-  Future<String> _createWorkspaceForUser({
-    required FirebaseFirestore firestore,
-    required User user,
-  }) async {
-    final workspaceId = const Uuid().v4();
-    final displayName = user.displayName?.trim();
-    final workspaceName = (displayName != null && displayName.isNotEmpty)
-        ? '$displayName Workspace'
-        : 'New Workspace';
-
-    await firestore.collection('workspaces').doc(workspaceId).set({
-      'id': workspaceId,
-      'name': workspaceName,
-      'ownerId': user.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    await firestore.collection('users').doc(user.uid).set({
-      'id': user.uid,
-      'fullName': displayName ?? '',
-      'email': (user.email ?? '').trim().toLowerCase(),
-      'phoneNumber': user.phoneNumber ?? '',
-      'workspaceId': workspaceId,
-      'photoUrl': user.photoURL ?? '',
-      'defaultCurrency': 'EGP',
-      'riskAlertsEnabled': true,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _membershipDocRef(
-      firestore: firestore,
-      workspaceId: workspaceId,
-      userId: user.uid,
-    ).set({
-      'workspaceId': workspaceId,
-      'userId': user.uid,
-      'role': 'owner',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    return workspaceId;
-  }
-
-  Future<void> _ensureOwnerMembership({
-    required FirebaseFirestore firestore,
-    required String workspaceId,
-    required User user,
-  }) async {
-    final existing = await firestore
-        .collection('memberships')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('userId', isEqualTo: user.uid)
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) {
-      return;
-    }
-
-    final workspace = await firestore
-        .collection('workspaces')
-        .doc(workspaceId)
-        .get();
-    final ownerId = workspace.data()?['ownerId'] as String?;
-    if (ownerId != user.uid) {
-      return;
-    }
-
-    await _membershipDocRef(
-      firestore: firestore,
-      workspaceId: workspaceId,
-      userId: user.uid,
-    ).set({
-      'workspaceId': workspaceId,
-      'userId': user.uid,
-      'role': 'owner',
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> _ensureWorkspaceExists({
-    required FirebaseFirestore firestore,
-    required String workspaceId,
-    required User user,
-  }) async {
-    final workspaceRef = firestore.collection('workspaces').doc(workspaceId);
-    final workspaceSnap = await workspaceRef.get();
-    if (workspaceSnap.exists) {
-      return;
-    }
-    await workspaceRef.set({
-      'id': workspaceId,
-      'name': '${user.displayName ?? 'Workspace'} Workspace',
-      'ownerId': user.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  DocumentReference<Map<String, dynamic>> _membershipDocRef({
-    required FirebaseFirestore firestore,
-    required String workspaceId,
-    required String userId,
-  }) {
-    return firestore.collection('memberships').doc('${workspaceId}_$userId');
   }
 
   @override
