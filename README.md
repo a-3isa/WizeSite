@@ -101,7 +101,7 @@ npm test
 4. Deploy:
 
 ```bash
-firebase deploy --only functions,firestore:rules,storage
+firebase deploy --only functions,firestore:rules,storage --config firebase.deploy.json
 ```
 
 ## Voice Callable API

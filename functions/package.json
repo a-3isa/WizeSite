@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "firebase deploy --only functions --config ../firebase.deploy.json",
     "lint": "echo \"No lint configured\"",
     "test": "npm run build && node --test \"lib/**/*.test.js\""
   },
