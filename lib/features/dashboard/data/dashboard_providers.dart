@@ -136,6 +136,16 @@ _workspacePendingDelta({
         final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
         pendingExpenses += daysWorked * dailyWage;
         break;
+      case OfflineActionTypes.updateWorkerEntry:
+        pendingExpenses -=
+            (action.payload['previousTotalCost'] as num?) ??
+            (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                ((action.payload['previousDailyWage'] as num?) ?? 0));
+        pendingExpenses +=
+            (action.payload['totalCost'] as num?) ??
+            (((action.payload['daysWorked'] as num?) ?? 0) *
+                ((action.payload['dailyWage'] as num?) ?? 0));
+        break;
       case OfflineActionTypes.createPayment:
         pendingIncome += (action.payload['amount'] as num?) ?? 0;
         break;

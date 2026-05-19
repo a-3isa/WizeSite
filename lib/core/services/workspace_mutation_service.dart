@@ -18,6 +18,7 @@ abstract final class OfflineActionTypes {
   static const createProject = 'create_project';
   static const updateProject = 'update_project';
   static const archiveProject = 'archive_project';
+  static const unarchiveProject = 'unarchive_project';
   static const deleteProject = 'delete_project';
   static const createExpense = 'create_expense';
   static const updateExpense = 'update_expense';
@@ -32,6 +33,7 @@ abstract final class OfflineActionTypes {
   static const updateWorkerEntry = 'update_worker_entry';
   static const archiveWorkerEntry = 'archive_worker_entry';
   static const updateUserProfile = 'update_user_profile';
+  static const updateUserSettings = 'update_user_settings';
 }
 
 class WorkspaceMutationService {
@@ -171,6 +173,19 @@ class WorkspaceMutationService {
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.archiveProject,
+      payload: {
+        'workspaceId': workspaceId,
+        'projectId': projectId,
+      },
+    );
+  }
+
+  Future<MutationResult> unarchiveProject({
+    required String workspaceId,
+    required String projectId,
+  }) {
+    return _enqueueForBackgroundSync(
+      type: OfflineActionTypes.unarchiveProject,
       payload: {
         'workspaceId': workspaceId,
         'projectId': projectId,
@@ -333,12 +348,10 @@ class WorkspaceMutationService {
   Future<void> deleteProjectCascade({
     required String workspaceId,
     required String projectId,
-  }) {
-    return _client.call<void>(
-      functionName: 'deleteProjectCascade',
+  }) async {
+    await _enqueueForBackgroundSync(
+      type: OfflineActionTypes.deleteProject,
       payload: {'workspaceId': workspaceId, 'projectId': projectId},
-      parseResult: (_) {},
-      defaultErrorMessage: 'Failed to delete project.',
     );
   }
 
@@ -350,6 +363,11 @@ class WorkspaceMutationService {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    String? previousProjectId,
+    double? previousDaysWorked,
+    double? previousDailyWage,
+    double? previousTotalCost,
+    DateTime? previousDate,
   }) async {
     await _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateWorkerEntry,
@@ -361,6 +379,11 @@ class WorkspaceMutationService {
         'dailyWage': dailyWage,
         'date': date.toIso8601String(),
         'notes': notes ?? '',
+        'previousProjectId': previousProjectId,
+        'previousDaysWorked': previousDaysWorked,
+        'previousDailyWage': previousDailyWage,
+        'previousTotalCost': previousTotalCost,
+        'previousDate': previousDate?.toIso8601String(),
       },
     );
   }
@@ -439,6 +462,21 @@ class WorkspaceMutationService {
     );
   }
 
+  Future<MutationResult> updateUserSettings({
+    required String userId,
+    String? defaultCurrency,
+    bool? riskAlertsEnabled,
+  }) {
+    return _enqueueForBackgroundSync(
+      type: OfflineActionTypes.updateUserSettings,
+      payload: {
+        'userId': userId,
+        'defaultCurrency': defaultCurrency,
+        'riskAlertsEnabled': riskAlertsEnabled,
+      },
+    );
+  }
+
   Future<void> inviteMemberByEmail({
     required String workspaceId,
     required String email,
@@ -493,6 +531,14 @@ class WorkspaceMutationService {
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive project.',
+        );
+        return;
+      case OfflineActionTypes.unarchiveProject:
+        await _client.call<void>(
+          functionName: 'unarchiveProject',
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to unarchive project.',
         );
         return;
       case OfflineActionTypes.deleteProject:
@@ -611,6 +657,14 @@ class WorkspaceMutationService {
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update profile.',
+        );
+        return;
+      case OfflineActionTypes.updateUserSettings:
+        await _client.call<void>(
+          functionName: 'updateUserSettings',
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to update settings.',
         );
         return;
       default:

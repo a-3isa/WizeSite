@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,13 +13,23 @@ abstract interface class UserSettingsRepository {
   Future<UserSettings> getSettings(String userId, {String? fallbackEmail});
   Future<void> updateCurrency(String userId, String currency);
   Future<void> updateRiskAlerts(String userId, bool enabled);
+  Future<void> cacheProfileUpdate({
+    required String userId,
+    required String fullName,
+    String? photoUrl,
+  });
 }
 
 class FirebaseUserSettingsRepository implements UserSettingsRepository {
-  FirebaseUserSettingsRepository(this._firestore, this._prefsBox);
+  FirebaseUserSettingsRepository(
+    this._firestore,
+    this._prefsBox,
+    this._mutationService,
+  );
 
   final FirebaseFirestore _firestore;
   final Box<String> _prefsBox;
+  final WorkspaceMutationService _mutationService;
 
   String _cacheKey(String userId) => 'user_settings_$userId';
 
@@ -80,6 +91,10 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
       'defaultCurrency': currency,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    await _mutationService.updateUserSettings(
+      userId: userId,
+      defaultCurrency: currency,
+    );
   }
 
   @override
@@ -91,6 +106,25 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
       'riskAlertsEnabled': enabled,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    await _mutationService.updateUserSettings(
+      userId: userId,
+      riskAlertsEnabled: enabled,
+    );
+  }
+
+  @override
+  Future<void> cacheProfileUpdate({
+    required String userId,
+    required String fullName,
+    String? photoUrl,
+  }) async {
+    final current = await getSettings(userId);
+    await _cache(
+      current.copyWith(
+        fullName: fullName,
+        photoUrl: photoUrl,
+      ),
+    );
   }
 }
 
@@ -98,6 +132,7 @@ final userSettingsRepositoryProvider = Provider<UserSettingsRepository>((ref) {
   return FirebaseUserSettingsRepository(
     ref.watch(firestoreProvider),
     Hive.box<String>('app_prefs'),
+    ref.watch(workspaceMutationServiceProvider),
   );
 });
 

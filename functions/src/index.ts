@@ -971,6 +971,33 @@ export const archiveProject = onCall(async (request) => {
   });
 });
 
+export const unarchiveProject = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const workspaceId = requireString(data, "workspaceId");
+  await assertMember(workspaceId, request.auth.uid);
+  const projectId = requireString(data, "projectId");
+  const projectRef = db.collection("projects").doc(projectId);
+  const projectSnap = await projectRef.get();
+  if (!projectSnap.exists) {
+    throw new HttpsError("not-found", "Project not found");
+  }
+  const project = projectSnap.data() ?? {};
+  if (`${project.workspaceId ?? ""}` !== workspaceId) {
+    throw new HttpsError("permission-denied", "Project is not available in this workspace");
+  }
+
+  await projectRef.update({
+    isArchived: false,
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
 export const createExpenseWithQuota = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -1940,6 +1967,8 @@ export const updateWorkerEntry = onCall(async (request) => {
     totalCost: daysWorked * dailyWage,
     date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
     notes: `${data.notes ?? ""}`.trim(),
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 });
@@ -2041,6 +2070,34 @@ export const updateUserProfile = onCall(async (request) => {
     ...(riskAlertsEnabled == null ? {} : {riskAlertsEnabled}),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, {merge: true});
+});
+
+export const updateUserSettings = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+
+  const data = request.data as Record<string, unknown>;
+  const targetUserId = `${data.userId ?? request.auth.uid}`.trim();
+  if (targetUserId !== request.auth.uid) {
+    throw new HttpsError("permission-denied", "Cannot update another user's settings");
+  }
+
+  const updates: Record<string, unknown> = {
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  const defaultCurrency = currencyCode(data.defaultCurrency);
+  if (defaultCurrency) {
+    updates.defaultCurrency = defaultCurrency;
+  }
+  const riskAlertsEnabled = asBooleanOrUndefined(data.riskAlertsEnabled);
+  if (riskAlertsEnabled != null) {
+    updates.riskAlertsEnabled = riskAlertsEnabled;
+  }
+
+  await db.collection("users").doc(request.auth.uid).set(updates, {merge: true});
 });
 
 export async function bootstrapWorkspaceForUser(input: {

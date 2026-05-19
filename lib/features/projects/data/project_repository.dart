@@ -364,10 +364,14 @@ class FirebaseProjectRepository implements ProjectRepository {
 
   @override
   Future<void> unarchiveProject(String projectId) async {
-    await _firestore.collection('projects').doc(projectId).update({
-      'isArchived': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final project = await getProject(projectId);
+    if (project == null) {
+      return;
+    }
+    await _mutationService.unarchiveProject(
+      workspaceId: project.workspaceId,
+      projectId: projectId,
+    );
   }
 
   @override
@@ -482,6 +486,30 @@ class FirebaseProjectRepository implements ProjectRepository {
         .toSet();
     items.removeWhere((project) => archivedProjectIds.contains(project.id));
 
+    final unarchivedProjectIds = actions
+        .where(
+          (action) =>
+              action.type == OfflineActionTypes.unarchiveProject &&
+              '${action.payload['workspaceId'] ?? ''}' == workspaceId,
+        )
+        .map((action) => '${action.payload['projectId'] ?? ''}')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (!includePendingCreates) {
+      items.removeWhere((project) => unarchivedProjectIds.contains(project.id));
+    }
+
+    final deletedProjectIds = actions
+        .where(
+          (action) =>
+              action.type == OfflineActionTypes.deleteProject &&
+              '${action.payload['workspaceId'] ?? ''}' == workspaceId,
+        )
+        .map((action) => '${action.payload['projectId'] ?? ''}')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    items.removeWhere((project) => deletedProjectIds.contains(project.id));
+
     for (final action in actions) {
       if (action.type != OfflineActionTypes.updateProject ||
           '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
@@ -549,7 +577,8 @@ class FirebaseProjectRepository implements ProjectRepository {
 
     for (final action in actions) {
       final payloadProjectId = '${action.payload['projectId'] ?? ''}';
-      if (payloadProjectId != project.id) {
+      final previousProjectId = '${action.payload['previousProjectId'] ?? ''}';
+      if (payloadProjectId != project.id && previousProjectId != project.id) {
         continue;
       }
       switch (action.type) {
@@ -564,6 +593,22 @@ class FirebaseProjectRepository implements ProjectRepository {
           final daysWorked = (action.payload['daysWorked'] as num?) ?? 0;
           final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
           pendingExpenses += daysWorked * dailyWage;
+          break;
+        case OfflineActionTypes.updateWorkerEntry:
+          final previousProjectId =
+              '${action.payload['previousProjectId'] ?? project.id}';
+          if (previousProjectId == project.id) {
+            pendingExpenses -=
+                (action.payload['previousTotalCost'] as num?) ??
+                (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                    ((action.payload['previousDailyWage'] as num?) ?? 0));
+          }
+          if (payloadProjectId == project.id) {
+            pendingExpenses +=
+                (action.payload['totalCost'] as num?) ??
+                (((action.payload['daysWorked'] as num?) ?? 0) *
+                    ((action.payload['dailyWage'] as num?) ?? 0));
+          }
           break;
         case OfflineActionTypes.createPayment:
           pendingIncome += (action.payload['amount'] as num?) ?? 0;

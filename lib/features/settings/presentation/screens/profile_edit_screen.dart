@@ -74,6 +74,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             fullName: fullName,
             photoUrl: photoUrl,
           );
+      await ref.read(userSettingsRepositoryProvider).cacheProfileUpdate(
+            userId: userId,
+            fullName: fullName,
+            photoUrl: photoUrl,
+          );
 
       if (mounted) {
         Navigator.of(context).pop();

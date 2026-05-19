@@ -418,6 +418,11 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       dailyWage: dailyWage,
       date: date,
       notes: notes,
+      previousProjectId: entry.projectId,
+      previousDaysWorked: entry.daysWorked,
+      previousDailyWage: entry.dailyWage,
+      previousTotalCost: entry.totalCost,
+      previousDate: entry.date,
     );
   }
 

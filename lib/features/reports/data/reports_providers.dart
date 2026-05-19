@@ -190,7 +190,9 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
   }
 
   for (final action in actions) {
-    if ('${action.payload['projectId'] ?? ''}' != projectId) {
+    final payloadProjectId = '${action.payload['projectId'] ?? ''}';
+    final previousProjectId = '${action.payload['previousProjectId'] ?? ''}';
+    if (payloadProjectId != projectId && previousProjectId != projectId) {
       continue;
     }
     final date = _parsePendingDate(action.payload['date']);
@@ -243,6 +245,36 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
           expenses: point.expenses + cost,
           income: point.income,
         );
+        break;
+      case OfflineActionTypes.updateWorkerEntry:
+        final previousProjectId =
+            '${action.payload['previousProjectId'] ?? projectId}';
+        final previousDate = _parsePendingDate(action.payload['previousDate']);
+        final previousCost =
+            ((action.payload['previousTotalCost'] as num?)?.toDouble() ??
+                (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                        ((action.payload['previousDailyWage'] as num?) ?? 0))
+                    .toDouble());
+        if (previousProjectId == projectId && previousDate != null) {
+          final previousPoint = pointFor(previousDate);
+          points[_monthKey(previousPoint.month)] = MonthlyFlowData(
+            month: previousPoint.month,
+            expenses: previousPoint.expenses - previousCost,
+            income: previousPoint.income,
+          );
+        }
+        if ('${action.payload['projectId'] ?? ''}' == projectId) {
+          final nextCost =
+              ((action.payload['totalCost'] as num?)?.toDouble() ??
+                  (((action.payload['daysWorked'] as num?) ?? 0) *
+                          ((action.payload['dailyWage'] as num?) ?? 0))
+                      .toDouble());
+          points[_monthKey(point.month)] = MonthlyFlowData(
+            month: point.month,
+            expenses: point.expenses + nextCost,
+            income: point.income,
+          );
+        }
         break;
       case OfflineActionTypes.archiveWorkerEntry:
         final cost =
@@ -315,7 +347,9 @@ Map<String, double> _mergeCategoryTotals(
   }
 
   for (final action in actions) {
-    if ('${action.payload['projectId'] ?? ''}' != projectId) {
+    final payloadProjectId = '${action.payload['projectId'] ?? ''}';
+    final previousProjectId = '${action.payload['previousProjectId'] ?? ''}';
+    if (payloadProjectId != projectId && previousProjectId != projectId) {
       continue;
     }
     switch (action.type) {
@@ -342,13 +376,15 @@ Map<String, double> _mergeCategoryTotals(
         );
         break;
       case OfflineActionTypes.createWorkerEntry:
-        addToCategory(
-          'labor',
-          ((action.payload['totalCost'] as num?)?.toDouble() ??
-              (((action.payload['daysWorked'] as num?) ?? 0) *
-                      ((action.payload['dailyWage'] as num?) ?? 0))
-                  .toDouble()),
-        );
+        if ('${action.payload['projectId'] ?? ''}' == projectId) {
+          addToCategory(
+            'labor',
+            ((action.payload['totalCost'] as num?)?.toDouble() ??
+                (((action.payload['daysWorked'] as num?) ?? 0) *
+                        ((action.payload['dailyWage'] as num?) ?? 0))
+                    .toDouble()),
+          );
+        }
         break;
       case OfflineActionTypes.archiveWorkerEntry:
         addToCategory(
@@ -358,6 +394,28 @@ Map<String, double> _mergeCategoryTotals(
                       ((action.payload['dailyWage'] as num?) ?? 0))
                   .toDouble()),
         );
+        break;
+      case OfflineActionTypes.updateWorkerEntry:
+        final previousProjectId =
+            '${action.payload['previousProjectId'] ?? projectId}';
+        if (previousProjectId == projectId) {
+          addToCategory(
+            'labor',
+            -((action.payload['previousTotalCost'] as num?)?.toDouble() ??
+                (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                        ((action.payload['previousDailyWage'] as num?) ?? 0))
+                    .toDouble()),
+          );
+        }
+        if ('${action.payload['projectId'] ?? ''}' == projectId) {
+          addToCategory(
+            'labor',
+            ((action.payload['totalCost'] as num?)?.toDouble() ??
+                (((action.payload['daysWorked'] as num?) ?? 0) *
+                        ((action.payload['dailyWage'] as num?) ?? 0))
+                    .toDouble()),
+          );
+        }
         break;
       default:
         break;
@@ -389,6 +447,39 @@ List<Expense> _mergeRecentExpenses(
 
   if (archivedIds.isNotEmpty) {
     items.removeWhere((item) => archivedIds.contains(item.id));
+  }
+
+  for (final action in actions) {
+    if (action.type != OfflineActionTypes.updateExpense ||
+        '${action.payload['projectId'] ?? ''}' != projectId) {
+      continue;
+    }
+    final expenseId = '${action.payload['expenseId'] ?? ''}';
+    final index = items.indexWhere((item) => item.id == expenseId);
+    if (index < 0) {
+      continue;
+    }
+    final current = items[index];
+    items[index] = Expense(
+      id: current.id,
+      workspaceId: current.workspaceId,
+      projectId: current.projectId,
+      projectName: current.projectName,
+      category: '${action.payload['category'] ?? current.category}',
+      amount: (action.payload['amount'] as num?)?.toDouble() ?? current.amount,
+      currency: current.currency,
+      date: _parsePendingDate(action.payload['date']) ?? current.date,
+      notes: '${action.payload['notes'] ?? current.notes}',
+      supplierName: '${action.payload['supplierName'] ?? current.supplierName}',
+      paymentMethod:
+          '${action.payload['paymentMethod'] ?? current.paymentMethod}',
+      inputMethod: current.inputMethod,
+      transcript: current.transcript,
+      source: current.source,
+      storagePath: current.storagePath,
+      isArchived: current.isArchived,
+      clientMutationId: current.clientMutationId,
+    );
   }
 
   final liveMutationIds = items
@@ -462,6 +553,31 @@ List<PaymentRecord> _mergeRecentPayments(
     items.removeWhere((item) => archivedIds.contains(item.id));
   }
 
+  for (final action in actions) {
+    if (action.type != OfflineActionTypes.updatePayment ||
+        '${action.payload['projectId'] ?? ''}' != projectId) {
+      continue;
+    }
+    final paymentId = '${action.payload['paymentId'] ?? ''}';
+    final index = items.indexWhere((item) => item.id == paymentId);
+    if (index < 0) {
+      continue;
+    }
+    final current = items[index];
+    items[index] = PaymentRecord(
+      id: current.id,
+      workspaceId: current.workspaceId,
+      projectId: current.projectId,
+      amount: (action.payload['amount'] as num?)?.toDouble() ?? current.amount,
+      date: _parsePendingDate(action.payload['date']) ?? current.date,
+      paymentMethod:
+          '${action.payload['paymentMethod'] ?? current.paymentMethod}',
+      notes: '${action.payload['notes'] ?? current.notes}',
+      isArchived: current.isArchived,
+      clientMutationId: current.clientMutationId,
+    );
+  }
+
   final liveMutationIds = items
       .map((item) => item.clientMutationId)
       .where((id) => id.isNotEmpty)
@@ -507,7 +623,11 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
   String projectId,
 ) {
   final relevantActions = actions
-      .where((action) => '${action.payload['projectId'] ?? ''}' == projectId)
+      .where((action) {
+        final payloadProjectId = '${action.payload['projectId'] ?? ''}';
+        final previousProjectId = '${action.payload['previousProjectId'] ?? ''}';
+        return payloadProjectId == projectId || previousProjectId == projectId;
+      })
       .toList(growable: false);
   if (base == null) {
     if (relevantActions.isEmpty) {
@@ -552,11 +672,13 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
         totalExpenses += ((action.payload['amount'] as num?) ?? 0).toDouble();
         break;
       case OfflineActionTypes.createWorkerEntry:
-        totalExpenses +=
-            ((action.payload['totalCost'] as num?)?.toDouble() ??
-                (((action.payload['daysWorked'] as num?) ?? 0) *
-                        ((action.payload['dailyWage'] as num?) ?? 0))
-                    .toDouble());
+        if ('${action.payload['projectId'] ?? ''}' == projectId) {
+          totalExpenses +=
+              ((action.payload['totalCost'] as num?)?.toDouble() ??
+                  (((action.payload['daysWorked'] as num?) ?? 0) *
+                          ((action.payload['dailyWage'] as num?) ?? 0))
+                      .toDouble());
+        }
         break;
       case OfflineActionTypes.archiveWorkerEntry:
         totalExpenses -=
@@ -564,6 +686,24 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
                 (((action.payload['daysWorked'] as num?) ?? 0) *
                         ((action.payload['dailyWage'] as num?) ?? 0))
                     .toDouble());
+        break;
+      case OfflineActionTypes.updateWorkerEntry:
+        final previousProjectId =
+            '${action.payload['previousProjectId'] ?? projectId}';
+        if (previousProjectId == projectId) {
+          totalExpenses -=
+              ((action.payload['previousTotalCost'] as num?)?.toDouble() ??
+                  (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                          ((action.payload['previousDailyWage'] as num?) ?? 0))
+                      .toDouble());
+        }
+        if ('${action.payload['projectId'] ?? ''}' == projectId) {
+          totalExpenses +=
+              ((action.payload['totalCost'] as num?)?.toDouble() ??
+                  (((action.payload['daysWorked'] as num?) ?? 0) *
+                          ((action.payload['dailyWage'] as num?) ?? 0))
+                      .toDouble());
+        }
         break;
       case OfflineActionTypes.createPayment:
         totalIncome += ((action.payload['amount'] as num?) ?? 0).toDouble();

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onProjectWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.ensureUserWorkspaceBootstrap = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
+exports.onProjectWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
 exports.writeIfChanged = writeIfChanged;
 exports.workerEntryTotalCost = workerEntryTotalCost;
@@ -795,6 +795,30 @@ exports.archiveProject = (0, https_1.onCall)(async (request) => {
     }
     await projectRef.update({
         isArchived: true,
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+});
+exports.unarchiveProject = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    const workspaceId = requireString(data, "workspaceId");
+    await assertMember(workspaceId, request.auth.uid);
+    const projectId = requireString(data, "projectId");
+    const projectRef = db.collection("projects").doc(projectId);
+    const projectSnap = await projectRef.get();
+    if (!projectSnap.exists) {
+        throw new https_1.HttpsError("not-found", "Project not found");
+    }
+    const project = projectSnap.data() ?? {};
+    if (`${project.workspaceId ?? ""}` !== workspaceId) {
+        throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
+    }
+    await projectRef.update({
+        isArchived: false,
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1640,6 +1664,8 @@ exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
         totalCost: daysWorked * dailyWage,
         date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
         notes: `${data.notes ?? ""}`.trim(),
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 });
@@ -1730,6 +1756,30 @@ exports.updateUserProfile = (0, https_1.onCall)(async (request) => {
         ...(riskAlertsEnabled == null ? {} : { riskAlertsEnabled }),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+});
+exports.updateUserSettings = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    const targetUserId = `${data.userId ?? request.auth.uid}`.trim();
+    if (targetUserId !== request.auth.uid) {
+        throw new https_1.HttpsError("permission-denied", "Cannot update another user's settings");
+    }
+    const updates = {
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const defaultCurrency = currencyCode(data.defaultCurrency);
+    if (defaultCurrency) {
+        updates.defaultCurrency = defaultCurrency;
+    }
+    const riskAlertsEnabled = asBooleanOrUndefined(data.riskAlertsEnabled);
+    if (riskAlertsEnabled != null) {
+        updates.riskAlertsEnabled = riskAlertsEnabled;
+    }
+    await db.collection("users").doc(request.auth.uid).set(updates, { merge: true });
 });
 async function bootstrapWorkspaceForUser(input) {
     const uid = input.uid.trim();

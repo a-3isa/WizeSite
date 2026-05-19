@@ -80,6 +80,17 @@ void main() {
     expect(visibleActions.first.syncedAt, isNotNull);
   });
 
+  test('delete project actions are normal optimistic queue entries', () async {
+    final action = await queue.enqueue(
+      type: 'delete_project',
+      payload: {'workspaceId': 'workspace_1', 'projectId': 'project_1'},
+    );
+
+    expect(action.type, 'delete_project');
+    expect(action.payload['clientMutationId'], action.id);
+    expect(await queue.pendingCount(), 1);
+  });
+
   test('terminal callable failures are stored as dead letters with code', () async {
     await queue.enqueue(type: 'payment', payload: {'value': 1});
 

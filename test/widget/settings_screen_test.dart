@@ -41,6 +41,13 @@ class _FakeUserSettingsRepository extends Fake
   }
 
   @override
+  Future<void> cacheProfileUpdate({
+    required String userId,
+    required String fullName,
+    String? photoUrl,
+  }) async {}
+
+  @override
   Stream<UserSettings> watchSettings(String userId, {String? fallbackEmail}) {
     return Stream.value(
       UserSettings.defaults(userId: userId, email: fallbackEmail ?? ''),
