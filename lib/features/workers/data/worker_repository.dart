@@ -21,6 +21,7 @@ abstract interface class WorkerRepository {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   });
@@ -30,6 +31,7 @@ abstract interface class WorkerRepository {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   });
@@ -96,20 +98,14 @@ class FirebaseWorkerRepository implements WorkerRepository {
         controller.add(_applyPendingWorkers(current, actions, workspaceId));
       }
 
-      final baseSub = baseStream.listen(
-        (items) {
-          current = items;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (value) {
-          actions = value;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final baseSub = baseStream.listen((items) {
+        current = items;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((value) {
+        actions = value;
+        emit();
+      }, onError: controller.addError);
       controller.onCancel = () async {
         await baseSub.cancel();
         await queueSub.cancel();
@@ -162,6 +158,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   }) async {
@@ -170,6 +167,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       name: name,
       phoneNumber: phoneNumber,
       dailyWage: dailyWage,
+      billingType: billingType,
       workerType: workerType,
       notes: notes,
     );
@@ -181,6 +179,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   }) async {
@@ -194,6 +193,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       name: name,
       phoneNumber: phoneNumber,
       dailyWage: dailyWage,
+      billingType: billingType,
       workerType: workerType,
       notes: notes,
     );
@@ -251,6 +251,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
         dailyWage:
             (action.payload['dailyWage'] as num?)?.toDouble() ??
             current.dailyWage,
+        billingType: '${action.payload['billingType'] ?? current.billingType}',
         workerType: '${action.payload['workerType'] ?? current.workerType}',
         notes: '${action.payload['notes'] ?? current.notes}',
         isArchived: current.isArchived,
@@ -290,6 +291,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       name: '${payload['name'] ?? ''}',
       phoneNumber: '${payload['phoneNumber'] ?? ''}',
       dailyWage: (payload['dailyWage'] as num?)?.toDouble() ?? 0,
+      billingType: '${payload['billingType'] ?? 'daily'}',
       workerType: '${payload['workerType'] ?? ''}',
       notes: '${payload['notes'] ?? ''}',
       isArchived: false,
@@ -342,20 +344,14 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
         );
       }
 
-      final baseSub = baseStream.listen(
-        (items) {
-          current = items;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (value) {
-          actions = value;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final baseSub = baseStream.listen((items) {
+        current = items;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((value) {
+        actions = value;
+        emit();
+      }, onError: controller.addError);
       controller.onCancel = () async {
         await baseSub.cancel();
         await queueSub.cancel();

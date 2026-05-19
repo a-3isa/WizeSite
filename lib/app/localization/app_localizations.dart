@@ -68,7 +68,8 @@ class AppLocalizations {
     'workerTypeOperator': 'Operator',
     'workerTypeOther': 'Other',
     'search': 'Search',
-    'queuedForSync': 'Saved offline. It will sync automatically when you reconnect.',
+    'queuedForSync':
+        'Saved offline. It will sync automatically when you reconnect.',
     'offlineSyncPending': '{count} offline actions are waiting to sync.',
     'offlineSyncFailed': '{count} offline actions failed and need attention.',
     'offlineSyncFailureQuota':
@@ -273,6 +274,14 @@ class AppLocalizations {
     'workerName': 'Worker Name',
     'dailyWage': 'Daily Wage',
     'workerType': 'Worker Type',
+    'billingType': 'Billing Type',
+    'billingTypeDaily': 'Paid by Day',
+    'billingTypeProject': 'Paid by Project',
+    'billingTypeWithValue': 'Billing: {value}',
+    'dailyWageUsedForEntries':
+        'This daily wage will be used when adding worker days.',
+    'dailyWageNotRequiredForProjectBilling':
+        'Not required for project-based workers.',
     'saveWorker': 'Save Worker',
     'updateWorker': 'Update Worker',
     'addWorkerTitle': 'Add Worker',
@@ -287,6 +296,9 @@ class AppLocalizations {
     'updateWorkerEntry': 'Update Worker Entry',
     'nameAndValidWageRequired': 'Name and valid daily wage are required.',
     'fillWorkerProjectDaysWage': 'Fill worker, project, days, and wage.',
+    'fillWorkerProjectTotalWage': 'Fill worker, project, and total wage.',
+    'totalWage': 'Total Wage',
+    'calculatedTotalWageWithValue': 'Calculated Total Wage: {value}',
     'recentEntries': 'Recent Entries',
     'noEntriesYet': 'No entries yet.',
     'totalLaborCost': 'Total Labor Cost',
@@ -427,6 +439,7 @@ class AppLocalizations {
     'inputSourceWithValue': 'Input: {input} | Source: {source}',
     'projectDateWithValue': '{project} | {date}',
     'wageWithValue': 'Wage: {value}',
+    'totalWageWithValue': 'Total Wage: {value}',
     'workerEntryLine': '{days} d × {wage} = {total}',
   };
 
@@ -479,7 +492,8 @@ class AppLocalizations {
     'workerTypeOperator': 'مشغل',
     'workerTypeOther': 'أخرى',
     'search': 'بحث',
-    'queuedForSync': 'تم الحفظ بدون اتصال. ستتم المزامنة تلقائياً عند عودة الشبكة.',
+    'queuedForSync':
+        'تم الحفظ بدون اتصال. ستتم المزامنة تلقائياً عند عودة الشبكة.',
     'offlineSyncPending': 'هناك {count} إجراءات بدون اتصال بانتظار المزامنة.',
     'offlineSyncFailed': 'فشل {count} إجراءات بدون اتصال وتحتاج إلى مراجعة.',
     'confirmArchiveExpense': 'هل تريد أرشفة هذا المصروف؟',
@@ -657,6 +671,14 @@ class AppLocalizations {
     'workerName': 'اسم العامل',
     'dailyWage': 'الأجر اليومي',
     'workerType': 'نوع العامل',
+    'billingType': 'طريقة الدفع',
+    'billingTypeDaily': 'بالأيام',
+    'billingTypeProject': 'بالمشروع',
+    'billingTypeWithValue': 'الدفع: {value}',
+    'dailyWageUsedForEntries':
+        'سيتم استخدام الأجر اليومي عند إضافة أيام العامل.',
+    'dailyWageNotRequiredForProjectBilling':
+        'غير مطلوب للعامل الذي يُدفع بالمشروع.',
     'saveWorker': 'حفظ العامل',
     'updateWorker': 'تحديث العامل',
     'addWorkerTitle': 'إضافة عامل',
@@ -671,6 +693,9 @@ class AppLocalizations {
     'updateWorkerEntry': 'تحديث سجل العامل',
     'nameAndValidWageRequired': 'اسم العامل وأجر يومي صحيح مطلوبان.',
     'fillWorkerProjectDaysWage': 'املأ العامل والمشروع والأيام والأجر.',
+    'fillWorkerProjectTotalWage': 'املأ العامل والمشروع وإجمالي الأجر.',
+    'totalWage': 'إجمالي الأجر',
+    'calculatedTotalWageWithValue': 'إجمالي الأجر المحسوب: {value}',
     'recentEntries': 'أحدث السجلات',
     'noEntriesYet': 'لا توجد سجلات بعد.',
     'totalLaborCost': 'إجمالي تكلفة العمالة',
@@ -802,15 +827,14 @@ class AppLocalizations {
     'inputSourceWithValue': 'الإدخال: {input} | المصدر: {source}',
     'projectDateWithValue': '{project} | {date}',
     'wageWithValue': 'الأجر: {value}',
+    'totalWageWithValue': 'إجمالي الأجر: {value}',
     'workerEntryLine': '{days} يوم × {wage} = {total}',
   };
 
   static final _localized = <String, Map<String, String>>{'en': _en, 'ar': _ar};
 
   String t(String key, {Map<String, String> params = const {}}) {
-    var value = _localized[locale.languageCode]?[key] ??
-        _en[key] ??
-        key;
+    var value = _localized[locale.languageCode]?[key] ?? _en[key] ?? key;
     for (final entry in params.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value);
     }

@@ -51,6 +51,22 @@ service cloud.firestore {
       return method in ["cash", "bank", "check"];
     }
 
+    function validWorkerBillingType(type) {
+      return type in ["daily", "project"];
+    }
+
+    function validWorkerDailyWageForBillingType(dailyWage, billingType) {
+      return (
+        billingType == "daily"
+        && dailyWage is number
+        && dailyWage > 0
+      ) || (
+        billingType == "project"
+        && dailyWage is number
+        && dailyWage >= 0
+      );
+    }
+
     function validProjectUpdate(projectId) {
       return inWorkspace(resource.data.workspaceId)
         && request.resource.data.id == projectId
@@ -154,21 +170,25 @@ service cloud.firestore {
         ]);
     }
 
-    function validWorkerWrite(workerId) {
+    function validWorkerWrite() {
       return inWorkspace(request.resource.data.workspaceId)
         && request.resource.data.workspaceId is string
         && request.resource.data.workspaceId.size() > 0
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.phoneNumber is string
-        && request.resource.data.dailyWage is number
-        && request.resource.data.dailyWage > 0
+        && request.resource.data.billingType is string
+        && validWorkerBillingType(request.resource.data.billingType)
+        && validWorkerDailyWageForBillingType(
+          request.resource.data.dailyWage,
+          request.resource.data.billingType
+        )
         && request.resource.data.workerType is string
         && request.resource.data.notes is string
         && request.resource.data.isArchived is bool;
     }
 
-    function validWorkerUpdate(workerId) {
+    function validWorkerUpdate() {
       return inWorkspace(resource.data.workspaceId)
         && request.resource.data.workspaceId == resource.data.workspaceId
         && request.resource.data.createdBy == resource.data.createdBy
@@ -176,8 +196,12 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.phoneNumber is string
-        && request.resource.data.dailyWage is number
-        && request.resource.data.dailyWage > 0
+        && request.resource.data.billingType is string
+        && validWorkerBillingType(request.resource.data.billingType)
+        && validWorkerDailyWageForBillingType(
+          request.resource.data.dailyWage,
+          request.resource.data.billingType
+        )
         && request.resource.data.workerType is string
         && request.resource.data.notes is string
         && request.resource.data.isArchived is bool
@@ -186,6 +210,7 @@ service cloud.firestore {
           "name",
           "phoneNumber",
           "dailyWage",
+          "billingType",
           "workerType",
           "notes",
           "isArchived",
@@ -254,8 +279,8 @@ service cloud.firestore {
 
     match /workers/{workerId} {
       allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if validWorkerWrite(workerId);
-      allow update: if validWorkerUpdate(workerId);
+      allow create: if validWorkerWrite();
+      allow update: if validWorkerUpdate();
       allow delete: if false;
     }
 

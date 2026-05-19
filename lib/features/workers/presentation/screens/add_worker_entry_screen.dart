@@ -9,6 +9,7 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +34,7 @@ class AddWorkerEntryScreen extends ConsumerStatefulWidget {
 
 class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   final _daysController = TextEditingController(text: '1');
-  final _wageController = TextEditingController();
+  final _totalWageController = TextEditingController();
   final _notesController = TextEditingController();
   String? _workerId;
   String? _projectId;
@@ -71,7 +72,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
           _workerId = entry.workerId;
           _projectId = entry.projectId;
           _daysController.text = entry.daysWorked.toStringAsFixed(2);
-          _wageController.text = entry.dailyWage.toStringAsFixed(2);
+          _totalWageController.text = entry.totalCost.toStringAsFixed(2);
           _notesController.text = entry.notes;
           _date = entry.date;
         });
@@ -92,7 +93,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   @override
   void dispose() {
     _daysController.dispose();
-    _wageController.dispose();
+    _totalWageController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -109,17 +110,29 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final days = double.tryParse(_daysController.text.trim());
-    final wage = double.tryParse(_wageController.text.trim());
+    final totalWage = double.tryParse(_totalWageController.text.trim());
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    if (_workerId == null ||
-        _projectId == null ||
-        days == null ||
-        wage == null ||
-        days <= 0) {
-      setState(() => _error = l10n.t('fillWorkerProjectDaysWage'));
+    final selectedWorker = _selectedWorker(
+      ref.read(workersProvider).valueOrNull ?? const [],
+    );
+    if (_workerId == null || _projectId == null || selectedWorker == null) {
+      return;
+    }
+    final billedByProject = selectedWorker.billingType == 'project';
+    final invalidDaily =
+        !billedByProject &&
+        (days == null || days <= 0 || selectedWorker.dailyWage <= 0);
+    final invalidProject =
+        billedByProject && (totalWage == null || totalWage <= 0);
+    if (invalidDaily || invalidProject) {
+      setState(
+        () => _error = billedByProject
+            ? l10n.t('fillWorkerProjectTotalWage')
+            : l10n.t('fillWorkerProjectDaysWage'),
+      );
       return;
     }
 
@@ -137,8 +150,10 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
               userId: userId,
               workerId: _workerId!,
               projectId: _projectId!,
-              daysWorked: days,
-              dailyWage: wage,
+              daysWorked: billedByProject ? 1 : days!,
+              dailyWage: billedByProject
+                  ? totalWage!
+                  : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
             );
@@ -149,8 +164,10 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
             .updateEntry(
               entryId: widget.entryId!,
               projectId: _projectId!,
-              daysWorked: days,
-              dailyWage: wage,
+              daysWorked: billedByProject ? 1 : days!,
+              dailyWage: billedByProject
+                  ? totalWage!
+                  : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
             );
@@ -258,18 +275,56 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         const Center(child: CircularProgressIndicator()),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _daysController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: l10n.t('daysWorked'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _wageController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: l10n.t('dailyWage')),
+                  Builder(
+                    builder: (context) {
+                      final worker = _selectedWorker(
+                        workersAsync.valueOrNull ?? const [],
+                      );
+                      if (worker == null) {
+                        return const SizedBox.shrink();
+                      }
+                      if (worker.billingType == 'project') {
+                        return TextField(
+                          controller: _totalWageController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: l10n.t('totalWage'),
+                          ),
+                        );
+                      }
+                      final days =
+                          double.tryParse(_daysController.text.trim()) ?? 0;
+                      final total = days * worker.dailyWage;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _daysController,
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              labelText: l10n.t('daysWorked'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.t(
+                              'dailyWageWithValue',
+                              params: {
+                                'value': worker.dailyWage.toStringAsFixed(2),
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            l10n.t(
+                              'calculatedTotalWageWithValue',
+                              params: {'value': total.toStringAsFixed(2)},
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   ListTile(
@@ -324,7 +379,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     );
   }
 
-  String? _resolvedWorkerId(List<dynamic> workers) {
+  String? _resolvedWorkerId(List<WorkerProfile> workers) {
     final currentWorkerId = _workerId;
     if (currentWorkerId == null ||
         currentWorkerId.isEmpty ||
@@ -340,6 +395,19 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
         setState(() => _workerId = null);
       }
     });
+    return null;
+  }
+
+  WorkerProfile? _selectedWorker(List<WorkerProfile> workers) {
+    final id = _workerId;
+    if (id == null || id.isEmpty || id == 'new') {
+      return null;
+    }
+    for (final worker in workers) {
+      if (worker.id == id) {
+        return worker;
+      }
+    }
     return null;
   }
 }

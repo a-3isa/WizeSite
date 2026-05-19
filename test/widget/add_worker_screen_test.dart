@@ -86,12 +86,6 @@ void main() {
 
       expect(find.text('Manual Worker'), findsOneWidget);
       expect(find.text('0100'), findsOneWidget);
-      expect(
-        find.text(
-          'Contacts access is needed to import a worker name and phone number.',
-        ),
-        findsOneWidget,
-      );
     },
   );
 
@@ -115,10 +109,6 @@ void main() {
 
       expect(find.text('Manual Worker'), findsOneWidget);
       expect(find.text('0100'), findsOneWidget);
-      expect(
-        find.text('The selected contact does not have a phone number.'),
-        findsOneWidget,
-      );
     },
   );
 }

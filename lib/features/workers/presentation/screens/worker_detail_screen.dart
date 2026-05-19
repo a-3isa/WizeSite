@@ -77,16 +77,23 @@ class WorkerDetailScreen extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          l10n.t(
-                            'dailyWageWithValue',
-                            params: {
-                              'value': Formatters.money(
-                                worker.dailyWage,
-                                currencyCode: currency,
-                                locale: locale,
-                              ),
-                            },
-                          ),
+                          worker.billingType == 'project'
+                              ? l10n.t(
+                                  'billingTypeWithValue',
+                                  params: {
+                                    'value': l10n.t('billingTypeProject'),
+                                  },
+                                )
+                              : l10n.t(
+                                  'dailyWageWithValue',
+                                  params: {
+                                    'value': Formatters.money(
+                                      worker.dailyWage,
+                                      currencyCode: currency,
+                                      locale: locale,
+                                    ),
+                                  },
+                                ),
                         ),
                         Text(
                           l10n.t(
@@ -162,22 +169,33 @@ class WorkerDetailScreen extends ConsumerWidget {
                           (entry) => Card(
                             child: ListTile(
                               title: Text(
-                                l10n.t(
-                                  'workerEntryLine',
-                                  params: {
-                                    'days': '${entry.daysWorked}',
-                                    'wage': Formatters.money(
-                                      entry.dailyWage,
-                                      currencyCode: currency,
-                                      locale: locale,
-                                    ),
-                                    'total': Formatters.money(
-                                      entry.totalCost,
-                                      currencyCode: currency,
-                                      locale: locale,
-                                    ),
-                                  },
-                                ),
+                                worker.billingType == 'project'
+                                    ? l10n.t(
+                                        'totalWageWithValue',
+                                        params: {
+                                          'value': Formatters.money(
+                                            entry.totalCost,
+                                            currencyCode: currency,
+                                            locale: locale,
+                                          ),
+                                        },
+                                      )
+                                    : l10n.t(
+                                        'workerEntryLine',
+                                        params: {
+                                          'days': '${entry.daysWorked}',
+                                          'wage': Formatters.money(
+                                            entry.dailyWage,
+                                            currencyCode: currency,
+                                            locale: locale,
+                                          ),
+                                          'total': Formatters.money(
+                                            entry.totalCost,
+                                            currencyCode: currency,
+                                            locale: locale,
+                                          ),
+                                        },
+                                      ),
                               ),
                               subtitle: Text(
                                 entry.date.toIso8601String().split('T').first,

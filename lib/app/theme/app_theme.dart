@@ -110,6 +110,36 @@ class AppTheme {
         ),
         hintStyle: baseFont.bodyMedium?.copyWith(color: AppColors.borderGrey),
       ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: baseFont.bodyLarge?.copyWith(
+          color: AppColors.textDark,
+          fontWeight: FontWeight.w600,
+        ),
+        menuStyle: MenuStyle(
+          backgroundColor: const WidgetStatePropertyAll(AppColors.surfaceSolid),
+          elevation: const WidgetStatePropertyAll(6),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: radiusMd),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          prefixIconColor: AppColors.constructionOrange,
+        ),
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: const WidgetStatePropertyAll(AppColors.surfaceSolid),
+          elevation: const WidgetStatePropertyAll(6),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: radiusMd),
+          ),
+        ),
+      ),
+      dropdownButtonTheme: const DropdownButtonThemeData(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        elevation: 6,
+        isExpanded: true,
+      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.constructionOrange,

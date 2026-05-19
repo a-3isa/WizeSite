@@ -19,6 +19,7 @@ class AddWorkerScreen extends ConsumerStatefulWidget {
 }
 
 class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
+  static const _billingTypes = <String>['daily', 'project'];
   static const _workerTypes = <String>[
     'carpenter',
     'electrician',
@@ -35,6 +36,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   final _wageController = TextEditingController();
   final _notesController = TextEditingController();
   String _workerType = 'other';
+  String _billingType = 'daily';
   bool _loading = false;
   bool _importingContact = false;
   bool _prefilling = false;
@@ -64,6 +66,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
           _nameController.text = worker.name;
           _phoneController.text = worker.phoneNumber;
           _wageController.text = worker.dailyWage.toStringAsFixed(2);
+          _billingType = worker.billingType == 'project' ? 'project' : 'daily';
           _workerType = _workerTypes.contains(worker.workerType)
               ? worker.workerType
               : 'other';
@@ -108,7 +111,12 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    if (_nameController.text.trim().isEmpty || wage == null || wage <= 0) {
+    if (_nameController.text.trim().isEmpty) {
+      setState(() => _error = l10n.t('nameAndValidWageRequired'));
+      return;
+    }
+    final isDaily = _billingType == 'daily';
+    if (isDaily && (wage == null || wage <= 0)) {
       setState(() => _error = l10n.t('nameAndValidWageRequired'));
       return;
     }
@@ -126,7 +134,8 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               userId: userId,
               name: _nameController.text.trim(),
               phoneNumber: _phoneController.text.trim(),
-              dailyWage: wage,
+              dailyWage: isDaily ? wage! : 0,
+              billingType: _billingType,
               workerType: _workerType,
               notes: _notesController.text.trim(),
             );
@@ -137,7 +146,8 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               workerId: widget.workerId!,
               name: _nameController.text.trim(),
               phoneNumber: _phoneController.text.trim(),
-              dailyWage: wage,
+              dailyWage: isDaily ? wage! : 0,
+              billingType: _billingType,
               workerType: _workerType,
               notes: _notesController.text.trim(),
             );
@@ -251,7 +261,34 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                   TextField(
                     controller: _wageController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: l10n.t('dailyWage')),
+                    enabled: _billingType == 'daily',
+                    decoration: InputDecoration(
+                      labelText: l10n.t('dailyWage'),
+                      helperText: _billingType == 'daily'
+                          ? l10n.t('dailyWageUsedForEntries')
+                          : l10n.t('dailyWageNotRequiredForProjectBilling'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _billingType,
+                    items: _billingTypes
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(
+                              type == 'daily'
+                                  ? l10n.t('billingTypeDaily')
+                                  : l10n.t('billingTypeProject'),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _billingType = value ?? _billingType),
+                    decoration: InputDecoration(
+                      labelText: l10n.t('billingType'),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(

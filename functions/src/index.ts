@@ -1827,9 +1827,11 @@ export const createWorker = onCall(async (request) => {
   const workspaceId = requireString(data, "workspaceId");
   await assertMember(workspaceId, request.auth.uid);
   const name = requireString(data, "name");
+  const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
+  const billingType = billingTypeRaw === "project" ? "project" : "daily";
   const dailyWage = requireNumber(data, "dailyWage");
-  if (dailyWage <= 0) {
-    throw new HttpsError("invalid-argument", "Daily wage must be greater than zero");
+  if (billingType === "daily" && dailyWage <= 0) {
+    throw new HttpsError("invalid-argument", "Daily workers must have daily wage greater than zero");
   }
 
   const workerRef = db.collection("workers").doc();
@@ -1838,7 +1840,8 @@ export const createWorker = onCall(async (request) => {
     workspaceId,
     name,
     phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-    dailyWage,
+    dailyWage: billingType === "daily" ? dailyWage : 0,
+    billingType,
     workerType: `${data.workerType ?? ""}`.trim(),
     notes: `${data.notes ?? ""}`.trim(),
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
@@ -1863,9 +1866,11 @@ export const updateWorker = onCall(async (request) => {
   await assertMember(workspaceId, request.auth.uid);
   const workerId = requireString(data, "workerId");
   const name = requireString(data, "name");
+  const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
+  const billingType = billingTypeRaw === "project" ? "project" : "daily";
   const dailyWage = requireNumber(data, "dailyWage");
-  if (dailyWage <= 0) {
-    throw new HttpsError("invalid-argument", "Daily wage must be greater than zero");
+  if (billingType === "daily" && dailyWage <= 0) {
+    throw new HttpsError("invalid-argument", "Daily workers must have daily wage greater than zero");
   }
 
   const workerRef = db.collection("workers").doc(workerId);
@@ -1884,7 +1889,8 @@ export const updateWorker = onCall(async (request) => {
   await workerRef.update({
     name,
     phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-    dailyWage,
+    dailyWage: billingType === "daily" ? dailyWage : 0,
+    billingType,
     workerType: `${data.workerType ?? ""}`.trim(),
     notes: `${data.notes ?? ""}`.trim(),
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),

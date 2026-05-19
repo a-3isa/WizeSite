@@ -337,10 +337,10 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
               leading: const Icon(Icons.engineering),
               title: Text(worker.name),
               subtitle: Text(
-                '${worker.phoneNumber} | ${l10n.t(
-                  'wageWithValue',
-                  params: {'value': Formatters.money(worker.dailyWage, currencyCode: currency, locale: locale)},
-                )}',
+                '${worker.phoneNumber} | ${worker.billingType == 'project' ? l10n.t('billingTypeProject') : l10n.t(
+                        'wageWithValue',
+                        params: {'value': Formatters.money(worker.dailyWage, currencyCode: currency, locale: locale)},
+                      )}',
               ),
               trailing: PopupMenuButton<String>(
                 onSelected: (value) async {

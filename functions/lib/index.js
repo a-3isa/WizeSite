@@ -1536,9 +1536,11 @@ exports.createWorker = (0, https_1.onCall)(async (request) => {
     const workspaceId = requireString(data, "workspaceId");
     await assertMember(workspaceId, request.auth.uid);
     const name = requireString(data, "name");
+    const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
+    const billingType = billingTypeRaw === "project" ? "project" : "daily";
     const dailyWage = requireNumber(data, "dailyWage");
-    if (dailyWage <= 0) {
-        throw new https_1.HttpsError("invalid-argument", "Daily wage must be greater than zero");
+    if (billingType === "daily" && dailyWage <= 0) {
+        throw new https_1.HttpsError("invalid-argument", "Daily workers must have daily wage greater than zero");
     }
     const workerRef = db.collection("workers").doc();
     await workerRef.set({
@@ -1546,7 +1548,8 @@ exports.createWorker = (0, https_1.onCall)(async (request) => {
         workspaceId,
         name,
         phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-        dailyWage,
+        dailyWage: billingType === "daily" ? dailyWage : 0,
+        billingType,
         workerType: `${data.workerType ?? ""}`.trim(),
         notes: `${data.notes ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
@@ -1568,9 +1571,11 @@ exports.updateWorker = (0, https_1.onCall)(async (request) => {
     await assertMember(workspaceId, request.auth.uid);
     const workerId = requireString(data, "workerId");
     const name = requireString(data, "name");
+    const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
+    const billingType = billingTypeRaw === "project" ? "project" : "daily";
     const dailyWage = requireNumber(data, "dailyWage");
-    if (dailyWage <= 0) {
-        throw new https_1.HttpsError("invalid-argument", "Daily wage must be greater than zero");
+    if (billingType === "daily" && dailyWage <= 0) {
+        throw new https_1.HttpsError("invalid-argument", "Daily workers must have daily wage greater than zero");
     }
     const workerRef = db.collection("workers").doc(workerId);
     const workerSnap = await workerRef.get();
@@ -1587,7 +1592,8 @@ exports.updateWorker = (0, https_1.onCall)(async (request) => {
     await workerRef.update({
         name,
         phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-        dailyWage,
+        dailyWage: billingType === "daily" ? dailyWage : 0,
+        billingType,
         workerType: `${data.workerType ?? ""}`.trim(),
         notes: `${data.notes ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),

@@ -64,6 +64,7 @@ WorkerProfile _worker(String id, String name) {
     name: name,
     phoneNumber: '0100',
     dailyWage: 120,
+    billingType: 'daily',
     workerType: 'laborer',
     notes: '',
     isArchived: false,
@@ -103,9 +104,7 @@ void main() {
                 _worker('worker_2', 'Worker Two'),
               ]),
             ),
-            projectsProvider.overrideWith(
-              (ref) => Stream.value([_project()]),
-            ),
+            projectsProvider.overrideWith((ref) => Stream.value([_project()])),
             workerEntryRepositoryProvider.overrideWithValue(entryRepository),
           ],
           child: const MaterialApp(
@@ -132,7 +131,7 @@ void main() {
       await tester.tap(find.text('Worker One').last);
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField).at(1), '150');
+      await tester.enterText(find.byType(TextField).at(0), '2');
       await tester.tap(find.text('Save Worker Entry'));
       await tester.pumpAndSettle();
 

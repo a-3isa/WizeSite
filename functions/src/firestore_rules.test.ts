@@ -92,6 +92,20 @@ if (!emulatorHost) {
         paymentMethod: "cash",
         isArchived: false,
       });
+      await setDoc(doc(db, "workers", "worker_owner"), {
+        id: "worker_owner",
+        workspaceId: "workspace_owner",
+        name: "Worker Owner",
+        phoneNumber: "0100",
+        dailyWage: 100,
+        billingType: "daily",
+        workerType: "laborer",
+        notes: "",
+        isArchived: false,
+        createdBy: "owner_1",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       await setDoc(doc(db, "worker_entries", "entry_owner"), {
         id: "entry_owner",
         workspaceId: "workspace_owner",
@@ -261,6 +275,56 @@ if (!emulatorHost) {
     await assertFails(
       updateDoc(doc(memberDb, "worker_entries", "entry_owner"), {
         daysWorked: -1,
+      }),
+    );
+  });
+
+  test("worker create allows project billing with zero daily wage", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertSucceeds(
+      setDoc(doc(memberDb, "workers", "worker_project"), {
+        id: "worker_project",
+        workspaceId: "workspace_owner",
+        name: "Project Billed Worker",
+        phoneNumber: "0100111",
+        dailyWage: 0,
+        billingType: "project",
+        workerType: "laborer",
+        notes: "",
+        isArchived: false,
+      }),
+    );
+  });
+
+  test("worker create rejects daily billing with zero wage", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      setDoc(doc(memberDb, "workers", "worker_daily_invalid"), {
+        id: "worker_daily_invalid",
+        workspaceId: "workspace_owner",
+        name: "Daily Billed Worker",
+        phoneNumber: "0100111",
+        dailyWage: 0,
+        billingType: "daily",
+        workerType: "laborer",
+        notes: "",
+        isArchived: false,
+      }),
+    );
+  });
+
+  test("worker update rejects invalid billing type", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      updateDoc(doc(memberDb, "workers", "worker_owner"), {
+        billingType: "weekly",
+        updatedAt: new Date(),
       }),
     );
   });

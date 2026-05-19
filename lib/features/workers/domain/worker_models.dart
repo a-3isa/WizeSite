@@ -5,6 +5,7 @@ class WorkerProfile {
     required this.name,
     required this.phoneNumber,
     required this.dailyWage,
+    required this.billingType,
     required this.workerType,
     required this.notes,
     required this.isArchived,
@@ -16,6 +17,7 @@ class WorkerProfile {
   final String name;
   final String phoneNumber;
   final double dailyWage;
+  final String billingType;
   final String workerType;
   final String notes;
   final bool isArchived;
@@ -28,6 +30,7 @@ class WorkerProfile {
       name: map['name'] as String? ?? '',
       phoneNumber: map['phoneNumber'] as String? ?? '',
       dailyWage: (map['dailyWage'] as num?)?.toDouble() ?? 0,
+      billingType: map['billingType'] as String? ?? 'daily',
       workerType: map['workerType'] as String? ?? '',
       notes: map['notes'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,

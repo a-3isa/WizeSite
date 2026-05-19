@@ -173,10 +173,7 @@ class WorkspaceMutationService {
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.archiveProject,
-      payload: {
-        'workspaceId': workspaceId,
-        'projectId': projectId,
-      },
+      payload: {'workspaceId': workspaceId, 'projectId': projectId},
     );
   }
 
@@ -186,10 +183,7 @@ class WorkspaceMutationService {
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.unarchiveProject,
-      payload: {
-        'workspaceId': workspaceId,
-        'projectId': projectId,
-      },
+      payload: {'workspaceId': workspaceId, 'projectId': projectId},
     );
   }
 
@@ -393,6 +387,7 @@ class WorkspaceMutationService {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   }) {
@@ -403,6 +398,7 @@ class WorkspaceMutationService {
         'name': name,
         'phoneNumber': phoneNumber,
         'dailyWage': dailyWage,
+        'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
       },
@@ -415,6 +411,7 @@ class WorkspaceMutationService {
     required String name,
     required String phoneNumber,
     required double dailyWage,
+    required String billingType,
     String? workerType,
     String? notes,
   }) {
@@ -426,6 +423,7 @@ class WorkspaceMutationService {
         'name': name,
         'phoneNumber': phoneNumber,
         'dailyWage': dailyWage,
+        'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
       },
@@ -438,10 +436,7 @@ class WorkspaceMutationService {
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.archiveWorker,
-      payload: {
-        'workspaceId': workspaceId,
-        'workerId': workerId,
-      },
+      payload: {'workspaceId': workspaceId, 'workerId': workerId},
     );
   }
 
