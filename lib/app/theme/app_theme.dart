@@ -135,11 +135,6 @@ class AppTheme {
           ),
         ),
       ),
-      dropdownButtonTheme: const DropdownButtonThemeData(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        elevation: 6,
-        isExpanded: true,
-      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.constructionOrange,
