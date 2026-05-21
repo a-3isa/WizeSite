@@ -9,7 +9,26 @@
       "Bash(firebase deploy:*)",
       "Bash(firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET)",
       "Bash(xargs grep:*)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git -C \"d:/WizeSite\" log --oneline -3)",
+      "Bash(Select-Object -First 100)",
+      "Bash(git commit -m 'refactor: _warmOnce returns Future<void> for deduplication *)",
+      "Bash(git commit *)",
+      "Bash(Select-Object -First 50)",
+      "Bash(git -C \"d:/WizeSite\" log --oneline -1)",
+      "Bash(Get-Content 'D:\\\\WizeSite\\\\pubspec.lock')",
+      "Bash(Select-String -Pattern 'fake_async' -Context 2)",
+      "Bash(Select-Object -Last 20)",
+      "Bash(Select-Object -First 60)",
+      "Bash(Select-Object -First 40)",
+      "Bash(sed -n '340,360p' lib/features/projects/presentation/screens/projects_screen.dart)",
+      "Bash(sed -n '415,435p' lib/features/projects/presentation/screens/projects_screen.dart)",
+      "Bash(sed -n '175,200p' lib/features/dashboard/presentation/screens/dashboard_screen.dart)",
+      "Bash(sed -n '260,280p' lib/features/dashboard/presentation/screens/dashboard_screen.dart)",
+      "Bash(sed -n '225,255p' lib/features/projects/presentation/screens/create_project_screen.dart)",
+      "Bash(sed -n '225,255p' lib/features/workers/presentation/screens/add_worker_screen.dart)",
+      "Bash(sed -n '370,385p' lib/features/reports/presentation/screens/reports_screen.dart)",
+      "Bash(sed -n '720,740p' lib/features/reports/presentation/screens/reports_screen.dart)"
     ]
   }
 }

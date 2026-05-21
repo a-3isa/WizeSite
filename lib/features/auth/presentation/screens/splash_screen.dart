@@ -1,6 +1,6 @@
-import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';

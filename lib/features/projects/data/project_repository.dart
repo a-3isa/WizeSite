@@ -448,6 +448,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       List<OfflineAction> currentActions = const [];
 
       void emit() {
+        if (currentProjects == null) return;
         final metricsByProjectId = {
           for (final doc in currentMetrics?.docs ?? const [])
             doc.id: doc.data(),
