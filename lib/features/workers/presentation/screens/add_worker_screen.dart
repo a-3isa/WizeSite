@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -270,42 +271,36 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _billingType,
-                    items: _billingTypes
+                  BelowDropdownField<String>(
+                    label: l10n.t('billingType'),
+                    value: _billingType,
+                    entries: _billingTypes
                         .map(
-                          (type) => DropdownMenuItem(
+                          (type) => DropdownMenuEntry(
                             value: type,
-                            child: Text(
-                              type == 'daily'
-                                  ? l10n.t('billingTypeDaily')
-                                  : l10n.t('billingTypeProject'),
-                            ),
+                            label: type == 'daily'
+                                ? l10n.t('billingTypeDaily')
+                                : l10n.t('billingTypeProject'),
                           ),
                         )
                         .toList(),
-                    onChanged: (value) =>
+                    onSelected: (value) =>
                         setState(() => _billingType = value ?? _billingType),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('billingType'),
-                    ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _workerType,
-                    items: _workerTypes
+                  BelowDropdownField<String>(
+                    label: l10n.t('workerType'),
+                    value: _workerType,
+                    entries: _workerTypes
                         .map(
-                          (type) => DropdownMenuItem(
+                          (type) => DropdownMenuEntry(
                             value: type,
-                            child: Text(l10n.workerTypeLabel(type)),
+                            label: l10n.workerTypeLabel(type),
                           ),
                         )
                         .toList(),
-                    onChanged: (value) =>
+                    onSelected: (value) =>
                         setState(() => _workerType = value ?? _workerType),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('workerType'),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(

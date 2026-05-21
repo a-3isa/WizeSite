@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
@@ -131,43 +132,101 @@ class OfflineActionQueue {
       createdAt: now,
     );
     await _box.put(action.id, jsonEncode(action.toMap()));
+    if (kDebugMode && type == 'create_payment') {
+      debugPrint(
+        '[offline_queue.enqueue] type=$type id=${action.id} '
+        'projectId=${enrichedPayload['projectId']} '
+        'amount=${enrichedPayload['amount']} '
+        'before=${enrichedPayload['projectTotalPaymentsBefore']} '
+        'after=${enrichedPayload['projectTotalPaymentsAfter']}',
+      );
+    }
     return action;
   }
 
-  Future<List<OfflineAction>> list({bool includeDeadLetters = false}) async {
+  Future<List<OfflineAction>> list({
+    bool includeDeadLetters = false,
+    bool includeExpiredSynced = false,
+  }) async {
     final now = DateTime.now();
-    return _box.values
-        .map(
-          (raw) =>
-              OfflineAction.fromMap(jsonDecode(raw) as Map<String, dynamic>),
-        )
-        .where(
-          (action) {
-            if (!includeDeadLetters &&
-                action.status == OfflineActionStatus.deadLetter) {
-              return false;
-            }
-            if (action.status == OfflineActionStatus.synced) {
-              final syncedAt = action.syncedAt;
-              return syncedAt != null &&
-                  now.difference(syncedAt) <= syncedVisibilityWindow;
-            }
-            return true;
-          },
-        )
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final actions =
+        _box.values
+            .map(
+              (raw) => OfflineAction.fromMap(
+                jsonDecode(raw) as Map<String, dynamic>,
+              ),
+            )
+            .where((action) {
+              if (!includeDeadLetters &&
+                  action.status == OfflineActionStatus.deadLetter) {
+                return false;
+              }
+              if (action.status == OfflineActionStatus.synced) {
+                if (includeExpiredSynced) {
+                  return true;
+                }
+                final syncedAt = action.syncedAt;
+                return syncedAt != null &&
+                    now.difference(syncedAt) <= syncedVisibilityWindow;
+              }
+              return true;
+            })
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (kDebugMode) {
+      final paymentActions = actions
+          .where((action) => action.type == 'create_payment')
+          .map(
+            (action) =>
+                '${action.id}:${action.status}:project=${action.payload['projectId']}:'
+                'amount=${action.payload['amount']}:'
+                'before=${action.payload['projectTotalPaymentsBefore']}:'
+                'after=${action.payload['projectTotalPaymentsAfter']}:'
+                'syncedAt=${action.syncedAt?.toIso8601String()}:'
+                'errorCode=${action.lastErrorCode}:'
+                'error=${action.lastError}',
+          )
+          .toList();
+      if (paymentActions.isNotEmpty) {
+        debugPrint(
+          '[offline_queue.list] includeExpiredSynced=$includeExpiredSynced '
+          'payments=${paymentActions.join(' | ')}',
+        );
+      }
+    }
+    return actions;
   }
 
-  Stream<List<OfflineAction>> watch({bool includeDeadLetters = false}) async* {
-    yield await list(includeDeadLetters: includeDeadLetters);
+  Stream<List<OfflineAction>> watch({
+    bool includeDeadLetters = false,
+    bool includeExpiredSynced = false,
+  }) async* {
+    yield await list(
+      includeDeadLetters: includeDeadLetters,
+      includeExpiredSynced: includeExpiredSynced,
+    );
     await for (final _ in _box.watch()) {
-      yield await list(includeDeadLetters: includeDeadLetters);
+      yield await list(
+        includeDeadLetters: includeDeadLetters,
+        includeExpiredSynced: includeExpiredSynced,
+      );
     }
   }
 
   Future<void> save(OfflineAction action) async {
     await _box.put(action.id, jsonEncode(action.toMap()));
+    if (kDebugMode && action.type == 'create_payment') {
+      debugPrint(
+        '[offline_queue.save] type=${action.type} id=${action.id} '
+        'status=${action.status} projectId=${action.payload['projectId']} '
+        'amount=${action.payload['amount']} '
+        'before=${action.payload['projectTotalPaymentsBefore']} '
+        'after=${action.payload['projectTotalPaymentsAfter']} '
+        'syncedAt=${action.syncedAt?.toIso8601String()} '
+        'errorCode=${action.lastErrorCode} '
+        'error=${action.lastError}',
+      );
+    }
   }
 
   Future<void> drain(
@@ -199,7 +258,22 @@ class OfflineActionQueue {
           }
           processedAny = true;
           try {
+            if (kDebugMode && action.type == 'create_payment') {
+              debugPrint(
+                '[offline_queue.drain] processing id=${action.id} '
+                'type=${action.type} status=${action.status} '
+                'projectId=${action.payload['projectId']} '
+                'amount=${action.payload['amount']} '
+                'retryCount=${action.retryCount}',
+              );
+            }
             await handler(action);
+            if (kDebugMode && action.type == 'create_payment') {
+              debugPrint(
+                '[offline_queue.drain] success id=${action.id} '
+                'type=${action.type}',
+              );
+            }
             await save(
               action.copyWith(
                 status: OfflineActionStatus.synced,
@@ -210,6 +284,16 @@ class OfflineActionQueue {
             );
           } catch (error) {
             final details = SyncErrorClassifier.detailsFrom(error);
+            if (kDebugMode && action.type == 'create_payment') {
+              debugPrint(
+                '[offline_queue.drain] failure id=${action.id} '
+                'type=${action.type} projectId=${action.payload['projectId']} '
+                'amount=${action.payload['amount']} '
+                'retryCount=${action.retryCount} '
+                'terminal=${SyncErrorClassifier.isTerminal(error)} '
+                'code=${details.code} message=${details.message}',
+              );
+            }
             final nextRetryCount = action.retryCount + 1;
             if (SyncErrorClassifier.isTerminal(error) ||
                 nextRetryCount >= maxRetries) {

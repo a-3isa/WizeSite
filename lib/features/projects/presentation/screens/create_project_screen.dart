@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -322,36 +323,31 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                           const SizedBox(height: 20),
                           _SectionHeader(title: l10n.t('status')),
                           const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            initialValue: _status,
-                            items: [
-                              DropdownMenuItem(
+                          BelowDropdownField<String>(
+                            label: l10n.t('status'),
+                            value: _status,
+                            entries: [
+                              DropdownMenuEntry(
                                 value: 'active',
-                                child: Text(l10n.projectStatusLabel('active')),
+                                label: l10n.projectStatusLabel('active'),
                               ),
-                              DropdownMenuItem(
+                              DropdownMenuEntry(
                                 value: 'paused',
-                                child: Text(l10n.projectStatusLabel('paused')),
+                                label: l10n.projectStatusLabel('paused'),
                               ),
-                              DropdownMenuItem(
+                              DropdownMenuEntry(
                                 value: 'completed',
-                                child: Text(
-                                  l10n.projectStatusLabel('completed'),
-                                ),
+                                label: l10n.projectStatusLabel('completed'),
                               ),
-                              DropdownMenuItem(
+                              DropdownMenuEntry(
                                 value: 'cancelled',
-                                child: Text(
-                                  l10n.projectStatusLabel('cancelled'),
-                                ),
+                                label: l10n.projectStatusLabel('cancelled'),
                               ),
                             ],
-                            onChanged: (value) {
+                            onSelected: (value) {
                               HapticFeedback.lightImpact();
                               setState(() => _status = value ?? 'active');
                             },
-                            decoration: _inputDecoration(l10n.t('status')),
-                            borderRadius: BorderRadius.circular(12),
                           ),
                           const SizedBox(height: 20),
                           _SectionHeader(title: l10n.t('startDate')),

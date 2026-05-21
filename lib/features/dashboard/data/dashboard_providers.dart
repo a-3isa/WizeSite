@@ -32,7 +32,7 @@ Stream<Map<String, num>> _projectsSummaryStream({
       .where('workspaceId', isEqualTo: workspaceId)
       .snapshots();
 
-  final queueStream = queue.watch();
+  final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
     QuerySnapshot<Map<String, dynamic>>? latestProjects;
@@ -48,6 +48,8 @@ Stream<Map<String, num>> _projectsSummaryStream({
       num totalIncome = 0;
       num totalNet = 0;
       var activeProjects = 0;
+      final expensesByProjectId = <String, double>{};
+      final incomeByProjectId = <String, double>{};
 
       for (final doc in projects) {
         final data = mergeProjectMetricsData(
@@ -66,6 +68,8 @@ Stream<Map<String, num>> _projectsSummaryStream({
         totalExpenses += expenses;
         totalIncome += income;
         totalNet += net;
+        expensesByProjectId[doc.id] = expenses.toDouble();
+        incomeByProjectId[doc.id] = income.toDouble();
         if ('${data['status'] ?? 'active'}' == 'active') {
           activeProjects += 1;
         }
@@ -74,6 +78,8 @@ Stream<Map<String, num>> _projectsSummaryStream({
       final pending = _workspacePendingDelta(
         actions: latestActions,
         workspaceId: workspaceId,
+        expensesByProjectId: expensesByProjectId,
+        incomeByProjectId: incomeByProjectId,
       );
 
       controller.add(<String, num>{
@@ -110,6 +116,8 @@ Stream<Map<String, num>> _projectsSummaryStream({
 _workspacePendingDelta({
   required List<OfflineAction> actions,
   required String workspaceId,
+  required Map<String, double> expensesByProjectId,
+  required Map<String, double> incomeByProjectId,
 }) {
   var pendingProjects = 0;
   num pendingExpenses = 0;
@@ -122,36 +130,81 @@ _workspacePendingDelta({
     }
     switch (action.type) {
       case OfflineActionTypes.createProject:
+        if (action.status == OfflineActionStatus.synced) {
+          break;
+        }
         pendingProjects += 1;
         break;
       case OfflineActionTypes.createExpense:
-        pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+        pendingExpenses += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalExpensesBefore',
+          currentTotal:
+              expensesByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta: ((action.payload['amount'] as num?) ?? 0).toDouble(),
+        );
         break;
       case OfflineActionTypes.updateExpense:
-        pendingExpenses -= (action.payload['previousAmount'] as num?) ?? 0;
-        pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+        pendingExpenses += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalExpensesBefore',
+          currentTotal:
+              expensesByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta:
+              (((action.payload['amount'] as num?) ?? 0) -
+                      ((action.payload['previousAmount'] as num?) ?? 0))
+                  .toDouble(),
+        );
         break;
       case OfflineActionTypes.createWorkerEntry:
         final daysWorked = (action.payload['daysWorked'] as num?) ?? 0;
         final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
-        pendingExpenses += daysWorked * dailyWage;
+        pendingExpenses += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalExpensesBefore',
+          currentTotal:
+              expensesByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta: (daysWorked * dailyWage).toDouble(),
+        );
         break;
       case OfflineActionTypes.updateWorkerEntry:
-        pendingExpenses -=
+        final previousCost =
             (action.payload['previousTotalCost'] as num?) ??
             (((action.payload['previousDaysWorked'] as num?) ?? 0) *
                 ((action.payload['previousDailyWage'] as num?) ?? 0));
-        pendingExpenses +=
+        final nextCost =
             (action.payload['totalCost'] as num?) ??
             (((action.payload['daysWorked'] as num?) ?? 0) *
                 ((action.payload['dailyWage'] as num?) ?? 0));
+        final delta = nextCost - previousCost;
+        pendingExpenses += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalExpensesBefore',
+          currentTotal:
+              expensesByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta: delta.toDouble(),
+        );
         break;
       case OfflineActionTypes.createPayment:
-        pendingIncome += (action.payload['amount'] as num?) ?? 0;
+        pendingIncome += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalPaymentsBefore',
+          currentTotal:
+              incomeByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta: ((action.payload['amount'] as num?) ?? 0).toDouble(),
+        );
         break;
       case OfflineActionTypes.updatePayment:
-        pendingIncome -= (action.payload['previousAmount'] as num?) ?? 0;
-        pendingIncome += (action.payload['amount'] as num?) ?? 0;
+        pendingIncome += _dashboardDeltaIfNeeded(
+          action: action,
+          baselineField: 'projectTotalPaymentsBefore',
+          currentTotal:
+              incomeByProjectId['${action.payload['projectId'] ?? ''}'],
+          delta:
+              (((action.payload['amount'] as num?) ?? 0) -
+                      ((action.payload['previousAmount'] as num?) ?? 0))
+                  .toDouble(),
+        );
         break;
       default:
         break;
@@ -163,4 +216,24 @@ _workspacePendingDelta({
     pendingExpenses: pendingExpenses,
     pendingIncome: pendingIncome,
   );
+}
+
+double _dashboardDeltaIfNeeded({
+  required OfflineAction action,
+  required String baselineField,
+  required double? currentTotal,
+  required double delta,
+}) {
+  final baseline = (action.payload[baselineField] as num?)?.toDouble();
+  if (baseline == null || currentTotal == null || delta == 0) {
+    return delta;
+  }
+  final expected =
+      (action.payload[baselineField.replaceFirst('Before', 'After')] as num?)
+          ?.toDouble() ??
+      baseline + delta;
+  final reflected = delta > 0
+      ? currentTotal >= expected
+      : currentTotal <= expected;
+  return reflected ? 0 : delta;
 }

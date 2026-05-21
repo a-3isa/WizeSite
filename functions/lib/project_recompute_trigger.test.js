@@ -433,6 +433,28 @@ else {
                 handled.message.includes("Project is archived");
         });
     });
+    (0, node_test_1.default)("payment creation increments project payment and net metrics", async () => {
+        await seedRecomputeInputs();
+        await db.collection("project_metrics").doc("project_1").set({
+            workspaceId,
+            projectId: "project_1",
+            totalExpenses: 300,
+            totalPayments: 300,
+            netProfit: 0,
+        });
+        await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 125,
+            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            paymentMethod: "cash",
+            clientMutationId: "client_payment_1",
+        });
+        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsData = metricsSnap.data() ?? {};
+        strict_1.default.equal(Number(metricsData.totalPayments ?? 0), 425);
+        strict_1.default.equal(Number(metricsData.netProfit ?? 0), 125);
+    });
     (0, node_test_1.default)("worker entry creation rejects archived projects", async () => {
         await seedRecomputeInputs();
         await db.collection("projects").doc("project_1").update({ isArchived: true });

@@ -202,9 +202,7 @@ Widget _testApp({
           ),
         ),
       ),
-      currentUsageProvider.overrideWith(
-        (ref) => Stream.value(usageSnapshot),
-      ),
+      currentUsageProvider.overrideWith((ref) => Stream.value(usageSnapshot)),
       dashboardSummaryProvider.overrideWith(
         (ref, workspaceId) => Stream.value({
           'totalProjects': 1,
@@ -224,29 +222,7 @@ Widget _testApp({
 }
 
 void main() {
-  testWidgets('navigates to paywall on cap hit', (tester) async {
-    await tester.pumpWidget(
-      _testApp(
-        result: const LimitCheckResult(
-          allowed: false,
-          limitType: LimitType.expensesPerMonth,
-          current: 30,
-          max: 30,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final scrollable = find.byType(Scrollable).first;
-    final target = find.byKey(const Key('qa_add_expense'));
-    await tester.scrollUntilVisible(target, 300, scrollable: scrollable);
-    await tester.tap(target);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Upgrade Required'), findsOneWidget);
-  });
-
-  testWidgets('limit screen upgrade opens paywall success path', (
+  testWidgets('bypasses paywall on cap hit while limits are disabled', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -257,7 +233,6 @@ void main() {
           current: 30,
           max: 30,
         ),
-        paywallResult: PaywallPresentationResult.purchased,
       ),
     );
     await tester.pumpAndSettle();
@@ -266,6 +241,27 @@ void main() {
     final target = find.byKey(const Key('qa_add_expense'));
     await tester.scrollUntilVisible(target, 300, scrollable: scrollable);
     await tester.tap(target);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add Expense Screen'), findsOneWidget);
+  });
+
+  testWidgets('limit screen upgrade opens paywall success path directly', (
+    tester,
+  ) async {
+    final router = _buildRouter();
+    router.go('/subscription/limit?limit=expensesPerMonth');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+          purchaseCoordinatorProvider.overrideWithValue(
+            _FakePurchaseCoordinator(PaywallPresentationResult.purchased),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Upgrade to Pro'));

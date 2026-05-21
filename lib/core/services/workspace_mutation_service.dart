@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MutationResult {
@@ -121,6 +122,7 @@ class WorkspaceMutationService {
     String? transcript,
     String? source,
     String? storagePath,
+    double? projectTotalExpensesBefore,
   }) async {
     final payload = {
       'workspaceId': workspaceId,
@@ -137,6 +139,7 @@ class WorkspaceMutationService {
       'transcript': transcript ?? '',
       'source': source ?? '',
       'storagePath': storagePath ?? '',
+      'projectTotalExpensesBefore': projectTotalExpensesBefore,
     };
 
     return _enqueueForBackgroundSync(
@@ -227,7 +230,11 @@ class WorkspaceMutationService {
     required DateTime date,
     required String paymentMethod,
     String? notes,
+    double? projectTotalPaymentsBefore,
   }) async {
+    final projectTotalPaymentsAfter = projectTotalPaymentsBefore == null
+        ? null
+        : projectTotalPaymentsBefore + amount;
     final payload = {
       'workspaceId': workspaceId,
       'projectId': projectId,
@@ -235,7 +242,16 @@ class WorkspaceMutationService {
       'date': date.toIso8601String(),
       'paymentMethod': paymentMethod,
       'notes': notes ?? '',
+      'projectTotalPaymentsBefore': projectTotalPaymentsBefore,
+      'projectTotalPaymentsAfter': projectTotalPaymentsAfter,
     };
+    if (kDebugMode) {
+      debugPrint(
+        '[mutation.createPayment] workspaceId=$workspaceId '
+        'projectId=$projectId amount=$amount '
+        'before=$projectTotalPaymentsBefore after=$projectTotalPaymentsAfter',
+      );
+    }
 
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createPayment,
@@ -298,6 +314,7 @@ class WorkspaceMutationService {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    double? projectTotalExpensesBefore,
   }) async {
     final payload = {
       'workspaceId': workspaceId,
@@ -307,6 +324,7 @@ class WorkspaceMutationService {
       'dailyWage': dailyWage,
       'date': date.toIso8601String(),
       'notes': notes ?? '',
+      'projectTotalExpensesBefore': projectTotalExpensesBefore,
     };
 
     return _enqueueForBackgroundSync(

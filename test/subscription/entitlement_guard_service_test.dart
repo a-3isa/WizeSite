@@ -82,7 +82,7 @@ void main() {
       expect(result.max, 999999);
     });
 
-    test('throws LimitExceeded for free users hitting limit', () async {
+    test('allows quota while usage limits are disabled', () async {
       final subRepo = _FakeSubscriptionRepository(
         SubscriptionState(
           tier: PlanTier.free,
@@ -105,13 +105,12 @@ void main() {
         usageQuotaRepository: usageRepo,
       );
 
-      expect(
-        () => service.ensureCanCreate(
-          workspaceId: 'w1',
-          type: LimitType.expensesPerMonth,
-        ),
-        throwsA(isA<LimitExceeded>()),
+      final result = await service.checkQuota(
+        workspaceId: 'w1',
+        type: LimitType.expensesPerMonth,
       );
+
+      expect(result.allowed, isTrue);
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -172,20 +173,18 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
                 decoration: InputDecoration(labelText: l10n.t('inviteByEmail')),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _role,
-                items: [
-                  DropdownMenuItem(
+              BelowDropdownField<String>(
+                label: l10n.t('role'),
+                value: _role,
+                entries: [
+                  DropdownMenuEntry(
                     value: 'member',
-                    child: Text(l10n.t('memberRole')),
+                    label: l10n.t('memberRole'),
                   ),
-                  DropdownMenuItem(
-                    value: 'owner',
-                    child: Text(l10n.t('ownerRole')),
-                  ),
+                  DropdownMenuEntry(value: 'owner', label: l10n.t('ownerRole')),
                 ],
-                onChanged: (value) => setState(() => _role = value ?? 'member'),
-                decoration: InputDecoration(labelText: l10n.t('role')),
+                onSelected: (value) =>
+                    setState(() => _role = value ?? 'member'),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),

@@ -8,7 +8,8 @@
       "Bash(npm install:*)",
       "Bash(firebase deploy:*)",
       "Bash(firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(npx tsc *)"
     ]
   }
 }

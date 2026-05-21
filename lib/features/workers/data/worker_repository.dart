@@ -56,6 +56,7 @@ abstract interface class WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    double? projectTotalExpensesBefore,
   });
 
   Future<void> updateEntry({
@@ -381,6 +382,7 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    double? projectTotalExpensesBefore,
   }) async {
     return _mutationService.createWorkerEntry(
       workspaceId: workspaceId,
@@ -390,6 +392,7 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       dailyWage: dailyWage,
       date: date,
       notes: notes,
+      projectTotalExpensesBefore: projectTotalExpensesBefore,
     );
   }
 

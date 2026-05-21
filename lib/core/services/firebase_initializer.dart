@@ -31,6 +31,9 @@ class FirebaseInitializer {
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
+      debugPrint(
+        '[firebase.cache] Firestore persistence enabled with unlimited cache',
+      );
       await _ensureAppCheckActivated();
       _initialized = true;
     } catch (error, stackTrace) {

@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -329,29 +330,32 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: projectsAsync.when(
-                data: (projects) => DropdownButtonFormField<String?>(
-                  initialValue: _selectedProjectId,
-                  decoration: InputDecoration(labelText: l10n.t('project')),
-                  items: [
-                    DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text(l10n.t('allProjectsOption')),
+                data: (projects) => BelowDropdownField<String>(
+                  label: l10n.t('project'),
+                  value: _selectedProjectId ?? '',
+                  entries: [
+                    DropdownMenuEntry<String>(
+                      value: '',
+                      label: l10n.t('allProjectsOption'),
                     ),
                     ...projects.map(
-                      (project) => DropdownMenuItem<String?>(
+                      (project) => DropdownMenuEntry<String>(
                         value: project.id,
-                        child: Text(project.name),
+                        label: project.name,
                       ),
                     ),
                   ],
-                  onChanged: (value) {
-                    if (_selectedProjectId == value) {
+                  onSelected: (value) {
+                    final projectId = value == null || value.isEmpty
+                        ? null
+                        : value;
+                    if (_selectedProjectId == projectId) {
                       return;
                     }
                     setState(() {
-                      _selectedProjectId = value;
+                      _selectedProjectId = projectId;
                     });
-                    context.go(AppRoutes.paymentsPath(projectId: value));
+                    context.go(AppRoutes.paymentsPath(projectId: projectId));
                     _refresh();
                   },
                 ),

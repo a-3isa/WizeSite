@@ -7,9 +7,13 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
+import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -113,6 +117,26 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     try {
       var queued = false;
       if (widget.paymentId == null) {
+        try {
+          await ref
+              .read(entitlementGuardProvider)
+              .ensureCanCreate(
+                workspaceId: workspaceId,
+                type: LimitType.paymentsPerMonth,
+              );
+        } on LimitExceeded {
+          if (mounted) {
+            context.push(AppRoutes.subscriptionLimitPath('paymentsPerMonth'));
+          }
+          return;
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '[add_payment.save] create start workspaceId=$workspaceId '
+            'userId=$userId projectId=$_projectId amount=$amount '
+            'method=$_method date=${_date.toIso8601String()}',
+          );
+        }
         final result = await ref
             .read(paymentRepositoryProvider)
             .createPayment(
@@ -125,6 +149,12 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               notes: _notesController.text.trim(),
             );
         queued = result.queued;
+        if (kDebugMode) {
+          debugPrint(
+            '[add_payment.save] create result queued=${result.queued} '
+            'id=${result.id}',
+          );
+        }
       } else {
         await ref
             .read(paymentRepositoryProvider)
@@ -186,18 +216,16 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   projectsAsync.when(
-                    data: (projects) => DropdownButtonFormField<String>(
-                      initialValue: _projectId,
-                      items: projects
+                    data: (projects) => BelowDropdownField<String>(
+                      label: l10n.t('project'),
+                      value: _projectId,
+                      entries: projects
                           .map(
-                            (p) => DropdownMenuItem(
-                              value: p.id,
-                              child: Text(p.name),
-                            ),
+                            (p) =>
+                                DropdownMenuEntry(value: p.id, label: p.name),
                           )
                           .toList(),
-                      onChanged: (value) => setState(() => _projectId = value),
-                      decoration: InputDecoration(labelText: l10n.t('project')),
+                      onSelected: (value) => setState(() => _projectId = value),
                     ),
                     error: (e, _) => Text(e.toString()),
                     loading: () =>
@@ -234,27 +262,25 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _method,
-                    items: [
-                      DropdownMenuItem(
+                  BelowDropdownField<String>(
+                    label: l10n.t('paymentMethod'),
+                    value: _method,
+                    entries: [
+                      DropdownMenuEntry(
                         value: 'cash',
-                        child: Text(l10n.paymentMethodLabel('cash')),
+                        label: l10n.paymentMethodLabel('cash'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'bank',
-                        child: Text(l10n.paymentMethodLabel('bank')),
+                        label: l10n.paymentMethodLabel('bank'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'check',
-                        child: Text(l10n.paymentMethodLabel('check')),
+                        label: l10n.paymentMethodLabel('check'),
                       ),
                     ],
-                    onChanged: (value) =>
+                    onSelected: (value) =>
                         setState(() => _method = value ?? 'cash'),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('paymentMethod'),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(

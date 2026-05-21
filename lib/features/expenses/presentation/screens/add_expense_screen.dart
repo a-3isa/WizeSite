@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -121,11 +122,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       var queued = false;
       if (widget.expenseId == null) {
         String finalProjectName = _projectName;
+        final projects = ref.read(projectsProvider).valueOrNull ?? [];
+        final matches = projects.where((project) => project.id == _projectId);
+        final selectedProject = matches.isEmpty ? null : matches.first;
         if (finalProjectName.isEmpty && _projectId != null) {
-          final projects = ref.read(projectsProvider).valueOrNull ?? [];
-          final match = projects.where((p) => p.id == _projectId);
-          if (match.isNotEmpty) {
-            finalProjectName = match.first.name;
+          if (selectedProject != null) {
+            finalProjectName = selectedProject.name;
           }
         }
         final result = await ref
@@ -141,6 +143,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               date: _date,
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
+              projectTotalExpensesBefore: selectedProject?.totalExpenses,
             );
         queued = result.queued;
       } else {
@@ -220,17 +223,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 children: [
                   projectsAsync.when(
                     data: (projects) {
-                      return DropdownButtonFormField<String>(
-                        initialValue: _projectId,
-                        items: projects
+                      return BelowDropdownField<String>(
+                        label: l10n.t('project'),
+                        value: _projectId,
+                        entries: projects
                             .map(
-                              (p) => DropdownMenuItem(
-                                value: p.id,
-                                child: Text(p.name),
-                              ),
+                              (p) =>
+                                  DropdownMenuEntry(value: p.id, label: p.name),
                             )
                             .toList(),
-                        onChanged: (value) {
+                        onSelected: (value) {
                           final selected = projects.where((p) => p.id == value);
                           setState(() {
                             _projectId = value;
@@ -239,9 +241,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 : selected.first.name;
                           });
                         },
-                        decoration: InputDecoration(
-                          labelText: l10n.t('project'),
-                        ),
                       );
                     },
                     error: (e, _) => Text(e.toString()),
@@ -249,33 +248,33 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         const Center(child: CircularProgressIndicator()),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _category,
-                    items: [
-                      DropdownMenuItem(
+                  BelowDropdownField<String>(
+                    label: l10n.t('category'),
+                    value: _category,
+                    entries: [
+                      DropdownMenuEntry(
                         value: 'labor',
-                        child: Text(l10n.expenseCategoryLabel('labor')),
+                        label: l10n.expenseCategoryLabel('labor'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'materials',
-                        child: Text(l10n.expenseCategoryLabel('materials')),
+                        label: l10n.expenseCategoryLabel('materials'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'equipment',
-                        child: Text(l10n.expenseCategoryLabel('equipment')),
+                        label: l10n.expenseCategoryLabel('equipment'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'transport',
-                        child: Text(l10n.expenseCategoryLabel('transport')),
+                        label: l10n.expenseCategoryLabel('transport'),
                       ),
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: 'other',
-                        child: Text(l10n.expenseCategoryLabel('other')),
+                        label: l10n.expenseCategoryLabel('other'),
                       ),
                     ],
-                    onChanged: (value) =>
+                    onSelected: (value) =>
                         setState(() => _category = value ?? _category),
-                    decoration: InputDecoration(labelText: l10n.t('category')),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -284,19 +283,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     decoration: InputDecoration(labelText: l10n.t('amount')),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _currency,
-                    items: const [
-                      DropdownMenuItem(value: 'EGP', child: Text('EGP')),
-                      DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      DropdownMenuItem(value: 'SAR', child: Text('SAR')),
-                      DropdownMenuItem(value: 'AED', child: Text('AED')),
+                  BelowDropdownField<String>(
+                    label: l10n.t('currencyLabel'),
+                    value: _currency,
+                    entries: const [
+                      DropdownMenuEntry(value: 'EGP', label: 'EGP'),
+                      DropdownMenuEntry(value: 'USD', label: 'USD'),
+                      DropdownMenuEntry(value: 'SAR', label: 'SAR'),
+                      DropdownMenuEntry(value: 'AED', label: 'AED'),
                     ],
-                    onChanged: (value) =>
+                    onSelected: (value) =>
                         setState(() => _currency = value ?? _currency),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('currencyLabel'),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   ListTile(

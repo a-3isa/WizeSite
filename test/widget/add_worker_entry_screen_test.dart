@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -30,6 +31,7 @@ class _FakeWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    double? projectTotalExpensesBefore,
   }) async {
     createdWorkerId = workerId;
     return const MutationResult();
@@ -126,7 +128,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.tap(find.byType(BelowDropdownField<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Worker One').last);
       await tester.pumpAndSettle();

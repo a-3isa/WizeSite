@@ -28,6 +28,7 @@ abstract interface class ExpenseRepository {
     String? notes,
     String? supplierName,
     String? paymentMethod,
+    double? projectTotalExpensesBefore,
   });
 
   Future<void> updateExpense({
@@ -85,20 +86,14 @@ class FirebaseExpenseRepository implements ExpenseRepository {
         );
       }
 
-      final baseSub = baseStream.listen(
-        (items) {
-          current = items;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (value) {
-          actions = value;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final baseSub = baseStream.listen((items) {
+        current = items;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((value) {
+        actions = value;
+        emit();
+      }, onError: controller.addError);
 
       controller.onCancel = () async {
         await baseSub.cancel();
@@ -168,6 +163,7 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     String? notes,
     String? supplierName,
     String? paymentMethod,
+    double? projectTotalExpensesBefore,
   }) async {
     return _mutationService.createManualExpense(
       workspaceId: workspaceId,
@@ -180,6 +176,7 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       notes: notes,
       supplierName: supplierName,
       paymentMethod: paymentMethod,
+      projectTotalExpensesBefore: projectTotalExpensesBefore,
     );
   }
 
@@ -319,7 +316,8 @@ class FirebaseExpenseRepository implements ExpenseRepository {
         }
         final payloadWorkspaceId = '${action.payload['workspaceId'] ?? ''}';
         final payloadProjectId = '${action.payload['projectId'] ?? ''}';
-        if (payloadWorkspaceId != workspaceId || payloadProjectId != projectId) {
+        if (payloadWorkspaceId != workspaceId ||
+            payloadProjectId != projectId) {
           continue;
         }
         items.insert(0, _expenseFromCreateAction(action));

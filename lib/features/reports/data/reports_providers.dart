@@ -217,8 +217,8 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
         break;
       case OfflineActionTypes.updateExpense:
         final previousDate = _parsePendingDate(action.payload['previousDate']);
-        final previousAmount =
-            ((action.payload['previousAmount'] as num?) ?? 0).toDouble();
+        final previousAmount = ((action.payload['previousAmount'] as num?) ?? 0)
+            .toDouble();
         if (previousDate != null) {
           final previousPoint = pointFor(previousDate);
           points[_monthKey(previousPoint.month)] = MonthlyFlowData(
@@ -229,16 +229,15 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
         }
         points[_monthKey(point.month)] = MonthlyFlowData(
           month: point.month,
-          expenses:
-              point.expenses + ((action.payload['amount'] as num?) ?? 0),
+          expenses: point.expenses + ((action.payload['amount'] as num?) ?? 0),
           income: point.income,
         );
         break;
       case OfflineActionTypes.createWorkerEntry:
         final cost =
             ((action.payload['totalCost'] as num?)?.toDouble() ??
-                (((action.payload['daysWorked'] as num?) ?? 0) *
-                    ((action.payload['dailyWage'] as num?) ?? 0)))
+                    (((action.payload['daysWorked'] as num?) ?? 0) *
+                        ((action.payload['dailyWage'] as num?) ?? 0)))
                 .toDouble();
         points[_monthKey(point.month)] = MonthlyFlowData(
           month: point.month,
@@ -252,9 +251,9 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
         final previousDate = _parsePendingDate(action.payload['previousDate']);
         final previousCost =
             ((action.payload['previousTotalCost'] as num?)?.toDouble() ??
-                (((action.payload['previousDaysWorked'] as num?) ?? 0) *
-                        ((action.payload['previousDailyWage'] as num?) ?? 0))
-                    .toDouble());
+            (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                    ((action.payload['previousDailyWage'] as num?) ?? 0))
+                .toDouble());
         if (previousProjectId == projectId && previousDate != null) {
           final previousPoint = pointFor(previousDate);
           points[_monthKey(previousPoint.month)] = MonthlyFlowData(
@@ -266,9 +265,9 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
         if ('${action.payload['projectId'] ?? ''}' == projectId) {
           final nextCost =
               ((action.payload['totalCost'] as num?)?.toDouble() ??
-                  (((action.payload['daysWorked'] as num?) ?? 0) *
-                          ((action.payload['dailyWage'] as num?) ?? 0))
-                      .toDouble());
+              (((action.payload['daysWorked'] as num?) ?? 0) *
+                      ((action.payload['dailyWage'] as num?) ?? 0))
+                  .toDouble());
           points[_monthKey(point.month)] = MonthlyFlowData(
             month: point.month,
             expenses: point.expenses + nextCost,
@@ -279,8 +278,8 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
       case OfflineActionTypes.archiveWorkerEntry:
         final cost =
             ((action.payload['totalCost'] as num?)?.toDouble() ??
-                (((action.payload['daysWorked'] as num?) ?? 0) *
-                    ((action.payload['dailyWage'] as num?) ?? 0)))
+                    (((action.payload['daysWorked'] as num?) ?? 0) *
+                        ((action.payload['dailyWage'] as num?) ?? 0)))
                 .toDouble();
         points[_monthKey(point.month)] = MonthlyFlowData(
           month: point.month,
@@ -304,8 +303,8 @@ List<MonthlyFlowData> _mergeMonthlyFlow(
         break;
       case OfflineActionTypes.updatePayment:
         final previousDate = _parsePendingDate(action.payload['previousDate']);
-        final previousAmount =
-            ((action.payload['previousAmount'] as num?) ?? 0).toDouble();
+        final previousAmount = ((action.payload['previousAmount'] as num?) ?? 0)
+            .toDouble();
         if (previousDate != null) {
           final previousPoint = pointFor(previousDate);
           points[_monthKey(previousPoint.month)] = MonthlyFlowData(
@@ -622,19 +621,20 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
   List<OfflineAction> actions,
   String projectId,
 ) {
-  final relevantActions = actions
+  final candidateActions = actions
       .where((action) {
         final payloadProjectId = '${action.payload['projectId'] ?? ''}';
-        final previousProjectId = '${action.payload['previousProjectId'] ?? ''}';
+        final previousProjectId =
+            '${action.payload['previousProjectId'] ?? ''}';
         return payloadProjectId == projectId || previousProjectId == projectId;
       })
       .toList(growable: false);
   if (base == null) {
-    if (relevantActions.isEmpty) {
+    if (candidateActions.isEmpty) {
       return null;
     }
 
-    final projectName = relevantActions
+    final projectName = candidateActions
         .map((action) => '${action.payload['projectName'] ?? ''}'.trim())
         .firstWhere(
           (value) => value.isNotEmpty,
@@ -658,7 +658,25 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
 
   var totalExpenses = base.totalExpenses;
   var totalIncome = base.totalIncome;
-  for (final action in relevantActions) {
+  final relevantActions = <OfflineAction>[];
+  for (final action in candidateActions) {
+    final delta = _reportDeltaForAction(action, projectId);
+    final expenseReflected = _isReportDeltaAlreadyReflected(
+      action: action,
+      baselineField: 'projectTotalExpensesBefore',
+      currentTotal: totalExpenses,
+      delta: delta.expenses,
+    );
+    final incomeReflected = _isReportDeltaAlreadyReflected(
+      action: action,
+      baselineField: 'projectTotalPaymentsBefore',
+      currentTotal: totalIncome,
+      delta: delta.income,
+    );
+    if (expenseReflected && incomeReflected) {
+      continue;
+    }
+    relevantActions.add(action);
     switch (action.type) {
       case OfflineActionTypes.createExpense:
         totalExpenses += ((action.payload['amount'] as num?) ?? 0).toDouble();
@@ -667,25 +685,25 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
         totalExpenses -= ((action.payload['amount'] as num?) ?? 0).toDouble();
         break;
       case OfflineActionTypes.updateExpense:
-        totalExpenses -=
-            ((action.payload['previousAmount'] as num?) ?? 0).toDouble();
+        totalExpenses -= ((action.payload['previousAmount'] as num?) ?? 0)
+            .toDouble();
         totalExpenses += ((action.payload['amount'] as num?) ?? 0).toDouble();
         break;
       case OfflineActionTypes.createWorkerEntry:
         if ('${action.payload['projectId'] ?? ''}' == projectId) {
           totalExpenses +=
               ((action.payload['totalCost'] as num?)?.toDouble() ??
-                  (((action.payload['daysWorked'] as num?) ?? 0) *
-                          ((action.payload['dailyWage'] as num?) ?? 0))
-                      .toDouble());
+              (((action.payload['daysWorked'] as num?) ?? 0) *
+                      ((action.payload['dailyWage'] as num?) ?? 0))
+                  .toDouble());
         }
         break;
       case OfflineActionTypes.archiveWorkerEntry:
         totalExpenses -=
             ((action.payload['totalCost'] as num?)?.toDouble() ??
-                (((action.payload['daysWorked'] as num?) ?? 0) *
-                        ((action.payload['dailyWage'] as num?) ?? 0))
-                    .toDouble());
+            (((action.payload['daysWorked'] as num?) ?? 0) *
+                    ((action.payload['dailyWage'] as num?) ?? 0))
+                .toDouble());
         break;
       case OfflineActionTypes.updateWorkerEntry:
         final previousProjectId =
@@ -693,16 +711,16 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
         if (previousProjectId == projectId) {
           totalExpenses -=
               ((action.payload['previousTotalCost'] as num?)?.toDouble() ??
-                  (((action.payload['previousDaysWorked'] as num?) ?? 0) *
-                          ((action.payload['previousDailyWage'] as num?) ?? 0))
-                      .toDouble());
+              (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                      ((action.payload['previousDailyWage'] as num?) ?? 0))
+                  .toDouble());
         }
         if ('${action.payload['projectId'] ?? ''}' == projectId) {
           totalExpenses +=
               ((action.payload['totalCost'] as num?)?.toDouble() ??
-                  (((action.payload['daysWorked'] as num?) ?? 0) *
-                          ((action.payload['dailyWage'] as num?) ?? 0))
-                      .toDouble());
+              (((action.payload['daysWorked'] as num?) ?? 0) *
+                      ((action.payload['dailyWage'] as num?) ?? 0))
+                  .toDouble());
         }
         break;
       case OfflineActionTypes.createPayment:
@@ -712,8 +730,8 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
         totalIncome -= ((action.payload['amount'] as num?) ?? 0).toDouble();
         break;
       case OfflineActionTypes.updatePayment:
-        totalIncome -=
-            ((action.payload['previousAmount'] as num?) ?? 0).toDouble();
+        totalIncome -= ((action.payload['previousAmount'] as num?) ?? 0)
+            .toDouble();
         totalIncome += ((action.payload['amount'] as num?) ?? 0).toDouble();
         break;
       default:
@@ -729,15 +747,131 @@ ReportMetrics? _mergePendingActionsIntoMetrics(
     totalExpenses: totalExpenses,
     totalIncome: totalIncome,
     net: totalIncome - totalExpenses,
-    categoryTotals:
-        _mergeCategoryTotals(base.categoryTotals, relevantActions, projectId),
-    monthlyFlow: _mergeMonthlyFlow(base.monthlyFlow, relevantActions, projectId),
+    categoryTotals: _mergeCategoryTotals(
+      base.categoryTotals,
+      relevantActions,
+      projectId,
+    ),
+    monthlyFlow: _mergeMonthlyFlow(
+      base.monthlyFlow,
+      relevantActions,
+      projectId,
+    ),
     topWorkers: base.topWorkers,
-    recentExpenses:
-        _mergeRecentExpenses(base.recentExpenses, relevantActions, projectId),
-    recentPayments:
-        _mergeRecentPayments(base.recentPayments, relevantActions, projectId),
+    recentExpenses: _mergeRecentExpenses(
+      base.recentExpenses,
+      relevantActions,
+      projectId,
+    ),
+    recentPayments: _mergeRecentPayments(
+      base.recentPayments,
+      relevantActions,
+      projectId,
+    ),
   );
+}
+
+({double expenses, double income}) _reportDeltaForAction(
+  OfflineAction action,
+  String projectId,
+) {
+  switch (action.type) {
+    case OfflineActionTypes.createExpense:
+      return (
+        expenses: ((action.payload['amount'] as num?) ?? 0).toDouble(),
+        income: 0,
+      );
+    case OfflineActionTypes.archiveExpense:
+      return (
+        expenses: -((action.payload['amount'] as num?) ?? 0).toDouble(),
+        income: 0,
+      );
+    case OfflineActionTypes.updateExpense:
+      return (
+        expenses:
+            (((action.payload['amount'] as num?) ?? 0) -
+                    ((action.payload['previousAmount'] as num?) ?? 0))
+                .toDouble(),
+        income: 0,
+      );
+    case OfflineActionTypes.createWorkerEntry:
+      if ('${action.payload['projectId'] ?? ''}' != projectId) {
+        return (expenses: 0, income: 0);
+      }
+      return (
+        expenses:
+            ((action.payload['totalCost'] as num?)?.toDouble() ??
+            (((action.payload['daysWorked'] as num?) ?? 0) *
+                    ((action.payload['dailyWage'] as num?) ?? 0))
+                .toDouble()),
+        income: 0,
+      );
+    case OfflineActionTypes.archiveWorkerEntry:
+      return (
+        expenses:
+            -((action.payload['totalCost'] as num?)?.toDouble() ??
+                (((action.payload['daysWorked'] as num?) ?? 0) *
+                        ((action.payload['dailyWage'] as num?) ?? 0))
+                    .toDouble()),
+        income: 0,
+      );
+    case OfflineActionTypes.updateWorkerEntry:
+      final previousProjectId =
+          '${action.payload['previousProjectId'] ?? projectId}';
+      var expenses = 0.0;
+      if (previousProjectId == projectId) {
+        expenses -=
+            ((action.payload['previousTotalCost'] as num?)?.toDouble() ??
+            (((action.payload['previousDaysWorked'] as num?) ?? 0) *
+                    ((action.payload['previousDailyWage'] as num?) ?? 0))
+                .toDouble());
+      }
+      if ('${action.payload['projectId'] ?? ''}' == projectId) {
+        expenses +=
+            ((action.payload['totalCost'] as num?)?.toDouble() ??
+            (((action.payload['daysWorked'] as num?) ?? 0) *
+                    ((action.payload['dailyWage'] as num?) ?? 0))
+                .toDouble());
+      }
+      return (expenses: expenses, income: 0);
+    case OfflineActionTypes.createPayment:
+      return (
+        expenses: 0,
+        income: ((action.payload['amount'] as num?) ?? 0).toDouble(),
+      );
+    case OfflineActionTypes.archivePayment:
+      return (
+        expenses: 0,
+        income: -((action.payload['amount'] as num?) ?? 0).toDouble(),
+      );
+    case OfflineActionTypes.updatePayment:
+      return (
+        expenses: 0,
+        income:
+            (((action.payload['amount'] as num?) ?? 0) -
+                    ((action.payload['previousAmount'] as num?) ?? 0))
+                .toDouble(),
+      );
+    default:
+      return (expenses: 0, income: 0);
+  }
+}
+
+bool _isReportDeltaAlreadyReflected({
+  required OfflineAction action,
+  required String baselineField,
+  required double currentTotal,
+  required double delta,
+}) {
+  final baseline = (action.payload[baselineField] as num?)?.toDouble();
+  if (baseline == null || delta == 0) {
+    return delta == 0;
+  }
+  final expected =
+      (action.payload[baselineField.replaceFirst('Before', 'After')] as num?)
+          ?.toDouble() ??
+      baseline + delta;
+  return delta > 0 ? currentTotal >= expected : currentTotal <= expected;
 }
 
 final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
@@ -760,7 +894,9 @@ final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
 });
 
 final reportPendingActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
-  return ref.watch(offlineActionQueueProvider).watch();
+  return ref
+      .watch(offlineActionQueueProvider)
+      .watch(includeExpiredSynced: true);
 });
 
 final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
@@ -774,9 +910,8 @@ final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
 
   return baseAsync.when(
     data: (base) => pendingAsync.when(
-      data: (actions) => AsyncData(
-        _mergePendingActionsIntoMetrics(base, actions, projectId),
-      ),
+      data: (actions) =>
+          AsyncData(_mergePendingActionsIntoMetrics(base, actions, projectId)),
       error: (error, stackTrace) => AsyncError(error, stackTrace),
       loading: () => const AsyncLoading(),
     ),

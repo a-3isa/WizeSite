@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/services/expense_save_service.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
@@ -230,7 +231,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final confidence = widget.response.confidence;
     final defaultCurrency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-            'EGP';
+        'EGP';
     if (_currency == 'EGP' &&
         (parsed.currency == null || parsed.currency!.isEmpty) &&
         defaultCurrency != 'EGP') {
@@ -297,50 +298,48 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               decoration: InputDecoration(labelText: l10n.t('amount')),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _currency,
-              decoration: InputDecoration(labelText: l10n.t('currencyLabel')),
-              items: _allowedCurrencies
+            BelowDropdownField<String>(
+              label: l10n.t('currencyLabel'),
+              value: _currency,
+              entries: _allowedCurrencies
                   .map(
-                    (currency) => DropdownMenuItem(
-                      value: currency,
-                      child: Text(currency),
-                    ),
+                    (currency) =>
+                        DropdownMenuEntry(value: currency, label: currency),
                   )
                   .toList(),
-              onChanged: (value) {
+              onSelected: (value) {
                 setState(() => _currency = value ?? _currency);
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _category,
-              decoration: InputDecoration(labelText: l10n.t('category')),
-              items: _allowedCategories
+            BelowDropdownField<String>(
+              label: l10n.t('category'),
+              value: _category,
+              entries: _allowedCategories
                   .map(
-                    (category) => DropdownMenuItem(
+                    (category) => DropdownMenuEntry(
                       value: category,
-                      child: Text(l10n.expenseCategoryLabel(category)),
+                      label: l10n.expenseCategoryLabel(category),
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
+              onSelected: (value) {
                 setState(() => _category = value ?? _category);
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _projectId,
-              decoration: InputDecoration(labelText: l10n.t('project')),
-              items: widget.projects
+            BelowDropdownField<String>(
+              label: l10n.t('project'),
+              value: _projectId,
+              entries: widget.projects
                   .map(
-                    (project) => DropdownMenuItem(
+                    (project) => DropdownMenuEntry(
                       value: project.id,
-                      child: Text(project.name),
+                      label: project.name,
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
+              onSelected: (value) {
                 setState(() => _projectId = value);
               },
             ),

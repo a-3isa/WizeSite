@@ -591,6 +591,31 @@ if (!emulatorHost) {
     );
   });
 
+  test("payment creation increments project payment and net metrics", async () => {
+    await seedRecomputeInputs();
+    await db.collection("project_metrics").doc("project_1").set({
+      workspaceId,
+      projectId: "project_1",
+      totalExpenses: 300,
+      totalPayments: 300,
+      netProfit: 0,
+    });
+
+    await createPaymentWithQuotaForUser("user_1", {
+      workspaceId,
+      projectId: "project_1",
+      amount: 125,
+      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      paymentMethod: "cash",
+      clientMutationId: "client_payment_1",
+    });
+
+    const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+    const metricsData = metricsSnap.data() ?? {};
+    assert.equal(Number(metricsData.totalPayments ?? 0), 425);
+    assert.equal(Number(metricsData.netProfit ?? 0), 125);
+  });
+
   test("worker entry creation rejects archived projects", async () => {
     await seedRecomputeInputs();
     await db.collection("projects").doc("project_1").update({isArchived: true});

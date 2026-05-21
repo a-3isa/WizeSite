@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -103,36 +104,37 @@ class SettingsScreen extends ConsumerWidget {
                       title: l10n.t('currency'),
                       subtitle: currency,
                       color: AppColors.success,
-                      child: DropdownButton<String>(
-                        value: currency,
-                        underline: const SizedBox.shrink(),
-                        isDense: true,
-                        borderRadius: BorderRadius.circular(12),
-                        items: const [
-                          DropdownMenuItem(value: 'EGP', child: Text('EGP')),
-                          DropdownMenuItem(value: 'USD', child: Text('USD')),
-                          DropdownMenuItem(value: 'SAR', child: Text('SAR')),
-                          DropdownMenuItem(value: 'AED', child: Text('AED')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            HapticFeedback.lightImpact();
-                            if (userId == null || userId.isEmpty) {
-                              return;
+                      child: SizedBox(
+                        width: 130,
+                        child: BelowDropdownField<String>(
+                          label: l10n.t('currency'),
+                          value: currency,
+                          entries: const [
+                            DropdownMenuEntry(value: 'EGP', label: 'EGP'),
+                            DropdownMenuEntry(value: 'USD', label: 'USD'),
+                            DropdownMenuEntry(value: 'SAR', label: 'SAR'),
+                            DropdownMenuEntry(value: 'AED', label: 'AED'),
+                          ],
+                          onSelected: (value) {
+                            if (value != null) {
+                              HapticFeedback.lightImpact();
+                              if (userId == null || userId.isEmpty) {
+                                return;
+                              }
+                              ref
+                                  .read(userSettingsRepositoryProvider)
+                                  .updateCurrency(userId, value)
+                                  .catchError((error) {
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    // ScaffoldMessenger.of(context).showSnackBar(
+                                    //   SnackBar(content: Text(error.toString())),
+                                    // );
+                                  });
                             }
-                            ref
-                                .read(userSettingsRepositoryProvider)
-                                .updateCurrency(userId, value)
-                                .catchError((error) {
-                                  if (!context.mounted) {
-                                    return;
-                                  }
-                                  // ScaffoldMessenger.of(context).showSnackBar(
-                                  //   SnackBar(content: Text(error.toString())),
-                                  // );
-                                });
-                          }
-                        },
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),

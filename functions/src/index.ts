@@ -26,6 +26,7 @@ const FREE_LIMITS: Record<LimitType, number> = {
   workerEntriesPerMonth: 10,
   teamMembers: 1,
 };
+const USAGE_LIMITS_DISABLED = true;
 
 type SubscriptionTier = "free" | "pro";
 type SubscriptionStatus = "trial" | "active" | "grace" | "expired" | "canceled" | "unknown";
@@ -146,6 +147,9 @@ function normalizeStatus(input: string): SubscriptionStatus {
 }
 
 function hasUnlimitedQuota(subscription: SubscriptionDoc): boolean {
+  if (USAGE_LIMITS_DISABLED) {
+    return true;
+  }
   return subscription.tier === "pro" &&
     (subscription.status === "active" || subscription.status === "trial" || subscription.status === "grace");
 }
@@ -342,6 +346,48 @@ function assignIfDefined(
   if (value !== undefined) {
     target[key] = value;
   }
+}
+
+function applyMetricsDeltaInTx(
+  tx: admin.firestore.Transaction,
+  projectId: string,
+  workspaceId: string,
+  expensesDelta: number,
+  paymentsDelta: number,
+): void {
+  if (expensesDelta === 0 && paymentsDelta === 0) return;
+  const metricsRef = db.collection("project_metrics").doc(projectId);
+  const netDelta = paymentsDelta - expensesDelta;
+  const updates: Record<string, unknown> = {workspaceId, projectId};
+  if (expensesDelta !== 0) updates.totalExpenses = admin.firestore.FieldValue.increment(expensesDelta);
+  if (paymentsDelta !== 0) updates.totalPayments = admin.firestore.FieldValue.increment(paymentsDelta);
+  if (netDelta !== 0) updates.netProfit = admin.firestore.FieldValue.increment(netDelta);
+  console.log("[metrics.applyDelta.tx]", {
+    workspaceId,
+    projectId,
+    expensesDelta,
+    paymentsDelta,
+    netDelta,
+    updateKeys: Object.keys(updates),
+  });
+  tx.set(metricsRef, updates, {merge: true});
+}
+
+function applyMetricsDeltaInBatch(
+  batch: admin.firestore.WriteBatch,
+  projectId: string,
+  workspaceId: string,
+  expensesDelta: number,
+  paymentsDelta: number,
+): void {
+  if (expensesDelta === 0 && paymentsDelta === 0) return;
+  const metricsRef = db.collection("project_metrics").doc(projectId);
+  const netDelta = paymentsDelta - expensesDelta;
+  const updates: Record<string, unknown> = {workspaceId, projectId};
+  if (expensesDelta !== 0) updates.totalExpenses = admin.firestore.FieldValue.increment(expensesDelta);
+  if (paymentsDelta !== 0) updates.totalPayments = admin.firestore.FieldValue.increment(paymentsDelta);
+  if (netDelta !== 0) updates.netProfit = admin.firestore.FieldValue.increment(netDelta);
+  batch.set(metricsRef, updates, {merge: true});
 }
 
 type TriggerDocData = Record<string, unknown>;
@@ -1091,6 +1137,7 @@ async function createExpenseWithQuotaForUser(
       expensesCount: admin.firestore.FieldValue.increment(1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+    applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
   });
 
   return {id: expenseRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
@@ -1188,6 +1235,13 @@ export async function createPaymentWithQuotaForUser(
 
   const paymentRef = db.collection("payments").doc();
   const counterRef = db.collection("usage_counters").doc(`${workspaceId}_${periodKey()}`);
+  console.log("[payment.create.start]", {
+    uid,
+    workspaceId,
+    projectId,
+    amount,
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+  });
   await db.runTransaction(async (tx) => {
     tx.set(paymentRef, {
       id: paymentRef.id,
@@ -1211,6 +1265,14 @@ export async function createPaymentWithQuotaForUser(
       paymentsCount: admin.firestore.FieldValue.increment(1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+    applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, amount);
+  });
+  console.log("[payment.create.done]", {
+    workspaceId,
+    projectId,
+    paymentId: paymentRef.id,
+    amount,
+    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
   });
   return {id: paymentRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
@@ -1358,6 +1420,7 @@ export async function createWorkerEntryWithQuotaForUser(
       workerEntriesCount: admin.firestore.FieldValue.increment(1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+    applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
   });
   return {id: entryRef.id, clientMutationId: `${data.clientMutationId ?? ""}`.trim()};
 }
@@ -1446,6 +1509,9 @@ async function archiveExpenseWithQuotaRefundForUser(
       return;
     }
 
+    const archivedAmount = Number(expense.amount ?? 0);
+    const archivedProjectId = `${expense.projectId ?? ""}`;
+
     tx.update(expenseRef, {
       isArchived: true,
       archivedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1460,6 +1526,10 @@ async function archiveExpenseWithQuotaRefundForUser(
       expensesCount: Math.max(0, current - 1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+
+    if (archivedProjectId) {
+      applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, -archivedAmount, 0);
+    }
   });
 }
 
@@ -1544,6 +1614,9 @@ async function archivePaymentWithQuotaRefundForUser(
       return;
     }
 
+    const archivedAmount = Number(payment.amount ?? 0);
+    const archivedProjectId = `${payment.projectId ?? ""}`;
+
     tx.update(paymentRef, {
       isArchived: true,
       archivedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1558,6 +1631,10 @@ async function archivePaymentWithQuotaRefundForUser(
       paymentsCount: Math.max(0, current - 1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+
+    if (archivedProjectId) {
+      applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, 0, -archivedAmount);
+    }
   });
 }
 
@@ -1642,6 +1719,9 @@ async function archiveWorkerEntryWithQuotaRefundForUser(
       return;
     }
 
+    const archivedCost = workerEntryTotalCost(entry);
+    const archivedProjectId = `${entry.projectId ?? ""}`;
+
     tx.update(entryRef, {
       isArchived: true,
       archivedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1656,6 +1736,10 @@ async function archiveWorkerEntryWithQuotaRefundForUser(
       workerEntriesCount: Math.max(0, current - 1),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
+
+    if (archivedProjectId) {
+      applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, -archivedCost, 0);
+    }
   });
 }
 
@@ -1755,7 +1839,10 @@ export const updateExpense = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Project is not available in this workspace");
   }
 
-  await expenseSnap.ref.update({
+  const oldAmount = Number(expense.amount ?? 0);
+  const oldProjectId = `${expense.projectId ?? ""}`;
+  const batch = db.batch();
+  batch.update(expenseSnap.ref, {
     projectId,
     category,
     amount,
@@ -1767,6 +1854,13 @@ export const updateExpense = onCall(async (request) => {
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  if (oldProjectId === projectId) {
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, amount - oldAmount, 0);
+  } else {
+    if (oldProjectId) applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, -oldAmount, 0);
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, amount, 0);
+  }
+  await batch.commit();
 });
 
 export const updatePayment = onCall(async (request) => {
@@ -1806,7 +1900,10 @@ export const updatePayment = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Project is not available in this workspace");
   }
 
-  await paymentSnap.ref.update({
+  const oldAmount = Number(payment.amount ?? 0);
+  const oldProjectId = `${payment.projectId ?? ""}`;
+  const batch = db.batch();
+  batch.update(paymentSnap.ref, {
     projectId,
     amount,
     date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
@@ -1816,6 +1913,13 @@ export const updatePayment = onCall(async (request) => {
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  if (oldProjectId === projectId) {
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount - oldAmount);
+  } else {
+    if (oldProjectId) applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, 0, -oldAmount);
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount);
+  }
+  await batch.commit();
 });
 
 export const createWorker = onCall(async (request) => {
@@ -1966,17 +2070,28 @@ export const updateWorkerEntry = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Project is archived and can no longer accept worker entries.");
   }
 
-  await entrySnap.ref.update({
+  const newTotalCost = daysWorked * dailyWage;
+  const oldTotalCost = workerEntryTotalCost(entry);
+  const oldProjectId = `${entry.projectId ?? ""}`;
+  const batch = db.batch();
+  batch.update(entrySnap.ref, {
     projectId,
     daysWorked,
     dailyWage,
-    totalCost: daysWorked * dailyWage,
+    totalCost: newTotalCost,
     date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
     notes: `${data.notes ?? ""}`.trim(),
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  if (oldProjectId === projectId) {
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, newTotalCost - oldTotalCost, 0);
+  } else {
+    if (oldProjectId) applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, -oldTotalCost, 0);
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, newTotalCost, 0);
+  }
+  await batch.commit();
 });
 
 export const deleteProjectCascade = onCall(async (request) => {

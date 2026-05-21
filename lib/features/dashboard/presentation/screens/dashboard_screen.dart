@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -363,7 +364,9 @@ class DashboardScreen extends ConsumerWidget {
     String route,
   ) {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
-    if (workspaceId == null || workspaceId.isEmpty) {
+    if (workspaceId == null ||
+        workspaceId.isEmpty ||
+        AppLimits.usageLimitsDisabled) {
       context.go(route);
       return;
     }

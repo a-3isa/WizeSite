@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -355,48 +356,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           );
                         }
 
-                        return DropdownButtonFormField<String>(
-                          initialValue:
-                              projects.any((p) => p.id == currentProjectId)
+                        return BelowDropdownField<String>(
+                          label: l10n.t('selectProject'),
+                          value: projects.any((p) => p.id == currentProjectId)
                               ? currentProjectId
                               : null,
-                          hint: Text(
-                            l10n.t('selectProject'),
-                            style: const TextStyle(color: AppColors.textBody),
-                          ),
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.borderGrey,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.borderGrey,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.constructionOrange,
-                              ),
-                            ),
-                          ),
-                          items: projects
+                          entries: projects
                               .map(
-                                (project) => DropdownMenuItem(
+                                (project) => DropdownMenuEntry(
                                   value: project.id,
-                                  child: Text(project.name),
+                                  label: project.name,
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onSelected: (value) {
                             ref.read(reportProjectIdProvider.notifier).state =
                                 value;
                           },

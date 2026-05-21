@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -6,6 +8,7 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class ProjectRepository {
@@ -110,7 +113,7 @@ class FirebaseProjectRepository implements ProjectRepository {
   @override
   Stream<Project?> watchProject(String projectId) {
     if (projectId.startsWith('pending_')) {
-      return _queue.watch().map((actions) {
+      return _queue.watch(includeExpiredSynced: true).map((actions) {
         for (final action in actions) {
           if (action.type != OfflineActionTypes.createProject) {
             continue;
@@ -131,13 +134,20 @@ class FirebaseProjectRepository implements ProjectRepository {
         .collection('project_metrics')
         .doc(projectId)
         .snapshots();
-    final queueStream = _queue.watch();
+    final queueStream = _queue.watch(includeExpiredSynced: true);
     return Stream.multi((controller) {
       DocumentSnapshot<Map<String, dynamic>>? currentProjectSnap;
       Map<String, dynamic>? currentMetrics;
       List<OfflineAction> currentActions = const [];
+      StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? projectSub;
+      StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? metricsSub;
+      StreamSubscription<List<OfflineAction>>? queueSub;
+      var canceled = false;
 
       void emit() {
+        if (canceled) {
+          return;
+        }
         final projectSnap = currentProjectSnap;
         if (projectSnap == null || !projectSnap.exists) {
           controller.add(null);
@@ -150,26 +160,61 @@ class FirebaseProjectRepository implements ProjectRepository {
             metricsData: currentMetrics,
           ),
         );
+        if (kDebugMode) {
+          final paymentActions = currentActions
+              .where(
+                (action) =>
+                    action.type == OfflineActionTypes.createPayment &&
+                    '${action.payload['projectId'] ?? ''}' == projectId,
+              )
+              .map(
+                (action) =>
+                    '${action.id}:${action.status}:amount=${action.payload['amount']}:'
+                    'before=${action.payload['projectTotalPaymentsBefore']}:'
+                    'after=${action.payload['projectTotalPaymentsAfter']}:'
+                    'syncedAt=${action.syncedAt?.toIso8601String()}',
+              )
+              .toList();
+          debugPrint(
+            '[project_repo.watchProject.emit] projectId=$projectId '
+            'projectSnapExists=${projectSnap.exists} '
+            'rawProjectTotalPayments=${projectSnap.data()?['totalPayments']} '
+            'metrics=$currentMetrics '
+            'basePayments=${baseProject.totalPayments} '
+            'baseExpenses=${baseProject.totalExpenses} '
+            'baseNet=${baseProject.netProfit} '
+            'paymentActions=${paymentActions.join(' | ')}',
+          );
+        }
         controller.add(_applyPendingDeltas(baseProject, currentActions));
       }
 
-      final projectSub = projectStream.listen((snapshot) {
-        currentProjectSnap = snapshot;
-        emit();
-      }, onError: controller.addError);
-      final metricsSub = metricsStream.listen((snapshot) {
-        currentMetrics = snapshot.exists ? snapshot.data() : null;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((actions) {
-        currentActions = actions;
-        emit();
-      }, onError: controller.addError);
+      Future<void> start() async {
+        currentActions = await _queue.list(includeExpiredSynced: true);
+        if (canceled) {
+          return;
+        }
+        projectSub = projectStream.listen((snapshot) {
+          currentProjectSnap = snapshot;
+          emit();
+        }, onError: controller.addError);
+        metricsSub = metricsStream.listen((snapshot) {
+          currentMetrics = snapshot.exists ? snapshot.data() : null;
+          emit();
+        }, onError: controller.addError);
+        queueSub = queueStream.listen((actions) {
+          currentActions = actions;
+          emit();
+        }, onError: controller.addError);
+      }
+
+      unawaited(start());
 
       controller.onCancel = () async {
-        await projectSub.cancel();
-        await metricsSub.cancel();
-        await queueSub.cancel();
+        canceled = true;
+        await projectSub?.cancel();
+        await metricsSub?.cancel();
+        await queueSub?.cancel();
       };
     });
   }
@@ -206,7 +251,7 @@ class FirebaseProjectRepository implements ProjectRepository {
           ),
         )
         .toList();
-    final actions = await _queue.list();
+    final actions = await _queue.list(includeExpiredSynced: true);
     final mergedItems = _applyOptimisticProjectList(
       baseItems: items,
       actions: actions,
@@ -253,7 +298,7 @@ class FirebaseProjectRepository implements ProjectRepository {
           ),
         )
         .toList();
-    final actions = await _queue.list();
+    final actions = await _queue.list(includeExpiredSynced: true);
     final mergedItems = _applyOptimisticProjectList(
       baseItems: items,
       actions: actions,
@@ -396,7 +441,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         .collection('project_metrics')
         .where('workspaceId', isEqualTo: workspaceId)
         .snapshots();
-    final queueStream = _queue.watch();
+    final queueStream = _queue.watch(includeExpiredSynced: true);
     return Stream.multi((controller) {
       QuerySnapshot<Map<String, dynamic>>? currentProjects;
       QuerySnapshot<Map<String, dynamic>>? currentMetrics;
@@ -572,8 +617,8 @@ class FirebaseProjectRepository implements ProjectRepository {
   }
 
   Project _applyPendingDeltas(Project project, List<OfflineAction> actions) {
-    num pendingExpenses = 0;
-    num pendingIncome = 0;
+    var totalExpenses = project.totalExpenses;
+    var totalPayments = project.totalPayments;
 
     for (final action in actions) {
       final payloadProjectId = '${action.payload['projectId'] ?? ''}';
@@ -583,51 +628,133 @@ class FirebaseProjectRepository implements ProjectRepository {
       }
       switch (action.type) {
         case OfflineActionTypes.createExpense:
-          pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+          final delta = ((action.payload['amount'] as num?) ?? 0).toDouble();
+          if (!_isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalExpensesBefore',
+            currentTotal: totalExpenses,
+            delta: delta,
+          )) {
+            totalExpenses += delta;
+          }
           break;
         case OfflineActionTypes.updateExpense:
-          pendingExpenses -= (action.payload['previousAmount'] as num?) ?? 0;
-          pendingExpenses += (action.payload['amount'] as num?) ?? 0;
+          final delta =
+              (((action.payload['amount'] as num?) ?? 0) -
+                      ((action.payload['previousAmount'] as num?) ?? 0))
+                  .toDouble();
+          if (!_isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalExpensesBefore',
+            currentTotal: totalExpenses,
+            delta: delta,
+          )) {
+            totalExpenses += delta;
+          }
           break;
         case OfflineActionTypes.createWorkerEntry:
           final daysWorked = (action.payload['daysWorked'] as num?) ?? 0;
           final dailyWage = (action.payload['dailyWage'] as num?) ?? 0;
-          pendingExpenses += daysWorked * dailyWage;
+          final delta = (daysWorked * dailyWage).toDouble();
+          if (!_isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalExpensesBefore',
+            currentTotal: totalExpenses,
+            delta: delta,
+          )) {
+            totalExpenses += delta;
+          }
           break;
         case OfflineActionTypes.updateWorkerEntry:
           final previousProjectId =
               '${action.payload['previousProjectId'] ?? project.id}';
+          num delta = 0;
           if (previousProjectId == project.id) {
-            pendingExpenses -=
+            delta -=
                 (action.payload['previousTotalCost'] as num?) ??
                 (((action.payload['previousDaysWorked'] as num?) ?? 0) *
                     ((action.payload['previousDailyWage'] as num?) ?? 0));
           }
           if (payloadProjectId == project.id) {
-            pendingExpenses +=
+            delta +=
                 (action.payload['totalCost'] as num?) ??
                 (((action.payload['daysWorked'] as num?) ?? 0) *
                     ((action.payload['dailyWage'] as num?) ?? 0));
           }
+          final expenseDelta = delta.toDouble();
+          if (!_isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalExpensesBefore',
+            currentTotal: totalExpenses,
+            delta: expenseDelta,
+          )) {
+            totalExpenses += expenseDelta;
+          }
           break;
         case OfflineActionTypes.createPayment:
-          pendingIncome += (action.payload['amount'] as num?) ?? 0;
+          final delta = ((action.payload['amount'] as num?) ?? 0).toDouble();
+          final reflected = _isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalPaymentsBefore',
+            currentTotal: totalPayments,
+            delta: delta,
+          );
+          if (kDebugMode) {
+            debugPrint(
+              '[project_repo.applyDelta] projectId=${project.id} '
+              'action=${action.id} status=${action.status} '
+              'type=${action.type} amount=$delta '
+              'currentPayments=$totalPayments '
+              'before=${action.payload['projectTotalPaymentsBefore']} '
+              'after=${action.payload['projectTotalPaymentsAfter']} '
+              'reflected=$reflected',
+            );
+          }
+          if (!reflected) {
+            totalPayments += delta;
+          }
           break;
         case OfflineActionTypes.updatePayment:
-          pendingIncome -= (action.payload['previousAmount'] as num?) ?? 0;
-          pendingIncome += (action.payload['amount'] as num?) ?? 0;
+          final delta =
+              (((action.payload['amount'] as num?) ?? 0) -
+                      ((action.payload['previousAmount'] as num?) ?? 0))
+                  .toDouble();
+          if (!_isDeltaAlreadyReflected(
+            action: action,
+            baselineField: 'projectTotalPaymentsBefore',
+            currentTotal: totalPayments,
+            delta: delta,
+          )) {
+            totalPayments += delta;
+          }
           break;
         default:
           break;
       }
     }
 
-    if (pendingExpenses == 0 && pendingIncome == 0) {
+    if (totalExpenses == project.totalExpenses &&
+        totalPayments == project.totalPayments) {
+      if (kDebugMode) {
+        debugPrint(
+          '[project_repo.applyDelta.result] projectId=${project.id} '
+          'unchanged payments=${project.totalPayments} '
+          'expenses=${project.totalExpenses} net=${project.netProfit}',
+        );
+      }
       return project;
     }
 
-    final totalExpenses = project.totalExpenses + pendingExpenses.toDouble();
-    final totalPayments = project.totalPayments + pendingIncome.toDouble();
+    if (kDebugMode) {
+      debugPrint(
+        '[project_repo.applyDelta.result] projectId=${project.id} '
+        'basePayments=${project.totalPayments} '
+        'displayPayments=$totalPayments '
+        'baseExpenses=${project.totalExpenses} '
+        'displayExpenses=$totalExpenses '
+        'displayNet=${totalPayments - totalExpenses}',
+      );
+    }
     return Project(
       id: project.id,
       workspaceId: project.workspaceId,
@@ -642,6 +769,37 @@ class FirebaseProjectRepository implements ProjectRepository {
       isArchived: project.isArchived,
       clientMutationId: project.clientMutationId,
     );
+  }
+
+  bool _isDeltaAlreadyReflected({
+    required OfflineAction action,
+    required String baselineField,
+    required double currentTotal,
+    required double delta,
+  }) {
+    final baseline = (action.payload[baselineField] as num?)?.toDouble();
+    if (baseline == null || delta == 0) {
+      return false;
+    }
+    final expected =
+        (action.payload[baselineField.replaceFirst('Before', 'After')] as num?)
+            ?.toDouble() ??
+        baseline + delta;
+    final reflected = delta > 0
+        ? currentTotal >= expected
+        : currentTotal <= expected;
+    if (kDebugMode &&
+        (action.type == OfflineActionTypes.createPayment ||
+            action.type == OfflineActionTypes.updatePayment)) {
+      debugPrint(
+        '[project_repo.reflectionCheck] action=${action.id} '
+        'type=${action.type} status=${action.status} '
+        'baselineField=$baselineField baseline=$baseline '
+        'delta=$delta expected=$expected currentTotal=$currentTotal '
+        'reflected=$reflected',
+      );
+    }
+    return reflected;
   }
 
   Project _projectFromCreateAction(OfflineAction action) {

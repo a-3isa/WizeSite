@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/payments/presentation/screens/payments_screen.dart';
@@ -137,6 +138,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? notes,
+    double? projectTotalPaymentsBefore,
   }) async {
     return const MutationResult();
   }
@@ -219,9 +221,8 @@ GoRouter _paymentsRouter() {
     routes: [
       GoRoute(
         path: '/payments',
-        builder: (context, state) => PaymentsScreen(
-          projectId: state.uri.queryParameters['projectId'],
-        ),
+        builder: (context, state) =>
+            PaymentsScreen(projectId: state.uri.queryParameters['projectId']),
       ),
       GoRoute(
         path: '/payment/:id',
@@ -272,9 +273,7 @@ void main() {
         _payment(id: 'pay_1', projectId: 'project_1', amount: 100),
         _payment(id: 'pay_2', projectId: 'project_2', amount: 200),
       ],
-      'project_1': [
-        _payment(id: 'pay_1', projectId: 'project_1', amount: 100),
-      ],
+      'project_1': [_payment(id: 'pay_1', projectId: 'project_1', amount: 100)],
     });
 
     await tester.pumpWidget(
@@ -293,7 +292,7 @@ void main() {
     expect(find.textContaining('project_1'), findsOneWidget);
     expect(find.textContaining('project_2'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownButtonFormField<String?>));
+    await tester.tap(find.byType(BelowDropdownField<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Project 1').last);
     await tester.pumpAndSettle();
@@ -311,14 +310,8 @@ void main() {
 
     final fakeProjectRepository = _FakeProjectRepository(
       activeProjects: firstBatch,
-      firstPage: FirestorePage<Project>(
-        items: firstBatch,
-        hasMore: true,
-      ),
-      secondPage: FirestorePage<Project>(
-        items: secondBatch,
-        hasMore: false,
-      ),
+      firstPage: FirestorePage<Project>(items: firstBatch, hasMore: true),
+      secondPage: FirestorePage<Project>(items: secondBatch, hasMore: false),
     );
 
     await tester.pumpWidget(

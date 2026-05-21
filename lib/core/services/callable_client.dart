@@ -12,7 +12,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 class CallableClient {
-  const CallableClient(this._functions, this._auth, this._appCheck, this._telemetry);
+  const CallableClient(
+    this._functions,
+    this._auth,
+    this._appCheck,
+    this._telemetry,
+  );
 
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
@@ -44,6 +49,13 @@ class CallableClient {
       await _telemetry.log('callable.success', {'function': functionName});
       return parseResult(response.data);
     } on FirebaseFunctionsException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[callable.error] function=$functionName '
+          'code=${error.code} message=${error.message} '
+          'details=${error.details}',
+        );
+      }
       await _telemetry.log('callable.error', {
         'function': functionName,
         'code': error.code,
@@ -64,9 +76,18 @@ class CallableClient {
           final response = await _functions
               .httpsCallable(functionName)
               .call<Map<String, dynamic>>(payload);
-          await _telemetry.log('callable.retry_success', {'function': functionName});
+          await _telemetry.log('callable.retry_success', {
+            'function': functionName,
+          });
           return parseResult(response.data);
         } on FirebaseFunctionsException catch (retryError) {
+          if (kDebugMode) {
+            debugPrint(
+              '[callable.retry_error] function=$functionName '
+              'code=${retryError.code} message=${retryError.message} '
+              'details=${retryError.details}',
+            );
+          }
           await _telemetry.log('callable.retry_error', {
             'function': functionName,
             'code': retryError.code,
@@ -114,9 +135,10 @@ class CallableClient {
   }
 
   Future<void> _refreshCallableSession(User user, String functionName) async {
-    final tokenUpdate = _auth.idTokenChanges().skip(1).firstWhere(
-      (candidate) => candidate?.uid == user.uid,
-    );
+    final tokenUpdate = _auth
+        .idTokenChanges()
+        .skip(1)
+        .firstWhere((candidate) => candidate?.uid == user.uid);
 
     await user.getIdToken(true);
     String? appCheckToken;
@@ -189,6 +211,12 @@ class CallableClient {
       headers: headers,
       body: jsonEncode(payload),
     );
+    if (kDebugMode) {
+      debugPrint(
+        '[callable.http] function=$functionName '
+        'status=${response.statusCode} body=${response.body}',
+      );
+    }
 
     final body = response.body.trim();
     if (body.isEmpty) {

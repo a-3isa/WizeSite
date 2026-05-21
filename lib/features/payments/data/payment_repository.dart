@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class PaymentRepository {
@@ -27,6 +28,7 @@ abstract interface class PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? notes,
+    double? projectTotalPaymentsBefore,
   });
 
   Future<void> updatePayment({
@@ -88,20 +90,14 @@ class FirebasePaymentRepository implements PaymentRepository {
         );
       }
 
-      final baseSub = baseStream.listen(
-        (items) {
-          current = items;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      final queueSub = queueStream.listen(
-        (value) {
-          actions = value;
-          emit();
-        },
-        onError: controller.addError,
-      );
+      final baseSub = baseStream.listen((items) {
+        current = items;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((value) {
+        actions = value;
+        emit();
+      }, onError: controller.addError);
       controller.onCancel = () async {
         await baseSub.cancel();
         await queueSub.cancel();
@@ -167,7 +163,22 @@ class FirebasePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? notes,
+    double? projectTotalPaymentsBefore,
   }) async {
+    final resolvedProjectTotalPaymentsBefore =
+        await _projectPaymentBaseline(
+          workspaceId: workspaceId,
+          projectId: projectId,
+        ) ??
+        projectTotalPaymentsBefore;
+    if (kDebugMode) {
+      debugPrint(
+        '[payment_repo.createPayment] workspaceId=$workspaceId '
+        'projectId=$projectId amount=$amount '
+        'inputBefore=$projectTotalPaymentsBefore '
+        'resolvedBefore=$resolvedProjectTotalPaymentsBefore',
+      );
+    }
     return _mutationService.createPayment(
       workspaceId: workspaceId,
       projectId: projectId,
@@ -175,7 +186,67 @@ class FirebasePaymentRepository implements PaymentRepository {
       date: date,
       paymentMethod: paymentMethod,
       notes: notes,
+      projectTotalPaymentsBefore: resolvedProjectTotalPaymentsBefore,
     );
+  }
+
+  Future<double?> _projectPaymentBaseline({
+    required String workspaceId,
+    required String projectId,
+  }) async {
+    double? valueFrom(Map<String, dynamic>? data) {
+      if (data == null) {
+        return null;
+      }
+      final dataWorkspaceId = '${data['workspaceId'] ?? ''}'.trim();
+      if (dataWorkspaceId.isNotEmpty && dataWorkspaceId != workspaceId) {
+        return null;
+      }
+      return ((data['totalPayments'] as num?) ?? (data['totalIncome'] as num?))
+          ?.toDouble();
+    }
+
+    try {
+      final metricsSnap = await _firestore
+          .collection('project_metrics')
+          .doc(projectId)
+          .get();
+      final metricsValue = valueFrom(metricsSnap.data());
+      if (kDebugMode) {
+        debugPrint(
+          '[payment_repo.baseline] projectId=$projectId '
+          'metricsExists=${metricsSnap.exists} '
+          'metricsData=${metricsSnap.data()} '
+          'metricsValue=$metricsValue',
+        );
+      }
+      if (metricsValue != null) {
+        return metricsValue;
+      }
+
+      final projectSnap = await _firestore
+          .collection('projects')
+          .doc(projectId)
+          .get();
+      final projectValue = valueFrom(projectSnap.data());
+      if (kDebugMode) {
+        debugPrint(
+          '[payment_repo.baseline] projectId=$projectId '
+          'projectExists=${projectSnap.exists} '
+          'projectData=${projectSnap.data()} '
+          'projectValue=$projectValue',
+        );
+      }
+      return projectValue;
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          '[payment_repo.baseline] projectId=$projectId error=$error\n'
+          '$stackTrace',
+        );
+      }
+      return null;
+    }
   }
 
   @override

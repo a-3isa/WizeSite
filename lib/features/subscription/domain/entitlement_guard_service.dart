@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
@@ -18,6 +19,14 @@ class EntitlementGuardService {
     required LimitType type,
     int delta = 1,
   }) async {
+    if (AppLimits.usageLimitsDisabled) {
+      return LimitCheckResult(
+        allowed: true,
+        limitType: type,
+        current: 0,
+        max: AppLimits.proLimit,
+      );
+    }
     final subscription = await _subscriptionRepository.getSubscription(
       workspaceId,
     );

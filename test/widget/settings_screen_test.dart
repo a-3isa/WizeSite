@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
@@ -142,9 +143,7 @@ void main() {
       expect(find.text('jane@example.com'), findsOneWidget);
       expect(find.text('USD'), findsWidgets);
 
-      await tester.tap(
-        find.byWidgetPredicate((widget) => widget is DropdownButton<String>),
-      );
+      await tester.tap(find.byType(BelowDropdownField<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('SAR').last);
       await tester.pumpAndSettle();

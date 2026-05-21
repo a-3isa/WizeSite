@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -143,6 +144,9 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     try {
       var queued = false;
       if (widget.entryId == null) {
+        final projects = ref.read(projectsProvider).valueOrNull ?? [];
+        final matches = projects.where((project) => project.id == _projectId);
+        final selectedProject = matches.isEmpty ? null : matches.first;
         final result = await ref
             .read(workerEntryRepositoryProvider)
             .createEntry(
@@ -156,6 +160,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
+              projectTotalExpensesBefore: selectedProject?.totalExpenses,
             );
         queued = result.queued;
       } else {
@@ -235,20 +240,19 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       if (!showWorkerPicker) {
                         return const SizedBox.shrink();
                       }
-                      return DropdownButtonFormField<String>(
-                        initialValue: selectedWorkerId,
-                        items: workers
+                      return BelowDropdownField<String>(
+                        label: l10n.t('workerName'),
+                        value: selectedWorkerId,
+                        entries: workers
                             .map(
-                              (worker) => DropdownMenuItem(
+                              (worker) => DropdownMenuEntry(
                                 value: worker.id,
-                                child: Text(worker.name),
+                                label: worker.name,
                               ),
                             )
                             .toList(),
-                        onChanged: (value) => setState(() => _workerId = value),
-                        decoration: InputDecoration(
-                          labelText: l10n.t('workerName'),
-                        ),
+                        onSelected: (value) =>
+                            setState(() => _workerId = value),
                       );
                     },
                     error: (e, _) => Text(e.toString()),
@@ -257,18 +261,16 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   ),
                   const SizedBox(height: 12),
                   projectsAsync.when(
-                    data: (projects) => DropdownButtonFormField<String>(
-                      initialValue: _projectId,
-                      items: projects
+                    data: (projects) => BelowDropdownField<String>(
+                      label: l10n.t('project'),
+                      value: _projectId,
+                      entries: projects
                           .map(
-                            (p) => DropdownMenuItem(
-                              value: p.id,
-                              child: Text(p.name),
-                            ),
+                            (p) =>
+                                DropdownMenuEntry(value: p.id, label: p.name),
                           )
                           .toList(),
-                      onChanged: (value) => setState(() => _projectId = value),
-                      decoration: InputDecoration(labelText: l10n.t('project')),
+                      onSelected: (value) => setState(() => _projectId = value),
                     ),
                     error: (e, _) => Text(e.toString()),
                     loading: () =>
