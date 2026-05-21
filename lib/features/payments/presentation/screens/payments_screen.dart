@@ -395,7 +395,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _payments.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
 
     if (_error != null && _payments.isEmpty) {

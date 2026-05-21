@@ -348,7 +348,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
 
     if (_error != null && _projects.isEmpty) {

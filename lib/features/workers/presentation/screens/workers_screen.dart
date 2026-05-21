@@ -270,7 +270,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _workers.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
 
     if (_error != null && _workers.isEmpty) {

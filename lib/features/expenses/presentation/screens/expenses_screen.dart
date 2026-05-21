@@ -345,7 +345,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _expenses.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
 
     if (_error != null && _expenses.isEmpty) {

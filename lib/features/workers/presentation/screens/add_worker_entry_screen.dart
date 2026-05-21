@@ -256,8 +256,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       );
                     },
                     error: (e, _) => Text(e.toString()),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
                   projectsAsync.when(
@@ -273,8 +272,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
                     error: (e, _) => Text(e.toString()),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
                   Builder(

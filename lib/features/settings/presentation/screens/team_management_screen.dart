@@ -254,7 +254,7 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
                 );
               },
               error: (error, _) => Center(child: Text(error.toString())),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const SizedBox.shrink(),
             ),
           ],
         ),

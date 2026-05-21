@@ -375,8 +375,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           },
                         );
                       },
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
+                      loading: () => const SizedBox.shrink(),
                       error: (error, _) => Text(error.toString()),
                     ),
                   ),

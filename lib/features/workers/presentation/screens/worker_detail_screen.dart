@@ -278,13 +278,13 @@ class WorkerDetailScreen extends ConsumerWidget {
                     );
                   },
                   error: (error, _) => Text(error.toString()),
-                  loading: () => const CircularProgressIndicator(),
+                  loading: () => const SizedBox.shrink(),
                 ),
               ],
             );
           },
           error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SizedBox.shrink(),
         ),
       ),
     );

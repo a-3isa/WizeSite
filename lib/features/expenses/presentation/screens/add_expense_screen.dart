@@ -244,8 +244,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       );
                     },
                     error: (e, _) => Text(e.toString()),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
                   BelowDropdownField<String>(

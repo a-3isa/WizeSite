@@ -269,7 +269,7 @@ class _ArchivedProjectsScreenState
     List<Project> filtered,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
 
     if (_error != null && _projects.isEmpty) {

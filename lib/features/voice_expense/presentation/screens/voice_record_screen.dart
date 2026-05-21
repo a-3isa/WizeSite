@@ -494,7 +494,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
               ],
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SizedBox.shrink(),
           error: (error, _) => Center(child: Text(error.toString())),
         ),
       ),

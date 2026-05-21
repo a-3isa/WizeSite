@@ -228,8 +228,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
                     error: (e, _) => Text(e.toString()),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
                   TextField(

@@ -160,7 +160,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SizedBox.shrink(),
         ),
       ),
     );

@@ -179,12 +179,7 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
+              loading: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 24),
             Text(
@@ -266,7 +261,7 @@ class DashboardScreen extends ConsumerWidget {
             usageAsync.when(
               data: (usage) => UsageCard(usage: usage),
               error: (e, s) => const SizedBox.shrink(),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 16),
             subscriptionAsync.when(

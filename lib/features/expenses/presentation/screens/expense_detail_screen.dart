@@ -202,7 +202,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
             );
           },
           error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const SizedBox.shrink(),
         ),
       ),
     );
