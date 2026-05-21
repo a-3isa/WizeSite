@@ -138,6 +138,21 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       return;
     }
 
+    final provisioned = ref.read(projectsProvider).valueOrNull;
+    if (provisioned != null && mounted) {
+      setState(() {
+        _projects
+          ..clear()
+          ..addAll(provisioned);
+        _cursor = null;
+        _error = null;
+        _hasMore = false;
+        _isLoadingInitial = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
+
     if (mounted) {
       setState(() {
         _projects.clear();
@@ -289,6 +304,19 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(projectsProvider, (_, next) {
+      if (!mounted) return;
+      final items = next.valueOrNull;
+      if (items != null) {
+        setState(() {
+          _projects
+            ..clear()
+            ..addAll(items);
+          _isLoadingInitial = false;
+          _hasMore = false;
+        });
+      }
+    });
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredProjects();
     final locale = Localizations.localeOf(context).languageCode;

@@ -104,6 +104,21 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
       return;
     }
 
+    final provisioned = ref.read(workersProvider).valueOrNull;
+    if (provisioned != null && mounted) {
+      setState(() {
+        _workers
+          ..clear()
+          ..addAll(provisioned);
+        _cursor = null;
+        _error = null;
+        _hasMore = false;
+        _isLoadingInitial = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
+
     if (mounted) {
       setState(() {
         _workers.clear();
@@ -217,6 +232,19 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(workersProvider, (_, next) {
+      if (!mounted) return;
+      final items = next.valueOrNull;
+      if (items != null) {
+        setState(() {
+          _workers
+            ..clear()
+            ..addAll(items);
+          _isLoadingInitial = false;
+          _hasMore = false;
+        });
+      }
+    });
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredWorkers();
     final locale = Localizations.localeOf(context).languageCode;

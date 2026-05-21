@@ -319,6 +319,11 @@ void main() {
         overrides: [
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
           projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
+          // Override so the cache-first path in _refresh() never short-circuits
+          // pagination — the test must exercise the load-more fetch path.
+          projectsProvider.overrideWith(
+            (ref) => const Stream<List<Project>>.empty(),
+          ),
         ],
         child: MaterialApp.router(routerConfig: _projectsRouter()),
       ),
