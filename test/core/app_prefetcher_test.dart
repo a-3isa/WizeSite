@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -129,16 +130,19 @@ void main() {
     expect(resolved, isTrue);
   });
 
-  test('warmCritical resolves after timeout even when warms are still pending', () async {
-    final prefetcher = AppPrefetcher(
-      warm: ({required target, projectId}) =>
-          Completer<void>().future, // never completes
-    );
+  test('warmCritical resolves after timeout even when warms are still pending', () {
+    fakeAsync((fake) {
+      final prefetcher = AppPrefetcher(
+        warm: ({required target, projectId}) => Completer<void>().future,
+      );
+      var resolved = false;
+      unawaited(prefetcher.warmCritical().then((_) => resolved = true));
 
-    // Override timeout for test speed — we cannot change the 5 s constant,
-    // so we just verify the type signature compiles and resolves eventually.
-    // The actual timeout test is an integration concern; unit coverage here
-    // confirms the future type is correct.
-    expect(prefetcher.warmCritical(), isA<Future<void>>());
+      fake.elapse(const Duration(seconds: 4));
+      expect(resolved, isFalse);
+
+      fake.elapse(const Duration(seconds: 2));
+      expect(resolved, isTrue);
+    });
   });
 }
