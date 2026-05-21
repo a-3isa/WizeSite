@@ -32,16 +32,17 @@ class AppPrefetcher {
   final AppPrefetchWarm _warm;
   final Map<String, Future<void>> _inFlight = {};
 
-  void _warmOnce({required AppPrefetchTarget target, String? projectId}) {
+  Future<void> _warmOnce({required AppPrefetchTarget target, String? projectId}) {
     final key = '${target.name}:${projectId ?? ''}';
     if (_inFlight.containsKey(key)) {
-      return;
+      return _inFlight[key]!;
     }
     final future = Future<void>.sync(
       () => _warm(target: target, projectId: projectId),
     );
     _inFlight[key] = future;
     unawaited(future.whenComplete(() => _inFlight.remove(key)));
+    return future;
   }
 
   void warmDashboard() {
