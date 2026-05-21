@@ -71,6 +71,25 @@ class AppPrefetcher {
   void warmProjectReport(String projectId) {
     _warmOnce(target: AppPrefetchTarget.reportMetrics, projectId: projectId);
   }
+
+  /// Warms every provider required by the main screens.
+  /// Returns a [Future] that completes once all six providers have emitted
+  /// at least one value, or after a 5-second safety timeout (whichever
+  /// comes first). The timeout prevents the splash from blocking indefinitely
+  /// when the device is offline.
+  Future<void> warmCritical() {
+    return Future.wait([
+      _warmOnce(target: AppPrefetchTarget.dashboardSummary),
+      _warmOnce(target: AppPrefetchTarget.currentSubscription),
+      _warmOnce(target: AppPrefetchTarget.currentUsage),
+      _warmOnce(target: AppPrefetchTarget.currentUserSettings),
+      _warmOnce(target: AppPrefetchTarget.projects),
+      _warmOnce(target: AppPrefetchTarget.workers),
+    ]).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => [],
+    );
+  }
 }
 
 final appPrefetcherProvider = Provider<AppPrefetcher>((ref) {
