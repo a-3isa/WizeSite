@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
@@ -22,6 +23,7 @@ class ProjectDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final projectAsync = ref.watch(projectDetailsProvider(projectId));
+    final prefetcher = ref.read(appPrefetcherProvider);
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
@@ -79,23 +81,34 @@ class ProjectDetailScreen extends ConsumerWidget {
                       }
                     }
                   },
-                  onAddExpense: () => context.push(
-                    AppRoutes.addExpensePath(projectId: project.id),
-                  ),
-                  onAddPayment: () => context.push(
-                    AppRoutes.addPaymentPath(projectId: project.id),
-                  ),
+                  onAddExpense: () {
+                    prefetcher.warmAddEntry();
+                    context.push(
+                      AppRoutes.addExpensePath(projectId: project.id),
+                    );
+                  },
+                  onAddPayment: () {
+                    prefetcher.warmAddEntry();
+                    context.push(
+                      AppRoutes.addPaymentPath(projectId: project.id),
+                    );
+                  },
                   onViewExpenses: () =>
                       context.push(AppRoutes.projectExpensesPath(project.id)),
                   onViewPayments: () => context.push(
                     AppRoutes.paymentsPath(projectId: project.id),
                   ),
-                  onAddWorkerEntry: () => context.push(
-                    AppRoutes.workerEntryPath('new', projectId: project.id),
-                  ),
+                  onAddWorkerEntry: () {
+                    prefetcher.warmAddEntry();
+                    context.push(
+                      AppRoutes.workerEntryPath('new', projectId: project.id),
+                    );
+                  },
                   onViewWorkers: () => context.push(AppRoutes.workers),
-                  onGenerateReport: () =>
-                      context.go(AppRoutes.reportsPath(projectId: project.id)),
+                  onGenerateReport: () {
+                    prefetcher.warmProjectReport(project.id);
+                    context.push(AppRoutes.reportsPath(projectId: project.id));
+                  },
                   onDelete: () async {
                     final confirmed = await showDialog<bool>(
                       context: context,

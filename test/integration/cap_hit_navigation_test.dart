@@ -167,9 +167,11 @@ GoRouter _buildRouter() {
 
 Widget _testApp({
   required LimitCheckResult result,
+  GoRouter? router,
   PaywallPresentationResult paywallResult =
       PaywallPresentationResult.notSupported,
 }) {
+  final testRouter = router ?? _buildRouter();
   final usageSnapshot = UsageSnapshot(
     periodKey: '202603',
     activeProjects: result.limitType == LimitType.activeProjects
@@ -217,7 +219,7 @@ Widget _testApp({
         _FakePurchaseCoordinator(paywallResult),
       ),
     ],
-    child: MaterialApp.router(routerConfig: _buildRouter()),
+    child: MaterialApp.router(routerConfig: testRouter),
   );
 }
 
@@ -271,8 +273,10 @@ void main() {
   });
 
   testWidgets('navigates to add expense when quota allows', (tester) async {
+    final router = _buildRouter();
     await tester.pumpWidget(
       _testApp(
+        router: router,
         result: const LimitCheckResult(
           allowed: true,
           limitType: LimitType.expensesPerMonth,
@@ -290,5 +294,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Add Expense Screen'), findsOneWidget);
+    expect(router.canPop(), isTrue);
   });
 }

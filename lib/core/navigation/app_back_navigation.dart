@@ -11,6 +11,11 @@ void appNavigateBack(
     router.pop(result);
     return;
   }
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.pop(result);
+    return;
+  }
   context.go(fallbackRoute);
 }
 

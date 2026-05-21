@@ -156,4 +156,70 @@ void main() {
       expect(fakeSettingsRepository.riskAlertUpdates, [true]);
     },
   );
+
+  testWidgets(
+    'SettingsScreen keeps subscription content visible while refreshing',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeSettingsRepository = _FakeUserSettingsRepository();
+      final mockAuth = _MockFirebaseAuth();
+      final mockUser = _MockUser();
+      final refreshKeyProvider = StateProvider<int>((ref) => 0);
+
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockUser.displayName).thenReturn('Jane Builder');
+      when(() => mockUser.email).thenReturn('jane@example.com');
+      when(() => mockUser.photoURL).thenReturn(null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            localeControllerProvider.overrideWith(
+              (ref) => LocaleController(deviceLocale: const Locale('en')),
+            ),
+            userSettingsRepositoryProvider.overrideWithValue(
+              fakeSettingsRepository,
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(
+                UserSettings.defaults(
+                  userId: 'user_1',
+                  email: 'jane@example.com',
+                ),
+              ),
+            ),
+            currentSubscriptionStreamProvider.overrideWith((ref) {
+              final key = ref.watch(refreshKeyProvider);
+              if (key == 0) {
+                return Stream.value(SubscriptionState.free());
+              }
+              return const Stream<SubscriptionState>.empty();
+            }),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Free Plan'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SettingsScreen)),
+        listen: false,
+      );
+      container.read(refreshKeyProvider.notifier).state = 1;
+      await tester.pump();
+
+      expect(find.text('Free Plan'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    },
+  );
 }

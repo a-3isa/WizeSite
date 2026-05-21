@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -40,7 +41,11 @@ class DashboardScreen extends ConsumerWidget {
         title: Text(l10n.t('home')),
         actions: [
           IconButton(
-            onPressed: () => context.push(AppRoutes.settings),
+            key: const Key('qa_dashboard_settings'),
+            onPressed: () {
+              ref.read(appPrefetcherProvider).warmSettings();
+              context.push(AppRoutes.settings);
+            },
             icon: const Icon(Icons.settings_outlined),
             style: IconButton.styleFrom(
               backgroundColor: AppColors.surfaceSolid,
@@ -363,25 +368,26 @@ class DashboardScreen extends ConsumerWidget {
     LimitType type,
     String route,
   ) {
+    ref.read(appPrefetcherProvider).warmAddEntry();
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     if (workspaceId == null ||
         workspaceId.isEmpty ||
         AppLimits.usageLimitsDisabled) {
-      context.go(route);
+      context.push(route);
       return;
     }
 
     // Use already-loaded subscription data — no network call needed
     final sub = ref.read(currentSubscriptionStreamProvider).value;
     if (sub != null && sub.isActiveOrTrial && sub.tier == PlanTier.pro) {
-      context.go(route);
+      context.push(route);
       return;
     }
 
     // Use already-loaded usage snapshot — no network call needed
     final usage = ref.read(currentUsageProvider).value;
     if (usage == null) {
-      context.go(route); // data not yet loaded, navigate optimistically
+      context.push(route); // data not yet loaded, navigate optimistically
       return;
     }
 
@@ -392,7 +398,7 @@ class DashboardScreen extends ConsumerWidget {
       context.push('${AppRoutes.subscriptionLimit}?limit=$limit');
       return;
     }
-    context.go(route);
+    context.push(route);
   }
 }
 

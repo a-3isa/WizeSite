@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:flutter/material.dart';
@@ -40,6 +41,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
     ref.read(activeUserIdProvider.notifier).state = restored.userId;
     ref.read(activeWorkspaceIdProvider.notifier).state = restored.workspaceId;
+    ref.read(appPrefetcherProvider).warmDashboard();
     context.go(AppRoutes.dashboard);
   }
 

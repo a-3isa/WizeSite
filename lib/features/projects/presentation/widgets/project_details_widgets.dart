@@ -261,60 +261,70 @@ class ActionGrid extends StatelessWidget {
           childAspectRatio: 2.2,
           children: [
             _ActionCard(
+              qaKey: const Key('qa_project_add_expense'),
               icon: Icons.receipt_long_outlined,
               label: l10n.t('addExpense'),
               color: AppColors.danger,
               onTap: onAddExpense,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_add_payment'),
               icon: Icons.payments_outlined,
               label: l10n.t('addPayment'),
               color: AppColors.success,
               onTap: onAddPayment,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_add_worker_entry'),
               icon: Icons.engineering_outlined,
               label: l10n.t('addWorkerEntry'),
               color: AppColors.warning,
               onTap: onAddWorkerEntry,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_workers'),
               icon: Icons.engineering_outlined,
               label: l10n.t('workers'),
               color: AppColors.constructionOrange,
               onTap: onViewWorkers,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_report'),
               icon: Icons.picture_as_pdf_outlined,
               label: l10n.t('generateReport'),
               color: AppColors.constructionOrange,
               onTap: onGenerateReport,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_expenses'),
               icon: Icons.list_outlined,
               label: l10n.t('expenseList'),
               color: AppColors.textBody,
               onTap: onViewExpenses,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_payments'),
               icon: Icons.list_alt_outlined,
               label: l10n.t('paymentList'),
               color: AppColors.textBody,
               onTap: onViewPayments,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_edit'),
               icon: Icons.edit_outlined,
               label: l10n.t('edit'),
               color: AppColors.textBody,
               onTap: onEdit,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_archive'),
               icon: Icons.archive_outlined,
               label: l10n.t('archive'),
               color: AppColors.textBody,
               onTap: onArchive,
             ),
             _ActionCard(
+              qaKey: const Key('qa_project_delete'),
               icon: Icons.delete_outline,
               label: l10n.t('delete'),
               color: AppColors.danger,
@@ -329,12 +339,14 @@ class ActionGrid extends StatelessWidget {
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
+    this.qaKey,
     required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
   });
 
+  final Key? qaKey;
   final IconData icon;
   final String label;
   final Color color;
@@ -343,6 +355,7 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: qaKey,
       color: AppColors.surfaceSolid,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(

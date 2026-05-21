@@ -1,16 +1,19 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AddHubScreen extends StatelessWidget {
+class AddHubScreen extends ConsumerWidget {
   const AddHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final prefetcher = ref.read(appPrefetcherProvider);
     return Scaffold(
       body: SafeArea(
         child: CustomScrollView(
@@ -36,12 +39,14 @@ class AddHubScreen extends StatelessWidget {
                   _SectionHeader(title: l10n.t('expenses')),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_expense'),
                     icon: Icons.receipt_long_outlined,
                     title: l10n.t('addExpense'),
                     subtitle: l10n.t('addExpenseSubtitle'),
                     color: AppColors.danger,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmAddEntry();
                       context.push(AppRoutes.addExpense);
                     },
                   ),
@@ -60,12 +65,14 @@ class AddHubScreen extends StatelessWidget {
                   _SectionHeader(title: l10n.t('payments')),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_payment'),
                     icon: Icons.payments_outlined,
                     title: l10n.t('addPayment'),
                     subtitle: l10n.t('addPaymentSubtitle'),
                     color: AppColors.success,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmAddEntry();
                       context.push(AppRoutes.addPayment);
                     },
                   ),
@@ -84,6 +91,7 @@ class AddHubScreen extends StatelessWidget {
                   _SectionHeader(title: l10n.t('workers')),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_worker'),
                     icon: Icons.person_add_outlined,
                     title: l10n.t('addWorkerTitle'),
                     subtitle: l10n.t(
@@ -92,28 +100,33 @@ class AddHubScreen extends StatelessWidget {
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmAddEntry();
                       context.push(AppRoutes.addWorker);
                     },
                   ),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_workers'),
                     icon: Icons.engineering_outlined,
                     title: l10n.t('workerList'),
                     subtitle: l10n.t('workerListSubtitle'),
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmProjects();
                       context.push(AppRoutes.workers);
                     },
                   ),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_worker_entry'),
                     icon: Icons.assignment_ind_outlined,
                     title: l10n.t('addWorkerEntry'),
                     subtitle: l10n.t('addWorkerEntrySubtitle'),
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmAddEntry();
                       context.push('/worker-entry/new');
                     },
                   ),
@@ -134,12 +147,14 @@ class AddHubScreen extends StatelessWidget {
                   _SectionHeader(title: l10n.t('voiceExpense')),
                   const SizedBox(height: 8),
                   _ActionCard(
+                    qaKey: const Key('qa_add_hub_voice_expense'),
                     icon: Icons.mic_outlined,
                     title: l10n.t('voiceExpense'),
                     subtitle: l10n.t('voiceExpenseSubtitle'),
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
+                      prefetcher.warmAddEntry();
                       context.push(AppRoutes.voiceExpense);
                     },
                   ),
@@ -174,6 +189,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
+    this.qaKey,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -181,6 +197,7 @@ class _ActionCard extends StatelessWidget {
     required this.onTap,
   });
 
+  final Key? qaKey;
   final IconData icon;
   final String title;
   final String subtitle;
@@ -190,6 +207,7 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: qaKey,
       color: AppColors.surfaceSolid,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(

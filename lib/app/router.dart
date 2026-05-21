@@ -36,7 +36,7 @@ import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -111,25 +111,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reports,
         name: 'reports',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final projectId = state.uri.queryParameters['projectId'];
-          return ReportsScreen(projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ReportsScreen(projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.settings,
         name: 'settings',
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const SettingsScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.profileEdit,
         name: 'profileEdit',
-        builder: (context, state) => const ProfileEditScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ProfileEditScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.teamManagement,
         name: 'teamManagement',
-        builder: (context, state) => const TeamManagementScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const TeamManagementScreen(),
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -171,130 +183,181 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.createProject,
         name: 'createProject',
-        builder: (context, state) => const CreateProjectScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const CreateProjectScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.projectEdit,
         name: 'projectEdit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return CreateProjectScreen(projectId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: CreateProjectScreen(projectId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.projectDetail,
         name: 'projectDetail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return ProjectDetailScreen(projectId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ProjectDetailScreen(projectId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.archivedProjects,
         name: 'archivedProjects',
-        builder: (context, state) => const ArchivedProjectsScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ArchivedProjectsScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.projectExpenses,
         name: 'projectExpenses',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final projectId = state.pathParameters['projectId'] ?? '';
-          return ExpensesScreen(projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ExpensesScreen(projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.addExpense,
         name: 'addExpense',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final projectId = state.uri.queryParameters['projectId'];
-          return AddExpenseScreen(projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddExpenseScreen(projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.expenseDetail,
         name: 'expenseDetail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final projectId = state.uri.queryParameters['projectId'];
-          return ExpenseDetailScreen(expenseId: id, projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ExpenseDetailScreen(expenseId: id, projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.expenseEdit,
         name: 'expenseEdit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final projectId = state.uri.queryParameters['projectId'];
-          return AddExpenseScreen(expenseId: id, projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddExpenseScreen(expenseId: id, projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.voiceExpense,
         name: 'voiceExpense',
-        builder: (context, state) => const VoiceExpenseScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const VoiceExpenseScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.payments,
         name: 'payments',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final projectId = state.uri.queryParameters['projectId'];
-          return PaymentsScreen(projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: PaymentsScreen(projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.addPayment,
         name: 'addPayment',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final projectId = state.uri.queryParameters['projectId'];
-          return AddPaymentScreen(projectId: projectId);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddPaymentScreen(projectId: projectId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.paymentDetail,
         name: 'paymentDetail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return PaymentDetailScreen(paymentId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: PaymentDetailScreen(paymentId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.paymentEdit,
         name: 'paymentEdit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return AddPaymentScreen(paymentId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddPaymentScreen(paymentId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.workers,
         name: 'workers',
-        builder: (context, state) => const WorkersScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const WorkersScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.workerDetail,
         name: 'workerDetail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return WorkerDetailScreen(workerId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: WorkerDetailScreen(workerId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.workerEdit,
         name: 'workerEdit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return AddWorkerScreen(workerId: id);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddWorkerScreen(workerId: id),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.addWorker,
         name: 'addWorker',
-        builder: (context, state) => const AddWorkerScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const AddWorkerScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.workerEntry,
         name: 'workerEntry',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final extra = state.extra;
           String? entryId;
@@ -302,44 +365,89 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             entryId = extra['entryId'] as String?;
           }
           final projectId = state.uri.queryParameters['projectId'];
-          return AddWorkerEntryScreen(
-            workerId: id,
-            entryId: entryId,
-            projectId: projectId,
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddWorkerEntryScreen(
+              workerId: id,
+              entryId: entryId,
+              projectId: projectId,
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutes.notifications,
         name: 'notifications',
-        builder: (context, state) => const NotificationsScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const NotificationsScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.subscriptionPlans,
         name: 'subscriptionPlans',
-        builder: (context, state) => const PlansScreen(),
+        pageBuilder: (context, state) =>
+            smoothAppPage<void>(key: state.pageKey, child: const PlansScreen()),
       ),
       GoRoute(
         path: AppRoutes.subscriptionLimit,
         name: 'subscriptionLimit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final limitType = state.uri.queryParameters['limit'] ?? 'generic';
-          return LimitReachedScreen(limitType: limitType);
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: LimitReachedScreen(limitType: limitType),
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.subscriptionManage,
         name: 'subscriptionManage',
-        builder: (context, state) => const ManageSubscriptionScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ManageSubscriptionScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.subscriptionSuccess,
         name: 'subscriptionSuccess',
-        builder: (context, state) => const SubscriptionSuccessScreen(),
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const SubscriptionSuccessScreen(),
+        ),
       ),
     ],
   );
 });
+
+CustomTransitionPage<T> smoothAppPage<T>({
+  required LocalKey key,
+  required Widget child,
+}) {
+  return CustomTransitionPage<T>(
+    key: key,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 160),
+    reverseTransitionDuration: const Duration(milliseconds: 120),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.035, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
 
 String? resolveAppRedirect({
   required String location,

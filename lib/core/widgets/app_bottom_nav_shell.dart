@@ -54,12 +54,13 @@ class AppBottomNavShell extends ConsumerWidget {
         onDestinationSelected: _onDestinationSelected,
         destinations: [
           NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
+            icon: const Icon(Icons.home_outlined, key: Key('qa_nav_home')),
+            selectedIcon: const Icon(Icons.home, key: Key('qa_nav_home')),
             label: l10n.t('home'),
           ),
           NavigationDestination(
             icon: Container(
+              key: const Key('qa_nav_add'),
               decoration: BoxDecoration(
                 color: AppColors.constructionOrange,
                 shape: BoxShape.circle,
@@ -81,8 +82,8 @@ class AppBottomNavShell extends ConsumerWidget {
             label: l10n.t('add'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.work_outline),
-            selectedIcon: const Icon(Icons.work),
+            icon: const Icon(Icons.work_outline, key: Key('qa_nav_projects')),
+            selectedIcon: const Icon(Icons.work, key: Key('qa_nav_projects')),
             label: l10n.t('projects'),
           ),
         ],

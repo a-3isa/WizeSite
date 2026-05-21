@@ -3,6 +3,7 @@ import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
@@ -26,7 +27,7 @@ class SettingsScreen extends ConsumerWidget {
     final currency = settingsAsync.valueOrNull?.defaultCurrency ?? 'EGP';
     final notificationsEnabled =
         settingsAsync.valueOrNull?.riskAlertsEnabled ?? true;
-    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
+    final prefetcher = ref.read(appPrefetcherProvider);
 
     return AppBackScope(
       fallbackRoute: AppRoutes.dashboard,
@@ -174,7 +175,10 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: l10n.t('profile'),
                       color: AppColors.constructionOrange,
                       child: IconButton(
-                        onPressed: () => context.push(AppRoutes.profileEdit),
+                        onPressed: () {
+                          prefetcher.warmSettings();
+                          context.push(AppRoutes.profileEdit);
+                        },
                         icon: const Icon(Icons.chevron_right_rounded),
                       ),
                     ),
@@ -185,33 +189,28 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: l10n.t('teamMembersTitle'),
                       color: AppColors.success,
                       child: IconButton(
-                        onPressed: () => context.push(AppRoutes.teamManagement),
+                        onPressed: () {
+                          prefetcher.warmSettings();
+                          context.push(AppRoutes.teamManagement);
+                        },
                         icon: const Icon(Icons.chevron_right_rounded),
                       ),
                     ),
                     const SizedBox(height: 20),
                     _SectionHeader(title: l10n.t('subscription')),
                     const SizedBox(height: 8),
-                    subscriptionAsync.when(
-                      data: (sub) => _SubscriptionCard(
-                        l10n: l10n,
-                        sub: sub,
-                        onUpgrade: () {
-                          HapticFeedback.lightImpact();
-                          context.push(AppRoutes.subscriptionPlans);
-                        },
-                        onManage: () {
-                          HapticFeedback.lightImpact();
-                          context.push(AppRoutes.subscriptionManage);
-                        },
-                      ),
-                      error: (e, _) => _ErrorCard(message: e.toString()),
-                      loading: () => const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: CircularProgressIndicator(),
-                        ),
-                      ),
+                    _SubscriptionSettingsSection(
+                      l10n: l10n,
+                      onUpgrade: () {
+                        HapticFeedback.lightImpact();
+                        prefetcher.warmSettings();
+                        context.push(AppRoutes.subscriptionPlans);
+                      },
+                      onManage: () {
+                        HapticFeedback.lightImpact();
+                        prefetcher.warmSettings();
+                        context.push(AppRoutes.subscriptionManage);
+                      },
                     ),
                     const SizedBox(height: 24),
                     _LogoutButton(
@@ -236,6 +235,51 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SubscriptionSettingsSection extends ConsumerWidget {
+  const _SubscriptionSettingsSection({
+    required this.l10n,
+    required this.onUpgrade,
+    required this.onManage,
+  });
+
+  final AppLocalizations l10n;
+  final VoidCallback onUpgrade;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
+    final cachedSub = subscriptionAsync.valueOrNull;
+    if (cachedSub != null) {
+      return Column(
+        children: [
+          _SubscriptionCard(
+            l10n: l10n,
+            sub: cachedSub,
+            onUpgrade: onUpgrade,
+            onManage: onManage,
+          ),
+          if (subscriptionAsync.isLoading)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
+      );
+    }
+    return subscriptionAsync.when(
+      data: (sub) => _SubscriptionCard(
+        l10n: l10n,
+        sub: sub,
+        onUpgrade: onUpgrade,
+        onManage: onManage,
+      ),
+      error: (e, _) => _ErrorCard(message: e.toString()),
+      loading: () => const _SubscriptionLoadingCard(),
     );
   }
 }
@@ -494,6 +538,23 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
+class _SubscriptionLoadingCard extends StatelessWidget {
+  const _SubscriptionLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSolid,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderGrey),
+      ),
+      child: const LinearProgressIndicator(minHeight: 2),
+    );
+  }
+}
+
 class _LogoutButton extends StatelessWidget {
   const _LogoutButton({required this.label, required this.onTap});
 
@@ -626,6 +687,7 @@ class _ProfileSection extends ConsumerWidget {
           IconButton(
             onPressed: () {
               HapticFeedback.lightImpact();
+              ref.read(appPrefetcherProvider).warmSettings();
               context.push(AppRoutes.profileEdit);
             },
             icon: Icon(
