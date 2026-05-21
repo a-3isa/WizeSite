@@ -17,6 +17,8 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  bool _showProgress = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,25 +26,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) {
-      return;
-    }
-
     final restored = await ref.read(sessionRestoreServiceProvider).restore();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (restored == null) {
-      context.go(AppRoutes.features);
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      if (mounted) context.go(AppRoutes.features);
       return;
     }
 
     ref.read(activeUserIdProvider.notifier).state = restored.userId;
     ref.read(activeWorkspaceIdProvider.notifier).state = restored.workspaceId;
-    ref.read(appPrefetcherProvider).warmDashboard();
-    context.go(AppRoutes.dashboard);
+
+    setState(() => _showProgress = true);
+
+    await Future.wait([
+      ref.read(appPrefetcherProvider).warmCritical(),
+      Future<void>.delayed(const Duration(milliseconds: 800)),
+    ]);
+
+    if (mounted) context.go(AppRoutes.dashboard);
   }
 
   @override
@@ -57,27 +60,45 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             end: Alignment.bottomRight,
           ),
         ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.construction, color: Colors.white, size: 72),
-              const SizedBox(height: 16),
-              Text(
-                l10n.t('appName'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.construction,
+                    color: Colors.white,
+                    size: 72,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.t('appName'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.t('tagline'),
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            if (_showProgress)
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.t('tagline'),
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
