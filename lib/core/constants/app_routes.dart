@@ -20,6 +20,7 @@ class AppRoutes {
   static const String projectEdit = '/project/:id/edit';
   static const String projectExpenses = '/project/:projectId/expenses';
 
+  static const String addEntry = '/add-entry';
   static const String addExpense = '/add-expense';
   static const String expenseDetail = '/expense/:id';
   static const String expenseEdit = '/expense/:id/edit';

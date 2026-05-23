@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
+import 'package:buildtrack_app/features/add/presentation/screens/add_entry_screen.dart';
 import 'package:buildtrack_app/features/add/presentation/screens/add_hub_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
@@ -226,6 +227,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return smoothAppPage<void>(
             key: state.pageKey,
             child: ExpensesScreen(projectId: projectId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.addEntry,
+        name: 'addEntry',
+        pageBuilder: (context, state) {
+          final tabParam = state.uri.queryParameters['tab'];
+          final initialTab = int.tryParse(tabParam ?? '0') ?? 0;
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: AddEntryScreen(initialTab: initialTab),
           );
         },
       ),

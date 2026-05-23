@@ -228,16 +228,14 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _QuickActionCard(
-                    qaKey: const Key('qa_add_worker_entry'),
+                    qaKey: const Key('qa_workers_list'),
                     icon: Icons.engineering_outlined,
-                    label: l10n.t('addWorkerEntry'),
+                    label: l10n.t('workers'),
                     color: AppColors.warning,
-                    onTap: () => _onQuotaAction(
-                      context,
-                      ref,
-                      LimitType.workerEntriesPerMonth,
-                      AppRoutes.workerEntry.replaceFirst(':id', 'new'),
-                    ),
+                    onTap: () {
+                      ref.read(appPrefetcherProvider).warmProjects();
+                      context.push(AppRoutes.workers);
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
