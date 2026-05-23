@@ -170,9 +170,13 @@ class AppTheme {
             return baseFont.labelSmall?.copyWith(
               color: AppColors.constructionOrange,
               fontWeight: FontWeight.bold,
+              decoration: TextDecoration.none,
             );
           }
-          return baseFont.labelSmall?.copyWith(color: AppColors.textBody);
+          return baseFont.labelSmall?.copyWith(
+            color: AppColors.textBody,
+            decoration: TextDecoration.none,
+          );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {

@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
+import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:go_router/go_router.dart';
 import 'package:buildtrack_app/core/widgets/usage_card.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
@@ -59,7 +60,7 @@ class DashboardScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: ListView(
+          child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
             if (deadLetterCount > 0) ...[
@@ -83,13 +84,7 @@ class DashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
             ],
-            Text(
-              l10n.t('overview'),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
+            SectionHeader(title: l10n.t('overview')),
             const SizedBox(height: 16),
             summaryAsync.when(
               data: (summary) {
@@ -182,13 +177,7 @@ class DashboardScreen extends ConsumerWidget {
               loading: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 24),
-            Text(
-              l10n.t('quickActions'),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
+            SectionHeader(title: l10n.t('quickActions')),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -453,35 +442,55 @@ class _QuickActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       key: qaKey,
-      color: AppColors.surfaceSolid,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
           decoration: BoxDecoration(
+            color: AppColors.surfaceSolid,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.borderGrey),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.07),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.78)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: Colors.white, size: 22),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.textDark,
+                  fontSize: 13,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

@@ -8,7 +8,7 @@ class VoiceRecorderService {
   VoiceRecorderService({AudioRecorder? recorder})
     : _recorder = recorder ?? AudioRecorder();
 
-  static const recordingFileExtension = '.m4a';
+  static const recordingFileExtension = '.wav';
 
   final AudioRecorder _recorder;
 
@@ -28,9 +28,10 @@ class VoiceRecorderService {
 
     await _recorder.start(
       const RecordConfig(
-        encoder: AudioEncoder.aacLc,
+        encoder: AudioEncoder.wav,
         sampleRate: 16000,
         numChannels: 1,
+        bitRate: 128000,
       ),
       path: path,
     );

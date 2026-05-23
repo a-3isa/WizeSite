@@ -164,9 +164,9 @@ function transcriptionFailureForStatus(
     );
   default:
     if (providerMessage) {
-      return new HttpsError("internal", `Voice transcription failed: ${providerMessage}`);
+      return new HttpsError("internal", `Voice transcription failed [${status}]: ${providerMessage}`);
     }
-    return new HttpsError("internal", "Voice transcription failed");
+    return new HttpsError("internal", `Voice transcription failed [${status}]`);
   }
 }
 
@@ -210,15 +210,12 @@ export async function transcribeAudioFromStorage(params: {
       headers: {
         Authorization: `Bearer ${params.openRouterApiKey}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://buildtrack.app",
+        "X-Title": "BuildTrack",
       },
       body: JSON.stringify({
         model: params.model,
-        temperature: 0,
         messages: [
-          {
-            role: "system",
-            content: TRANSCRIPTION_PROMPT,
-          },
           {
             role: "user",
             content: [
@@ -244,6 +241,7 @@ export async function transcribeAudioFromStorage(params: {
 
   if (!response.ok) {
     const bodyText = await response.text();
+    console.error(`[transcription] HTTP ${response.status} from OpenRouter. model=${params.model} body=${bodyText.slice(0, 500)}`);
     let providerMessage = "";
     try {
       providerMessage = readProviderErrorMessage(JSON.parse(bodyText));

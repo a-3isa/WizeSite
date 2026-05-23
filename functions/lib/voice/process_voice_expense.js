@@ -172,9 +172,9 @@ async function processVoiceExpenseForUser(uid, payload) {
         transcript = await (0, transcription_service_1.transcribeAudioFromStorage)({
             storagePath,
             openRouterApiKey,
-            model: exports.openRouterTranscriptionModelSecret.value() ||
+            model: (exports.openRouterTranscriptionModelSecret.value() ||
                 process.env.OPENROUTER_TRANSCRIPTION_MODEL ||
-                DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL,
+                DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL).replace(/^﻿|\r?\n/g, "").trim(),
             languageHint,
         });
     }

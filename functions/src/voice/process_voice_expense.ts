@@ -9,7 +9,7 @@ export const openRouterApiKeySecret = defineSecret("OPENROUTER_API_KEY");
 export const openRouterModelSecret = defineSecret("OPENROUTER_MODEL");
 export const openRouterTranscriptionModelSecret = defineSecret("OPENROUTER_TRANSCRIPTION_MODEL");
 
-const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-4o-mini-audio-preview";
+const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-audio-mini";
 
 function parseProjects(input: unknown): VoiceProjectInput[] {
   if (!Array.isArray(input)) {
@@ -159,10 +159,11 @@ async function processVoiceExpenseForUser(
     transcript = await transcribeAudioFromStorage({
       storagePath,
       openRouterApiKey,
-      model:
+      model: (
         openRouterTranscriptionModelSecret.value() ||
         process.env.OPENROUTER_TRANSCRIPTION_MODEL ||
-        DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL,
+        DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL
+      ).replace(/^﻿|\r?\n/g, "").trim(),
       languageHint,
     });
   } catch (error) {
