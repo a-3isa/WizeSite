@@ -9,7 +9,7 @@ export const openRouterApiKeySecret = defineSecret("OPENROUTER_API_KEY");
 export const openRouterModelSecret = defineSecret("OPENROUTER_MODEL");
 export const openRouterTranscriptionModelSecret = defineSecret("OPENROUTER_TRANSCRIPTION_MODEL");
 
-const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-audio-mini";
+const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-4o-mini-audio-preview";
 
 function parseProjects(input: unknown): VoiceProjectInput[] {
   if (!Array.isArray(input)) {
