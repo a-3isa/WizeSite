@@ -122,6 +122,35 @@ if (!emulatorHost) {
         userId: "member_1",
         role: "member",
       });
+      await setDoc(doc(db, "memberships", "workspace_owner_admin_1"), {
+        workspaceId: "workspace_owner",
+        userId: "admin_1",
+        role: "admin",
+      });
+      await setDoc(doc(db, "memberships", "workspace_owner_accounting_1"), {
+        workspaceId: "workspace_owner",
+        userId: "accounting_1",
+        role: "accountingApproved",
+      });
+      await setDoc(doc(db, "entity_summaries", "entity_summary_owner"), {
+        id: "entity_summary_owner",
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        entityId: "entity_1",
+        entityName: "Acme Materials",
+        entityType: "supplier",
+        totalExpenses: 100,
+        totalPayments: 25,
+      });
+      await setDoc(doc(db, "attachments", "attachment_owner"), {
+        id: "attachment_owner",
+        workspaceId: "workspace_owner",
+        ownerType: "expense",
+        ownerId: "expense_owner",
+        fileName: "receipt.pdf",
+        storagePath: "attachments/owner/receipt.pdf",
+        contentType: "application/pdf",
+      });
     });
   }
 
@@ -198,6 +227,23 @@ if (!emulatorHost) {
     const memberDb = env.authenticatedContext("member_1").firestore();
 
     await assertSucceeds(getDoc(doc(memberDb, "projects", "project_owner")));
+  });
+
+  test("ordinary members cannot read role-restricted accounting summaries or attachments", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(getDoc(doc(memberDb, "entity_summaries", "entity_summary_owner")));
+    await assertFails(getDoc(doc(memberDb, "attachments", "attachment_owner")));
+  });
+
+  test("accounting-approved roles can read role-restricted summaries and attachments", async () => {
+    await seedBaseData();
+    const adminDb = env.authenticatedContext("admin_1").firestore();
+    const accountingDb = env.authenticatedContext("accounting_1").firestore();
+
+    await assertSucceeds(getDoc(doc(adminDb, "entity_summaries", "entity_summary_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "attachments", "attachment_owner")));
   });
 
   test("workspace owner can add members", async () => {

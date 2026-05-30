@@ -2,6 +2,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -476,6 +477,7 @@ List<Expense> _mergeRecentExpenses(
       transcript: current.transcript,
       source: current.source,
       storagePath: current.storagePath,
+      attachments: current.attachments,
       isArchived: current.isArchived,
       clientMutationId: current.clientMutationId,
     );
@@ -513,6 +515,7 @@ List<Expense> _mergeRecentExpenses(
         transcript: '${action.payload['transcript'] ?? ''}',
         source: 'pending',
         storagePath: '${action.payload['storagePath'] ?? ''}',
+        attachments: Attachment.listFromDynamic(action.payload['attachments']),
         isArchived: false,
         clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
       ),
@@ -572,6 +575,7 @@ List<PaymentRecord> _mergeRecentPayments(
       paymentMethod:
           '${action.payload['paymentMethod'] ?? current.paymentMethod}',
       notes: '${action.payload['notes'] ?? current.notes}',
+      attachments: current.attachments,
       isArchived: current.isArchived,
       clientMutationId: current.clientMutationId,
     );
@@ -601,6 +605,7 @@ List<PaymentRecord> _mergeRecentPayments(
         date: _parsePendingDate(action.payload['date']) ?? action.createdAt,
         paymentMethod: '${action.payload['paymentMethod'] ?? 'cash'}',
         notes: '${action.payload['notes'] ?? ''}',
+        attachments: Attachment.listFromDynamic(action.payload['attachments']),
         isArchived: false,
         clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
       ),

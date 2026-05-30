@@ -11,6 +11,7 @@ class AppRoutes {
   static const String archivedProjects = '/projects/archived';
   static const String add = '/add';
   static const String reports = '/reports';
+  static const String entitySummary = '/entity-summary';
   static const String settings = '/settings';
   static const String profileEdit = '/settings/profile';
   static const String teamManagement = '/settings/team';
@@ -69,6 +70,7 @@ class AppRoutes {
 
   static String reportsPath({String? projectId}) =>
       _withOptionalQuery(reports, {'projectId': projectId});
+  static String entitySummaryPath() => entitySummary;
   static String subscriptionLimitPath(String limitType) =>
       _withOptionalQuery(subscriptionLimit, {'limit': limitType});
 

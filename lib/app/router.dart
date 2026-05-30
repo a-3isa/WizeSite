@@ -25,6 +25,7 @@ import 'package:buildtrack_app/features/projects/presentation/screens/create_pro
 import 'package:buildtrack_app/features/projects/presentation/screens/project_detail_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/archived_projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/reports/presentation/screens/entity_aggregation_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
@@ -119,6 +120,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: ReportsScreen(projectId: projectId),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.entitySummary,
+        name: 'entitySummary',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const EntityAggregationScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settings,

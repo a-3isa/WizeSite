@@ -100,6 +100,27 @@ abstract final class OfflineActionStatus {
   static const deadLetter = 'dead_letter';
 }
 
+abstract final class OfflineActionQueueTypes {
+  static const attachmentUpload = 'attachment_upload';
+  static const entityUpsert = 'entity_upsert';
+  static const summaryDelta = 'summary_delta';
+}
+
+abstract final class OfflineActionPayloadKeys {
+  static const workspaceId = 'workspaceId';
+  static const ownerType = 'ownerType';
+  static const ownerId = 'ownerId';
+  static const attachment = 'attachment';
+  static const entity = 'entity';
+  static const summaryScope = 'summaryScope';
+  static const summaryId = 'summaryId';
+  static const summaryDelta = 'summaryDelta';
+  static const clientMutationId = 'clientMutationId';
+  static const clientCreatedAt = 'clientCreatedAt';
+  static const clientUpdatedAt = 'clientUpdatedAt';
+  static const clientSavedAt = 'clientSavedAt';
+}
+
 typedef OfflineActionHandler = Future<void> Function(OfflineAction action);
 
 class OfflineActionQueue {
@@ -118,13 +139,18 @@ class OfflineActionQueue {
   Future<OfflineAction> enqueue({
     required String type,
     required Map<String, dynamic> payload,
+    DateTime? clientSavedAt,
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now();
     final enrichedPayload = Map<String, dynamic>.from(payload);
-    enrichedPayload['clientMutationId'] ??= id;
-    enrichedPayload['clientCreatedAt'] ??= now.toIso8601String();
-    enrichedPayload['clientUpdatedAt'] ??= now.toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientMutationId] ??= id;
+    enrichedPayload[OfflineActionPayloadKeys.clientCreatedAt] ??= now
+        .toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientUpdatedAt] ??= now
+        .toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientSavedAt] ??=
+        (clientSavedAt ?? now).toIso8601String();
     final action = OfflineAction(
       id: id,
       type: type,

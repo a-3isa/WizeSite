@@ -1,17 +1,26 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
+import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,16 +36,24 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _amountController = TextEditingController();
+  final _purposeController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _notesController = TextEditingController();
   final _supplierController = TextEditingController();
-  String _category = 'materials';
+  String _category = AccountingCategories.materials;
   String _currency = 'EGP';
+  String _paymentMethod = 'cash';
+  String _paymentStatus = PaymentStatuses.unpaid;
   String? _projectId;
   String _projectName = '';
+  String? _entityId;
+  String _entityName = '';
   DateTime _date = DateTime.now();
   bool _loading = false;
   bool _prefilling = false;
   String? _error;
+  final _pickedFiles = <PlatformFile>[];
+  final _attachments = <Attachment>[];
 
   @override
   void initState() {
@@ -65,10 +82,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           _projectName = expense.projectName;
           _category = expense.category;
           _amountController.text = expense.amount.toStringAsFixed(2);
+          _purposeController.text = expense.purpose;
+          _descriptionController.text = expense.description;
           _notesController.text = expense.notes;
           _supplierController.text = expense.supplierName;
+          _entityId = expense.entityId;
+          _entityName = expense.entityName;
           _currency = expense.currency;
+          _paymentMethod = expense.paymentMethod.isEmpty
+              ? 'cash'
+              : expense.paymentMethod;
+          _paymentStatus = expense.paymentStatus;
           _date = expense.date;
+          _attachments.clear();
+          _attachments.addAll(expense.attachments);
         });
       }
     } catch (_) {
@@ -84,9 +111,40 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
+  Future<void> _pickAttachments() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
+    );
+    if (result == null) {
+      return;
+    }
+    final invalidMessages = <String>[];
+    final validFiles = <PlatformFile>[];
+    for (final file in result.files.where((file) => file.path != null)) {
+      final validationError = AttachmentValidationService.validatePickedFile(
+        file,
+      );
+      if (validationError != null) {
+        invalidMessages.add(validationError);
+        continue;
+      }
+      validFiles.add(file);
+    }
+    setState(() {
+      _pickedFiles.addAll(validFiles);
+      if (invalidMessages.isNotEmpty) {
+        _error = invalidMessages.join('\n');
+      }
+    });
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
+    _purposeController.dispose();
+    _descriptionController.dispose();
     _notesController.dispose();
     _supplierController.dispose();
     super.dispose();
@@ -120,6 +178,39 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     });
     try {
       var queued = false;
+      final attachments = <Attachment>[];
+      if (_pickedFiles.isNotEmpty) {
+        for (final file in _pickedFiles) {
+          if (file.path == null) {
+            continue;
+          }
+          final uploaded = await ref
+              .read(storageUploadServiceProvider)
+              .uploadAttachment(
+                userId: userId,
+                localFilePath: file.path!,
+                fileName: file.name,
+              );
+          attachments.add(
+            Attachment(
+              id: const Uuid().v4(),
+              fileName: uploaded.fileName,
+              storagePath: uploaded.storagePath,
+              contentType: uploaded.contentType,
+              uploadedAt: DateTime.now(),
+              downloadUrl: uploaded.downloadUrl,
+              size: uploaded.size,
+            ),
+          );
+        }
+      }
+      attachments.addAll(_attachments);
+      final resolvedEntity = await _resolveEntity(
+        workspaceId: workspaceId,
+        fallbackName: _supplierController.text.trim(),
+        type: 'supplier',
+      );
+
       if (widget.expenseId == null) {
         String finalProjectName = _projectName;
         final projects = ref.read(projectsProvider).valueOrNull ?? [];
@@ -141,9 +232,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               amount: amount,
               currency: _currency,
               date: _date,
+              purpose: _purposeController.text.trim(),
+              description: _descriptionController.text.trim(),
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
+              entityId: resolvedEntity.id,
+              entityName: resolvedEntity.name,
+              entityType: 'supplier',
+              paymentMethod: _paymentMethod,
+              paymentStatus: _paymentStatus,
               projectTotalExpensesBefore: selectedProject?.totalExpenses,
+              attachments: attachments.isNotEmpty ? attachments : null,
             );
         queued = result.queued;
       } else {
@@ -154,8 +253,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               category: _category,
               amount: amount,
               date: _date,
+              purpose: _purposeController.text.trim(),
+              description: _descriptionController.text.trim(),
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
+              entityId: resolvedEntity.id,
+              entityName: resolvedEntity.name,
+              entityType: 'supplier',
+              paymentMethod: _paymentMethod,
+              paymentStatus: _paymentStatus,
+              attachments: attachments,
             );
       }
       if (mounted) {
@@ -188,9 +295,30 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
+  Future<({String? id, String? name})> _resolveEntity({
+    required String workspaceId,
+    required String fallbackName,
+    required String type,
+  }) async {
+    final name = (_entityName.isNotEmpty ? _entityName : fallbackName).trim();
+    if (name.isEmpty) {
+      return (id: _entityId, name: null);
+    }
+    if (_entityId != null && _entityId!.isNotEmpty) {
+      return (id: _entityId, name: name);
+    }
+    final entity = await ref.read(entityRepositoryProvider).ensureEntity(
+          workspaceId: workspaceId,
+          name: name,
+          type: type,
+        );
+    return (id: entity?.id ?? _entityId, name: entity?.name ?? name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
     final defaultCurrency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
@@ -221,6 +349,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_error != null) ...[
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                    const SizedBox(height: 12),
+                  ],
                   projectsAsync.when(
                     data: (projects) {
                       return BelowDropdownField<String>(
@@ -252,24 +384,52 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     value: _category,
                     entries: [
                       DropdownMenuEntry(
-                        value: 'labor',
-                        label: l10n.expenseCategoryLabel('labor'),
+                        value: AccountingCategories.labor,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.labor,
+                        ),
                       ),
                       DropdownMenuEntry(
-                        value: 'materials',
-                        label: l10n.expenseCategoryLabel('materials'),
+                        value: AccountingCategories.materials,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.materials,
+                        ),
                       ),
                       DropdownMenuEntry(
-                        value: 'equipment',
-                        label: l10n.expenseCategoryLabel('equipment'),
+                        value: AccountingCategories.equipment,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.equipment,
+                        ),
                       ),
                       DropdownMenuEntry(
-                        value: 'transport',
-                        label: l10n.expenseCategoryLabel('transport'),
+                        value: AccountingCategories.transport,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.transport,
+                        ),
                       ),
                       DropdownMenuEntry(
-                        value: 'other',
-                        label: l10n.expenseCategoryLabel('other'),
+                        value: AccountingCategories.storage,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.storage,
+                        ),
+                      ),
+                      DropdownMenuEntry(
+                        value: AccountingCategories.rentals,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.rentals,
+                        ),
+                      ),
+                      DropdownMenuEntry(
+                        value: AccountingCategories.payments,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.payments,
+                        ),
+                      ),
+                      DropdownMenuEntry(
+                        value: AccountingCategories.other,
+                        label: l10n.expenseCategoryLabel(
+                          AccountingCategories.other,
+                        ),
                       ),
                     ],
                     onSelected: (value) =>
@@ -326,14 +486,160 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  EntityAutocompleteField(
+                    workspaceId: workspaceId ?? '',
+                    label: l10n.t('entityNameOptional'),
+                    initialEntityId: _entityId,
+                    initialEntityName: _entityName.isNotEmpty
+                        ? _entityName
+                        : null,
+                    onChanged: (entityId, entityName) {
+                      setState(() {
+                        _entityId = entityId;
+                        _entityName = entityName ?? '';
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _purposeController,
+                    decoration: InputDecoration(labelText: l10n.t('purpose')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('description'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  BelowDropdownField<String>(
+                    label: l10n.t('paymentMethod'),
+                    value: _paymentMethod,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: 'cash',
+                        label: l10n.paymentMethodLabel('cash'),
+                      ),
+                      DropdownMenuEntry(
+                        value: 'bank',
+                        label: l10n.paymentMethodLabel('bank'),
+                      ),
+                      DropdownMenuEntry(
+                        value: 'check',
+                        label: l10n.paymentMethodLabel('check'),
+                      ),
+                    ],
+                    onSelected: (value) => setState(
+                      () => _paymentMethod = value ?? _paymentMethod,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  BelowDropdownField<String>(
+                    label: l10n.t('paymentStatus'),
+                    value: _paymentStatus,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.unpaid,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.unpaid),
+                      ),
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.partial,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.partial),
+                      ),
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.paid,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.paid),
+                      ),
+                    ],
+                    onSelected: (value) => setState(
+                      () => _paymentStatus = value ?? _paymentStatus,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _notesController,
                     maxLines: 3,
                     decoration: InputDecoration(labelText: l10n.t('notes')),
                   ),
                   const SizedBox(height: 12),
-                  if (_error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  Text(
+                    'Attachments',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_attachments.isNotEmpty)
+                    Column(
+                      children: _attachments
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(entry.value.id),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _attachments.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.attach_file),
+                                title: Text(entry.value.fileName),
+                                subtitle: Text(entry.value.storagePath),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (_pickedFiles.isNotEmpty)
+                    Column(
+                      children: _pickedFiles
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(
+                                entry.value.path ?? entry.value.name,
+                              ),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _pickedFiles.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.description),
+                                title: Text(entry.value.name),
+                                subtitle: Text(entry.value.path ?? ''),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  FilledButton.tonal(
+                    onPressed: _loading ? null : _pickAttachments,
+                    child: const Text('Select attachments'),
+                  ),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _loading ? null : _save,

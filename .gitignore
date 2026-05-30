@@ -3,7 +3,9 @@
 *.log
 *.pyc
 *.swp
+*.tmp
 .DS_Store
+Thumbs.db
 .atom/
 .build/
 .buildlog/
@@ -19,6 +21,9 @@ migrate_working_dir/
 .idea/
 
 .env
+.env*
+node_modules/
+dist/
 functions/.env*
 !functions/.env.example
 functions/node_modules/
@@ -37,7 +42,8 @@ functions/node_modules/
 .pub/
 /build/
 /coverage/
-
+.agents/
+.specify/
 # Symbolication related
 app.*.symbols
 

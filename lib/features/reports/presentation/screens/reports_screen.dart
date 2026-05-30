@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/cashflow_line_chart.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/category_pie_chart.dart';
@@ -16,13 +17,12 @@ import 'package:buildtrack_app/features/reports/presentation/widgets/recent_expe
 import 'package:buildtrack_app/features/reports/presentation/widgets/recent_payments_table.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/worker_cost_table.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -63,195 +63,67 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     required ReportMetrics metrics,
     required String currency,
   }) async {
-    final font = await PdfGoogleFonts.cairoRegular();
-    final fontBold = await PdfGoogleFonts.cairoBold();
-    final document = pw.Document();
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-    final locale = l10n.locale.languageCode;
-
-    pw.Widget sectionTitle(String text) {
-      return pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 8, top: 18),
-        child: pw.Text(
-          text,
-          style: pw.TextStyle(
-            font: fontBold,
-            fontSize: 16,
-            color: PdfColor.fromHex('#0F172A'),
-          ),
-        ),
+    try {
+      final exporter = const ReportPdfExporter();
+      final documentBytes = await exporter.buildProjectReportPdf(
+        l10n: l10n,
+        project: project,
+        metrics: metrics,
+        currency: currency,
       );
+      await Printing.layoutPdf(onLayout: (_) async => documentBytes);
+    } catch (error) {
+      _showExportError(l10n, error);
     }
+  }
 
-    pw.Widget twoColumnTable(List<List<String>> rows) {
-      return pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey300),
-        columnWidths: const {
-          0: pw.FlexColumnWidth(2),
-          1: pw.FlexColumnWidth(1),
-        },
-        children: rows
-            .map(
-              (row) => pw.TableRow(
-                children: row
-                    .map(
-                      (cell) => pw.Padding(
-                        padding: const pw.EdgeInsets.all(10),
-                        child: pw.Text(
-                          cell,
-                          style: pw.TextStyle(font: font, fontSize: 11),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
+  Future<void> _exportWeekly({
+    required AppLocalizations l10n,
+    required DashboardWeeklyInsights insights,
+    required String currency,
+  }) async {
+    try {
+      final exporter = const ReportPdfExporter();
+      final documentBytes = await exporter.buildWeeklyInsightsReportPdf(
+        l10n: l10n,
+        insights: insights,
+        currency: currency,
       );
+      await Printing.layoutPdf(onLayout: (_) async => documentBytes);
+    } catch (error) {
+      _showExportError(l10n, error);
     }
+  }
 
-    document.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => [
-          pw.Text(
-            l10n.t('buildozerFinancialReport'),
-            style: pw.TextStyle(
-              font: fontBold,
-              fontSize: 24,
-              color: PdfColor.fromHex('#F59E0B'),
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            l10n.t('projectReport'),
-            style: pw.TextStyle(font: font, fontSize: 12),
-          ),
-          pw.SizedBox(height: 12),
-          twoColumnTable([
-            [l10n.t('project'), project.name],
-            [l10n.t('status'), l10n.projectStatusLabel(project.status)],
-            [l10n.t('generated'), dateFormat.format(DateTime.now())],
-          ]),
-          sectionTitle(l10n.t('currentSnapshot')),
-          twoColumnTable([
-            [
-              l10n.t('totalIncome'),
-              Formatters.money(
-                metrics.totalIncome,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
-            [
-              l10n.t('totalExpenses'),
-              Formatters.money(
-                metrics.totalExpenses,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
-            [
-              l10n.t('netProfit'),
-              Formatters.money(
-                metrics.net,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
-          ]),
-          sectionTitle(l10n.t('expenseBreakdown')),
-          twoColumnTable(
-            metrics.categoryTotals.entries
-                .map(
-                  (entry) => [
-                    l10n.expenseCategoryLabel(entry.key),
-                    Formatters.money(
-                      entry.value,
-                      currencyCode: currency,
-                      locale: locale,
-                    ),
-                  ],
-                )
-                .toList(),
-          ),
-          sectionTitle(l10n.t('monthlyCashFlow')),
-          twoColumnTable(
-            metrics.monthlyFlow
-                .map(
-                  (entry) => [
-                    DateFormat('yyyy-MM').format(entry.month),
-                    '${Formatters.money(entry.income, currencyCode: currency, locale: locale)} / ${Formatters.money(entry.expenses, currencyCode: currency, locale: locale)}',
-                  ],
-                )
-                .toList(),
-          ),
-          sectionTitle(l10n.t('topWorkers')),
-          twoColumnTable(
-            metrics.topWorkers.isEmpty
-                ? [
-                    [l10n.t('workerName'), l10n.t('noDataYet')],
-                  ]
-                : metrics.topWorkers
-                      .map(
-                        (worker) => [
-                          worker.name,
-                          '${worker.totalDays.toStringAsFixed(1)} d / ${Formatters.money(worker.totalCost, currencyCode: currency, locale: locale)}',
-                        ],
-                      )
-                      .toList(),
-          ),
-          sectionTitle(l10n.t('recentExpenses')),
-          twoColumnTable(
-            metrics.recentExpenses.isEmpty
-                ? [
-                    [l10n.t('expenses'), l10n.t('noDataYet')],
-                  ]
-                : metrics.recentExpenses
-                      .map(
-                        (expense) => [
-                          '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
-                          Formatters.money(
-                            expense.amount,
-                            currencyCode: expense.currency,
-                            locale: locale,
-                          ),
-                        ],
-                      )
-                      .toList(),
-          ),
-          sectionTitle(l10n.t('recentPayments')),
-          twoColumnTable(
-            metrics.recentPayments.isEmpty
-                ? [
-                    [l10n.t('payments'), l10n.t('noDataYet')],
-                  ]
-                : metrics.recentPayments
-                      .map(
-                        (payment) => [
-                          '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
-                          Formatters.money(
-                            payment.amount,
-                            currencyCode: currency,
-                            locale: locale,
-                          ),
-                        ],
-                      )
-                      .toList(),
-          ),
-          pw.SizedBox(height: 18),
-          pw.Center(
-            child: pw.Text(
-              l10n.t('generatedByBuildozer'),
-              style: pw.TextStyle(font: font, fontSize: 10),
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _exportCombined({
+    required AppLocalizations l10n,
+    required Project project,
+    required ReportMetrics metrics,
+    required DashboardWeeklyInsights insights,
+    required String currency,
+  }) async {
+    try {
+      final exporter = const ReportPdfExporter();
+      final documentBytes = await exporter.buildCombinedReportPdf(
+        l10n: l10n,
+        project: project,
+        metrics: metrics,
+        insights: insights,
+        currency: currency,
+      );
+      await Printing.layoutPdf(onLayout: (_) async => documentBytes);
+    } catch (error) {
+      _showExportError(l10n, error);
+    }
+  }
 
-    await Printing.layoutPdf(onLayout: (_) async => document.save());
+  void _showExportError(AppLocalizations l10n, Object error) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
   }
 
   @override
@@ -259,6 +131,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final usageAsync = ref.watch(currentUsageProvider);
+    final locale = Localizations.localeOf(context).languageCode;
     final currentProjectId = ref.watch(reportProjectIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
     final summaryAsync = ref.watch(reportSummaryProvider);
@@ -266,8 +139,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
-    final locale = Localizations.localeOf(context).languageCode;
     final hasWorkspace = workspaceId != null;
+    final weeklyInsightsAsync = workspaceId == null
+        ? AsyncValue.data(
+            DashboardWeeklyInsights(
+              topEntity: 'Unassigned',
+              topCategory: 'Unassigned',
+              laborTotal: 0,
+              equipmentTotal: 0,
+              paymentSummary: {},
+              recentTransactions: [],
+            ),
+          )
+        : ref.watch(dashboardWeeklyInsightsProvider(workspaceId));
+    final weeklyInsights = weeklyInsightsAsync.valueOrNull;
 
     final categoryAsync = ref.watch(expensesByCategoryProvider);
     final flowAsync = ref.watch(monthlyFlowProvider);
@@ -287,56 +172,110 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final title = _ReportsHeaderTitle(
+                        fallbackRoute: fallbackRoute,
+                        title: l10n.t('reports'),
+                      );
+                      final actions = hasWorkspace
+                          ? _ReportsHeaderActions(
+                              currentProjectId: currentProjectId,
+                              weeklyInsights: weeklyInsights,
+                              onExportProject: () async {
+                                HapticFeedback.lightImpact();
+                                final projects = ref
+                                    .read(projectsProvider)
+                                    .valueOrNull;
+                                final metrics = ref
+                                    .read(reportMetricsProvider)
+                                    .valueOrNull;
+                                final selectedProject = projects
+                                    ?.where(
+                                      (project) =>
+                                          project.id == currentProjectId,
+                                    )
+                                    .firstOrNull;
+                                if (selectedProject == null ||
+                                    metrics == null) {
+                                  return;
+                                }
+                                await _export(
+                                  l10n: l10n,
+                                  project: selectedProject,
+                                  metrics: metrics,
+                                  currency: currency,
+                                );
+                              },
+                              onExportWeekly: () async {
+                                HapticFeedback.lightImpact();
+                                if (weeklyInsights == null) {
+                                  return;
+                                }
+                                await _exportWeekly(
+                                  l10n: l10n,
+                                  insights: weeklyInsights,
+                                  currency: currency,
+                                );
+                              },
+                              onExportCombined: () async {
+                                HapticFeedback.lightImpact();
+                                final projects = ref
+                                    .read(projectsProvider)
+                                    .valueOrNull;
+                                final metrics = ref
+                                    .read(reportMetricsProvider)
+                                    .valueOrNull;
+                                final selectedProject = projects
+                                    ?.where(
+                                      (project) =>
+                                          project.id == currentProjectId,
+                                    )
+                                    .firstOrNull;
+                                if (selectedProject == null ||
+                                    metrics == null ||
+                                    weeklyInsights == null) {
+                                  return;
+                                }
+                                await _exportCombined(
+                                  l10n: l10n,
+                                  project: selectedProject,
+                                  metrics: metrics,
+                                  insights: weeklyInsights,
+                                  currency: currency,
+                                );
+                              },
+                              onOpenEntitySummary: () {
+                                HapticFeedback.lightImpact();
+                                context.push(AppRoutes.entitySummaryPath());
+                              },
+                            )
+                          : null;
+
+                      if (actions == null) {
+                        return title;
+                      }
+
+                      if (constraints.maxWidth < 560) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            AppBackButton(fallbackRoute: fallbackRoute),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                l10n.t('reports'),
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.5,
-                                      color: AppColors.textDark,
-                                    ),
-                              ),
-                            ),
+                            title,
+                            const SizedBox(height: 12),
+                            actions,
                           ],
-                        ),
-                      ),
-                      if (hasWorkspace && currentProjectId != null)
-                        _ExportButton(
-                          label: l10n.t('exportPdf'),
-                          onTap: () async {
-                            HapticFeedback.lightImpact();
-                            final projects = ref
-                                .read(projectsProvider)
-                                .valueOrNull;
-                            final metrics = ref
-                                .read(reportMetricsProvider)
-                                .valueOrNull;
-                            final selectedProject = projects
-                                ?.where(
-                                  (project) => project.id == currentProjectId,
-                                )
-                                .firstOrNull;
-                            if (selectedProject == null || metrics == null) {
-                              return;
-                            }
-                            await _export(
-                              l10n: l10n,
-                              project: selectedProject,
-                              metrics: metrics,
-                              currency: currency,
-                            );
-                          },
-                        ),
-                    ],
+                        );
+                      }
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: title),
+                          const SizedBox(width: 16),
+                          Flexible(child: actions),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -596,6 +535,84 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReportsHeaderTitle extends StatelessWidget {
+  const _ReportsHeaderTitle({required this.fallbackRoute, required this.title});
+
+  final String fallbackRoute;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        AppBackButton(fallbackRoute: fallbackRoute),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: AppColors.textDark,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportsHeaderActions extends StatelessWidget {
+  const _ReportsHeaderActions({
+    required this.currentProjectId,
+    required this.weeklyInsights,
+    required this.onExportProject,
+    required this.onExportWeekly,
+    required this.onExportCombined,
+    required this.onOpenEntitySummary,
+  });
+
+  final String? currentProjectId;
+  final DashboardWeeklyInsights? weeklyInsights;
+  final VoidCallback onExportProject;
+  final VoidCallback onExportWeekly;
+  final VoidCallback onExportCombined;
+  final VoidCallback onOpenEntitySummary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          if (currentProjectId != null)
+            _ExportButton(label: l10n.t('exportPdf'), onTap: onExportProject),
+          if (currentProjectId != null) const SizedBox(width: 8),
+          if (weeklyInsights != null)
+            _ExportButton(
+              label: l10n.t('exportWeeklyReport'),
+              onTap: onExportWeekly,
+            ),
+          if (weeklyInsights != null && currentProjectId != null)
+            const SizedBox(width: 8),
+          if (weeklyInsights != null && currentProjectId != null)
+            _ExportButton(
+              label: l10n.t('exportCombinedReport'),
+              onTap: onExportCombined,
+            ),
+          const SizedBox(width: 8),
+          _ExportButton(
+            label: l10n.t('entitySummary'),
+            onTap: onOpenEntitySummary,
+          ),
+        ],
       ),
     );
   }

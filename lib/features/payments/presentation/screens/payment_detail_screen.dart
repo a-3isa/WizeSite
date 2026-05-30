@@ -2,13 +2,17 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -25,10 +29,33 @@ class PaymentDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final paymentAsync = ref.watch(paymentDetailsProvider(paymentId));
+    final storageUploadService = ref.read(storageUploadServiceProvider);
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
+
+    Future<void> openAttachment(Attachment attachment) async {
+      try {
+        final rawUrl = attachment.downloadUrl?.trim();
+        final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
+            ? rawUrl
+            : await storageUploadService.getDownloadUrl(attachment.storagePath);
+        final launched = await launchUrlString(
+          downloadUrl,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched) {
+          throw Exception('Could not open attachment.');
+        }
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+
     return AppBackScope(
       fallbackRoute: AppRoutes.payments,
       child: Scaffold(
@@ -100,6 +127,35 @@ class PaymentDetailScreen extends ConsumerWidget {
                             },
                           ),
                         ),
+                        if (payment.attachments.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Attachments',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Column(
+                            children: payment.attachments
+                                .map(
+                                  (attachment) => Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      child: AttachmentTile(
+                                        attachment: attachment,
+                                        onOpen: () =>
+                                            openAttachment(attachment),
+                                        onDownload: () =>
+                                            openAttachment(attachment),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
                       ],
                     ),
                   ),

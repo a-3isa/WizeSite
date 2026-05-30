@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,14 @@ abstract interface class PaymentRepository {
   Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
   });
@@ -27,8 +36,14 @@ abstract interface class PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? projectTotalPaymentsBefore,
+    List<Attachment>? attachments,
   });
 
   Future<void> updatePayment({
@@ -36,7 +51,13 @@ abstract interface class PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    List<Attachment>? attachments,
   });
 
   Future<MutationResult> archivePayment(String paymentId);
@@ -109,6 +130,14 @@ class FirebasePaymentRepository implements PaymentRepository {
   Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
   }) async {
@@ -118,6 +147,26 @@ class FirebasePaymentRepository implements PaymentRepository {
         .where('isArchived', isEqualTo: false);
     if (projectId != null && projectId.isNotEmpty) {
       query = query.where('projectId', isEqualTo: projectId);
+    }
+    if (entityId != null && entityId.isNotEmpty) {
+      query = query.where('entityId', isEqualTo: entityId);
+    } else if (entityName != null && entityName.trim().isNotEmpty) {
+      query = query.where('entityName', isEqualTo: entityName.trim());
+    }
+    if (entityType != null && entityType.isNotEmpty) {
+      query = query.where('entityType', isEqualTo: entityType);
+    }
+    if (paymentMethod != null && paymentMethod.isNotEmpty) {
+      query = query.where('paymentMethod', isEqualTo: paymentMethod);
+    }
+    if (paymentStatus != null && paymentStatus.isNotEmpty) {
+      query = query.where('paymentStatus', isEqualTo: paymentStatus);
+    }
+    if (startDate != null) {
+      query = query.where('date', isGreaterThanOrEqualTo: startDate);
+    }
+    if (endDate != null) {
+      query = query.where('date', isLessThanOrEqualTo: endDate);
     }
     query = query.orderBy('date', descending: true).limit(pageSize);
 
@@ -130,13 +179,28 @@ class FirebasePaymentRepository implements PaymentRepository {
         .map((doc) => PaymentRecord.fromMap(doc.id, doc.data()))
         .toList();
     final actions = await _queue.list();
-    final mergedItems = _applyPendingPayments(
-      baseItems: items,
-      actions: actions,
-      workspaceId: workspaceId,
-      projectId: projectId,
-      includePendingCreates: cursor == null,
-    );
+    final mergedItems =
+        _applyPendingPayments(
+              baseItems: items,
+              actions: actions,
+              workspaceId: workspaceId,
+              projectId: projectId,
+              includePendingCreates: cursor == null,
+            )
+            .where(
+              (payment) => _matchesPaymentFilters(
+                payment,
+                entityId: entityId,
+                entityName: entityName,
+                entityType: entityType,
+                paymentMethod: paymentMethod,
+                paymentStatus: paymentStatus,
+                searchText: searchText,
+                startDate: startDate,
+                endDate: endDate,
+              ),
+            )
+            .toList(growable: false);
 
     return FirestorePage<PaymentRecord>(
       items: mergedItems,
@@ -162,8 +226,14 @@ class FirebasePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? projectTotalPaymentsBefore,
+    List<Attachment>? attachments,
   }) async {
     final resolvedProjectTotalPaymentsBefore =
         await _projectPaymentBaseline(
@@ -185,8 +255,14 @@ class FirebasePaymentRepository implements PaymentRepository {
       amount: amount,
       date: date,
       paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus,
+      description: description,
       notes: notes,
+      entityId: entityId,
+      entityName: entityName,
+      entityType: entityType,
       projectTotalPaymentsBefore: resolvedProjectTotalPaymentsBefore,
+      attachments: attachments?.map((item) => item.toMap()).toList(),
     );
   }
 
@@ -255,7 +331,13 @@ class FirebasePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    List<Attachment>? attachments,
   }) async {
     final payment = await getPayment(paymentId);
     if (payment == null) {
@@ -268,7 +350,15 @@ class FirebasePaymentRepository implements PaymentRepository {
       amount: amount,
       date: date,
       paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus,
+      description: description,
       notes: notes,
+      entityId: entityId,
+      entityName: entityName,
+      entityType: entityType,
+      attachments:
+          attachments?.map((item) => item.toMap()).toList() ??
+          payment.attachments.map((item) => item.toMap()).toList(),
       previousAmount: payment.amount,
       previousDate: payment.date,
     );
@@ -346,7 +436,22 @@ class FirebasePaymentRepository implements PaymentRepository {
             current.date,
         paymentMethod:
             '${action.payload['paymentMethod'] ?? current.paymentMethod}',
+        paymentStatus:
+            '${action.payload['paymentStatus'] ?? current.paymentStatus}',
+        description: '${action.payload['description'] ?? current.description}',
         notes: '${action.payload['notes'] ?? current.notes}',
+        entityId:
+            '${action.payload['entityId'] ?? current.entityId ?? ''}'.isNotEmpty
+            ? '${action.payload['entityId'] ?? current.entityId ?? ''}'
+            : null,
+        entityName: '${action.payload['entityName'] ?? current.entityName}',
+        entityType: '${action.payload['entityType'] ?? current.entityType}',
+        attachments:
+            (action.payload['attachments'] as List<dynamic>?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(Attachment.fromMap)
+                .toList() ??
+            current.attachments,
         isArchived: current.isArchived,
         clientMutationId: current.clientMutationId,
       );
@@ -389,6 +494,65 @@ class FirebasePaymentRepository implements PaymentRepository {
     return result;
   }
 
+  bool _matchesPaymentFilters(
+    PaymentRecord payment, {
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    if (entityId != null &&
+        entityId.isNotEmpty &&
+        payment.entityId != entityId) {
+      return false;
+    }
+    final normalizedEntityName = entityName?.trim().toLowerCase() ?? '';
+    if ((entityId == null || entityId.isEmpty) &&
+        normalizedEntityName.isNotEmpty &&
+        payment.entityName.trim().toLowerCase() != normalizedEntityName) {
+      return false;
+    }
+    if (entityType != null &&
+        entityType.isNotEmpty &&
+        payment.entityType != entityType) {
+      return false;
+    }
+    if (paymentMethod != null &&
+        paymentMethod.isNotEmpty &&
+        payment.paymentMethod.toLowerCase() != paymentMethod.toLowerCase()) {
+      return false;
+    }
+    if (paymentStatus != null &&
+        paymentStatus.isNotEmpty &&
+        payment.paymentStatus.toLowerCase() != paymentStatus.toLowerCase()) {
+      return false;
+    }
+    final normalizedSearch = searchText?.trim().toLowerCase() ?? '';
+    if (normalizedSearch.isNotEmpty &&
+        !_containsAnyPaymentText(payment, normalizedSearch)) {
+      return false;
+    }
+    if (startDate != null && payment.date.isBefore(startDate)) {
+      return false;
+    }
+    if (endDate != null && payment.date.isAfter(endDate)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _containsAnyPaymentText(PaymentRecord payment, String searchText) {
+    return [
+      payment.entityName,
+      payment.description,
+      payment.notes,
+    ].any((value) => value.toLowerCase().contains(searchText));
+  }
+
   PaymentRecord _paymentFromCreateAction(OfflineAction action) {
     final payload = action.payload;
     final parsedDate = DateTime.tryParse('${payload['date'] ?? ''}');
@@ -399,7 +563,22 @@ class FirebasePaymentRepository implements PaymentRepository {
       amount: (payload['amount'] as num?)?.toDouble() ?? 0,
       date: parsedDate ?? action.createdAt,
       paymentMethod: '${payload['paymentMethod'] ?? 'cash'}',
+      paymentStatus: '${payload['paymentStatus'] ?? 'paid'}',
+      description: '${payload['description'] ?? payload['notes'] ?? ''}',
       notes: '${payload['notes'] ?? ''}',
+      entityId:
+          payload['entityId'] is String &&
+              (payload['entityId'] as String).isNotEmpty
+          ? payload['entityId'] as String
+          : null,
+      entityName: '${payload['entityName'] ?? ''}',
+      entityType: '${payload['entityType'] ?? 'other'}',
+      attachments:
+          (payload['attachments'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(Attachment.fromMap)
+              .toList() ??
+          const <Attachment>[],
       isArchived: false,
       clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );

@@ -2,7 +2,7 @@ name: buildtrack_app
 description: "Buildozer field-ready construction tracking app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -52,6 +52,7 @@ dependencies:
   hive_flutter: ^1.1.0
   record: ^6.1.2
   path_provider: ^2.1.5
+  url_launcher: ^6.1.10
   image_picker: ^1.2.0
   purchases_flutter: ^9.13.1
   pdf: ^3.11.3
@@ -67,7 +68,7 @@ dependencies:
   audioplayers: ^6.1.0
   permission_handler: ^12.0.1
   flutter_contacts: ^2.0.2
-
+  file_picker: ^10.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -91,7 +92,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

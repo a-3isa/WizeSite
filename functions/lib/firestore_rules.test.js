@@ -144,6 +144,35 @@ else {
                 userId: "member_1",
                 role: "member",
             });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "workspace_owner_admin_1"), {
+                workspaceId: "workspace_owner",
+                userId: "admin_1",
+                role: "admin",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "workspace_owner_accounting_1"), {
+                workspaceId: "workspace_owner",
+                userId: "accounting_1",
+                role: "accountingApproved",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "entity_summaries", "entity_summary_owner"), {
+                id: "entity_summary_owner",
+                workspaceId: "workspace_owner",
+                projectId: "project_owner",
+                entityId: "entity_1",
+                entityName: "Acme Materials",
+                entityType: "supplier",
+                totalExpenses: 100,
+                totalPayments: 25,
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "attachments", "attachment_owner"), {
+                id: "attachment_owner",
+                workspaceId: "workspace_owner",
+                ownerType: "expense",
+                ownerId: "expense_owner",
+                fileName: "receipt.pdf",
+                storagePath: "attachments/owner/receipt.pdf",
+                contentType: "application/pdf",
+            });
         });
     }
     node_test_1.default.before(async () => {
@@ -193,6 +222,19 @@ else {
         await seedBaseData();
         const memberDb = env.authenticatedContext("member_1").firestore();
         await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(memberDb, "projects", "project_owner")));
+    });
+    (0, node_test_1.default)("ordinary members cannot read role-restricted accounting summaries or attachments", async () => {
+        await seedBaseData();
+        const memberDb = env.authenticatedContext("member_1").firestore();
+        await (0, rules_unit_testing_1.assertFails)((0, firestore_1.getDoc)((0, firestore_1.doc)(memberDb, "entity_summaries", "entity_summary_owner")));
+        await (0, rules_unit_testing_1.assertFails)((0, firestore_1.getDoc)((0, firestore_1.doc)(memberDb, "attachments", "attachment_owner")));
+    });
+    (0, node_test_1.default)("accounting-approved roles can read role-restricted summaries and attachments", async () => {
+        await seedBaseData();
+        const adminDb = env.authenticatedContext("admin_1").firestore();
+        const accountingDb = env.authenticatedContext("accounting_1").firestore();
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(adminDb, "entity_summaries", "entity_summary_owner")));
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(accountingDb, "attachments", "attachment_owner")));
     });
     (0, node_test_1.default)("workspace owner can add members", async () => {
         await seedBaseData();

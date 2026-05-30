@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_limits.dart';
@@ -5,6 +7,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
@@ -36,6 +39,21 @@ class DashboardScreen extends ConsumerWidget {
     final summaryAsync = workspaceId == null
         ? const AsyncValue.data(<String, num>{})
         : ref.watch(dashboardSummaryProvider(workspaceId));
+    final weeklySummaryAsync = workspaceId == null
+        ? const AsyncValue.data(<String, num>{})
+        : ref.watch(dashboardWeeklySummaryProvider(workspaceId));
+    final weeklyInsightsAsync = workspaceId == null
+        ? AsyncValue.data(
+            DashboardWeeklyInsights(
+              topEntity: 'Unassigned',
+              topCategory: 'Unassigned',
+              laborTotal: 0,
+              equipmentTotal: 0,
+              paymentSummary: {},
+              recentTransactions: [],
+            ),
+          )
+        : ref.watch(dashboardWeeklyInsightsProvider(workspaceId));
 
     return Scaffold(
       appBar: AppBar(
@@ -71,6 +89,8 @@ class DashboardScreen extends ConsumerWidget {
                   'offlineSyncFailed',
                   params: {'count': '$deadLetterCount'},
                 ),
+                actionLabel: l10n.t('retry'),
+                onAction: () => _retryOfflineWork(ref),
               ),
               const SizedBox(height: 12),
             ] else if (pendingSyncCount > 0) ...[
@@ -81,6 +101,8 @@ class DashboardScreen extends ConsumerWidget {
                   'offlineSyncPending',
                   params: {'count': '$pendingSyncCount'},
                 ),
+                actionLabel: l10n.t('retry'),
+                onAction: () => _retryOfflineWork(ref),
               ),
               const SizedBox(height: 12),
             ],
@@ -177,6 +199,176 @@ class DashboardScreen extends ConsumerWidget {
               loading: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 24),
+            weeklySummaryAsync.when(
+              data: (weeklySummary) {
+                if (weeklySummary.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SectionHeader(title: l10n.t('weeklySummary')),
+                    const SizedBox(height: 16),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      childAspectRatio: 1.4,
+                      children: [
+                        MetricCard(
+                          label: l10n.t('totalExpenses'),
+                          value: Formatters.money(
+                            weeklySummary['weeklyExpenses'] ?? 0,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
+                          color: AppColors.danger,
+                          icon: Icons.trending_down,
+                        ),
+                        MetricCard(
+                          label: l10n.t('totalIncome'),
+                          value: Formatters.money(
+                            weeklySummary['weeklyIncome'] ?? 0,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
+                          color: AppColors.success,
+                          icon: Icons.trending_up,
+                        ),
+                        MetricCard(
+                          label: l10n.t('netProfit'),
+                          value: Formatters.money(
+                            weeklySummary['weeklyNet'] ?? 0,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
+                          color: (weeklySummary['weeklyNet'] ?? 0) >= 0
+                              ? AppColors.success
+                              : AppColors.danger,
+                          icon: Icons.account_balance_wallet_outlined,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
+            ),
+            weeklyInsightsAsync.when(
+              data: (insights) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SectionHeader(title: l10n.t('weeklyInsights')),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 1.4,
+                    children: [
+                      MetricCard(
+                        label: l10n.t('topEntity'),
+                        value: insights.topEntity,
+                        color: AppColors.surfaceSolid,
+                        icon: Icons.business_outlined,
+                      ),
+                      MetricCard(
+                        label: l10n.t('topCategory'),
+                        value: insights.topCategory,
+                        color: AppColors.surfaceSolid,
+                        icon: Icons.category_outlined,
+                      ),
+                      MetricCard(
+                        label: l10n.t('laborExpenses'),
+                        value: Formatters.money(
+                          insights.laborTotal,
+                          currencyCode: currency,
+                          locale: locale,
+                        ),
+                        color: AppColors.warning,
+                        icon: Icons.construction_outlined,
+                      ),
+                      MetricCard(
+                        label: l10n.t('equipmentExpenses'),
+                        value: Formatters.money(
+                          insights.equipmentTotal,
+                          currencyCode: currency,
+                          locale: locale,
+                        ),
+                        color: AppColors.constructionOrange,
+                        icon: Icons.engineering_outlined,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (insights.paymentSummary.isNotEmpty) ...[
+                    SectionHeader(title: l10n.t('paymentBreakdown')),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: insights.paymentSummary.entries
+                          .map(
+                            (entry) => MetricCard(
+                              label: entry.key,
+                              value: Formatters.money(
+                                entry.value,
+                                currencyCode: currency,
+                                locale: locale,
+                              ),
+                              color: AppColors.surfaceSolid,
+                              icon: Icons.payment_outlined,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (insights.recentTransactions.isNotEmpty) ...[
+                    SectionHeader(title: l10n.t('recentTransactions')),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: insights.recentTransactions.map((transaction) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            transaction.type == 'payment'
+                                ? Icons.payments_outlined
+                                : Icons.receipt_long_outlined,
+                            color: AppColors.textBody,
+                          ),
+                          title: Text(transaction.title),
+                          subtitle: Text(
+                            Formatters.date(transaction.date, locale: locale),
+                          ),
+                          trailing: Text(
+                            Formatters.money(
+                              transaction.amount,
+                              currencyCode: currency,
+                              locale: locale,
+                            ),
+                            style: TextStyle(
+                              color: transaction.type == 'payment'
+                                  ? AppColors.success
+                                  : AppColors.danger,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ],
+              ),
+              loading: () => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
+            ),
             SectionHeader(title: l10n.t('quickActions')),
             const SizedBox(height: 16),
             Row(
@@ -334,7 +526,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     )
                   : const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
+              error: (error, stack) => const SizedBox.shrink(),
               loading: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 32),
@@ -382,6 +574,12 @@ class DashboardScreen extends ConsumerWidget {
     }
     context.push(route);
   }
+
+  void _retryOfflineWork(WidgetRef ref) {
+    final coordinator = ref.read(offlineQueueCoordinatorProvider);
+    unawaited(coordinator.refreshCounts());
+    unawaited(coordinator.drainNow());
+  }
 }
 
 class _QueueStatusCard extends StatelessWidget {
@@ -389,11 +587,15 @@ class _QueueStatusCard extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.message,
+    this.actionLabel,
+    this.onAction,
   });
 
   final Color color;
   final IconData icon;
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -417,6 +619,13 @@ class _QueueStatusCard extends StatelessWidget {
               ),
             ),
           ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
+          ],
         ],
       ),
     );

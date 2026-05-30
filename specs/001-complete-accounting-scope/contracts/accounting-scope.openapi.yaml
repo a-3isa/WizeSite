@@ -1,0 +1,535 @@
+openapi: 3.1.0
+info:
+  title: Complete Accounting Scope Contracts
+  version: 0.1.0
+  description: >
+    Logical contracts for user-facing accounting operations. These describe
+    expected behavior and payloads for app/backend boundaries and tests; they
+    do not require changing the existing transport style.
+servers:
+  - url: https://app.local/contracts
+    description: Logical contract surface for planning and tests
+security:
+  - WorkspaceAuth: []
+paths:
+  /workspaces/{workspaceId}/expenses:
+    get:
+      summary: List expenses with pagination, filters, and search
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/Category'
+        - $ref: '#/components/parameters/EntityId'
+        - $ref: '#/components/parameters/EntityType'
+        - $ref: '#/components/parameters/PaymentMethod'
+        - $ref: '#/components/parameters/PaymentStatus'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageCursor'
+      responses:
+        '200':
+          description: Paginated expense list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpensePage'
+    post:
+      summary: Create an expense with optional offline and attachment metadata
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseInput'
+      responses:
+        '201':
+          description: Expense created or queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResult'
+  /workspaces/{workspaceId}/expenses/{expenseId}:
+    patch:
+      summary: Update an expense using last-saved-change-wins semantics
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: expenseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseInput'
+      responses:
+        '200':
+          description: Expense updated or queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResult'
+  /workspaces/{workspaceId}/payments:
+    get:
+      summary: List payments with pagination, filters, and search
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/EntityId'
+        - $ref: '#/components/parameters/EntityType'
+        - $ref: '#/components/parameters/PaymentMethod'
+        - $ref: '#/components/parameters/PaymentStatus'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageCursor'
+      responses:
+        '200':
+          description: Paginated payment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPage'
+    post:
+      summary: Create a payment with optional offline and attachment metadata
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInput'
+      responses:
+        '201':
+          description: Payment created or queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutationResult'
+  /workspaces/{workspaceId}/entities:
+    get:
+      summary: Search reusable entities with recent-first ordering
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/EntityType'
+        - name: query
+          in: query
+          schema:
+            type: string
+        - name: recentFirst
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Matching entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entity'
+    post:
+      summary: Create or reuse an entity by normalized workspace/type/name
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntityInput'
+      responses:
+        '200':
+          description: Existing or newly created entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entity'
+  /workspaces/{workspaceId}/summaries/weekly:
+    get:
+      summary: Get maintained weekly dashboard summary
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/ProjectId'
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Weekly summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklySummary'
+  /workspaces/{workspaceId}/summaries/entities:
+    get:
+      summary: Get maintained entity aggregation summaries
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/ProjectId'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/EntityType'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Entity summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntitySummary'
+  /workspaces/{workspaceId}/reports:
+    post:
+      summary: Generate a role-restricted accounting report
+      security:
+        - AccountingRole: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResult'
+        '403':
+          description: User lacks owner, admin, or accounting-approved role
+components:
+  securitySchemes:
+    WorkspaceAuth:
+      type: http
+      scheme: bearer
+    AccountingRole:
+      type: http
+      scheme: bearer
+      description: Requires owner, admin, or accounting-approved workspace role.
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    ProjectId:
+      name: projectId
+      in: query
+      schema:
+        type: string
+    DateFrom:
+      name: dateFrom
+      in: query
+      schema:
+        type: string
+        format: date
+    DateTo:
+      name: dateTo
+      in: query
+      schema:
+        type: string
+        format: date
+    Category:
+      name: category
+      in: query
+      schema:
+        $ref: '#/components/schemas/ExpenseCategory'
+    EntityId:
+      name: entityId
+      in: query
+      schema:
+        type: string
+    EntityType:
+      name: entityType
+      in: query
+      schema:
+        $ref: '#/components/schemas/EntityType'
+    PaymentMethod:
+      name: paymentMethod
+      in: query
+      schema:
+        type: string
+    PaymentStatus:
+      name: paymentStatus
+      in: query
+      schema:
+        type: string
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+    PageCursor:
+      name: pageCursor
+      in: query
+      schema:
+        type: string
+  schemas:
+    ExpenseCategory:
+      type: string
+      enum: [materials, labor, transport, equipment, storage, rentals, payments, other]
+    EntityType:
+      type: string
+      enum: [supplier, vendor, worker, contractor, transportProvider, equipmentProvider, other]
+    AttachmentStatus:
+      type: string
+      enum: [pending, uploading, uploaded, failed, missingLocalFile]
+    Attachment:
+      type: object
+      required: [id, fileName, contentType, size, uploadStatus]
+      properties:
+        id:
+          type: string
+        fileName:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+        storagePath:
+          type: string
+        downloadUrl:
+          type: string
+        localPath:
+          type: string
+        uploadStatus:
+          $ref: '#/components/schemas/AttachmentStatus'
+    ExpenseInput:
+      type: object
+      required: [projectId, category, amount, currency, date, paymentMethod, paymentStatus]
+      properties:
+        projectId:
+          type: string
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        entityId:
+          type: string
+        entityName:
+          type: string
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        purpose:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+        date:
+          type: string
+          format: date-time
+        paymentMethod:
+          type: string
+        paymentStatus:
+          type: string
+        notes:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+    PaymentInput:
+      type: object
+      required: [projectId, amount, currency, date, paymentMethod, paymentStatus]
+      properties:
+        projectId:
+          type: string
+        entityId:
+          type: string
+        entityName:
+          type: string
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+        date:
+          type: string
+          format: date-time
+        paymentMethod:
+          type: string
+        paymentStatus:
+          type: string
+        description:
+          type: string
+        notes:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+    EntityInput:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/EntityType'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+    Entity:
+      allOf:
+        - $ref: '#/components/schemas/EntityInput'
+        - type: object
+          required: [id, normalizedName, workspaceId]
+          properties:
+            id:
+              type: string
+            workspaceId:
+              type: string
+            normalizedName:
+              type: string
+            lastUsedAt:
+              type: string
+              format: date-time
+    EntitySummary:
+      type: object
+      required: [entityId, entityName, entityType, totalExpenses, totalPayments, transactionCount]
+      properties:
+        entityId:
+          type: string
+        entityName:
+          type: string
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        totalExpenses:
+          type: number
+        totalPayments:
+          type: number
+        totalPaid:
+          type: number
+        remainingBalance:
+          type: number
+        transactionCount:
+          type: integer
+        attachmentCount:
+          type: integer
+        latestTransactionDate:
+          type: string
+          format: date-time
+    WeeklySummary:
+      type: object
+      properties:
+        weekStart:
+          type: string
+          format: date
+        weekEnd:
+          type: string
+          format: date
+        totalExpenses:
+          type: number
+        totalPayments:
+          type: number
+        topEntity:
+          type: string
+        topCategory:
+          type: string
+        recentTransactionRefs:
+          type: array
+          items:
+            type: string
+    ReportRequest:
+      type: object
+      required: [reportType, dateRange]
+      properties:
+        reportType:
+          type: string
+          enum: [expenses, payments, entities, workers, contractors, daily, weekly, filtered, combined]
+        projectId:
+          type: string
+        dateRange:
+          type: object
+          required: [from, to]
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        filters:
+          type: object
+          additionalProperties: true
+        selectedSections:
+          type: array
+          items:
+            type: string
+    ReportResult:
+      type: object
+      properties:
+        reportId:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        title:
+          type: string
+        totals:
+          type: object
+          additionalProperties: true
+    MutationResult:
+      type: object
+      required: [id, queued]
+      properties:
+        id:
+          type: string
+        queued:
+          type: boolean
+        syncStatus:
+          type: string
+          enum: [synced, pending, failed]
+    ExpensePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseInput'
+        nextPageCursor:
+          type: string
+    PaymentPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+        nextPageCursor:
+          type: string
