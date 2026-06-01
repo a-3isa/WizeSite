@@ -49,24 +49,33 @@ class SessionRestoreService {
   }
 
   Future<String?> _resolveWorkspaceId(User user) async {
-    final membershipSnap = await _firestore
-        .collection('memberships')
-        .where('userId', isEqualTo: user.uid)
-        .limit(1)
-        .get();
-    if (membershipSnap.docs.isNotEmpty) {
-      final workspaceId =
-          membershipSnap.docs.first.data()['workspaceId'] as String?;
+    try {
+      final membershipSnap = await _firestore
+          .collection('memberships')
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      if (membershipSnap.docs.isNotEmpty) {
+        final workspaceId =
+            membershipSnap.docs.first.data()['workspaceId'] as String?;
+        if (workspaceId != null && workspaceId.isNotEmpty) {
+          return workspaceId;
+        }
+      }
+
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final workspaceId = userDoc.data()?['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
+        await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
         return workspaceId;
       }
-    }
-
-    final userDoc = await _firestore.collection('users').doc(user.uid).get();
-    final workspaceId = userDoc.data()?['workspaceId'] as String?;
-    if (workspaceId != null && workspaceId.isNotEmpty) {
-      await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
-      return workspaceId;
+    } catch (error, stackTrace) {
+      await _telemetry.recordError(
+        error,
+        stackTrace,
+        reason: 'session_restore.resolve_workspace',
+      );
+      // Firestore platform channel unavailable; fall through to callable.
     }
 
     return _bootstrapWorkspaceId();

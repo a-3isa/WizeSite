@@ -26,7 +26,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    final restored = await ref.read(sessionRestoreServiceProvider).restore();
+    SessionRestoreResult? restored;
+    try {
+      restored = await ref.read(sessionRestoreServiceProvider).restore();
+    } catch (_) {
+      // Firestore platform channel unavailable — fall through to login.
+    }
     if (!mounted) return;
 
     if (restored == null) {
