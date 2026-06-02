@@ -104,4 +104,30 @@ void main() {
       expect(summary['weeklyExpenses'], 100);
     },
   );
+
+  test(
+    'weekly insights normalizes empty names and raw category keys',
+    () async {
+      final now = DateTime.now();
+      final date = DateTime(now.year, now.month, now.day);
+      await firestore.collection('expenses').doc('expense_1').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 100,
+        'category': 'labor',
+        'entityName': '',
+        'paymentMethod': 'cash',
+        'date': date,
+      });
+
+      final insights = await container.read(
+        dashboardWeeklyInsightsProvider('workspace_1').future,
+      );
+
+      expect(insights.topEntity, 'unassigned');
+      expect(insights.topCategory, 'labor');
+      expect(insights.paymentSummary.keys, contains('cash'));
+      expect(insights.recentTransactions.single.title, 'unassigned');
+    },
+  );
 }

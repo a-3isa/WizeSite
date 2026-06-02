@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -44,9 +45,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _loading = true;
       _error = null;
     });
+    final auth = ref.read(firebaseAuthProvider);
     try {
-      final auth = ref.read(firebaseAuthProvider);
-
       final cred = await auth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -56,9 +56,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         throw Exception('User not found');
       }
 
-      final workspaceId = await ref
-          .read(workspaceMutationServiceProvider)
-          .ensureUserWorkspaceBootstrap();
+      final workspaceId =
+          (await ref
+                  .read(workspaceMutationServiceProvider)
+                  .ensureUserWorkspaceBootstrap())
+              .trim();
+      if (workspaceId.isEmpty) {
+        throw const CallableClientException('Workspace bootstrap failed.');
+      }
       ref.read(activeUserIdProvider.notifier).state = user.uid;
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
 
@@ -67,10 +72,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
+        await _clearFailedSignInSession(auth);
         setState(() => _error = _authErrorMessage(l10n, e.code));
       }
     } catch (_) {
       if (mounted) {
+        await _clearFailedSignInSession(auth);
         setState(() => _error = _authErrorMessage(l10n, null));
       }
     } finally {
@@ -102,6 +109,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _clearFailedSignInSession(
+    FirebaseAuth auth, {
+    bool includeGoogle = false,
+  }) async {
+    ref.read(activeUserIdProvider.notifier).state = null;
+    ref.read(activeWorkspaceIdProvider.notifier).state = null;
+    try {
+      if (includeGoogle) {
+        await ref.read(googleAuthServiceProvider).signOut();
+      }
+      await auth.signOut();
+    } catch (_) {
+      // Keep the visible login failure instead of replacing it with sign-out noise.
+    }
+  }
+
   Future<void> _loginWithGoogle() async {
     final l10n = AppLocalizations.of(context);
     setState(() {
@@ -109,8 +132,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    final auth = ref.read(firebaseAuthProvider);
     try {
-      final auth = ref.read(firebaseAuthProvider);
       final credential = await ref
           .read(googleAuthServiceProvider)
           .signInWithGoogle(auth: auth);
@@ -126,9 +149,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
 
-      final workspaceId = await ref
-          .read(workspaceMutationServiceProvider)
-          .ensureUserWorkspaceBootstrap();
+      final workspaceId =
+          (await ref
+                  .read(workspaceMutationServiceProvider)
+                  .ensureUserWorkspaceBootstrap())
+              .trim();
+      if (workspaceId.isEmpty) {
+        throw const CallableClientException('Workspace bootstrap failed.');
+      }
       ref.read(activeUserIdProvider.notifier).state = user.uid;
       ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
 
@@ -137,10 +165,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
+        await _clearFailedSignInSession(auth, includeGoogle: true);
         setState(() => _error = _authErrorMessage(l10n, e.code));
       }
     } catch (_) {
       if (mounted) {
+        await _clearFailedSignInSession(auth, includeGoogle: true);
         setState(() => _error = _authErrorMessage(l10n, null));
       }
     } finally {

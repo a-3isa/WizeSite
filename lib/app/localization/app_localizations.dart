@@ -231,6 +231,8 @@ class AppLocalizations {
     'paymentStatusUnpaid': 'Unpaid',
     'paymentStatusPartial': 'Partial',
     'paymentStatusPaid': 'Paid',
+    'paymentStatusRefunded': 'Refunded',
+    'paymentStatusCancelled': 'Cancelled',
     'attachmentOpenDenied':
         'You do not have permission to open this attachment.',
     'attachmentMissing': 'Attachment file is missing.',
@@ -245,6 +247,7 @@ class AppLocalizations {
     'clearFilters': 'Clear filters',
     'supplierName': 'Supplier name',
     'entityName': 'Entity name',
+    'entityNameOptional': 'Entity name (optional)',
     'startDate': 'Start Date',
     'expectedEndDate': 'Expected End Date',
     'expectedEndDateOptional': 'Expected End Date: Optional',
@@ -350,8 +353,11 @@ class AppLocalizations {
     'quickEntry': 'Quick entry',
     'saveAndAddAnother': 'Save & add another',
     'weeklyInsights': 'Weekly insights',
+    'weeklySummary': 'Weekly summary',
     'topEntity': 'Top entity',
     'topCategory': 'Top category',
+    'laborExpenses': 'Labor expenses',
+    'equipmentExpenses': 'Equipment expenses',
     'laborSummary': 'Labor',
     'equipmentSummary': 'Equipment',
     'paymentBreakdown': 'Payment breakdown',
@@ -381,6 +387,8 @@ class AppLocalizations {
     'groupByRelativeDate': 'Group by relative date',
     'noFilterResults': 'No matching results.',
     'attachments': 'Attachments',
+    'attachment': 'Attachment',
+    'selectAttachments': 'Select attachments',
     'notificationsTitle': 'Notifications',
     'noNotificationsYet': 'No notifications yet.',
     'recordShortNote':
@@ -465,6 +473,9 @@ class AppLocalizations {
     'expenseCategoryMaterials': 'Materials',
     'expenseCategoryEquipment': 'Equipment',
     'expenseCategoryTransport': 'Transport',
+    'expenseCategoryStorage': 'Storage',
+    'expenseCategoryRentals': 'Rentals',
+    'expenseCategoryPayments': 'Payments',
     'expenseCategoryOther': 'Other',
     'projectStatusActive': 'Active',
     'projectStatusPaused': 'Paused',
@@ -677,25 +688,27 @@ class AppLocalizations {
     'contractValue': 'قيمة العقد',
     'location': 'الموقع',
     'description': 'الوصف',
-    'purpose': 'Purpose',
-    'paymentStatus': 'Payment Status',
-    'paymentStatusUnpaid': 'Unpaid',
-    'paymentStatusPartial': 'Partial',
-    'paymentStatusPaid': 'Paid',
-    'attachmentOpenDenied':
-        'You do not have permission to open this attachment.',
-    'attachmentMissing': 'Attachment file is missing.',
-    'attachmentPending': 'Attachment upload is pending.',
-    'attachmentCannotOpen': 'Attachment cannot be opened.',
-    'previewAttachment': 'Preview attachment',
-    'openAttachment': 'Open attachment',
-    'downloadAttachment': 'Download attachment',
-    'closePreview': 'Close preview',
+    'purpose': 'الغرض',
+    'paymentStatus': 'حالة الدفع',
+    'paymentStatusUnpaid': 'غير مدفوع',
+    'paymentStatusPartial': 'مدفوع جزئياً',
+    'paymentStatusPaid': 'مدفوع',
+    'paymentStatusRefunded': 'مستردة',
+    'paymentStatusCancelled': 'ملغاة',
+    'attachmentOpenDenied': 'ليس لديك صلاحية لفتح هذا المرفق.',
+    'attachmentMissing': 'ملف المرفق غير موجود.',
+    'attachmentPending': 'رفع المرفق قيد الانتظار.',
+    'attachmentCannotOpen': 'لا يمكن فتح المرفق.',
+    'previewAttachment': 'معاينة المرفق',
+    'openAttachment': 'فتح المرفق',
+    'downloadAttachment': 'تحميل المرفق',
+    'closePreview': 'إغلاق المعاينة',
     'budgetLimit': 'حد الميزانية',
     'filters': 'عوامل التصفية',
     'clearFilters': 'Clear filters',
     'supplierName': 'اسم المورد',
     'entityName': 'اسم الكيان',
+    'entityNameOptional': 'اسم الكيان (اختياري)',
     'startDate': 'تاريخ البداية',
     'expectedEndDate': 'تاريخ النهاية المتوقع',
     'expectedEndDateOptional': 'تاريخ النهاية المتوقع: اختياري',
@@ -801,8 +814,11 @@ class AppLocalizations {
     'quickEntry': 'إدخال سريع',
     'saveAndAddAnother': 'حفظ وإضافة آخر',
     'weeklyInsights': 'رؤى أسبوعية',
+    'weeklySummary': 'ملخص أسبوعي',
     'topEntity': 'أفضل كيان',
     'topCategory': 'أفضل فئة',
+    'laborExpenses': 'مصروفات العمالة',
+    'equipmentExpenses': 'مصروفات المعدات',
     'laborSummary': 'العمالة',
     'equipmentSummary': 'المعدات',
     'paymentBreakdown': 'تفصيل الدفع',
@@ -832,6 +848,8 @@ class AppLocalizations {
     'groupByRelativeDate': 'Group by relative date',
     'noFilterResults': 'No matching results.',
     'attachments': 'المرفقات',
+    'attachment': 'مرفق',
+    'selectAttachments': 'اختيار المرفقات',
     'notificationsTitle': 'الإشعارات',
     'noNotificationsYet': 'لا توجد إشعارات بعد.',
     'recordShortNote':
@@ -907,6 +925,9 @@ class AppLocalizations {
     'expenseCategoryMaterials': 'مواد',
     'expenseCategoryEquipment': 'معدات',
     'expenseCategoryTransport': 'نقل',
+    'expenseCategoryStorage': 'تخزين',
+    'expenseCategoryRentals': 'إيجارات',
+    'expenseCategoryPayments': 'دفعات',
     'expenseCategoryOther': 'أخرى',
     'projectStatusActive': 'نشط',
     'projectStatusPaused': 'متوقف',
@@ -985,6 +1006,12 @@ class AppLocalizations {
         return t('expenseCategoryEquipment');
       case 'transport':
         return t('expenseCategoryTransport');
+      case 'storage':
+        return t('expenseCategoryStorage');
+      case 'rentals':
+        return t('expenseCategoryRentals');
+      case 'payments':
+        return t('expenseCategoryPayments');
       case 'other':
         return t('expenseCategoryOther');
       default:
@@ -1013,6 +1040,10 @@ class AppLocalizations {
         return t('paymentStatusPartial');
       case 'paid':
         return t('paymentStatusPaid');
+      case 'refunded':
+        return t('paymentStatusRefunded');
+      case 'cancelled':
+        return t('paymentStatusCancelled');
       default:
         return status;
     }

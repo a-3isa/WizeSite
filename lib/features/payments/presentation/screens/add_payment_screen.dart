@@ -304,11 +304,9 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     if (_entityId != null && _entityId!.isNotEmpty) {
       return (id: _entityId, name: name);
     }
-    final entity = await ref.read(entityRepositoryProvider).ensureEntity(
-          workspaceId: workspaceId,
-          name: name,
-          type: type,
-        );
+    final entity = await ref
+        .read(entityRepositoryProvider)
+        .ensureEntity(workspaceId: workspaceId, name: name, type: type);
     return (id: entity?.id ?? _entityId, name: entity?.name ?? name);
   }
 
@@ -450,7 +448,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Attachments',
+                    l10n.t('attachments'),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
@@ -524,7 +522,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     ),
                   FilledButton.tonal(
                     onPressed: _loading ? null : _pickAttachments,
-                    child: const Text('Select attachments'),
+                    child: Text(l10n.t('selectAttachments')),
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)

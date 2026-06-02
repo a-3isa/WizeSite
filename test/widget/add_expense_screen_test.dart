@@ -132,4 +132,44 @@ void main() {
     expect(find.text('Payment method'), findsOneWidget);
     expect(find.text('Payment status'), findsOneWidget);
   });
+
+  testWidgets('AddExpenseScreen localizes attachment controls in Arabic', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          activeUserIdProvider.overrideWith((ref) => 'user_1'),
+          expenseRepositoryProvider.overrideWithValue(_FakeExpenseRepository()),
+          projectsProvider.overrideWith((ref) => Stream.value(const [])),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(
+              UserSettings.defaults(userId: 'user_1', email: 'user@test.com'),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          locale: Locale('ar'),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AddExpenseScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    expect(find.text('المرفقات'), findsOneWidget);
+    expect(find.text('اختيار المرفقات'), findsOneWidget);
+    expect(find.text('Attachments'), findsNothing);
+    expect(find.text('Select attachments'), findsNothing);
+  });
 }

@@ -45,8 +45,8 @@ class DashboardScreen extends ConsumerWidget {
     final weeklyInsightsAsync = workspaceId == null
         ? AsyncValue.data(
             DashboardWeeklyInsights(
-              topEntity: 'Unassigned',
-              topCategory: 'Unassigned',
+              topEntity: 'unassigned',
+              topCategory: 'unassigned',
               laborTotal: 0,
               equipmentTotal: 0,
               paymentSummary: {},
@@ -78,7 +78,7 @@ class DashboardScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-          child: ListView(
+        child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
             if (deadLetterCount > 0) ...[
@@ -274,13 +274,13 @@ class DashboardScreen extends ConsumerWidget {
                     children: [
                       MetricCard(
                         label: l10n.t('topEntity'),
-                        value: insights.topEntity,
+                        value: _entityLabel(l10n, insights.topEntity),
                         color: AppColors.surfaceSolid,
                         icon: Icons.business_outlined,
                       ),
                       MetricCard(
                         label: l10n.t('topCategory'),
-                        value: insights.topCategory,
+                        value: _categoryLabel(l10n, insights.topCategory),
                         color: AppColors.surfaceSolid,
                         icon: Icons.category_outlined,
                       ),
@@ -316,7 +316,7 @@ class DashboardScreen extends ConsumerWidget {
                       children: insights.paymentSummary.entries
                           .map(
                             (entry) => MetricCard(
-                              label: entry.key,
+                              label: _paymentMethodLabel(l10n, entry.key),
                               value: Formatters.money(
                                 entry.value,
                                 currencyCode: currency,
@@ -343,7 +343,7 @@ class DashboardScreen extends ConsumerWidget {
                                 : Icons.receipt_long_outlined,
                             color: AppColors.textBody,
                           ),
-                          title: Text(transaction.title),
+                          title: Text(_entityLabel(l10n, transaction.title)),
                           subtitle: Text(
                             Formatters.date(transaction.date, locale: locale),
                           ),
@@ -580,6 +580,22 @@ class DashboardScreen extends ConsumerWidget {
     unawaited(coordinator.refreshCounts());
     unawaited(coordinator.drainNow());
   }
+
+  String _entityLabel(AppLocalizations l10n, String value) {
+    return value == 'unassigned' ? l10n.t('unassigned') : value;
+  }
+
+  String _categoryLabel(AppLocalizations l10n, String value) {
+    return value == 'unassigned'
+        ? l10n.t('unassigned')
+        : l10n.expenseCategoryLabel(value);
+  }
+
+  String _paymentMethodLabel(AppLocalizations l10n, String value) {
+    return value.isEmpty
+        ? l10n.t('unassigned')
+        : l10n.paymentMethodLabel(value);
+  }
 }
 
 class _QueueStatusCard extends StatelessWidget {
@@ -621,10 +637,7 @@ class _QueueStatusCard extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(width: 10),
-            TextButton(
-              onPressed: onAction,
-              child: Text(actionLabel!),
-            ),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
           ],
         ],
       ),

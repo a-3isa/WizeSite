@@ -229,6 +229,51 @@ void main() {
     },
   );
 
+  testWidgets('AddPaymentScreen localizes attachment controls in Arabic', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          activeUserIdProvider.overrideWith((ref) => 'user_1'),
+          paymentRepositoryProvider.overrideWithValue(_FakePaymentRepository()),
+          projectsProvider.overrideWith((ref) => Stream.value([_project()])),
+          entitlementGuardProvider.overrideWithValue(
+            EntitlementGuardService(
+              subscriptionRepository: _FakeSubscriptionRepository(),
+              usageQuotaRepository: _FakeUsageQuotaRepository(),
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          locale: const Locale('ar'),
+          routerConfig: _router(),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('المرفقات'), findsOneWidget);
+    expect(find.text('اختيار المرفقات'), findsOneWidget);
+    expect(find.text('Attachments'), findsNothing);
+    expect(find.text('Select attachments'), findsNothing);
+  });
+
   testWidgets('AddPaymentScreen bypasses quota while limits are disabled', (
     tester,
   ) async {

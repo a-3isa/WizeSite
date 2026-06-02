@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -19,5 +20,19 @@ void main() {
         reason: 'Locale ${locale.languageCode} does not match keyset',
       );
     }
+  });
+
+  test('arabic accounting labels are translated and not raw fallback text', () {
+    final l10n = AppLocalizations(const Locale('ar'));
+
+    expect(l10n.t('weeklySummary'), 'ملخص أسبوعي');
+    expect(l10n.t('purpose'), 'الغرض');
+    expect(l10n.t('paymentStatus'), 'حالة الدفع');
+    expect(l10n.t('entityNameOptional'), 'اسم الكيان (اختياري)');
+    expect(l10n.t('selectAttachments'), 'اختيار المرفقات');
+    expect(l10n.t('attachment'), 'مرفق');
+    expect(l10n.paymentStatusLabel('unpaid'), 'غير مدفوع');
+    expect(l10n.expenseCategoryLabel('labor'), 'عمالة');
+    expect(l10n.expenseCategoryLabel('storage'), 'تخزين');
   });
 }

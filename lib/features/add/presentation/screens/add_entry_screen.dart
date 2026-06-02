@@ -275,11 +275,9 @@ class _ExpenseFormBodyState extends ConsumerState<_ExpenseFormBody> {
     if (_entityId != null && _entityId!.isNotEmpty) {
       return (id: _entityId, name: name);
     }
-    final entity = await ref.read(entityRepositoryProvider).ensureEntity(
-          workspaceId: workspaceId,
-          name: name,
-          type: type,
-        );
+    final entity = await ref
+        .read(entityRepositoryProvider)
+        .ensureEntity(workspaceId: workspaceId, name: name, type: type);
     return (id: entity?.id ?? _entityId, name: entity?.name ?? name);
   }
 
@@ -504,7 +502,10 @@ class _ExpenseFormBodyState extends ConsumerState<_ExpenseFormBody> {
               setState(() => _paymentStatus = value ?? _paymentStatus),
         ),
         const SizedBox(height: 12),
-        Text('Attachments', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          l10n.t('attachments'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 8),
         if (_pickedFiles.isNotEmpty)
           Column(
@@ -543,7 +544,7 @@ class _ExpenseFormBodyState extends ConsumerState<_ExpenseFormBody> {
         ],
         FilledButton.tonal(
           onPressed: _loading ? null : _pickAttachments,
-          child: const Text('Select attachments'),
+          child: Text(l10n.t('selectAttachments')),
         ),
         const SizedBox(height: 12),
         Row(

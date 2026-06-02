@@ -127,9 +127,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
         final data = doc.data();
         final amount = ((data['amount'] as num?) ?? 0).toDouble();
         final category = '${data['category'] ?? ''}'.trim();
-        final entityName =
-            '${data['entityName'] ?? data['supplierName'] ?? 'Unassigned'}'
-                .trim();
+        final entityName = _normalizedEntityName(
+          data['entityName'] ?? data['supplierName'],
+        );
         final paymentMethod = '${data['paymentMethod'] ?? 'Unknown'}'.trim();
         final date = parseDate(data['date']);
 
@@ -159,9 +159,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       for (final doc in payments) {
         final data = doc.data();
         final amount = ((data['amount'] as num?) ?? 0).toDouble();
-        final entityName =
-            '${data['entityName'] ?? data['supplierName'] ?? 'Unassigned'}'
-                .trim();
+        final entityName = _normalizedEntityName(
+          data['entityName'] ?? data['supplierName'],
+        );
         final paymentMethod = '${data['paymentMethod'] ?? 'Unknown'}'.trim();
         final date = parseDate(data['date']);
 
@@ -194,9 +194,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
         }
         final amount = ((payload['amount'] as num?) ?? 0).toDouble();
         final category = '${payload['category'] ?? ''}'.trim();
-        final entityName =
-            '${payload['entityName'] ?? payload['supplierName'] ?? 'Unassigned'}'
-                .trim();
+        final entityName = _normalizedEntityName(
+          payload['entityName'] ?? payload['supplierName'],
+        );
         final paymentMethod = '${payload['paymentMethod'] ?? 'Unknown'}'.trim();
 
         if (action.type == OfflineActionTypes.createExpense) {
@@ -234,9 +234,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       }
 
       final topCategory = categoryTotals.entries.toList().fold<String>(
-        'Unassigned',
+        'unassigned',
         (previous, entry) {
-          if (previous == 'Unassigned') {
+          if (previous == 'unassigned') {
             return entry.key.isEmpty ? previous : entry.key;
           }
           return (categoryTotals[previous] ?? 0) >= entry.value
@@ -245,9 +245,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
         },
       );
       final topEntity = entityTotals.entries.toList().fold<String>(
-        'Unassigned',
+        'unassigned',
         (previous, entry) {
-          if (previous == 'Unassigned') {
+          if (previous == 'unassigned') {
             return entry.key.isEmpty ? previous : entry.key;
           }
           return (entityTotals[previous] ?? 0) >= entry.value
@@ -290,6 +290,14 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       await queueSub.cancel();
     };
   });
+}
+
+String _normalizedEntityName(Object? value) {
+  if (value == null) {
+    return 'unassigned';
+  }
+  final name = '$value'.trim();
+  return name.isEmpty ? 'unassigned' : name;
 }
 
 Stream<Map<String, num>> _projectsSummaryStream({
