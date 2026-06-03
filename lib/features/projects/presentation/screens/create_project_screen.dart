@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -64,6 +65,13 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
           _nameController.text = project.name;
           _clientController.text = project.clientName;
           _contractController.text = project.contractValue.toStringAsFixed(2);
+          _locationController.text = project.location;
+          _descriptionController.text = project.description;
+          if (project.budgetLimit != null) {
+            _budgetController.text = project.budgetLimit!.toStringAsFixed(2);
+          }
+          if (project.startDate != null) _startDate = project.startDate!;
+          _endDate = project.expectedEndDate;
           _completion = project.completionPercentage;
           _status = project.status;
         });
@@ -101,10 +109,10 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       return;
     }
 
-    final contract = double.tryParse(_contractController.text.trim());
+    final contract = NumberParser.parseDouble(_contractController.text);
     if (_nameController.text.trim().isEmpty ||
         contract == null ||
-        contract <= 0) {
+        contract < 0) {
       setState(() => _error = l10n.t('fillRequiredFields'));
       return;
     }
@@ -129,7 +137,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: double.tryParse(_budgetController.text.trim()),
+              budgetLimit: NumberParser.parseDouble(_budgetController.text),
               completionPercentage: _completion,
             );
         queued = result.queued;
@@ -145,7 +153,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: double.tryParse(_budgetController.text.trim()),
+              budgetLimit: NumberParser.parseDouble(_budgetController.text),
               completionPercentage: _completion,
               status: _status,
             );

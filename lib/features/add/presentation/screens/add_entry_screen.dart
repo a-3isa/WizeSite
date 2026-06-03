@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
@@ -147,12 +148,12 @@ class _ExpenseFormBodyState extends ConsumerState<_ExpenseFormBody> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final amount = double.tryParse(_amountController.text.trim());
+    final amount = NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    if (_projectId == null || amount == null || amount <= 0) {
+    if (_projectId == null || amount == null || amount < 0) {
       setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
     }
@@ -644,13 +645,13 @@ class _WorkerEntryFormBodyState extends ConsumerState<_WorkerEntryFormBody> {
       return;
     }
     final billedByProject = selectedWorker.billingType == 'project';
-    final days = double.tryParse(_daysController.text.trim());
-    final totalWage = double.tryParse(_totalWageController.text.trim());
+    final days = NumberParser.parseDouble(_daysController.text);
+    final totalWage = NumberParser.parseDouble(_totalWageController.text);
     final invalidDaily =
         !billedByProject &&
-        (days == null || days <= 0 || selectedWorker.dailyWage <= 0);
+        (days == null || days <= 0 || selectedWorker.dailyWage < 0);
     final invalidProject =
-        billedByProject && (totalWage == null || totalWage <= 0);
+        billedByProject && (totalWage == null || totalWage < 0);
     if (invalidDaily || invalidProject) {
       setState(
         () => _error = billedByProject
@@ -762,7 +763,7 @@ class _WorkerEntryFormBodyState extends ConsumerState<_WorkerEntryFormBody> {
                 decoration: InputDecoration(labelText: l10n.t('totalWage')),
               );
             }
-            final days = double.tryParse(_daysController.text.trim()) ?? 0;
+            final days = NumberParser.parseDouble(_daysController.text) ?? 0;
             final total = days * worker.dailyWage;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

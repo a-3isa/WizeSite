@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
@@ -107,7 +108,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final wage = double.tryParse(_wageController.text.trim());
+    final wage = NumberParser.parseDouble(_wageController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
@@ -117,7 +118,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
       return;
     }
     final isDaily = _billingType == 'daily';
-    if (isDaily && (wage == null || wage <= 0)) {
+    if (isDaily && (wage == null || wage < 0)) {
       setState(() => _error = l10n.t('nameAndValidWageRequired'));
       return;
     }

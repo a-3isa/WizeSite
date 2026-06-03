@@ -584,6 +584,13 @@ class FirebaseProjectRepository implements ProjectRepository {
         netProfit: current.netProfit,
         isArchived: current.isArchived,
         clientMutationId: current.clientMutationId,
+        location: '${action.payload['location'] ?? current.location}',
+        description: '${action.payload['description'] ?? current.description}',
+        budgetLimit:
+            (action.payload['budgetLimit'] as num?)?.toDouble() ??
+            current.budgetLimit,
+        startDate: current.startDate,
+        expectedEndDate: current.expectedEndDate,
       );
     }
 
@@ -769,6 +776,11 @@ class FirebaseProjectRepository implements ProjectRepository {
       netProfit: totalPayments - totalExpenses,
       isArchived: project.isArchived,
       clientMutationId: project.clientMutationId,
+      location: project.location,
+      description: project.description,
+      budgetLimit: project.budgetLimit,
+      startDate: project.startDate,
+      expectedEndDate: project.expectedEndDate,
     );
   }
 
@@ -818,6 +830,12 @@ class FirebaseProjectRepository implements ProjectRepository {
       netProfit: 0,
       isArchived: false,
       clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
+      location: '${action.payload['location'] ?? ''}',
+      description: '${action.payload['description'] ?? ''}',
+      budgetLimit: (action.payload['budgetLimit'] as num?)?.toDouble(),
+      startDate: DateTime.tryParse('${action.payload['startDate'] ?? ''}'),
+      expectedEndDate:
+          DateTime.tryParse('${action.payload['expectedEndDate'] ?? ''}'),
     );
   }
 }

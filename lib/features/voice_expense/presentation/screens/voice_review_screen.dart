@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
@@ -126,7 +127,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId =
         await _resolvedWorkspaceId() ?? await _workspaceIdFromSelectedProject();
-    final amount = double.tryParse(_amountController.text.trim());
+    final amount = NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || workspaceId.isEmpty) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;

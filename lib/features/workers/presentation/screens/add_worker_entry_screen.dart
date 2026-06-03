@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -110,8 +111,8 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final days = double.tryParse(_daysController.text.trim());
-    final totalWage = double.tryParse(_totalWageController.text.trim());
+    final days = NumberParser.parseDouble(_daysController.text);
+    final totalWage = NumberParser.parseDouble(_totalWageController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
@@ -125,9 +126,9 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final billedByProject = selectedWorker.billingType == 'project';
     final invalidDaily =
         !billedByProject &&
-        (days == null || days <= 0 || selectedWorker.dailyWage <= 0);
+        (days == null || days <= 0 || selectedWorker.dailyWage < 0);
     final invalidProject =
-        billedByProject && (totalWage == null || totalWage <= 0);
+        billedByProject && (totalWage == null || totalWage < 0);
     if (invalidDaily || invalidProject) {
       setState(
         () => _error = billedByProject
@@ -293,7 +294,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         );
                       }
                       final days =
-                          double.tryParse(_daysController.text.trim()) ?? 0;
+                          NumberParser.parseDouble(_daysController.text) ?? 0;
                       final total = days * worker.dailyWage;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

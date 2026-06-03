@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -162,12 +163,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final amount = double.tryParse(_amountController.text.trim());
+    final amount = NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    if (_projectId == null || amount == null || amount <= 0) {
+    if (_projectId == null || amount == null || amount < 0) {
       setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
     }
