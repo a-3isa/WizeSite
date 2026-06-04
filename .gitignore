@@ -50,6 +50,8 @@ android/key.properties
 functions/.env*
 !functions/.env.example
 functions/node_modules/
+firestore-debug.log
+functions/firestore-debug.log
 
 # ============================================================
 # Environment & secrets
@@ -92,6 +94,9 @@ temp_*
 analyze_output.txt
 test_output.txt
 *.orig
+flutter_*.log
+android/.kotlin/
+_error
 
 # ============================================================
 # Tooling (project-specific)

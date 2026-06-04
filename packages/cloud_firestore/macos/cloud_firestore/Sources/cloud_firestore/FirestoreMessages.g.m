@@ -672,13 +672,13 @@ static id GetNullableObjectAtIndex(NSArray *array, NSInteger key) {
       return [PigeonFirebaseSettings fromList:[self readValue]];
     case 136:
       return [PigeonGetOptions fromList:[self readValue]];
-    case 137:
-      return [PigeonQueryParameters fromList:[self readValue]];
-    case 138:
-      return [PigeonQuerySnapshot fromList:[self readValue]];
     case 139:
-      return [PigeonSnapshotMetadata fromList:[self readValue]];
+      return [PigeonQueryParameters fromList:[self readValue]];
     case 140:
+      return [PigeonQuerySnapshot fromList:[self readValue]];
+    case 141:
+      return [PigeonSnapshotMetadata fromList:[self readValue]];
+    case 142:
       return [PigeonTransactionCommand fromList:[self readValue]];
     default:
       return [super readValueOfType:type];
@@ -718,16 +718,16 @@ static id GetNullableObjectAtIndex(NSArray *array, NSInteger key) {
     [self writeByte:136];
     [self writeValue:[value toList]];
   } else if ([value isKindOfClass:[PigeonQueryParameters class]]) {
-    [self writeByte:137];
-    [self writeValue:[value toList]];
-  } else if ([value isKindOfClass:[PigeonQuerySnapshot class]]) {
-    [self writeByte:138];
-    [self writeValue:[value toList]];
-  } else if ([value isKindOfClass:[PigeonSnapshotMetadata class]]) {
     [self writeByte:139];
     [self writeValue:[value toList]];
-  } else if ([value isKindOfClass:[PigeonTransactionCommand class]]) {
+  } else if ([value isKindOfClass:[PigeonQuerySnapshot class]]) {
     [self writeByte:140];
+    [self writeValue:[value toList]];
+  } else if ([value isKindOfClass:[PigeonSnapshotMetadata class]]) {
+    [self writeByte:141];
+    [self writeValue:[value toList]];
+  } else if ([value isKindOfClass:[PigeonTransactionCommand class]]) {
+    [self writeByte:142];
     [self writeValue:[value toList]];
   } else {
     [super writeValue:value];

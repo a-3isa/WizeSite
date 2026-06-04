@@ -42,4 +42,29 @@ $content = $content -replace 'value instanceof PigeonTransactionCommand\) \{(\s+
   'value instanceof PigeonTransactionCommand) {$1stream.write(142)'
 
 Set-Content $file $content -Encoding UTF8
-Write-Host "Patch applied. Now run: flutter pub get"
+Write-Host "Android patch applied."
+
+# Patch iOS and macOS FirestoreMessages.g.m with the same type ID shift (137-140 -> 139-142)
+foreach ($platform in @("ios", "macos")) {
+  $iosFile = "$dst\$platform\cloud_firestore\Sources\cloud_firestore\FirestoreMessages.g.m"
+  if (-not (Test-Path $iosFile)) { continue }
+  Write-Host "Patching Pigeon type IDs in $iosFile"
+  $iosContent = Get-Content $iosFile -Raw
+
+  # Reader: shift case IDs 137-140 -> 139-142
+  $iosContent = $iosContent -replace 'case 137:\s+return \[PigeonQueryParameters fromList:\[self readValue\]\];', "case 139:`n      return [PigeonQueryParameters fromList:[self readValue]];"
+  $iosContent = $iosContent -replace 'case 138:\s+return \[PigeonQuerySnapshot fromList:\[self readValue\]\];', "case 140:`n      return [PigeonQuerySnapshot fromList:[self readValue]];"
+  $iosContent = $iosContent -replace 'case 139:\s+return \[PigeonSnapshotMetadata fromList:\[self readValue\]\];', "case 141:`n      return [PigeonSnapshotMetadata fromList:[self readValue]];"
+  $iosContent = $iosContent -replace 'case 140:\s+return \[PigeonTransactionCommand fromList:\[self readValue\]\];', "case 142:`n      return [PigeonTransactionCommand fromList:[self readValue]];"
+
+  # Writer: shift writeByte values 137-140 -> 139-142
+  $iosContent = $iosContent -replace '(isKindOfClass:\[PigeonQueryParameters class\]\]) \{(\s+)\[self writeByte:137\]', '$1 {$2[self writeByte:139]'
+  $iosContent = $iosContent -replace '(isKindOfClass:\[PigeonQuerySnapshot class\]\]) \{(\s+)\[self writeByte:138\]', '$1 {$2[self writeByte:140]'
+  $iosContent = $iosContent -replace '(isKindOfClass:\[PigeonSnapshotMetadata class\]\]) \{(\s+)\[self writeByte:139\]', '$1 {$2[self writeByte:141]'
+  $iosContent = $iosContent -replace '(isKindOfClass:\[PigeonTransactionCommand class\]\]) \{(\s+)\[self writeByte:140\]', '$1 {$2[self writeByte:142]'
+
+  Set-Content $iosFile $iosContent -Encoding UTF8
+  Write-Host "$platform patch applied."
+}
+
+Write-Host "All patches applied. Now run: flutter pub get"

@@ -28,7 +28,8 @@
       "Bash(sed -n '225,255p' lib/features/projects/presentation/screens/create_project_screen.dart)",
       "Bash(sed -n '225,255p' lib/features/workers/presentation/screens/add_worker_screen.dart)",
       "Bash(sed -n '370,385p' lib/features/reports/presentation/screens/reports_screen.dart)",
-      "Bash(sed -n '720,740p' lib/features/reports/presentation/screens/reports_screen.dart)"
+      "Bash(sed -n '720,740p' lib/features/reports/presentation/screens/reports_screen.dart)",
+      "Bash(git rm *)"
     ]
   }
 }
