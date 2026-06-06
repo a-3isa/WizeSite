@@ -215,7 +215,10 @@ class SettingsScreen extends ConsumerWidget {
                       },
                     ),
                     const SizedBox(height: 24),
-                    if (kDebugMode) ...[
+                    if (kDebugMode ||
+                        const bool.fromEnvironment(
+                          'SHOW_CRASHLYTICS_TEST',
+                        )) ...[
                       _SectionHeader(title: 'Debug: Crashlytics'),
                       const SizedBox(height: 8),
                       _CrashlyticsTestCard(),

@@ -235,6 +235,7 @@ workflows:
           flutter build ipa --release \
             --build-name=1.0.0 \
             --build-number=$NEXT_BUILD \
+            --dart-define=SHOW_CRASHLYTICS_TEST=true \
             --export-options-plist=/Users/builder/export_options.plist
 
       - name: Upload dSYMs to Firebase Crashlytics
