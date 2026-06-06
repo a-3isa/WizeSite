@@ -91,9 +91,19 @@ class OfflineQueueCoordinator {
             id: record.id,
             message: error.message,
           );
+          await _ref.read(appTelemetryProvider).recordError(
+            error,
+            StackTrace.current,
+            reason: 'attachment_upload.storage_error code=${error.code}',
+          );
         }
-      } catch (error) {
+      } catch (error, stackTrace) {
         await pendingService.markFailed(id: record.id, message: '$error');
+        await _ref.read(appTelemetryProvider).recordError(
+          error,
+          stackTrace,
+          reason: 'attachment_upload.unexpected_error',
+        );
       }
     }
   }
@@ -109,6 +119,18 @@ class OfflineQueueCoordinator {
     if (alreadyNotified) {
       return;
     }
+
+    _ref.read(appTelemetryProvider).recordError(
+      Exception(
+        'offline_sync.dead_letter '
+        'type=${latest.type} '
+        'code=${latest.lastErrorCode} '
+        'retries=${latest.retryCount} '
+        'error=${latest.lastError}',
+      ),
+      StackTrace.empty,
+      reason: 'offline_sync.dead_letter type=${latest.type}',
+    );
 
     final type = _failureTypeFor(
       code: latest.lastErrorCode,

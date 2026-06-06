@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/crashlytics_route_observer.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/features/add/presentation/screens/add_entry_screen.dart';
 import 'package:buildtrack_app/features/add/presentation/screens/add_hub_screen.dart';
@@ -56,13 +58,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
   ref.listen<String?>(
     activeUserIdProvider,
-    (previous, next) => refresh.refresh(),
+    (previous, next) {
+      refresh.refresh();
+      FirebaseCrashlytics.instance.setUserIdentifier(next ?? '');
+    },
   );
 
   return GoRouter(
     initialLocation: AppRoutes.root,
     refreshListenable: refresh,
-    observers: [rootRouteObserver],
+    observers: [const CrashlyticsRouteObserver(), rootRouteObserver],
     redirect: (context, state) {
       final location = state.uri.path;
       final isSignedIn = auth.currentUser != null;

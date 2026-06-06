@@ -60,6 +60,13 @@ class CallableClient {
         'function': functionName,
         'code': error.code,
       });
+      if (error.code != 'unauthenticated') {
+        await _telemetry.recordError(
+          error,
+          StackTrace.current,
+          reason: 'callable.$functionName',
+        );
+      }
       if (error.code == 'unauthenticated') {
         final refreshedUser = await _authenticatedUser();
         if (refreshedUser == null) {
@@ -92,6 +99,11 @@ class CallableClient {
             'function': functionName,
             'code': retryError.code,
           });
+          await _telemetry.recordError(
+            retryError,
+            StackTrace.current,
+            reason: 'callable.$functionName.retry',
+          );
           if (retryError.code == 'unauthenticated' &&
               httpFunctionName != null &&
               httpFunctionName.isNotEmpty) {
