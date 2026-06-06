@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 /// navigation event so that crash reports always show which screen the
 /// user was on.
 class CrashlyticsRouteObserver extends NavigatorObserver {
-  const CrashlyticsRouteObserver();
+  CrashlyticsRouteObserver();
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>

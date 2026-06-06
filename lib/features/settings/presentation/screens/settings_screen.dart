@@ -10,6 +10,8 @@ import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,6 +215,12 @@ class SettingsScreen extends ConsumerWidget {
                       },
                     ),
                     const SizedBox(height: 24),
+                    if (kDebugMode) ...[
+                      _SectionHeader(title: 'Debug: Crashlytics'),
+                      const SizedBox(height: 8),
+                      _CrashlyticsTestCard(),
+                      const SizedBox(height: 24),
+                    ],
                     _LogoutButton(
                       label: l10n.t('logout'),
                       onTap: () async {
@@ -761,6 +769,102 @@ class _ProfileSection extends ConsumerWidget {
       return parts.first.substring(0, 1).toUpperCase();
     }
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+class _CrashlyticsTestCard extends StatefulWidget {
+  @override
+  State<_CrashlyticsTestCard> createState() => _CrashlyticsTestCardState();
+}
+
+class _CrashlyticsTestCardState extends State<_CrashlyticsTestCard> {
+  bool _sent = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSolid,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          _DebugTile(
+            label: _sent ? 'Non-fatal sent ✓' : 'Send test non-fatal error',
+            onTap: _sent
+                ? null
+                : () async {
+                    await FirebaseCrashlytics.instance.recordError(
+                      Exception('Crashlytics test non-fatal error'),
+                      StackTrace.current,
+                      reason: 'debug.crashlytics_test',
+                    );
+                    await FirebaseCrashlytics.instance.sendUnsentReports();
+                    setState(() => _sent = true);
+                  },
+            isLast: false,
+          ),
+          _DebugTile(
+            label: 'Force crash (kills app)',
+            isDestructive: true,
+            onTap: () => FirebaseCrashlytics.instance.crash(),
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DebugTile extends StatelessWidget {
+  const _DebugTile({
+    required this.label,
+    required this.onTap,
+    required this.isLast,
+    this.isDestructive = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool isLast;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? AppColors.danger : AppColors.textDark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: isLast
+            ? const BorderRadius.vertical(bottom: Radius.circular(16))
+            : BorderRadius.zero,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: isLast
+              ? null
+              : BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.borderGrey),
+                  ),
+                ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: onTap == null
+                      ? AppColors.textBody.withValues(alpha: 0.5)
+                      : color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

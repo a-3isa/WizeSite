@@ -67,7 +67,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.root,
     refreshListenable: refresh,
-    observers: [const CrashlyticsRouteObserver(), rootRouteObserver],
+    observers: [CrashlyticsRouteObserver(), rootRouteObserver],
     redirect: (context, state) {
       final location = state.uri.path;
       final isSignedIn = auth.currentUser != null;
