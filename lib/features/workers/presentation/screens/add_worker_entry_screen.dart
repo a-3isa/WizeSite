@@ -2,20 +2,25 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 class AddWorkerEntryScreen extends ConsumerStatefulWidget {
   const AddWorkerEntryScreen({
@@ -41,6 +46,8 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   String? _workerId;
   String? _projectId;
   DateTime _date = DateTime.now();
+  final _pickedFiles = <PlatformFile>[];
+  final _attachments = <Attachment>[];
   bool _loading = false;
   bool _prefilling = false;
   String? _error;
@@ -77,6 +84,9 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
           _totalWageController.text = entry.totalCost.toStringAsFixed(2);
           _notesController.text = entry.notes;
           _date = entry.date;
+          _attachments
+            ..clear()
+            ..addAll(entry.attachments);
         });
       }
     } catch (_) {
@@ -98,6 +108,35 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     _totalWageController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachments() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
+    );
+    if (result == null) {
+      return;
+    }
+    final invalidMessages = <String>[];
+    final validFiles = <PlatformFile>[];
+    for (final file in result.files.where((file) => file.path != null)) {
+      final validationError = AttachmentValidationService.validatePickedFile(
+        file,
+      );
+      if (validationError != null) {
+        invalidMessages.add(validationError);
+        continue;
+      }
+      validFiles.add(file);
+    }
+    setState(() {
+      _pickedFiles.addAll(validFiles);
+      if (invalidMessages.isNotEmpty) {
+        _error = invalidMessages.join('\n');
+      }
+    });
   }
 
   String _fallbackRoute() {
@@ -143,6 +182,32 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       _error = null;
     });
     try {
+      final attachments = <Attachment>[];
+      for (final file in _pickedFiles) {
+        final path = file.path;
+        if (path == null) {
+          continue;
+        }
+        final uploaded = await ref
+            .read(storageUploadServiceProvider)
+            .uploadAttachment(
+              userId: userId,
+              localFilePath: path,
+              fileName: file.name,
+            );
+        attachments.add(
+          Attachment(
+            id: const Uuid().v4(),
+            fileName: uploaded.fileName,
+            storagePath: uploaded.storagePath,
+            contentType: uploaded.contentType,
+            uploadedAt: DateTime.now(),
+            downloadUrl: uploaded.downloadUrl,
+            size: uploaded.size,
+          ),
+        );
+      }
+      attachments.addAll(_attachments);
       var queued = false;
       if (widget.entryId == null) {
         final projects = ref.read(projectsProvider).valueOrNull ?? [];
@@ -161,6 +226,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
+              attachments: attachments,
               projectTotalExpensesBefore: selectedProject?.totalExpenses,
             );
         queued = result.queued;
@@ -176,6 +242,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
+              attachments: attachments,
             );
       }
       if (mounted) {
@@ -356,6 +423,84 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                     controller: _notesController,
                     maxLines: 3,
                     decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.t('attachments'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_attachments.isNotEmpty)
+                    Column(
+                      children: _attachments
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(entry.value.id),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _attachments.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.attach_file),
+                                title: Text(entry.value.fileName),
+                                subtitle: Text(entry.value.storagePath),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (_pickedFiles.isNotEmpty)
+                    Column(
+                      children: _pickedFiles
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(
+                                entry.value.path ?? entry.value.name,
+                              ),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _pickedFiles.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.description),
+                                title: Text(entry.value.name),
+                                subtitle: Text(entry.value.path ?? ''),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  FilledButton.tonal(
+                    onPressed: _loading ? null : _pickAttachments,
+                    child: Text(l10n.t('selectAttachments')),
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)

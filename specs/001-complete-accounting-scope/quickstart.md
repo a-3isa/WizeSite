@@ -44,10 +44,11 @@ implementation progresses.
 | Foundational | `flutter analyze` | PASS | No issues found |
 | Foundational | foundational targeted Flutter tests | PASS | 28 foundational tests passed for attachment lifecycle, access roles, offline action serialization, pending attachment service, storage upload service, and accounting summaries |
 | Foundational | `functions/npm test` | PASS | TypeScript build passed; 7 Node tests passed, 2 emulator-dependent suites skipped because `FIRESTORE_EMULATOR_HOST` was not set |
-| Final | `flutter analyze` | Pending | Run during T127 |
-| Final | `flutter test` | Pending | Run during T128 |
-| Final | targeted feature tests | Pending | Run during T129 |
-| Final | `functions/npm test` | Pending | Run during T130 |
+| Final | `flutter analyze` | PASS | No issues found after worker-entry attachments, domain accounting screens, report request/export updates |
+| Final | `flutter test` | PASS | 201 Flutter tests passed |
+| Final | targeted feature tests | PASS | Worker attachment, report request/export/access, report provider, and domain accounting targeted suites passed |
+| Final | `functions/npm test` | PASS | TypeScript build passed; 8 Node tests passed, 2 emulator-dependent suites skipped because `FIRESTORE_EMULATOR_HOST` was not set |
+| Final | `dart run tool/release_audit.dart` | PASS | Android/iOS config checks passed, including Android OAuth client for `com.ahmed.buildozer` |
 
 ## 2. Required Implementation Order
 
@@ -167,3 +168,16 @@ implementation progresses.
 - PDF exporter for every report type and empty data.
 - Offline queue merge, retry, dead-letter, conflict behavior, and pagination.
 - Role restrictions for reports, balances, exports, and attachments.
+
+## 5. Production Readiness Matrix
+
+| Area | Status | Evidence | Remaining release action |
+|------|--------|----------|--------------------------|
+| Flutter static analysis | Ready | `flutter analyze` passed with no issues | None |
+| Flutter automated tests | Ready | `flutter test` passed with 201 tests | None |
+| Cloud Functions build/tests | Ready with emulator caveat | `npm test` passed; Firestore emulator suites skipped without `FIRESTORE_EMULATOR_HOST` | Run emulator-backed rules/recompute command before final production sign-off |
+| Firebase deploy | Ready | `firebase deploy --only "functions,firestore:rules,firestore:indexes,storage" --config firebase.deploy.json` completed | Monitor first production worker-entry attachment saves |
+| Android release config | Ready | `dart run tool/release_audit.dart` passed, including Android OAuth client for `com.ahmed.buildozer` | Run signed Google Sign-In smoke test |
+| App Check | Needs console/device verification | Repo config and audit command pass local checks | Confirm Play Integrity, Apple provider, and debug tokens in Firebase Console |
+| RevenueCat | Needs console/device verification | Repo tests and setup docs cover expected entitlement | Confirm `wizesite_pro`, offering, purchase, restore, and webhook in RevenueCat/Firebase |
+| Mobile app release | Not shipped by Firebase deploy | Firebase backend deployed only | Build and distribute signed Android/iOS app binaries |

@@ -16,6 +16,7 @@ import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_entry_defaults.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -66,8 +67,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         }
         unawaited(_prefill());
       });
-    } else if (widget.projectId != null) {
-      _projectId = widget.projectId;
+    } else {
+      final defaults = ref.read(expenseEntryDefaultsProvider);
+      _category = defaults.category;
+      _paymentMethod = defaults.paymentMethod;
+      _paymentStatus = defaults.paymentStatus;
+      if (widget.projectId != null) {
+        _projectId = widget.projectId;
+      }
     }
   }
 
@@ -246,6 +253,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               attachments: attachments.isNotEmpty ? attachments : null,
             );
         queued = result.queued;
+        ref.read(expenseEntryDefaultsProvider.notifier).state =
+            ExpenseEntryDefaults(
+              category: _category,
+              paymentMethod: _paymentMethod,
+              paymentStatus: _paymentStatus,
+            );
       } else {
         await ref
             .read(expenseRepositoryProvider)

@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
@@ -56,6 +57,7 @@ abstract interface class WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
     double? projectTotalExpensesBefore,
   });
 
@@ -66,6 +68,7 @@ abstract interface class WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
   });
 
   Future<MutationResult> archiveEntry(String entryId);
@@ -382,6 +385,7 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
     double? projectTotalExpensesBefore,
   }) async {
     return _mutationService.createWorkerEntry(
@@ -392,6 +396,9 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       dailyWage: dailyWage,
       date: date,
       notes: notes,
+      attachments: attachments
+          ?.map((attachment) => attachment.toMap())
+          .toList(growable: false),
       projectTotalExpensesBefore: projectTotalExpensesBefore,
     );
   }
@@ -404,6 +411,7 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
   }) async {
     final entry = await getEntry(entryId);
     if (entry == null) {
@@ -417,6 +425,9 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       dailyWage: dailyWage,
       date: date,
       notes: notes,
+      attachments: (attachments ?? entry.attachments)
+          .map((attachment) => attachment.toMap())
+          .toList(growable: false),
       previousProjectId: entry.projectId,
       previousDaysWorked: entry.daysWorked,
       previousDailyWage: entry.dailyWage,
@@ -498,6 +509,9 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
             current.date,
         notes: '${action.payload['notes'] ?? current.notes}',
         isArchived: current.isArchived,
+        attachments: action.payload.containsKey('attachments')
+            ? Attachment.listFromDynamic(action.payload['attachments'])
+            : current.attachments,
         clientMutationId: current.clientMutationId,
       );
     }
@@ -548,6 +562,7 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
       date: parsedDate ?? action.createdAt,
       notes: '${payload['notes'] ?? ''}',
       isArchived: false,
+      attachments: Attachment.listFromDynamic(payload['attachments']),
       clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );
   }

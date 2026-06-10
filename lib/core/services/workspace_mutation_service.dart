@@ -377,6 +377,7 @@ class WorkspaceMutationService {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Map<String, dynamic>>? attachments,
     double? projectTotalExpensesBefore,
   }) async {
     final payload = {
@@ -389,6 +390,9 @@ class WorkspaceMutationService {
       'notes': notes ?? '',
       'projectTotalExpensesBefore': projectTotalExpensesBefore,
     };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
 
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createWorkerEntry,
@@ -443,23 +447,29 @@ class WorkspaceMutationService {
     double? previousDailyWage,
     double? previousTotalCost,
     DateTime? previousDate,
+    List<Map<String, dynamic>>? attachments,
   }) async {
+    final payload = <String, dynamic>{
+      'workspaceId': workspaceId,
+      'entryId': entryId,
+      'projectId': projectId,
+      'daysWorked': daysWorked,
+      'dailyWage': dailyWage,
+      'date': date.toIso8601String(),
+      'notes': notes ?? '',
+      'previousProjectId': previousProjectId,
+      'previousDaysWorked': previousDaysWorked,
+      'previousDailyWage': previousDailyWage,
+      'previousTotalCost': previousTotalCost,
+      'previousDate': previousDate?.toIso8601String(),
+    };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
+
     await _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateWorkerEntry,
-      payload: {
-        'workspaceId': workspaceId,
-        'entryId': entryId,
-        'projectId': projectId,
-        'daysWorked': daysWorked,
-        'dailyWage': dailyWage,
-        'date': date.toIso8601String(),
-        'notes': notes ?? '',
-        'previousProjectId': previousProjectId,
-        'previousDaysWorked': previousDaysWorked,
-        'previousDailyWage': previousDailyWage,
-        'previousTotalCost': previousTotalCost,
-        'previousDate': previousDate?.toIso8601String(),
-      },
+      payload: payload,
     );
   }
 
@@ -834,6 +844,9 @@ class WorkspaceMutationService {
       case OfflineActionTypes.createPayment:
       case OfflineActionTypes.updatePayment:
         return 'payment';
+      case OfflineActionTypes.createWorkerEntry:
+      case OfflineActionTypes.updateWorkerEntry:
+        return 'worker_entry';
       default:
         return null;
     }
@@ -849,6 +862,8 @@ class WorkspaceMutationService {
         return (payload['expenseId'] as String?) ?? sourceActionId;
       case OfflineActionTypes.updatePayment:
         return (payload['paymentId'] as String?) ?? sourceActionId;
+      case OfflineActionTypes.updateWorkerEntry:
+        return (payload['entryId'] as String?) ?? sourceActionId;
       default:
         return sourceActionId;
     }

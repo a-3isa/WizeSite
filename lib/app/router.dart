@@ -14,7 +14,9 @@ import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.d
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
+import 'package:buildtrack_app/features/contractors/presentation/screens/contractors_screen.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:buildtrack_app/features/equipment/presentation/screens/equipment_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expense_detail_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expenses_screen.dart';
@@ -36,8 +38,10 @@ import 'package:buildtrack_app/features/subscription/presentation/screens/limit_
 import 'package:buildtrack_app/features/subscription/presentation/screens/manage_subscription_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/plans_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/subscription_success_screen.dart';
+import 'package:buildtrack_app/features/transport/presentation/screens/transport_providers_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_entry_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
+import 'package:buildtrack_app/features/workers/presentation/screens/worker_accounting_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:flutter/material.dart';
@@ -56,13 +60,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     activeWorkspaceIdProvider,
     (previous, next) => refresh.refresh(),
   );
-  ref.listen<String?>(
-    activeUserIdProvider,
-    (previous, next) {
-      refresh.refresh();
-      FirebaseCrashlytics.instance.setUserIdentifier(next ?? '');
-    },
-  );
+  ref.listen<String?>(activeUserIdProvider, (previous, next) {
+    refresh.refresh();
+    FirebaseCrashlytics.instance.setUserIdentifier(next ?? '');
+  });
 
   return GoRouter(
     initialLocation: AppRoutes.root,
@@ -398,6 +399,66 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               workerId: id,
               entryId: entryId,
               projectId: projectId,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.workerAccounting,
+        name: 'workerAccounting',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: WorkerAccountingScreen(
+              workerId: id,
+              workerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.contractors,
+        name: 'contractors',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ContractorsScreen(
+              contractorId: id,
+              contractorName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.equipment,
+        name: 'equipment',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: EquipmentScreen(
+              providerId: id,
+              providerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.transportProviders,
+        name: 'transportProviders',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: TransportProvidersScreen(
+              providerId: id,
+              providerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
             ),
           );
         },

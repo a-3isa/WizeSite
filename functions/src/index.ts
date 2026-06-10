@@ -1989,7 +1989,6 @@ export async function createPaymentWithQuotaForUser(
       "Project is archived and can no longer accept payments.",
     );
   }
-
   const subscription = await getSubscription(workspaceId);
   if (!hasUnlimitedQuota(subscription)) {
     const current = await getCurrentUsage(workspaceId, "paymentsPerMonth");
@@ -2188,6 +2187,7 @@ export async function createWorkerEntryWithQuotaForUser(
   }
 
   const entryRef = db.collection("worker_entries").doc();
+  const attachments = ensureAttachmentItems(data, "attachments");
   const counterRef = db
     .collection("usage_counters")
     .doc(`${workspaceId}_${periodKey()}`);
@@ -2202,6 +2202,7 @@ export async function createWorkerEntryWithQuotaForUser(
       totalCost,
       date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
       notes: `${data.notes ?? ""}`.trim(),
+      attachments,
       clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
       clientCreatedAt: parseTimestamp(data.clientCreatedAt),
       clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
@@ -3051,7 +3052,7 @@ export const updateWorkerEntry = onCall(async (request) => {
   const oldTotalCost = workerEntryTotalCost(entry);
   const oldProjectId = `${entry.projectId ?? ""}`;
   const batch = db.batch();
-  batch.update(entrySnap.ref, {
+  const updateData: Record<string, unknown> = {
     projectId,
     daysWorked,
     dailyWage,
@@ -3061,7 +3062,11 @@ export const updateWorkerEntry = onCall(async (request) => {
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (data.attachments != null) {
+    updateData.attachments = ensureAttachmentItems(data, "attachments");
+  }
+  batch.update(entrySnap.ref, updateData);
   if (oldProjectId === projectId) {
     applyMetricsDeltaInBatch(
       batch,

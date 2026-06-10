@@ -17,10 +17,13 @@ import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/expenses/presentation/models/expense_group.dart';
 import 'package:buildtrack_app/features/expenses/presentation/widgets/expense_group_section.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
+import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({required this.projectId, super.key});
@@ -636,6 +639,56 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         .toList(growable: false);
   }
 
+  Future<void> _exportPdf() async {
+    final l10n = AppLocalizations.of(context);
+    final expenses = _filteredExpenses();
+    if (expenses.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.t('noDataYet'))));
+      return;
+    }
+    final currency =
+        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
+    final filterParts = <String>[];
+    if (_categoryFilter != null) {
+      filterParts.add(l10n.expenseCategoryLabel(_categoryFilter!));
+    }
+    if (_paymentMethodFilter != null) {
+      filterParts.add(l10n.paymentMethodLabel(_paymentMethodFilter!));
+    }
+    if (_paymentStatusFilter != null) {
+      filterParts.add(l10n.paymentStatusLabel(_paymentStatusFilter!));
+    }
+    if (_entityFilterName.isNotEmpty) {
+      filterParts.add(_entityFilterName);
+    }
+    final search = _searchController.text.trim();
+    if (search.isNotEmpty) {
+      filterParts.add(search);
+    }
+    try {
+      final bytes = await const ReportPdfExporter().buildExpensesListPdf(
+        l10n: l10n,
+        projectName: expenses.first.projectName,
+        expenses: expenses,
+        currency: currency,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+        filterSummary: filterParts.isEmpty ? null : filterParts.join(', '),
+      );
+      await Printing.layoutPdf(onLayout: (_) async => bytes);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -661,6 +714,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
           context: context,
           title: l10n.t('expenseList'),
           fallbackRoute: AppRoutes.projectDetailPath(widget.projectId),
+          actions: [
+            IconButton(
+              tooltip: l10n.t('exportPdf'),
+              onPressed: _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openAddExpense,

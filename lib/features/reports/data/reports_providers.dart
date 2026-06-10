@@ -5,6 +5,11 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/features/contractors/domain/contractor_accounting_record.dart';
+import 'package:buildtrack_app/features/equipment/domain/equipment_accounting_record.dart';
+import 'package:buildtrack_app/features/transport/domain/transport_provider_accounting_record.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final reportProjectIdProvider = StateProvider<String?>((ref) => null);
@@ -936,6 +941,123 @@ final reportPaymentsProvider = Provider<AsyncValue<List<PaymentRecord>>>((ref) {
       .watch(reportMetricsProvider)
       .whenData((metrics) => metrics?.recentPayments ?? const []);
 });
+
+final reportWorkerAccountingRecordsProvider =
+    StreamProvider<List<WorkerAccountingRecord>>((ref) {
+      final workspaceId = ref.watch(activeWorkspaceIdProvider);
+      final projectId = ref.watch(reportProjectIdProvider);
+      if (workspaceId == null ||
+          workspaceId.isEmpty ||
+          projectId == null ||
+          projectId.isEmpty) {
+        return Stream.value(const <WorkerAccountingRecord>[]);
+      }
+
+      return ref
+          .watch(firestoreProvider)
+          .collection('worker_accounting_records')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('projectId', isEqualTo: projectId)
+          .orderBy('date', descending: true)
+          .limit(50)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map(
+                  (doc) => WorkerAccountingRecord.fromMap(doc.id, doc.data()),
+                )
+                .toList(growable: false),
+          );
+    });
+
+final reportContractorAccountingRecordsProvider =
+    StreamProvider<List<ContractorAccountingRecord>>((ref) {
+      final workspaceId = ref.watch(activeWorkspaceIdProvider);
+      final projectId = ref.watch(reportProjectIdProvider);
+      if (workspaceId == null ||
+          workspaceId.isEmpty ||
+          projectId == null ||
+          projectId.isEmpty) {
+        return Stream.value(const <ContractorAccountingRecord>[]);
+      }
+
+      return ref
+          .watch(firestoreProvider)
+          .collection('contractor_accounting_records')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('projectId', isEqualTo: projectId)
+          .orderBy('date', descending: true)
+          .limit(50)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map(
+                  (doc) =>
+                      ContractorAccountingRecord.fromMap(doc.id, doc.data()),
+                )
+                .toList(growable: false),
+          );
+    });
+
+final reportEquipmentAccountingRecordsProvider =
+    StreamProvider<List<EquipmentAccountingRecord>>((ref) {
+      final workspaceId = ref.watch(activeWorkspaceIdProvider);
+      final projectId = ref.watch(reportProjectIdProvider);
+      if (workspaceId == null ||
+          workspaceId.isEmpty ||
+          projectId == null ||
+          projectId.isEmpty) {
+        return Stream.value(const <EquipmentAccountingRecord>[]);
+      }
+
+      return ref
+          .watch(firestoreProvider)
+          .collection('equipment_accounting_records')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('projectId', isEqualTo: projectId)
+          .orderBy('date', descending: true)
+          .limit(50)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map(
+                  (doc) =>
+                      EquipmentAccountingRecord.fromMap(doc.id, doc.data()),
+                )
+                .toList(growable: false),
+          );
+    });
+
+final reportTransportAccountingRecordsProvider =
+    StreamProvider<List<TransportProviderAccountingRecord>>((ref) {
+      final workspaceId = ref.watch(activeWorkspaceIdProvider);
+      final projectId = ref.watch(reportProjectIdProvider);
+      if (workspaceId == null ||
+          workspaceId.isEmpty ||
+          projectId == null ||
+          projectId.isEmpty) {
+        return Stream.value(const <TransportProviderAccountingRecord>[]);
+      }
+
+      return ref
+          .watch(firestoreProvider)
+          .collection('transport_provider_accounting_records')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('projectId', isEqualTo: projectId)
+          .orderBy('date', descending: true)
+          .limit(50)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map(
+                  (doc) => TransportProviderAccountingRecord.fromMap(
+                    doc.id,
+                    doc.data(),
+                  ),
+                )
+                .toList(growable: false),
+          );
+    });
 
 final expensesByCategoryProvider = Provider<AsyncValue<Map<String, double>>>((
   ref,

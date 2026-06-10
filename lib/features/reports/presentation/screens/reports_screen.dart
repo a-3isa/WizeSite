@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
@@ -9,6 +10,11 @@ import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
+import 'package:buildtrack_app/features/payments/domain/payment.dart';
+import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/cashflow_line_chart.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/category_pie_chart.dart';
@@ -117,13 +123,243 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
   }
 
+  Future<void> _openCustomReportBuilder({
+    required AppLocalizations l10n,
+    required Project project,
+    required DashboardWeeklyInsights insights,
+    required String currency,
+  }) async {
+    var includeExpenses = true;
+    var includePayments = true;
+    var includeWeekly = true;
+    var includeEntities = true;
+    var includeDaily = true;
+    DateTime? startDate;
+    DateTime? endDate;
+
+    String dateLabel(DateTime? value) => value == null
+        ? l10n.t('dateRange')
+        : value.toIso8601String().split('T').first;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.t('buildCustomReport'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                              initialDate: startDate ?? DateTime.now(),
+                            );
+                            if (picked != null) {
+                              setSheetState(() => startDate = picked);
+                            }
+                          },
+                          child: Text(dateLabel(startDate)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                              initialDate: endDate ?? DateTime.now(),
+                            );
+                            if (picked != null) {
+                              setSheetState(() => endDate = picked);
+                            }
+                          },
+                          child: Text(dateLabel(endDate)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeExpenses,
+                    onChanged: (value) =>
+                        setSheetState(() => includeExpenses = value ?? true),
+                    title: Text(l10n.t('exportExpenses')),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includePayments,
+                    onChanged: (value) =>
+                        setSheetState(() => includePayments = value ?? true),
+                    title: Text(l10n.t('exportPayments')),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeWeekly,
+                    onChanged: (value) =>
+                        setSheetState(() => includeWeekly = value ?? true),
+                    title: Text(l10n.t('exportWeeklyReport')),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeEntities,
+                    onChanged: (value) =>
+                        setSheetState(() => includeEntities = value ?? true),
+                    title: Text(l10n.t('entitySummary')),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeDaily,
+                    onChanged: (value) =>
+                        setSheetState(() => includeDaily = value ?? true),
+                    title: Text(l10n.t('dailyBreakdown')),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        Navigator.pop(sheetContext);
+                        await _generateCustomReport(
+                          l10n: l10n,
+                          project: project,
+                          insights: insights,
+                          currency: currency,
+                          startDate: startDate,
+                          endDate: endDate,
+                          includeExpenses: includeExpenses,
+                          includePayments: includePayments,
+                          includeWeekly: includeWeekly,
+                          includeEntities: includeEntities,
+                          includeDaily: includeDaily,
+                        );
+                      },
+                      child: Text(l10n.t('exportPdf')),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _generateCustomReport({
+    required AppLocalizations l10n,
+    required Project project,
+    required DashboardWeeklyInsights insights,
+    required String currency,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required bool includeExpenses,
+    required bool includePayments,
+    required bool includeWeekly,
+    required bool includeEntities,
+    required bool includeDaily,
+  }) async {
+    try {
+      final workspaceId = ref.read(activeWorkspaceIdProvider);
+      final entitySummaries = workspaceId == null
+          ? const <EntitySummary>[]
+          : (ref.read(entityAggregationsProvider(workspaceId)).valueOrNull ??
+                const <EntitySummary>[]);
+
+      // The daily breakdown is derived from expenses, so fetch them whenever
+      // either the expenses section or the daily section is requested.
+      final effectiveStartDate =
+          startDate ?? DateTime(DateTime.now().year, DateTime.now().month);
+      final effectiveEndDate = endDate ?? DateTime.now();
+      final inclusiveEndDate = DateTime(
+        effectiveEndDate.year,
+        effectiveEndDate.month,
+        effectiveEndDate.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      var expenses = const <Expense>[];
+      if ((includeExpenses || includeDaily) && workspaceId != null) {
+        final page = await ref
+            .read(expenseRepositoryProvider)
+            .fetchExpensesPage(
+              workspaceId,
+              projectId: project.id,
+              startDate: effectiveStartDate,
+              endDate: inclusiveEndDate,
+              pageSize: 500,
+            );
+        expenses = page.items;
+      }
+
+      var payments = const <PaymentRecord>[];
+      if (includePayments && workspaceId != null) {
+        final page = await ref
+            .read(paymentRepositoryProvider)
+            .fetchPaymentsPage(
+              workspaceId,
+              projectId: project.id,
+              startDate: effectiveStartDate,
+              endDate: inclusiveEndDate,
+              pageSize: 500,
+            );
+        payments = page.items;
+      }
+
+      final exporter = const ReportPdfExporter();
+      final documentBytes = await exporter.buildCustomReportPdf(
+        l10n: l10n,
+        project: project,
+        expenses: expenses,
+        payments: payments,
+        insights: insights,
+        entitySummaries: entitySummaries,
+        currency: currency,
+        startDate: effectiveStartDate,
+        endDate: inclusiveEndDate,
+        includeExpenses: includeExpenses,
+        includePayments: includePayments,
+        includeWeekly: includeWeekly,
+        includeEntities: includeEntities,
+        includeDaily: includeDaily,
+      );
+      await Printing.layoutPdf(onLayout: (_) async => documentBytes);
+    } catch (error) {
+      _showExportError(l10n, error);
+    }
+  }
+
   void _showExportError(AppLocalizations l10n, Object error) {
     if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+      ..showSnackBar(SnackBar(content: Text(l10n.t('reportExportFailed'))));
   }
 
   @override
@@ -134,31 +370,52 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final locale = Localizations.localeOf(context).languageCode;
     final currentProjectId = ref.watch(reportProjectIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
-    final summaryAsync = ref.watch(reportSummaryProvider);
-    final metricsAsync = ref.watch(reportMetricsProvider);
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
     final hasWorkspace = workspaceId != null;
-    final weeklyInsightsAsync = workspaceId == null
-        ? AsyncValue.data(
-            DashboardWeeklyInsights(
-              topEntity: 'Unassigned',
-              topCategory: 'Unassigned',
-              laborTotal: 0,
-              equipmentTotal: 0,
-              paymentSummary: {},
-              recentTransactions: [],
-            ),
-          )
-        : ref.watch(dashboardWeeklyInsightsProvider(workspaceId));
-    final weeklyInsights = weeklyInsightsAsync.valueOrNull;
+    final roleAsync = ref.watch(currentAccountingRoleProvider);
+    final currentRole = roleAsync.valueOrNull;
+    final canAccessReports =
+        roleAsync.hasValue &&
+        ref.watch(canAccessAccountingProvider(currentRole));
+    final roleIsLoading = hasWorkspace && roleAsync.isLoading;
+    final weeklyInsights = canAccessReports
+        ? (workspaceId == null
+              ? DashboardWeeklyInsights(
+                  topEntity: 'Unassigned',
+                  topCategory: 'Unassigned',
+                  laborTotal: 0,
+                  equipmentTotal: 0,
+                  paymentSummary: {},
+                  recentTransactions: [],
+                )
+              : ref
+                    .watch(dashboardWeeklyInsightsProvider(workspaceId))
+                    .valueOrNull)
+        : null;
 
-    final categoryAsync = ref.watch(expensesByCategoryProvider);
-    final flowAsync = ref.watch(monthlyFlowProvider);
-    final workersAsync = ref.watch(topWorkersProvider);
-    final expensesAsync = ref.watch(reportExpensesProvider);
-    final paymentsAsync = ref.watch(reportPaymentsProvider);
+    final summaryAsync = canAccessReports
+        ? ref.watch(reportSummaryProvider)
+        : const AsyncData(<String, num>{});
+    final metricsAsync = canAccessReports
+        ? ref.watch(reportMetricsProvider)
+        : const AsyncData<ReportMetrics?>(null);
+    final categoryAsync = canAccessReports
+        ? ref.watch(expensesByCategoryProvider)
+        : const AsyncData(<String, double>{});
+    final flowAsync = canAccessReports
+        ? ref.watch(monthlyFlowProvider)
+        : const AsyncData(<MonthlyFlowData>[]);
+    final workersAsync = canAccessReports
+        ? ref.watch(topWorkersProvider)
+        : const AsyncData(<WorkerCostData>[]);
+    final expensesAsync = canAccessReports
+        ? ref.watch(reportExpensesProvider)
+        : const AsyncData(<Expense>[]);
+    final paymentsAsync = canAccessReports
+        ? ref.watch(reportPaymentsProvider)
+        : const AsyncData(<PaymentRecord>[]);
     final fallbackRoute = widget.projectId == null
         ? AppRoutes.dashboard
         : AppRoutes.projectDetailPath(widget.projectId!);
@@ -178,7 +435,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         fallbackRoute: fallbackRoute,
                         title: l10n.t('reports'),
                       );
-                      final actions = hasWorkspace
+                      final actions = hasWorkspace && canAccessReports
                           ? _ReportsHeaderActions(
                               currentProjectId: currentProjectId,
                               weeklyInsights: weeklyInsights,
@@ -248,6 +505,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               onOpenEntitySummary: () {
                                 HapticFeedback.lightImpact();
                                 context.push(AppRoutes.entitySummaryPath());
+                              },
+                              onBuildCustomReport: () async {
+                                HapticFeedback.lightImpact();
+                                final projects = ref
+                                    .read(projectsProvider)
+                                    .valueOrNull;
+                                final selectedProject = projects
+                                    ?.where(
+                                      (project) =>
+                                          project.id == currentProjectId,
+                                    )
+                                    .firstOrNull;
+                                if (selectedProject == null ||
+                                    weeklyInsights == null) {
+                                  return;
+                                }
+                                await _openCustomReportBuilder(
+                                  l10n: l10n,
+                                  project: selectedProject,
+                                  insights: weeklyInsights,
+                                  currency: currency,
+                                );
                               },
                             )
                           : null;
@@ -319,7 +598,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     ),
                   ),
                 ),
-              if (currentProjectId == null)
+              if (roleIsLoading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _LoadingWidget(),
+                )
+              else if (hasWorkspace && !canAccessReports)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: _ErrorCard(message: l10n.t('reportAccessDenied')),
+                    ),
+                  ),
+                )
+              else if (currentProjectId == null)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -575,6 +869,7 @@ class _ReportsHeaderActions extends StatelessWidget {
     required this.onExportWeekly,
     required this.onExportCombined,
     required this.onOpenEntitySummary,
+    required this.onBuildCustomReport,
   });
 
   final String? currentProjectId;
@@ -583,6 +878,7 @@ class _ReportsHeaderActions extends StatelessWidget {
   final VoidCallback onExportWeekly;
   final VoidCallback onExportCombined;
   final VoidCallback onOpenEntitySummary;
+  final VoidCallback onBuildCustomReport;
 
   @override
   Widget build(BuildContext context) {
@@ -612,6 +908,13 @@ class _ReportsHeaderActions extends StatelessWidget {
             label: l10n.t('entitySummary'),
             onTap: onOpenEntitySummary,
           ),
+          if (currentProjectId != null && weeklyInsights != null)
+            const SizedBox(width: 8),
+          if (currentProjectId != null && weeklyInsights != null)
+            _ExportButton(
+              label: l10n.t('buildCustomReport'),
+              onTap: onBuildCustomReport,
+            ),
         ],
       ),
     );

@@ -186,17 +186,17 @@
 - [X] T099 [P] [US3] Add contractor accounting repository/provider in `lib/features/contractors/data/contractor_accounting_repository.dart`
 - [X] T100 [P] [US3] Add equipment accounting repository/provider in `lib/features/equipment/data/equipment_accounting_repository.dart`
 - [X] T101 [P] [US3] Add transport provider accounting repository/provider in `lib/features/transport/data/transport_provider_accounting_repository.dart`
-- [ ] T102 [P] [US3] Add worker accounting list/detail/form UI with attachment count and open controls in `lib/features/workers/presentation/screens/worker_accounting_screen.dart`
-- [ ] T103 [P] [US3] Add contractor accounting list/detail/form UI with attachment count and open controls in `lib/features/contractors/presentation/screens/contractors_screen.dart`
-- [ ] T104 [P] [US3] Add equipment accounting list/detail/form UI with attachment count and open controls in `lib/features/equipment/presentation/screens/equipment_screen.dart`
-- [ ] T105 [P] [US3] Add transport provider accounting list/detail/form UI with attachment count and open controls in `lib/features/transport/presentation/screens/transport_providers_screen.dart`
+- [X] T102 [P] [US3] Add worker accounting list/detail/form UI with attachment count and open controls in `lib/features/workers/presentation/screens/worker_accounting_screen.dart`
+- [X] T103 [P] [US3] Add contractor accounting list/detail/form UI with attachment count and open controls in `lib/features/contractors/presentation/screens/contractors_screen.dart`
+- [X] T104 [P] [US3] Add equipment accounting list/detail/form UI with attachment count and open controls in `lib/features/equipment/presentation/screens/equipment_screen.dart`
+- [X] T105 [P] [US3] Add transport provider accounting list/detail/form UI with attachment count and open controls in `lib/features/transport/presentation/screens/transport_providers_screen.dart`
 - [X] T106 [US3] Integrate worker, contractor, equipment, and transport records into entity aggregation summaries in `lib/features/reports/data/entity_aggregation_providers.dart`
-- [ ] T107 [US3] Integrate worker, contractor, equipment, and transport records into report data providers in `lib/features/reports/data/reports_providers.dart`
-- [ ] T108 [US3] Register worker accounting, contractor, equipment, and transport routes in `lib/app/router.dart`
-- [ ] T109 [US3] Complete entity aggregation list, search, type filter, role gate, and empty/error states in `lib/features/reports/presentation/screens/entity_aggregation_screen.dart`
+- [X] T107 [US3] Integrate worker, contractor, equipment, and transport records into report data providers in `lib/features/reports/data/reports_providers.dart`
+- [X] T108 [US3] Register worker accounting, contractor, equipment, and transport routes in `lib/app/router.dart`
+- [X] T109 [US3] Complete entity aggregation list, search, type filter, role gate, and empty/error states in `lib/features/reports/presentation/screens/entity_aggregation_screen.dart`
 - [X] T110 [US3] Add entity aggregation detail view with history, category breakdown, payment method breakdown, and attachment count in `lib/features/reports/presentation/screens/entity_aggregation_detail_screen.dart`
-- [ ] T111 [US3] Apply the shared role-gated attachment tile to entity and domain accounting screens in `lib/core/widgets/attachment_tile.dart`
-- [ ] T112 [US3] Add localized domain accounting and attachment access-denied strings in `lib/app/localization/app_localizations.dart`
+- [X] T111 [US3] Apply the shared role-gated attachment tile to entity and domain accounting screens in `lib/core/widgets/attachment_tile.dart`
+- [X] T112 [US3] Add localized domain accounting and attachment access-denied strings in `lib/app/localization/app_localizations.dart`
 
 **Checkpoint**: US3 is independently functional and testable for reusable entities and aggregation.
 
@@ -210,21 +210,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T113 [P] [US4] Add report PDF exporter tests for expenses, payments, entities, workers, contractors, daily, weekly, filtered, combined, and empty data in `test/features/reports/services/report_pdf_exporter_test.dart`
-- [ ] T114 [P] [US4] Add report provider date/filter data tests in `test/features/reports/data/reports_providers_test.dart`
-- [ ] T115 [P] [US4] Add report screen export type and section selection widget tests in `test/widget/reports_screen_test.dart`
-- [ ] T116 [P] [US4] Add unauthorized report export tests in `test/features/reports/data/report_access_test.dart`
+- [X] T113 [P] [US4] Add report PDF exporter tests for expenses, payments, entities, workers, contractors, daily, weekly, filtered, combined, and empty data in `test/features/reports/services/report_pdf_exporter_test.dart`
+- [X] T114 [P] [US4] Add report provider date/filter data tests in `test/features/reports/data/reports_providers_test.dart`
+- [X] T115 [P] [US4] Add report screen export type and section selection widget tests in `test/widget/reports_screen_test.dart`
+- [X] T116 [P] [US4] Add unauthorized report export tests in `test/features/reports/data/report_access_test.dart`
 
 ### Implementation for User Story 4
 
-- [ ] T117 [P] [US4] Split reusable PDF section builders into `lib/features/reports/services/report_pdf_sections.dart`
-- [ ] T118 [US4] Add expenses-only, payments-only, entities, workers, contractors, daily, weekly, filtered, and combined builders in `lib/features/reports/services/report_pdf_exporter.dart`
-- [ ] T119 [US4] Add report request model and selectable sections in `lib/features/reports/domain/report_request.dart`
-- [ ] T120 [US4] Add bounded report data providers for each report type in `lib/features/reports/data/reports_providers.dart`
-- [ ] T121 [US4] Add role gate and recoverable PDF error handling to reports screen in `lib/features/reports/presentation/screens/reports_screen.dart`
-- [ ] T122 [US4] Add weekly export action from dashboard in `lib/features/dashboard/presentation/screens/dashboard_screen.dart`
+- [X] T117 [P] [US4] Split reusable PDF section builders into `lib/features/reports/services/report_pdf_sections.dart`
+- [X] T118 [US4] Add expenses-only, payments-only, entities, workers, contractors, daily, weekly, filtered, and combined builders in `lib/features/reports/services/report_pdf_exporter.dart`
+- [X] T119 [US4] Add report request model and selectable sections in `lib/features/reports/domain/report_request.dart`
+- [X] T120 [US4] Add bounded report data providers for each report type in `lib/features/reports/data/reports_providers.dart`
+- [X] T121 [US4] Add role gate and recoverable PDF error handling to reports screen in `lib/features/reports/presentation/screens/reports_screen.dart`
+- [X] T122 [US4] Add weekly export action from dashboard in `lib/features/dashboard/presentation/screens/dashboard_screen.dart`
 - [X] T123 [US4] Add entity summary export error handling in `lib/features/reports/presentation/screens/entity_aggregation_screen.dart`
-- [ ] T124 [US4] Add localized report type, section, empty, and export error strings in `lib/app/localization/app_localizations.dart`
+- [X] T124 [US4] Add localized report type, section, empty, and export error strings in `lib/app/localization/app_localizations.dart`
 
 **Checkpoint**: US4 is independently functional and testable for report export behavior.
 
@@ -234,14 +234,14 @@
 
 **Purpose**: End-to-end verification, documentation, accessibility, localization, and cleanup across all stories.
 
-- [ ] T125 [P] Add accessibility labels for attachment, filter, group, summary, and export controls in `lib/app/localization/app_localizations.dart`
-- [ ] T126 [P] Add manual QA result template for the full original scope in `specs/001-complete-accounting-scope/quickstart.md`
-- [ ] T127 Run `flutter analyze` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
-- [ ] T128 Run full `flutter test` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
-- [ ] T129 Run targeted feature tests and record command output in `specs/001-complete-accounting-scope/quickstart.md`
-- [ ] T130 Run functions `npm test` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
-- [ ] T131 Verify Firestore indexes and rules against actual implemented queries in `firestore.indexes.json`
-- [ ] T132 Complete final production-readiness scope matrix in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T125 [P] Add accessibility labels for attachment, filter, group, summary, and export controls in `lib/app/localization/app_localizations.dart`
+- [X] T126 [P] Add manual QA result template for the full original scope in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T127 Run `flutter analyze` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T128 Run full `flutter test` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T129 Run targeted feature tests and record command output in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T130 Run functions `npm test` and record command output in `specs/001-complete-accounting-scope/quickstart.md`
+- [X] T131 Verify Firestore indexes and rules against actual implemented queries in `firestore.indexes.json`
+- [X] T132 Complete final production-readiness scope matrix in `specs/001-complete-accounting-scope/quickstart.md`
 
 ---
 
@@ -350,3 +350,4 @@ After Phase 2, separate developers or agents can work on tests/helpers in differ
 - Every user story task includes `[US1]`, `[US2]`, `[US3]`, `[US4]`, or `[US5]`.
 - Parallelizable tasks use `[P]` only when they touch separate files or can be safely started before dependent implementation.
 - Every executable task names at least one concrete file path.
+

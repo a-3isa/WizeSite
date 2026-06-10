@@ -1,17 +1,53 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
+import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:printing/printing.dart';
 
-class EntityAggregationDetailScreen extends StatelessWidget {
+class EntityAggregationDetailScreen extends ConsumerWidget {
   const EntityAggregationDetailScreen({required this.summary, super.key});
 
   final EntitySummary summary;
 
+  Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final currency =
+        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
+    try {
+      final bytes = await const ReportPdfExporter().buildEntitySummaryReportPdf(
+        l10n: l10n,
+        summaries: [summary],
+        selectedType: 'all',
+        currency: currency,
+      );
+      await Printing.layoutPdf(onLayout: (_) async => bytes);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(summary.entityName)),
+      appBar: AppBar(
+        title: Text(summary.entityName),
+        actions: [
+          IconButton(
+            tooltip: l10n.t('exportEntitySummary'),
+            onPressed: () => _exportPdf(context, ref),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

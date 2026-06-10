@@ -37,6 +37,10 @@ class AppRoutes {
   static const String workerEdit = '/worker/:id/edit';
   static const String addWorker = '/add-worker';
   static const String workerEntry = '/worker-entry/:id';
+  static const String workerAccounting = '/worker-accounting/:id';
+  static const String contractors = '/contractors/:id';
+  static const String equipment = '/equipment/:id';
+  static const String transportProviders = '/transport-providers/:id';
   static const String notifications = '/notifications';
 
   static const String subscriptionPlans = '/subscription/plans';
@@ -67,6 +71,32 @@ class AppRoutes {
   static String workerEditPath(String id) => '/worker/$id/edit';
   static String workerEntryPath(String id, {String? projectId}) =>
       _withOptionalQuery('/worker-entry/$id', {'projectId': projectId});
+  static String workerAccountingPath(
+    String id, {
+    String? name,
+    String? projectId,
+  }) => _withOptionalQuery('/worker-accounting/$id', {
+    'name': name,
+    'projectId': projectId,
+  });
+  static String contractorsPath(String id, {String? name, String? projectId}) =>
+      _withOptionalQuery('/contractors/$id', {
+        'name': name,
+        'projectId': projectId,
+      });
+  static String equipmentPath(String id, {String? name, String? projectId}) =>
+      _withOptionalQuery('/equipment/$id', {
+        'name': name,
+        'projectId': projectId,
+      });
+  static String transportProvidersPath(
+    String id, {
+    String? name,
+    String? projectId,
+  }) => _withOptionalQuery('/transport-providers/$id', {
+    'name': name,
+    'projectId': projectId,
+  });
 
   static String reportsPath({String? projectId}) =>
       _withOptionalQuery(reports, {'projectId': projectId});

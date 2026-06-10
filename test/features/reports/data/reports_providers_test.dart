@@ -1,8 +1,11 @@
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -648,6 +651,106 @@ void main() {
         expect(summary['totalExpenses'], 0);
         expect(flow.first.expenses, 0);
         expect(categories['labor'], isNull);
+      },
+    );
+
+    test(
+      'domain accounting report providers return bounded project records',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final firstDate = DateTime.utc(2026, 6, 10);
+        final secondDate = DateTime.utc(2026, 6, 9);
+        await firestore.collection('worker_accounting_records').doc('w1').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_1',
+          'workerId': 'worker_1',
+          'workerName': 'Sam',
+          'description': 'Wages',
+          'amount': 120,
+          'date': firstDate,
+          'paymentMethod': 'cash',
+          'paymentStatus': 'paid',
+        });
+        await firestore
+            .collection('contractor_accounting_records')
+            .doc('c1')
+            .set({
+              'workspaceId': 'workspace_1',
+              'projectId': 'project_1',
+              'contractorId': 'contractor_1',
+              'contractorName': 'Mina Contracting',
+              'description': 'Concrete work',
+              'amount': 500,
+              'date': firstDate,
+              'paymentMethod': 'bank',
+              'paymentStatus': 'pending',
+            });
+        await firestore
+            .collection('equipment_accounting_records')
+            .doc('e1')
+            .set({
+              'workspaceId': 'workspace_1',
+              'projectId': 'project_1',
+              'providerId': 'equipment_1',
+              'providerName': 'Lift Rentals',
+              'description': 'Crane rental',
+              'amount': 300,
+              'date': secondDate,
+              'paymentMethod': 'cash',
+              'paymentStatus': 'paid',
+            });
+        await firestore
+            .collection('transport_provider_accounting_records')
+            .doc('t1')
+            .set({
+              'workspaceId': 'workspace_1',
+              'projectId': 'project_1',
+              'providerId': 'transport_1',
+              'providerName': 'Fast Trucks',
+              'description': 'Material delivery',
+              'amount': 80,
+              'date': secondDate,
+              'paymentMethod': 'cash',
+              'paymentStatus': 'paid',
+            });
+        await firestore.collection('worker_accounting_records').doc('w2').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'other_project',
+          'workerId': 'worker_2',
+          'workerName': 'Other',
+          'description': 'Other project',
+          'amount': 999,
+          'date': firstDate,
+          'paymentMethod': 'cash',
+          'paymentStatus': 'paid',
+        });
+
+        final container = ProviderContainer(
+          overrides: [
+            firestoreProvider.overrideWithValue(firestore),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            reportProjectIdProvider.overrideWith((ref) => 'project_1'),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final workers = await container.read(
+          reportWorkerAccountingRecordsProvider.future,
+        );
+        final contractors = await container.read(
+          reportContractorAccountingRecordsProvider.future,
+        );
+        final equipment = await container.read(
+          reportEquipmentAccountingRecordsProvider.future,
+        );
+        final transport = await container.read(
+          reportTransportAccountingRecordsProvider.future,
+        );
+
+        expect(workers.map((item) => item.id), ['w1']);
+        expect(contractors.single.contractorName, 'Mina Contracting');
+        expect(equipment.single.providerName, 'Lift Rentals');
+        expect(transport.single.providerName, 'Fast Trucks');
       },
     );
   });

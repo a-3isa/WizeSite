@@ -1,3 +1,5 @@
+import 'package:buildtrack_app/core/models/attachment.dart';
+
 class WorkerProfile {
   const WorkerProfile({
     required this.id,
@@ -51,6 +53,7 @@ class WorkerEntryRecord {
     required this.date,
     required this.notes,
     required this.isArchived,
+    this.attachments = const [],
     this.clientMutationId = '',
   });
 
@@ -64,6 +67,7 @@ class WorkerEntryRecord {
   final DateTime date;
   final String notes;
   final bool isArchived;
+  final List<Attachment> attachments;
   final String clientMutationId;
 
   factory WorkerEntryRecord.fromMap(String id, Map<String, dynamic> map) {
@@ -100,6 +104,7 @@ class WorkerEntryRecord {
       date: parseDate(map['date']),
       notes: map['notes'] as String? ?? '',
       isArchived: map['isArchived'] as bool? ?? false,
+      attachments: Attachment.listFromDynamic(map['attachments']),
       clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }

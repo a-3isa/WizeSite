@@ -369,6 +369,35 @@ else {
         strict_1.default.equal(saved.attachments?.[0]?.id, "attach_2");
         strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/receipt.png");
     });
+    (0, node_test_1.default)("createWorkerEntryWithQuotaForUser persists attachments", async () => {
+        await seedRecomputeInputs();
+        const result = await createWorkerEntryWithQuotaForUser("user_1", {
+            workspaceId,
+            workerId: "worker_1",
+            projectId: "project_1",
+            daysWorked: 1,
+            dailyWage: 125,
+            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            notes: "Worker attachment test",
+            attachments: [
+                {
+                    id: "attach_worker_1",
+                    fileName: "signed-timesheet.pdf",
+                    downloadUrl: "https://example.com/signed-timesheet.pdf",
+                    storagePath: "attachments/signed-timesheet.pdf",
+                    uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+                    contentType: "application/pdf",
+                    size: 24680,
+                },
+            ],
+            clientMutationId: "mutation_worker_1",
+        });
+        const saved = (await db.collection("worker_entries").doc(result.id).get()).data();
+        strict_1.default.equal(Array.isArray(saved.attachments), true);
+        strict_1.default.equal(saved.attachments?.length, 1);
+        strict_1.default.equal(saved.attachments?.[0]?.id, "attach_worker_1");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/signed-timesheet.pdf");
+    });
     (0, node_test_1.default)("project write does not loop on derived-only project field changes", async () => {
         await seedRecomputeInputs();
         const projectRef = db.collection("projects").doc("project_1");

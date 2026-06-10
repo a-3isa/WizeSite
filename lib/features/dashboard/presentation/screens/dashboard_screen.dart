@@ -20,6 +20,8 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
+import 'package:printing/printing.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -262,7 +264,41 @@ class DashboardScreen extends ConsumerWidget {
               data: (insights) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SectionHeader(title: l10n.t('weeklyInsights')),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SectionHeader(title: l10n.t('weeklyInsights')),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        tooltip: l10n.t('exportWeeklyReport'),
+                        onPressed: () async {
+                          try {
+                            final bytes = await const ReportPdfExporter()
+                                .buildWeeklyInsightsReportPdf(
+                                  l10n: l10n,
+                                  insights: insights,
+                                  currency: currency,
+                                );
+                            await Printing.layoutPdf(
+                              onLayout: (_) async => bytes,
+                            );
+                          } catch (error) {
+                            if (!context.mounted) {
+                              return;
+                            }
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(
+                                SnackBar(
+                                  content: Text('${l10n.t('failed')}: $error'),
+                                ),
+                              );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   GridView.count(
                     crossAxisCount: 2,

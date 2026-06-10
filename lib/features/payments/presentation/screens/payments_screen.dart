@@ -15,11 +15,13 @@ import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
 class PaymentsScreen extends ConsumerStatefulWidget {
   const PaymentsScreen({this.projectId, super.key});
@@ -525,6 +527,53 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     }
   }
 
+  Future<void> _exportPdf() async {
+    final l10n = AppLocalizations.of(context);
+    final payments = _filteredPayments();
+    if (payments.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.t('noDataYet'))));
+      return;
+    }
+    final currency =
+        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
+    final filterParts = <String>[];
+    if (_paymentMethodFilter != null) {
+      filterParts.add(l10n.paymentMethodLabel(_paymentMethodFilter!));
+    }
+    if (_paymentStatusFilter != null) {
+      filterParts.add(l10n.paymentStatusLabel(_paymentStatusFilter!));
+    }
+    if (_entityFilterName.isNotEmpty) {
+      filterParts.add(_entityFilterName);
+    }
+    final search = _searchController.text.trim();
+    if (search.isNotEmpty) {
+      filterParts.add(search);
+    }
+    try {
+      final bytes = await const ReportPdfExporter().buildPaymentsListPdf(
+        l10n: l10n,
+        projectName: '',
+        payments: payments,
+        currency: currency,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+        filterSummary: filterParts.isEmpty ? null : filterParts.join(', '),
+      );
+      await Printing.layoutPdf(onLayout: (_) async => bytes);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+    }
+  }
+
   List<PaymentRecord> _filteredPayments() {
     final search = _searchController.text.trim().toLowerCase();
     return _payments
@@ -591,6 +640,13 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           context: context,
           title: l10n.t('payments'),
           fallbackRoute: fallbackRoute,
+          actions: [
+            IconButton(
+              tooltip: l10n.t('exportPdf'),
+              onPressed: _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openAddPayment,

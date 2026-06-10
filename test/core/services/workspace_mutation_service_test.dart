@@ -86,4 +86,49 @@ void main() {
       );
     },
   );
+
+  test(
+    'queues pending worker entry attachments as retryable upload actions',
+    () async {
+      final result = await service.createWorkerEntry(
+        workspaceId: 'workspace_1',
+        workerId: 'worker_1',
+        projectId: 'project_1',
+        daysWorked: 2,
+        dailyWage: 150,
+        date: DateTime.utc(2026, 6, 10),
+        attachments: [
+          {
+            'id': 'worker_attachment_1',
+            'fileName': 'signed-timesheet.pdf',
+            'localPath': r'C:\pending\signed-timesheet.pdf',
+            'contentType': 'application/pdf',
+            'size': 4096,
+            'uploadStatus': 'pending',
+          },
+        ],
+      );
+
+      final actions = await queue.list(includeDeadLetters: true);
+
+      expect(result.queued, isTrue);
+      expect(actions.map((action) => action.type), [
+        OfflineActionTypes.createWorkerEntry,
+        OfflineActionQueueTypes.attachmentUpload,
+      ]);
+      expect(
+        actions.last.payload[OfflineActionPayloadKeys.workspaceId],
+        'workspace_1',
+      );
+      expect(
+        actions.last.payload[OfflineActionPayloadKeys.ownerType],
+        'worker_entry',
+      );
+      expect(actions.last.payload[OfflineActionPayloadKeys.ownerId], result.id);
+      expect(
+        actions.last.payload[OfflineActionPayloadKeys.attachment]['fileName'],
+        'signed-timesheet.pdf',
+      );
+    },
+  );
 }

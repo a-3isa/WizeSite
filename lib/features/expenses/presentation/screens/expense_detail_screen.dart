@@ -5,6 +5,8 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -207,6 +209,89 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   child: Text(l10n.t('edit')),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonal(
+                  onPressed: () async {
+                    final workspaceId = ref.read(activeWorkspaceIdProvider);
+                    final userId = ref.read(activeUserIdProvider);
+                    if (workspaceId == null || userId == null) {
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(content: Text(l10n.t('pleaseLoginFirst'))),
+                        );
+                      return;
+                    }
+                    try {
+                      final result = await ref
+                          .read(expenseRepositoryProvider)
+                          .createExpense(
+                            workspaceId: workspaceId,
+                            userId: userId,
+                            projectId: expense.projectId,
+                            projectName: expense.projectName,
+                            category: expense.category,
+                            amount: expense.amount,
+                            currency: expense.currency,
+                            date: DateTime.now(),
+                            purpose: expense.purpose,
+                            description: expense.description,
+                            notes: expense.notes,
+                            supplierName: expense.supplierName,
+                            entityId: expense.entityId,
+                            entityName: expense.entityName,
+                            entityType: expense.entityType,
+                            paymentMethod: expense.paymentMethod,
+                            paymentStatus: expense.paymentStatus,
+                            attachments: expense.attachments.isNotEmpty
+                                ? expense.attachments
+                                : null,
+                          );
+                      if (result.queued) {
+                        await ref
+                            .read(offlineQueueCoordinatorProvider)
+                            .refreshCounts();
+                        unawaited(
+                          ref.read(offlineQueueCoordinatorProvider).drainNow(),
+                        );
+                        pushAppUiNotice(ref, l10n.t('queuedForSync'));
+                      }
+                      if (context.mounted) {
+                        appNavigateBack(
+                          context,
+                          fallbackRoute: AppRoutes.projectExpensesPath(
+                            expense.projectId,
+                          ),
+                        );
+                      }
+                    } on CallableClientException catch (e) {
+                      if (e.code == 'failed-precondition') {
+                        if (context.mounted) {
+                          context.push(
+                            '${AppRoutes.subscriptionLimit}?limit=expensesPerMonth',
+                          );
+                        }
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(SnackBar(content: Text(e.message)));
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                l10n.t('unexpectedErrorTryAgain'),
+                              ),
+                            ),
+                          );
+                      }
+                    }
+                  },
+                  child: Text(l10n.t('duplicate')),
                 ),
                 const SizedBox(height: 8),
                 FilledButton(

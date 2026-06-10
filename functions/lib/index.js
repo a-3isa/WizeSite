@@ -1622,6 +1622,7 @@ async function createWorkerEntryWithQuotaForUser(uid, data) {
         }
     }
     const entryRef = db.collection("worker_entries").doc();
+    const attachments = ensureAttachmentItems(data, "attachments");
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
@@ -1636,6 +1637,7 @@ async function createWorkerEntryWithQuotaForUser(uid, data) {
             totalCost,
             date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
             notes: `${data.notes ?? ""}`.trim(),
+            attachments,
             clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
             clientCreatedAt: parseTimestamp(data.clientCreatedAt),
             clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
@@ -2250,7 +2252,7 @@ exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
     const oldTotalCost = workerEntryTotalCost(entry);
     const oldProjectId = `${entry.projectId ?? ""}`;
     const batch = db.batch();
-    batch.update(entrySnap.ref, {
+    const updateData = {
         projectId,
         daysWorked,
         dailyWage,
@@ -2260,7 +2262,11 @@ exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (data.attachments != null) {
+        updateData.attachments = ensureAttachmentItems(data, "attachments");
+    }
+    batch.update(entrySnap.ref, updateData);
     if (oldProjectId === projectId) {
         applyMetricsDeltaInBatch(batch, projectId, workspaceId, newTotalCost - oldTotalCost, 0);
     }
