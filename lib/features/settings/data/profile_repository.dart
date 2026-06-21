@@ -31,7 +31,9 @@ class FirebaseProfileRepository implements ProfileRepository {
   }) async {
     final source = File(localFilePath);
     if (!await source.exists()) {
-      throw const ProfileRepositoryException('Selected profile image was not found.');
+      throw const ProfileRepositoryException(
+        'Selected profile image was not found.',
+      );
     }
 
     final ref = _storage.ref('profile-photos/$userId/avatar.jpg');

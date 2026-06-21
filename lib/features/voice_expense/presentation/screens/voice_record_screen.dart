@@ -1,22 +1,20 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
-import 'dart:async';
-import 'dart:io';
-import 'dart:math' as math;
-
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
-import 'package:buildtrack_app/core/services/voice_recorder_service.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/voice_expense/domain/voice_capture_state.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
+import 'package:buildtrack_app/features/voice_expense/presentation/controllers/voice_capture_controller.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_processing_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:audioplayers/audioplayers.dart';
 
 class VoiceRecordScreen extends ConsumerStatefulWidget {
   const VoiceRecordScreen({super.key});
@@ -27,15 +25,11 @@ class VoiceRecordScreen extends ConsumerStatefulWidget {
 
 class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
     with SingleTickerProviderStateMixin {
-  Timer? _timer;
-  bool _isRecording = false;
-  int _elapsedSeconds = 0;
-  String? _recordingPath;
-  String? _readyFilePath;
-  String? _error;
-  late AnimationController _pulseController;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
+  late final AnimationController _pulseController;
+
+  /// Screen-level message key for permission-related failures (the controller
+  /// only owns recording/playback failures).
+  String? _permissionErrorKey;
 
   @override
   void initState() {
@@ -48,45 +42,19 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
 
   @override
   void dispose() {
-    _timer?.cancel();
     _pulseController.dispose();
-    _audioPlayer.dispose();
     super.dispose();
   }
 
-  Future<void> _startRecording() async {
+  VoiceCaptureController get _controller =>
+      ref.read(voiceCaptureControllerProvider.notifier);
+
+  Future<void> _onMicPressed() async {
     final l10n = AppLocalizations.of(context);
-    setState(() {
-      _error = null;
-      _readyFilePath = null;
-      _elapsedSeconds = 0;
-    });
-
-    try {
-      final hasPermission = await _ensureMicrophonePermission(l10n);
-      if (!hasPermission) {
-        return;
-      }
-
-      final path = await ref.read(voiceRecorderServiceProvider).start();
-      _pulseController.repeat(reverse: true);
-      _timer?.cancel();
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _elapsedSeconds += 1);
-        if (_elapsedSeconds >= 20) {
-          unawaited(_stopRecording());
-        }
-      });
-      setState(() {
-        _recordingPath = path;
-        _isRecording = true;
-      });
-    } catch (e) {
-      setState(() => _error = e.toString());
-    }
+    setState(() => _permissionErrorKey = null);
+    final granted = await _ensureMicrophonePermission(l10n);
+    if (!granted) return;
+    await _controller.startRecording();
   }
 
   Future<bool> _ensureMicrophonePermission(AppLocalizations l10n) async {
@@ -133,7 +101,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
       return false;
     }
     if (mounted) {
-      setState(() => _error = l10n.t('microphonePermissionDenied'));
+      setState(() => _permissionErrorKey = 'microphonePermissionDenied');
     }
     return false;
   }
@@ -164,92 +132,40 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
     }
   }
 
-  Future<void> _stopRecording() async {
-    _timer?.cancel();
-    _pulseController.stop();
-    try {
-      final path = await ref.read(voiceRecorderServiceProvider).stop();
-      setState(() {
-        _isRecording = false;
-        _readyFilePath = path ?? _recordingPath;
-      });
-    } catch (e) {
-      setState(() {
-        _isRecording = false;
-        _error = e.toString();
-      });
-    }
-  }
-
-  Future<void> _cancelRecording() async {
-    _timer?.cancel();
-    _pulseController.stop();
-    await _audioPlayer.stop();
-    await ref.read(voiceRecorderServiceProvider).cancel();
-    setState(() {
-      _isRecording = false;
-      _isPlaying = false;
-      _elapsedSeconds = 0;
-      _recordingPath = null;
-      _readyFilePath = null;
-      _error = null;
-    });
-  }
-
-  Future<void> _playRecording() async {
-    final path = _readyFilePath;
-    if (path == null) return;
-
-    try {
-      if (_isPlaying) {
-        await _audioPlayer.pause();
-        setState(() => _isPlaying = false);
-      } else {
-        await _audioPlayer.play(DeviceFileSource(path));
-        setState(() => _isPlaying = true);
-
-        _audioPlayer.onPlayerComplete.first.then((_) {
-          if (mounted) {
-            setState(() => _isPlaying = false);
-          }
-        });
-      }
-    } catch (e) {
-      setState(() => _error = "Play error: $e");
-    }
-  }
-
-  Future<void> _goToProcessing(List<VoiceProjectOption> projects) async {
-    final l10n = AppLocalizations.of(context);
+  Future<void> _goToProcessing(
+    List<VoiceProjectOption> projects,
+    VoiceCaptureState captureState,
+  ) async {
     final authUser = ref.read(firebaseAuthProvider).currentUser;
     final userId = authUser?.uid;
-    final audioPath = _readyFilePath;
+    final audioPath = captureState.recordingPath;
     final languageHint = Localizations.localeOf(context).languageCode;
     if (userId == null || userId.isEmpty) {
       ref.read(activeUserIdProvider.notifier).state = null;
-      setState(() => _error = l10n.t('pleaseLoginFirst'));
+      setState(() => _permissionErrorKey = 'pleaseLoginFirst');
       return;
     }
     ref.read(activeUserIdProvider.notifier).state = userId;
     if (audioPath == null || audioPath.isEmpty) {
-      setState(() => _error = l10n.t('recordAudioFirst'));
+      setState(() => _permissionErrorKey = 'recordAudioFirst');
       return;
     }
     if (!await File(audioPath).exists()) {
-      setState(() => _error = l10n.t('recordedFileMissing'));
+      setState(() => _permissionErrorKey = 'recordedFileMissing');
       return;
     }
 
     if (!mounted) {
       return;
     }
+    _controller.markProcessing();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => VoiceProcessingScreen(
           userId: userId,
           localAudioPath: audioPath,
           projects: projects,
-          currency: 'EGP',
+          currency: captureState.currencyCode,
           languageHint: languageHint,
         ),
       ),
@@ -257,8 +173,9 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
   }
 
   Future<void> _handleBackNavigation() async {
-    if (_isRecording || _readyFilePath != null || _isPlaying) {
-      await _cancelRecording();
+    final state = ref.read(voiceCaptureControllerProvider);
+    if (state.isRecording || state.hasRecording || state.isPlaying) {
+      await _controller.cancel();
     }
     if (!mounted) {
       return;
@@ -266,10 +183,31 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
     appNavigateBack(context, fallbackRoute: AppRoutes.add);
   }
 
+  void _syncPulse(VoiceCaptureState state) {
+    if (state.isRecording) {
+      if (!_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      }
+    } else if (_pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.reset();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final projectsAsync = ref.watch(projectsProvider);
+    final captureState = ref.watch(voiceCaptureControllerProvider);
+
+    ref.listen<VoiceCaptureState>(voiceCaptureControllerProvider, (_, next) {
+      _syncPulse(next);
+    });
+    _syncPulse(captureState);
+
+    final errorKey = captureState.hasError
+        ? captureState.errorKey
+        : _permissionErrorKey;
 
     return PopScope<Object?>(
       canPop: false,
@@ -305,90 +243,62 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
 
             return Stack(
               children: [
-                // Column(
-                //   children: [
-                //     const SizedBox(height: 40),
-                //     // Padding(
-                //     //   padding: const EdgeInsets.symmetric(horizontal: 40),
-                //     //   child: Text(
-                //     //     l10n.t('recordShortNote'),
-                //     //     textAlign: TextAlign.center,
-                //     //     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                //     //       color: AppColors.textDark,
-                //     //       fontWeight: FontWeight.w600,
-                //     //       letterSpacing: -0.5,
-                //     //     ),
-                //     //   ),
-                //     // ),
-                //     const SizedBox(height: 12),
-                //     Text(
-                //       _isRecording
-                //           ? l10n.t(
-                //               'recording',
-                //               params: {'seconds': '$_elapsedSeconds'},
-                //             )
-                //           : (_readyFilePath == null
-                //                 ? l10n.t('tapToStart')
-                //                 : l10n.t('readyToProcess')),
-                //       style: TextStyle(
-                //         color: _isRecording
-                //             ? AppColors.danger
-                //             : AppColors.textBody,
-                //         fontWeight: FontWeight.w500,
-                //       ),
-                //     ),
-                //     const Spacer(),
-                //     _WaveformVisualizer(isRecording: _isRecording),
-                //     const Spacer(flex: 2),
-                //   ],
-                // ),
                 Align(
                   alignment: Alignment.center,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _StatusLine(state: captureState),
+                      const SizedBox(height: 20),
                       _MicButton(
-                        isRecording: _isRecording,
+                        isRecording: captureState.isRecording,
                         pulseController: _pulseController,
-                        onPressed: _isRecording
-                            ? _stopRecording
-                            : _startRecording,
+                        onPressed: captureState.isRecording
+                            ? _controller.stopRecording
+                            : _onMicPressed,
                       ),
-                      if (kDebugMode &&
-                          _readyFilePath != null &&
-                          !_isRecording) ...[
-                        const SizedBox(height: 24),
-                        TextButton.icon(
-                          onPressed: _playRecording,
-                          icon: Icon(
-                            _isPlaying ? Icons.pause_circle : Icons.play_circle,
-                            size: 32,
-                            color: AppColors.constructionOrange,
-                          ),
-                          label: Text(
-                            _isPlaying ? "Pause Test" : "Play Test",
-                            style: const TextStyle(
+                      const SizedBox(height: 24),
+                      _WaveformVisualizer(
+                        isRecording: captureState.isRecording,
+                        amplitude: captureState.amplitude,
+                      ),
+                      if (captureState.hasRecording &&
+                          !captureState.isRecording)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: TextButton.icon(
+                            onPressed: _controller.togglePlayback,
+                            icon: Icon(
+                              captureState.isPlaying
+                                  ? Icons.pause_circle
+                                  : Icons.play_circle,
+                              size: 32,
                               color: AppColors.constructionOrange,
-                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                          style: TextButton.styleFrom(
-                            backgroundColor: AppColors.constructionOrange
-                                .withValues(alpha: 0.1),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
+                            label: Text(
+                              l10n.t('voicePlayRecording'),
+                              style: const TextStyle(
+                                color: AppColors.constructionOrange,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
+                            style: TextButton.styleFrom(
+                              backgroundColor: AppColors.constructionOrange
+                                  .withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ),
-                if (_error != null)
+                if (errorKey != null)
                   Positioned(
                     top: 100,
                     left: 20,
@@ -412,7 +322,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _error!,
+                              l10n.t(errorKey),
                               style: const TextStyle(
                                 color: AppColors.danger,
                                 fontSize: 13,
@@ -446,8 +356,10 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: _isRecording || _readyFilePath != null
-                                ? _cancelRecording
+                            onPressed:
+                                captureState.isRecording ||
+                                    captureState.hasRecording
+                                ? _controller.cancel
                                 : null,
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -468,9 +380,14 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                         const SizedBox(width: 16),
                         Expanded(
                           child: FilledButton(
-                            onPressed: _isRecording || _readyFilePath == null
+                            onPressed:
+                                captureState.isRecording ||
+                                    !captureState.hasRecording
                                 ? null
-                                : () => _goToProcessing(projectOptions),
+                                : () => _goToProcessing(
+                                    projectOptions,
+                                    captureState,
+                                  ),
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.constructionOrange,
                               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -495,8 +412,42 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
             );
           },
           loading: () => const SizedBox.shrink(),
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) =>
+              Center(child: Text(l10n.t('somethingWentWrong'))),
         ),
+      ),
+    );
+  }
+}
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({required this.state});
+
+  final VoiceCaptureState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final String label;
+    if (state.isRecording) {
+      label = l10n.t(
+        'voiceCountdownRemaining',
+        params: {'seconds': '${state.remaining.inSeconds}'},
+      );
+    } else if (state.isProcessing) {
+      label = l10n.t('voiceProcessing');
+    } else if (state.hasRecording) {
+      label = l10n.t('readyToProcess');
+    } else {
+      label = l10n.t('tapToStart');
+    }
+
+    return Text(
+      label,
+      key: const Key('voiceStatusLine'),
+      style: TextStyle(
+        color: state.isRecording ? AppColors.danger : AppColors.textBody,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -576,64 +527,47 @@ class _MicButton extends StatelessWidget {
   }
 }
 
-class _WaveformVisualizer extends StatefulWidget {
-  const _WaveformVisualizer({required this.isRecording});
+/// Live audio-level visualizer driven by the recorder amplitude. Shows a flat
+/// baseline when idle.
+class _WaveformVisualizer extends StatelessWidget {
+  const _WaveformVisualizer({
+    required this.isRecording,
+    required this.amplitude,
+  });
 
   final bool isRecording;
+  final double amplitude;
 
-  @override
-  State<_WaveformVisualizer> createState() => _WaveformVisualizerState();
-}
-
-class _WaveformVisualizerState extends State<_WaveformVisualizer>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final List<double> _heights = List.generate(
-    30,
-    (index) => 4.0 + math.Random().nextDouble() * 20.0,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  static const int _barCount = 30;
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isRecording) {
+    if (!isRecording) {
       return const SizedBox(height: 40);
     }
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(30, (index) {
-            final animatedHeight =
-                _heights[index] * (0.5 + _controller.value * 0.5);
-            return Container(
-              width: 3,
-              height: animatedHeight,
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              decoration: BoxDecoration(
-                color: AppColors.constructionOrange,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            );
-          }),
-        );
-      },
+    return SizedBox(
+      height: 40,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: List.generate(_barCount, (index) {
+          // Symmetric envelope around the center, scaled by the live amplitude.
+          final distance = (index - _barCount / 2).abs() / (_barCount / 2);
+          final envelope = (1.0 - distance).clamp(0.2, 1.0);
+          final height = (6.0 + amplitude.clamp(0.0, 1.0) * 32.0 * envelope)
+              .clamp(4.0, 40.0);
+          return Container(
+            width: 3,
+            height: height,
+            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+            decoration: BoxDecoration(
+              color: AppColors.constructionOrange,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          );
+        }),
+      ),
     );
   }
 }

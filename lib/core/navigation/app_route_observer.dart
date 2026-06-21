@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-mixin RouteAutoRefreshMixin<T extends ConsumerStatefulWidget> on ConsumerState<T>
+mixin RouteAutoRefreshMixin<T extends ConsumerStatefulWidget>
+    on ConsumerState<T>
     implements RouteAware {
   RouteObserver<ModalRoute<dynamic>>? _observer;
   ModalRoute<dynamic>? _route;

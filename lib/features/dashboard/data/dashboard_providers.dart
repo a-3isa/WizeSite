@@ -1,10 +1,106 @@
+import 'dart:async';
+
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
+import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final dashboardSnapshotProvider =
+    StreamProvider.family<DashboardSnapshot, String>((ref, workspaceId) {
+      final roleFuture = ref.watch(currentAccountingRoleProvider.future);
+      final firestore = ref.watch(firestoreProvider);
+      final queue = ref.watch(offlineActionQueueProvider);
+      return Stream.fromFuture(roleFuture).asyncExpand((role) {
+        if (role?.canAccessAccounting != true) {
+          return Stream.value(DashboardSnapshot.restricted());
+        }
+        return _dashboardSnapshotStream(
+          firestore: firestore,
+          queue: queue,
+          workspaceId: workspaceId,
+        );
+      });
+    });
+
+Stream<DashboardSnapshot> _dashboardSnapshotStream({
+  required FirebaseFirestore firestore,
+  required OfflineActionQueue queue,
+  required String workspaceId,
+}) {
+  final metricsStream = firestore
+      .collection('workspace_metrics')
+      .doc(workspaceId)
+      .snapshots();
+  final queueStream = queue.watch(includeExpiredSynced: true);
+
+  return Stream.multi((controller) {
+    Map<String, dynamic>? metrics;
+    List<OfflineAction> actions = const [];
+
+    void emit() {
+      final data = metrics;
+      if (data == null) return;
+      final merged = Map<String, dynamic>.from(data);
+      var pendingExpenses = 0.0;
+      var pendingIncome = 0.0;
+      for (final action in actions) {
+        if (action.status == OfflineActionStatus.synced ||
+            action.status == OfflineActionStatus.deadLetter ||
+            '${action.payload['workspaceId'] ?? ''}' != workspaceId) {
+          continue;
+        }
+        final amount = ((action.payload['amount'] as num?) ?? 0).toDouble();
+        final previous = ((action.payload['previousAmount'] as num?) ?? 0)
+            .toDouble();
+        switch (action.type) {
+          case OfflineActionTypes.createExpense:
+            pendingExpenses += amount;
+            break;
+          case OfflineActionTypes.updateExpense:
+            pendingExpenses += amount - previous;
+            break;
+          case OfflineActionTypes.archiveExpense:
+            pendingExpenses -= amount;
+            break;
+          case OfflineActionTypes.createPayment:
+            pendingIncome += amount;
+            break;
+          case OfflineActionTypes.updatePayment:
+            pendingIncome += amount - previous;
+            break;
+          case OfflineActionTypes.archivePayment:
+            pendingIncome -= amount;
+            break;
+          default:
+            break;
+        }
+      }
+      merged['totalExpenses'] =
+          ((data['totalExpenses'] as num?) ?? 0).toDouble() + pendingExpenses;
+      merged['totalIncome'] =
+          ((data['totalIncome'] as num?) ?? 0).toDouble() + pendingIncome;
+      controller.add(DashboardSnapshot.fromMap(merged));
+    }
+
+    final metricsSub = metricsStream.listen((snapshot) {
+      metrics = snapshot.data() ?? const <String, dynamic>{};
+      emit();
+    }, onError: controller.addError);
+    final queueSub = queueStream.listen((next) {
+      actions = next;
+      emit();
+    }, onError: controller.addError);
+    controller.onCancel = () async {
+      await metricsSub.cancel();
+      await queueSub.cancel();
+    };
+  });
+}
 
 final dashboardSummaryProvider =
     StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {

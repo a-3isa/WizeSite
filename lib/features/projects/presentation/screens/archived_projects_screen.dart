@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,8 +19,7 @@ class ArchivedProjectsScreen extends ConsumerStatefulWidget {
       _ArchivedProjectsScreenState();
 }
 
-class _ArchivedProjectsScreenState
-    extends ConsumerState<ArchivedProjectsScreen>
+class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
     with RouteAutoRefreshMixin<ArchivedProjectsScreen> {
   static const _pageSize = 20;
 
@@ -217,10 +217,13 @@ class _ArchivedProjectsScreenState
     if (search.isEmpty) {
       return List<Project>.unmodifiable(_projects);
     }
-    return _projects.where((project) {
-      final haystack = '${project.name} ${project.clientName}'.toLowerCase();
-      return haystack.contains(search);
-    }).toList(growable: false);
+    return _projects
+        .where((project) {
+          final haystack = '${project.name} ${project.clientName}'
+              .toLowerCase();
+          return haystack.contains(search);
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -283,7 +286,7 @@ class _ArchivedProjectsScreenState
               child: Column(
                 children: [
                   Text(
-                    _error.toString(),
+                    appErrorMessage(l10n, _error),
                     style: const TextStyle(color: AppColors.danger),
                     textAlign: TextAlign.center,
                   ),
@@ -317,7 +320,9 @@ class _ArchivedProjectsScreenState
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _projects.isEmpty ? l10n.t('noArchivedProjects') : l10n.t('noDataYet'),
+                  _projects.isEmpty
+                      ? l10n.t('noArchivedProjects')
+                      : l10n.t('noDataYet'),
                   style: const TextStyle(
                     color: AppColors.textBody,
                     fontSize: 16,

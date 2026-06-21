@@ -101,4 +101,59 @@ void main() {
       ),
     ).called(1);
   });
+
+  test(
+    'stale queued updates drain as synced with skipped-newer-version outcome',
+    () async {
+      await queue.enqueue(
+        type: OfflineActionTypes.updateExpense,
+        clientSavedAt: DateTime.utc(2026, 5, 27, 8),
+        payload: {
+          'workspaceId': 'workspace_1',
+          'expenseId': 'expense_1',
+          'projectId': 'project_1',
+          'category': 'materials',
+          'amount': 100,
+          'date': DateTime.utc(2026, 5, 27).toIso8601String(),
+        },
+      );
+      await queue.enqueue(
+        type: OfflineActionTypes.updateExpense,
+        clientSavedAt: DateTime.utc(2026, 5, 27, 9),
+        payload: {
+          'workspaceId': 'workspace_1',
+          'expenseId': 'expense_1',
+          'projectId': 'project_1',
+          'category': 'materials',
+          'amount': 150,
+          'date': DateTime.utc(2026, 5, 27).toIso8601String(),
+        },
+      );
+
+      await queue.drain(service.processQueuedAction);
+
+      final actions = await queue.list();
+      final older = actions.first;
+      final newer = actions.last;
+
+      expect(older.status, OfflineActionStatus.synced);
+      expect(
+        older.resolutionType,
+        OfflineActionResolutionType.skippedNewerVersion,
+      );
+      expect(older.resolutionTargetId, 'expense_1');
+      expect(older.resolutionAt, isNotNull);
+      expect(newer.status, OfflineActionStatus.synced);
+      expect(newer.resolutionType, OfflineActionResolutionType.applied);
+      verify(
+        () => client.call<void>(
+          functionName: 'updateExpense',
+          payload: any(named: 'payload'),
+          parseResult: any(named: 'parseResult'),
+          defaultErrorMessage: 'Failed to update expense.',
+          httpFunctionName: any(named: 'httpFunctionName'),
+        ),
+      ).called(1);
+    },
+  );
 }

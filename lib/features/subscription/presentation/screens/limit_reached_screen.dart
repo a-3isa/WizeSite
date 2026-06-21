@@ -8,9 +8,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class LimitReachedScreen extends ConsumerStatefulWidget {
-  const LimitReachedScreen({required this.limitType, super.key});
+  const LimitReachedScreen({
+    required this.limitType,
+    this.current,
+    this.max,
+    super.key,
+  });
 
   final String limitType;
+  final int? current;
+  final int? max;
 
   @override
   ConsumerState<LimitReachedScreen> createState() => _LimitReachedScreenState();
@@ -87,7 +94,11 @@ class _LimitReachedScreenState extends ConsumerState<LimitReachedScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  l10n.t('freePlanLimitsMessage'),
+                  l10n.limitMessage(
+                    widget.limitType,
+                    current: widget.current,
+                    max: widget.max,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),

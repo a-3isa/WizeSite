@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -332,13 +333,13 @@ class WorkerDetailScreen extends ConsumerWidget {
                       ],
                     );
                   },
-                  error: (error, _) => Text(error.toString()),
+                  error: (error, _) => Text(appErrorMessage(l10n, error)),
                   loading: () => const SizedBox.shrink(),
                 ),
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
           loading: () => const SizedBox.shrink(),
         ),
       ),

@@ -37,7 +37,9 @@ class SessionRestoreService {
     await _telemetry.log('session_restore.start', {'user_id': user.uid});
     final workspaceId = await _resolveWorkspaceId(user);
     if (workspaceId == null || workspaceId.isEmpty) {
-      await _telemetry.log('session_restore.no_workspace', {'user_id': user.uid});
+      await _telemetry.log('session_restore.no_workspace', {
+        'user_id': user.uid,
+      });
       return null;
     }
 
@@ -50,24 +52,27 @@ class SessionRestoreService {
 
   Future<String?> _resolveWorkspaceId(User user) async {
     try {
-      final membershipSnap = await _firestore
-          .collection('memberships')
-          .where('userId', isEqualTo: user.uid)
-          .limit(1)
-          .get();
-      if (membershipSnap.docs.isNotEmpty) {
-        final workspaceId =
-            membershipSnap.docs.first.data()['workspaceId'] as String?;
-        if (workspaceId != null && workspaceId.isNotEmpty) {
-          return workspaceId;
-        }
-      }
-
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final workspaceId = userDoc.data()?['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
         await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
         return workspaceId;
+      }
+
+      final membershipSnap = await _firestore
+          .collection('memberships')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      final workspaceIds =
+          membershipSnap.docs
+              .map((doc) => doc.data()['workspaceId'] as String?)
+              .whereType<String>()
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty)
+              .toList(growable: false)
+            ..sort();
+      if (workspaceIds.isNotEmpty) {
+        return workspaceIds.first;
       }
     } catch (error, stackTrace) {
       await _telemetry.recordError(

@@ -37,15 +37,115 @@ void main() {
       );
     });
 
-    test('entity aggregation uses maintained summaries instead of raw scans', () {
-      final entityProviders = File(
-        'lib/features/reports/data/entity_aggregation_providers.dart',
+    test(
+      'entity aggregation uses maintained summaries instead of raw scans',
+      () {
+        final entityProviders = File(
+          'lib/features/reports/data/entity_aggregation_providers.dart',
+        ).readAsStringSync();
+
+        expect(entityProviders, contains("collection('entity_summaries')"));
+        expect(entityProviders, contains('.limit(100)'));
+        expect(entityProviders, isNot(contains("collection('expenses')")));
+        expect(entityProviders, isNot(contains("collection('payments')")));
+      },
+    );
+
+    test('50-project financial pages sort globally in project metrics', () {
+      final projectRepository = File(
+        'lib/features/projects/data/project_repository.dart',
       ).readAsStringSync();
 
-      expect(entityProviders, contains("collection('entity_summaries')"));
-      expect(entityProviders, contains('.limit(100)'));
-      expect(entityProviders, isNot(contains("collection('expenses')")));
-      expect(entityProviders, isNot(contains("collection('payments')")));
+      expect(projectRepository, contains("collection('project_metrics')"));
+      expect(
+        projectRepository,
+        contains(".orderBy(metricField, descending: true)"),
+      );
+      expect(projectRepository, contains(".orderBy('projectName')"));
+      expect(projectRepository, contains(".orderBy('projectId')"));
+      expect(projectRepository, contains('_isMetricDocAfterCursor'));
+      expect(
+        projectRepository,
+        contains('query.limit(request.pageSize + (cursor == null ? 0 : 1))'),
+      );
+      expect(projectRepository, contains('watchProjects(String workspaceId)'));
+      expect(projectRepository, contains('.limit(50)'));
+    });
+
+    test(
+      'dashboard snapshot composes financial totals from one metrics doc',
+      () {
+        final dashboardProviders = File(
+          'lib/features/dashboard/data/dashboard_providers.dart',
+        ).readAsStringSync();
+        final snapshotStream = dashboardProviders.substring(
+          dashboardProviders.indexOf('Stream<DashboardSnapshot>'),
+          dashboardProviders.indexOf('final dashboardSummaryProvider'),
+        );
+
+        expect(snapshotStream, contains("collection('workspace_metrics')"));
+        expect(snapshotStream, contains('.doc(workspaceId)'));
+        expect(
+          snapshotStream,
+          isNot(contains("collection('project_metrics')")),
+        );
+        expect(snapshotStream, isNot(contains("collection('projects')")));
+        expect(snapshotStream, isNot(contains("collection('expenses')")));
+        expect(snapshotStream, isNot(contains("collection('payments')")));
+      },
+    );
+
+    test(
+      '100-entity directories depend on post-backfill timestamp visibility',
+      () {
+        final entityRepository = File(
+          'lib/features/entities/data/entity_repository.dart',
+        ).readAsStringSync();
+        final backfill = File(
+          'functions/src/entity_last_used_backfill.ts',
+        ).readAsStringSync();
+
+        expect(
+          entityRepository,
+          contains(".orderBy('lastUsedAt', descending: true)"),
+        );
+        expect(entityRepository, contains(".orderBy('normalizedName')"));
+        expect(entityRepository, contains(".orderBy('id')"));
+        expect(entityRepository, contains('query.startAfter(['));
+        expect(backfill, contains('data.lastUsedAt == null'));
+        expect(backfill, contains('parseDate(data.createdAt)'));
+        expect(backfill, contains('parseDate(data.updatedAt)'));
+        expect(backfill, contains('new Date(0)'));
+        expect(backfill, contains('.limit(batchSize)'));
+        expect(backfill, contains('startAfter(startAfterId)'));
+      },
+    );
+
+    test('2,000-expense and 1,000-payment exports loop beyond 500 rows', () {
+      final exportBuilder = File(
+        'lib/features/reports/services/report_export_data_builder.dart',
+      ).readAsStringSync();
+
+      expect(exportBuilder, contains('static const int pageSize = 500'));
+      expect(
+        exportBuilder,
+        contains('Future<List<Expense>> _fetchAllExpenses'),
+      );
+      expect(
+        exportBuilder,
+        contains('Future<List<PaymentRecord>> _fetchAllPayments'),
+      );
+      expect(exportBuilder, contains('while (true)'));
+      expect(exportBuilder, contains('fetchExpensesPage('));
+      expect(exportBuilder, contains('fetchPaymentsPage('));
+      expect(exportBuilder, contains('cursor = page.nextCursor'));
+      expect(
+        exportBuilder,
+        contains('if (!page.hasMore || page.nextCursor == null)'),
+      );
+      expect(exportBuilder, contains('startDate: startDate'));
+      expect(exportBuilder, contains('endDate: endDate'));
+      expect(exportBuilder, contains('projectId: projectId'));
     });
   });
 }

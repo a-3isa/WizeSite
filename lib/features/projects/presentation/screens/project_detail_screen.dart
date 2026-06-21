@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -150,7 +151,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               children: [
                 Icon(Icons.error_outline, size: 48, color: AppColors.danger),
                 const SizedBox(height: 16),
-                Text(error.toString()),
+                Text(appErrorMessage(l10n, error)),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () =>

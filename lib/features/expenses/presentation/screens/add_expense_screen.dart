@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -253,12 +254,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               attachments: attachments.isNotEmpty ? attachments : null,
             );
         queued = result.queued;
-        ref.read(expenseEntryDefaultsProvider.notifier).state =
-            ExpenseEntryDefaults(
-              category: _category,
-              paymentMethod: _paymentMethod,
-              paymentStatus: _paymentStatus,
-            );
+        ref
+            .read(expenseEntryDefaultsProvider.notifier)
+            .state = ExpenseEntryDefaults(
+          category: _category,
+          paymentMethod: _paymentMethod,
+          paymentStatus: _paymentStatus,
+        );
       } else {
         await ref
             .read(expenseRepositoryProvider)
@@ -387,7 +389,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         },
                       );
                     },
-                    error: (e, _) => Text(e.toString()),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
                     loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),

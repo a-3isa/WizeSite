@@ -32,7 +32,10 @@ class AppPrefetcher {
   final AppPrefetchWarm _warm;
   final Map<String, Future<void>> _inFlight = {};
 
-  Future<void> _warmOnce({required AppPrefetchTarget target, String? projectId}) {
+  Future<void> _warmOnce({
+    required AppPrefetchTarget target,
+    String? projectId,
+  }) {
     final key = '${target.name}:${projectId ?? ''}';
     if (_inFlight.containsKey(key)) {
       return _inFlight[key]!;
@@ -63,6 +66,10 @@ class AppPrefetcher {
     _warmOnce(target: AppPrefetchTarget.allProjects);
   }
 
+  void warmReports() {
+    _warmOnce(target: AppPrefetchTarget.allProjects);
+  }
+
   void warmSettings() {
     _warmOnce(target: AppPrefetchTarget.currentUserSettings);
     _warmOnce(target: AppPrefetchTarget.currentSubscription);
@@ -85,10 +92,7 @@ class AppPrefetcher {
       _warmOnce(target: AppPrefetchTarget.currentUserSettings),
       _warmOnce(target: AppPrefetchTarget.projects),
       _warmOnce(target: AppPrefetchTarget.workers),
-    ]).timeout(
-      const Duration(seconds: 5),
-      onTimeout: () => [],
-    );
+    ]).timeout(const Duration(seconds: 5), onTimeout: () => []);
   }
 }
 
@@ -106,7 +110,7 @@ final appPrefetcherProvider = Provider<AppPrefetcher>((ref) {
           final workspaceId = ref.read(activeWorkspaceIdProvider);
           if (workspaceId != null && workspaceId.isNotEmpty) {
             return start(
-              ref.read(dashboardSummaryProvider(workspaceId).future),
+              ref.read(dashboardSnapshotProvider(workspaceId).future),
             );
           }
           break;

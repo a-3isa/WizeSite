@@ -481,6 +481,7 @@ class WorkspaceMutationService {
     required String billingType,
     String? workerType,
     String? notes,
+    String? status,
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createWorker,
@@ -492,6 +493,7 @@ class WorkspaceMutationService {
         'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
+        'status': status ?? 'active',
       },
     );
   }
@@ -505,6 +507,7 @@ class WorkspaceMutationService {
     required String billingType,
     String? workerType,
     String? notes,
+    String? status,
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateWorker,
@@ -517,6 +520,7 @@ class WorkspaceMutationService {
         'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
+        'status': status,
       },
     );
   }
@@ -588,18 +592,36 @@ class WorkspaceMutationService {
     );
   }
 
-  Future<void> processQueuedAction(OfflineAction action) async {
+  Future<String> setActiveWorkspace({required String workspaceId}) {
+    return _client.call<String>(
+      functionName: 'setActiveWorkspace',
+      payload: {'workspaceId': workspaceId},
+      parseResult: (result) {
+        final data = Map<String, dynamic>.from(result as Map);
+        return '${data['workspaceId'] ?? ''}'.trim();
+      },
+      defaultErrorMessage: 'Failed to switch workspace.',
+    );
+  }
+
+  Future<OfflineActionOutcome> processQueuedAction(OfflineAction action) async {
     await _telemetry.log('offline_sync.process', {
       'type': action.type,
       'retry_count': action.retryCount,
     });
     if (await _isStaleLastSavedUpdate(action)) {
+      final targetId = _conflictTargetId(action);
       await _telemetry.log('offline_sync.skipped_stale_update', {
         'type': action.type,
-        'target': _conflictTargetId(action),
+        'target': targetId,
       });
-      return;
+      return OfflineActionOutcome.skippedNewerVersion(targetId: targetId);
     }
+    await _applyQueuedAction(action);
+    return OfflineActionOutcome.applied(targetId: _conflictTargetId(action));
+  }
+
+  Future<void> _applyQueuedAction(OfflineAction action) async {
     switch (action.type) {
       case OfflineActionTypes.createProject:
         await _client.call<Map<String, dynamic>>(

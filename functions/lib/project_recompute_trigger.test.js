@@ -84,6 +84,15 @@ function workerEntryWriteEvent(before, after, entryId = "entry_1") {
         params: { entryId },
     };
 }
+function workerAccountingWriteEvent(before, after, recordId = "worker_record_1") {
+    return {
+        data: {
+            before: snapshotOf(before),
+            after: snapshotOf(after),
+        },
+        params: { recordId },
+    };
+}
 (0, node_test_1.default)("summary builder maintains project, weekly, entity, and category payloads", async () => {
     const { buildAccountingSummaryPayloads } = await Promise.resolve().then(() => __importStar(require("./index")));
     const now = new Date(Date.UTC(2026, 4, 28, 10));
@@ -169,6 +178,70 @@ function workerEntryWriteEvent(before, after, entryId = "entry_1") {
     strict_1.default.equal(Number(laborSummary.totalAmount ?? 0), 150);
     strict_1.default.equal(Number(laborSummary.transactionCount ?? 0), 1);
 });
+(0, node_test_1.default)("worker accounting summary builder excludes unresolved legacy partials from confirmed totals", async () => {
+    const { buildWorkerAccountingSummaryPayload } = await Promise.resolve().then(() => __importStar(require("./index")));
+    const summary = buildWorkerAccountingSummaryPayload({
+        workspaceId: "workspace_1",
+        workerId: "worker_1",
+        records: [
+            { amount: 100, paymentStatus: "paid" },
+            { amount: 200, paymentStatus: "unpaid" },
+            { amount: 300, paymentStatus: "partial", paidAmount: 125 },
+            { amount: 400, paymentStatus: "partial" },
+        ],
+    });
+    strict_1.default.equal(Number(summary.totalAmount ?? 0), 1000);
+    strict_1.default.equal(Number(summary.confirmedPaid ?? 0), 225);
+    strict_1.default.equal(Number(summary.confirmedOutstanding ?? 0), 375);
+    strict_1.default.equal(Number(summary.unresolvedLegacyCount ?? 0), 1);
+    strict_1.default.equal(Number(summary.recordCount ?? 0), 4);
+});
+(0, node_test_1.default)("workspace metrics builder composes bounded financial dashboard data", async () => {
+    const { buildWorkspaceMetricsPayload } = await Promise.resolve().then(() => __importStar(require("./index")));
+    const payload = buildWorkspaceMetricsPayload("workspace_1", [
+        {
+            projectId: "project_1",
+            status: "active",
+            isArchived: false,
+            totalExpenses: 500,
+            totalIncome: 900,
+            weeklyExpenses: 80,
+            weeklyIncome: 120,
+            categoryTotals: { materials: 300, labor: 200 },
+            entityTotals: { Acme: 400 },
+            paymentMethodTotals: { cash: 120 },
+            totalLaborCost: 200,
+            totalEquipmentCost: 40,
+            recentTransactions: [
+                { id: "payment_1", type: "payment", title: "Client", amount: 120, date: "2026-06-15T10:00:00.000Z" },
+            ],
+        },
+        {
+            projectId: "project_2",
+            status: "completed",
+            isArchived: false,
+            totalExpenses: 100,
+            totalIncome: 50,
+            weeklyExpenses: 20,
+            weeklyIncome: 10,
+            categoryTotals: { materials: 100 },
+            entityTotals: { Acme: 50, Beta: 90 },
+            paymentMethodTotals: { bank: 10 },
+            totalLaborCost: 0,
+            totalEquipmentCost: 10,
+            recentTransactions: [],
+        },
+    ]);
+    strict_1.default.equal(payload.totalProjects, 2);
+    strict_1.default.equal(payload.activeProjects, 1);
+    strict_1.default.equal(payload.totalExpenses, 600);
+    strict_1.default.equal(payload.totalIncome, 950);
+    strict_1.default.equal(payload.weeklyExpenses, 100);
+    strict_1.default.equal(payload.weeklyIncome, 130);
+    strict_1.default.equal(payload.topCategory, "materials");
+    strict_1.default.equal(payload.topEntity, "Acme");
+    strict_1.default.equal(payload.recentTransactions.length, 1);
+});
 if (!emulatorHost) {
     (0, node_test_1.default)("Project trigger emulator tests require FIRESTORE_EMULATOR_HOST (skipped)", { skip: true }, () => { });
 }
@@ -183,6 +256,7 @@ else {
     let handleExpenseWriteRecompute;
     let handlePaymentWriteRecompute;
     let handleWorkerEntryWriteRecompute;
+    let handleWorkerAccountingWriteRecompute;
     let createExpenseWithQuotaForUser;
     let createPaymentWithQuotaForUser;
     let createWorkerEntryWithQuotaForUser;
@@ -277,6 +351,8 @@ else {
         handlePaymentWriteRecompute = indexModule.handlePaymentWriteRecompute;
         handleWorkerEntryWriteRecompute =
             indexModule.handleWorkerEntryWriteRecompute;
+        handleWorkerAccountingWriteRecompute =
+            indexModule.handleWorkerAccountingWriteRecompute;
         createExpenseWithQuotaForUser = indexModule.createExpenseWithQuotaForUser;
         createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
         createWorkerEntryWithQuotaForUser =
@@ -487,6 +563,51 @@ else {
             .get();
         strict_1.default.equal(projectAfterWorkerSnap.updateTime?.toMillis(), projectBeforeWorkerSnap.updateTime?.toMillis(), "worker-entry recompute must not mutate projects/{projectId}");
         strict_1.default.equal(metricsSnap.exists, true);
+    });
+    (0, node_test_1.default)("worker accounting recompute maintains exact worker summary", async () => {
+        await seedRecomputeInputs();
+        const paidRecordRef = db
+            .collection("worker_accounting_records")
+            .doc("worker_record_paid");
+        const partialRecordRef = db
+            .collection("worker_accounting_records")
+            .doc("worker_record_partial");
+        await paidRecordRef.set({
+            workspaceId,
+            projectId: "project_1",
+            workerId: "worker_1",
+            workerName: "Worker One",
+            description: "Paid wage",
+            amount: 100,
+            paymentMethod: "cash",
+            paymentStatus: "paid",
+            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            notes: "",
+        });
+        await partialRecordRef.set({
+            workspaceId,
+            projectId: "project_1",
+            workerId: "worker_1",
+            workerName: "Worker One",
+            description: "Partial wage",
+            amount: 300,
+            paidAmount: 125,
+            paymentMethod: "cash",
+            paymentStatus: "partial",
+            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            notes: "",
+        });
+        const partialAfter = (await partialRecordRef.get()).data();
+        await handleWorkerAccountingWriteRecompute(workerAccountingWriteEvent(undefined, partialAfter, "worker_record_partial"));
+        const summarySnap = await db
+            .collection("worker_accounting_summaries")
+            .doc(`${workspaceId}_worker_1`)
+            .get();
+        const summary = summarySnap.data() ?? {};
+        strict_1.default.equal(Number(summary.totalAmount ?? 0), 400);
+        strict_1.default.equal(Number(summary.confirmedPaid ?? 0), 225);
+        strict_1.default.equal(Number(summary.confirmedOutstanding ?? 0), 175);
+        strict_1.default.equal(Number(summary.recordCount ?? 0), 2);
     });
     (0, node_test_1.default)("expense trigger skips writes when irrelevant fields change", async () => {
         await seedRecomputeInputs();

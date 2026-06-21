@@ -142,6 +142,7 @@ class Attachment {
   }
 
   bool get isPdf {
-    return contentType == 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+    return contentType == 'application/pdf' ||
+        fileName.toLowerCase().endsWith('.pdf');
   }
 }

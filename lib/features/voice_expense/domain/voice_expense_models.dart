@@ -98,10 +98,14 @@ class VoiceExpenseParseResponse {
     return VoiceExpenseParseResponse(
       transcript: map['transcript'] as String? ?? '',
       parsed: VoiceParsedExpense.fromMap(
-        Map<String, dynamic>.from((map['parsed'] as Map?) ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          (map['parsed'] as Map?) ?? const <String, dynamic>{},
+        ),
       ),
       confidence: VoiceConfidenceScores.fromMap(
-        Map<String, dynamic>.from((map['confidence'] as Map?) ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          (map['confidence'] as Map?) ?? const <String, dynamic>{},
+        ),
       ),
       source: map['source'] as String? ?? 'rules',
       needsConfirmation: map['needsConfirmation'] as bool? ?? true,

@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/pending_attachment_service.dart';
@@ -91,19 +92,23 @@ class OfflineQueueCoordinator {
             id: record.id,
             message: error.message,
           );
-          await _ref.read(appTelemetryProvider).recordError(
-            error,
-            StackTrace.current,
-            reason: 'attachment_upload.storage_error code=${error.code}',
-          );
+          await _ref
+              .read(appTelemetryProvider)
+              .recordError(
+                error,
+                StackTrace.current,
+                reason: 'attachment_upload.storage_error code=${error.code}',
+              );
         }
       } catch (error, stackTrace) {
         await pendingService.markFailed(id: record.id, message: '$error');
-        await _ref.read(appTelemetryProvider).recordError(
-          error,
-          stackTrace,
-          reason: 'attachment_upload.unexpected_error',
-        );
+        await _ref
+            .read(appTelemetryProvider)
+            .recordError(
+              error,
+              stackTrace,
+              reason: 'attachment_upload.unexpected_error',
+            );
       }
     }
   }
@@ -120,17 +125,19 @@ class OfflineQueueCoordinator {
       return;
     }
 
-    _ref.read(appTelemetryProvider).recordError(
-      Exception(
-        'offline_sync.dead_letter '
-        'type=${latest.type} '
-        'code=${latest.lastErrorCode} '
-        'retries=${latest.retryCount} '
-        'error=${latest.lastError}',
-      ),
-      StackTrace.empty,
-      reason: 'offline_sync.dead_letter type=${latest.type}',
-    );
+    _ref
+        .read(appTelemetryProvider)
+        .recordError(
+          Exception(
+            'offline_sync.dead_letter '
+            'type=${latest.type} '
+            'code=${latest.lastErrorCode} '
+            'retries=${latest.retryCount} '
+            'error=${latest.lastError}',
+          ),
+          StackTrace.empty,
+          reason: 'offline_sync.dead_letter type=${latest.type}',
+        );
 
     final type = _failureTypeFor(
       code: latest.lastErrorCode,
@@ -185,6 +192,7 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(workspaceSelectionSyncProvider);
     Future.microtask(() async {
       await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
       await ref.read(offlineQueueCoordinatorProvider).drainNow();

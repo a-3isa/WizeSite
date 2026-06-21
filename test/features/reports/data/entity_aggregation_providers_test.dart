@@ -105,48 +105,54 @@ void main() {
     expect(summaries.single.attachmentCount, 1);
   });
 
-  test('merges domain accounting records into entity totals and breakdowns', () async {
-    await firestore.collection('worker_accounting_records').doc('worker_1').set({
-      'workspaceId': 'workspace_1',
-      'projectId': 'project_1',
-      'workerId': 'worker_1',
-      'workerName': 'Worker One',
-      'amount': 120,
-      'date': DateTime.utc(2026, 5, 28),
-      'paymentMethod': 'cash',
-      'attachments': [
-        {'id': 'attachment_1'},
-      ],
-    });
-    await firestore
-        .collection('equipment_accounting_records')
-        .doc('equipment_1')
-        .set({
-          'workspaceId': 'workspace_1',
-          'projectId': 'project_1',
-          'providerId': 'equipment_1',
-          'providerName': 'Crane Rental',
-          'amount': 300,
-          'date': DateTime.utc(2026, 5, 27),
-          'paymentMethod': 'bank',
-        });
+  test(
+    'merges domain accounting records into entity totals and breakdowns',
+    () async {
+      await firestore
+          .collection('worker_accounting_records')
+          .doc('worker_1')
+          .set({
+            'workspaceId': 'workspace_1',
+            'projectId': 'project_1',
+            'workerId': 'worker_1',
+            'workerName': 'Worker One',
+            'amount': 120,
+            'date': DateTime.utc(2026, 5, 28),
+            'paymentMethod': 'cash',
+            'attachments': [
+              {'id': 'attachment_1'},
+            ],
+          });
+      await firestore
+          .collection('equipment_accounting_records')
+          .doc('equipment_1')
+          .set({
+            'workspaceId': 'workspace_1',
+            'projectId': 'project_1',
+            'providerId': 'equipment_1',
+            'providerName': 'Crane Rental',
+            'amount': 300,
+            'date': DateTime.utc(2026, 5, 27),
+            'paymentMethod': 'bank',
+          });
 
-    final summaries = await container.read(
-      entityAggregationsProvider('workspace_1').future,
-    );
+      final summaries = await container.read(
+        entityAggregationsProvider('workspace_1').future,
+      );
 
-    final worker = summaries.singleWhere(
-      (summary) => summary.entityId == 'worker_1',
-    );
-    final equipment = summaries.singleWhere(
-      (summary) => summary.entityId == 'equipment_1',
-    );
-    expect(worker.entityType, 'worker');
-    expect(worker.totalExpenses, 120);
-    expect(worker.categoryBreakdown, {'labor': 120});
-    expect(worker.paymentMethodBreakdown, {'cash': 120});
-    expect(worker.attachmentCount, 1);
-    expect(equipment.entityType, 'equipment');
-    expect(equipment.categoryBreakdown, {'equipment': 300});
-  });
+      final worker = summaries.singleWhere(
+        (summary) => summary.entityId == 'worker_1',
+      );
+      final equipment = summaries.singleWhere(
+        (summary) => summary.entityId == 'equipment_1',
+      );
+      expect(worker.entityType, 'worker');
+      expect(worker.totalExpenses, 120);
+      expect(worker.categoryBreakdown, {'labor': 120});
+      expect(worker.paymentMethodBreakdown, {'cash': 120});
+      expect(worker.attachmentCount, 1);
+      expect(equipment.entityType, 'equipment');
+      expect(equipment.categoryBreakdown, {'equipment': 300});
+    },
+  );
 }

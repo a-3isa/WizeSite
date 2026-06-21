@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -20,6 +21,9 @@ class _MockUser extends Mock implements User {}
 
 class _FakeUserSettingsRepository extends Fake
     implements UserSettingsRepository {
+  _FakeUserSettingsRepository({this.failCurrencyUpdates = false});
+
+  final bool failCurrencyUpdates;
   final List<String> currencyUpdates = [];
   final List<bool> riskAlertUpdates = [];
 
@@ -34,6 +38,9 @@ class _FakeUserSettingsRepository extends Fake
   @override
   Future<void> updateCurrency(String userId, String currency) async {
     currencyUpdates.add(currency);
+    if (failCurrencyUpdates) {
+      throw Exception('network exploded');
+    }
   }
 
   @override
@@ -77,6 +84,11 @@ GoRouter _router() {
         builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
       ),
       GoRoute(
+        path: '/settings/sync',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Sync Status Route'))),
+      ),
+      GoRoute(
         path: '/subscription/plans',
         builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
       ),
@@ -93,6 +105,16 @@ GoRouter _router() {
 }
 
 void main() {
+  setUp(() {
+    PackageInfo.setMockInitialValues(
+      appName: 'Buildozer',
+      packageName: 'com.example.buildozer',
+      version: '1.2.3',
+      buildNumber: '45',
+      buildSignature: '',
+    );
+  });
+
   testWidgets(
     'SettingsScreen shows persisted settings and saves currency and risk alerts',
     (tester) async {
@@ -154,6 +176,157 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fakeSettingsRepository.riskAlertUpdates, [true]);
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen exposes expanded currencies and rolls back failed saves',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeSettingsRepository = _FakeUserSettingsRepository(
+        failCurrencyUpdates: true,
+      );
+      final mockAuth = _MockFirebaseAuth();
+      final mockUser = _MockUser();
+
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockUser.displayName).thenReturn('Jane Builder');
+      when(() => mockUser.email).thenReturn('jane@example.com');
+      when(() => mockUser.photoURL).thenReturn(null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            localeControllerProvider.overrideWith(
+              (ref) => LocaleController(deviceLocale: const Locale('en')),
+            ),
+            userSettingsRepositoryProvider.overrideWithValue(
+              fakeSettingsRepository,
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(
+                const UserSettings(
+                  userId: 'user_1',
+                  fullName: 'Jane Builder',
+                  email: 'jane@example.com',
+                  photoUrl: '',
+                  defaultCurrency: 'USD',
+                  riskAlertsEnabled: true,
+                ),
+              ),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BelowDropdownField<String>));
+      await tester.pumpAndSettle();
+
+      for (final currency in ['KWD', 'QAR', 'BHD', 'OMR', 'JOD']) {
+        expect(find.text(currency), findsOneWidget);
+      }
+
+      await tester.tap(find.text('KWD'));
+      await tester.pumpAndSettle();
+
+      expect(fakeSettingsRepository.currencyUpdates, ['KWD']);
+      expect(find.text('USD'), findsWidgets);
+      expect(
+        find.text('Could not save settings. Your previous value was restored.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen shows version, help/legal links, and confirms diagnostics',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeSettingsRepository = _FakeUserSettingsRepository();
+      final mockAuth = _MockFirebaseAuth();
+      final mockUser = _MockUser();
+
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockUser.displayName).thenReturn('Jane Builder');
+      when(() => mockUser.email).thenReturn('jane@example.com');
+      when(() => mockUser.photoURL).thenReturn(null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            localeControllerProvider.overrideWith(
+              (ref) => LocaleController(deviceLocale: const Locale('en')),
+            ),
+            userSettingsRepositoryProvider.overrideWithValue(
+              fakeSettingsRepository,
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(
+                UserSettings.defaults(
+                  userId: 'user_1',
+                  email: 'jane@example.com',
+                ),
+              ),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('App version'), findsOneWidget);
+      expect(find.text('1.2.3 (45)'), findsOneWidget);
+      expect(find.text('Help & Support'), findsOneWidget);
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(find.text('Terms of Service'), findsOneWidget);
+      expect(find.text('Run diagnostics'), findsOneWidget);
+      expect(find.text('Sync status'), findsOneWidget);
+
+      await tester.tap(find.text('Sync status'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Sync Status Route'), findsOneWidget);
+
+      GoRouter.of(
+        tester.element(find.text('Sync Status Route')),
+      ).go('/settings');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.tap(find.text('Run diagnostics'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run diagnostics?'), findsOneWidget);
+      expect(
+        find.text('This can send a diagnostic report or terminate the app.'),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel'), findsOneWidget);
     },
   );
 

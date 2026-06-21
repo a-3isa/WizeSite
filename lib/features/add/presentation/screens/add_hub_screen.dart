@@ -2,16 +2,32 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
+import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AddHubScreen extends ConsumerWidget {
+class AddHubScreen extends ConsumerStatefulWidget {
   const AddHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AddHubScreen> createState() => _AddHubScreenState();
+}
+
+class _AddHubScreenState extends ConsumerState<AddHubScreen> {
+  bool _launching = false;
+
+  Future<void> _open(String route, VoidCallback warm) async {
+    if (_launching) return;
+    setState(() => _launching = true);
+    warm();
+    await context.push(route);
+    if (mounted) setState(() => _launching = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final prefetcher = ref.read(appPrefetcherProvider);
     return Scaffold(
@@ -36,7 +52,7 @@ class AddHubScreen extends ConsumerWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const SizedBox(height: 8),
-                  _SectionHeader(title: l10n.t('expenses')),
+                  SectionHeader(title: l10n.t('expenses')),
                   const SizedBox(height: 8),
                   _ActionCard(
                     qaKey: const Key('qa_add_hub_expense'),
@@ -46,23 +62,11 @@ class AddHubScreen extends ConsumerWidget {
                     color: AppColors.danger,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmAddEntry();
-                      context.push(AppRoutes.addExpense);
+                      _open(AppRoutes.addExpense, prefetcher.warmAddEntry);
                     },
                   ),
-                  const SizedBox(height: 8),
-                  // _ActionCard(
-                  //   icon: Icons.list_outlined,
-                  //   title: l10n.t('expenseList'),
-                  //   subtitle: l10n.t('expenseListSubtitle'),
-                  //   color: AppColors.danger,
-                  //   onTap: () {
-                  //     HapticFeedback.lightImpact();
-                  //     context.push(AppRoutes.expenses);
-                  //   },
-                  // ),
                   const SizedBox(height: 20),
-                  _SectionHeader(title: l10n.t('payments')),
+                  SectionHeader(title: l10n.t('payments')),
                   const SizedBox(height: 8),
                   _ActionCard(
                     qaKey: const Key('qa_add_hub_payment'),
@@ -72,36 +76,21 @@ class AddHubScreen extends ConsumerWidget {
                     color: AppColors.success,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmAddEntry();
-                      context.push(AppRoutes.addPayment);
+                      _open(AppRoutes.addPayment, prefetcher.warmAddEntry);
                     },
                   ),
-                  const SizedBox(height: 8),
-                  // _ActionCard(
-                  //   icon: Icons.list_alt_outlined,
-                  //   title: l10n.t('paymentList'),
-                  //   subtitle: l10n.t('paymentListSubtitle'),
-                  //   color: AppColors.success,
-                  //   onTap: () {
-                  //     HapticFeedback.lightImpact();
-                  //     context.push(AppRoutes.payments);
-                  //   },
-                  // ),
                   const SizedBox(height: 20),
-                  _SectionHeader(title: l10n.t('workers')),
+                  SectionHeader(title: l10n.t('workers')),
                   const SizedBox(height: 8),
                   _ActionCard(
                     qaKey: const Key('qa_add_hub_worker'),
                     icon: Icons.person_add_outlined,
                     title: l10n.t('addWorkerTitle'),
-                    subtitle: l10n.t(
-                      'addWorkerSubtitle',
-                    ), // Wait, check if addWorkerSubtitle exists
+                    subtitle: l10n.t('addWorkerSubtitle'),
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmAddEntry();
-                      context.push(AppRoutes.addWorker);
+                      _open(AppRoutes.addWorker, prefetcher.warmAddEntry);
                     },
                   ),
                   const SizedBox(height: 8),
@@ -113,8 +102,7 @@ class AddHubScreen extends ConsumerWidget {
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmProjects();
-                      context.push(AppRoutes.workers);
+                      _open(AppRoutes.workers, prefetcher.warmProjects);
                     },
                   ),
                   const SizedBox(height: 8),
@@ -126,25 +114,11 @@ class AddHubScreen extends ConsumerWidget {
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmAddEntry();
-                      context.push('/worker-entry/new');
+                      _open('/worker-entry/new', prefetcher.warmAddEntry);
                     },
                   ),
-                  // const SizedBox(height: 20),
-                  // _SectionHeader(title: l10n.t('projects')),
-                  // const SizedBox(height: 8),
-                  // _ActionCard(
-                  //   icon: Icons.work_outline,
-                  //   title: l10n.t('createProject'),
-                  //   subtitle: l10n.t('createProjectSubtitle'),
-                  //   color: AppColors.constructionOrange,
-                  //   onTap: () {
-                  //     HapticFeedback.lightImpact();
-                  //     context.push(AppRoutes.createProject);
-                  //   },
-                  // ),
                   const SizedBox(height: 20),
-                  _SectionHeader(title: l10n.t('voiceExpense')),
+                  SectionHeader(title: l10n.t('voiceExpense')),
                   const SizedBox(height: 8),
                   _ActionCard(
                     qaKey: const Key('qa_add_hub_voice_expense'),
@@ -154,8 +128,66 @@ class AddHubScreen extends ConsumerWidget {
                     color: AppColors.constructionOrange,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      prefetcher.warmAddEntry();
-                      context.push(AppRoutes.voiceExpense);
+                      _open(AppRoutes.voiceExpense, prefetcher.warmAddEntry);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SectionHeader(title: l10n.t('resources')),
+                  const SizedBox(height: 8),
+                  _ActionCard(
+                    qaKey: const Key('qa_add_hub_workers_directory'),
+                    icon: Icons.engineering_outlined,
+                    title: l10n.t('workerDirectory'),
+                    subtitle: l10n.t('workerDirectorySubtitle'),
+                    color: AppColors.constructionOrange,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _open(AppRoutes.workers, prefetcher.warmProjects);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ActionCard(
+                    qaKey: const Key('qa_add_hub_contractors_directory'),
+                    icon: Icons.groups_2_outlined,
+                    title: l10n.t('contractorsDirectory'),
+                    subtitle: l10n.t('contractorsDirectorySubtitle'),
+                    color: AppColors.textDark,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _open(
+                        AppRoutes.contractorsDirectory,
+                        prefetcher.warmProjects,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ActionCard(
+                    qaKey: const Key('qa_add_hub_equipment_directory'),
+                    icon: Icons.precision_manufacturing_outlined,
+                    title: l10n.t('equipmentDirectory'),
+                    subtitle: l10n.t('equipmentDirectorySubtitle'),
+                    color: AppColors.warning,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _open(
+                        AppRoutes.equipmentDirectory,
+                        prefetcher.warmProjects,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ActionCard(
+                    qaKey: const Key('qa_add_hub_transport_directory'),
+                    icon: Icons.local_shipping_outlined,
+                    title: l10n.t('transportDirectory'),
+                    subtitle: l10n.t('transportDirectorySubtitle'),
+                    color: AppColors.success,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _open(
+                        AppRoutes.transportProvidersDirectory,
+                        prefetcher.warmProjects,
+                      );
                     },
                   ),
                   const SizedBox(height: 32),
@@ -164,24 +196,6 @@ class AddHubScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: AppColors.textBody,
-        letterSpacing: 0.5,
       ),
     );
   }
@@ -206,59 +220,65 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      key: qaKey,
-      color: AppColors.surfaceSolid,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
+    return Semantics(
+      label: title,
+      button: true,
+      excludeSemantics: true,
+      child: Material(
+        key: qaKey,
+        color: AppColors.surfaceSolid,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderGrey),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderGrey),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
                 ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark,
+                            ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textBody,
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textBody,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textBody.withValues(alpha: 0.6),
-                size: 24,
-              ),
-            ],
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textBody.withValues(alpha: 0.6),
+                  size: 24,
+                ),
+              ],
+            ),
           ),
         ),
       ),

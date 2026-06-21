@@ -103,10 +103,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        _testApp(
-          sessionRestoreService,
-          prefetcher: _instantPrefetcher(),
-        ),
+        _testApp(sessionRestoreService, prefetcher: _instantPrefetcher()),
       );
       // warmCritical instant + 800 ms min delay
       await tester.pump(const Duration(milliseconds: 900));
@@ -123,45 +120,39 @@ void main() {
     },
   );
 
-  testWidgets(
-    'SplashScreen shows LinearProgressIndicator while warmCritical is pending',
-    (tester) async {
-      final sessionRestoreService = _MockSessionRestoreService();
-      when(() => sessionRestoreService.restore()).thenAnswer(
-        (_) async => const SessionRestoreResult(
-          userId: 'user_1',
-          workspaceId: 'workspace_1',
-        ),
-      );
+  testWidgets('SplashScreen does not block dashboard on warmCritical', (
+    tester,
+  ) async {
+    final sessionRestoreService = _MockSessionRestoreService();
+    when(() => sessionRestoreService.restore()).thenAnswer(
+      (_) async => const SessionRestoreResult(
+        userId: 'user_1',
+        workspaceId: 'workspace_1',
+      ),
+    );
 
-      await tester.pumpWidget(
-        _testApp(
-          sessionRestoreService,
-          prefetcher: _blockingPrefetcher(),
-        ),
-      );
-      // Let session restore complete and setState(_showProgress) run
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.pump();
+    await tester.pumpWidget(
+      _testApp(sessionRestoreService, prefetcher: _blockingPrefetcher()),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
-      // Not yet navigated
-      expect(find.text('Dashboard Screen'), findsNothing);
+    expect(find.text('Dashboard Screen'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
 
-      // Drain pending timers (5 s warmCritical timeout + 800 ms min delay)
-      // so the test framework does not flag them as leaked.
-      await tester.pump(const Duration(seconds: 6));
-      await tester.pumpAndSettle();
-    },
-  );
+    // Drain the old warmCritical timeout if this regresses, so the test
+    // framework does not report leaked timers after the assertion.
+    await tester.pump(const Duration(seconds: 6));
+  });
 
   testWidgets(
     'SplashScreen does NOT show progress bar before session is restored',
     (tester) async {
       final restoreCompleter = Completer<SessionRestoreResult?>();
       final sessionRestoreService = _MockSessionRestoreService();
-      when(() => sessionRestoreService.restore())
-          .thenAnswer((_) => restoreCompleter.future);
+      when(
+        () => sessionRestoreService.restore(),
+      ).thenAnswer((_) => restoreCompleter.future);
 
       await tester.pumpWidget(
         _testApp(sessionRestoreService, prefetcher: _instantPrefetcher()),

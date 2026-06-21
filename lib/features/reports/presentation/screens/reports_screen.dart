@@ -4,9 +4,12 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
+import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -14,14 +17,18 @@ import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
-import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
+import 'package:buildtrack_app/features/reports/data/report_project_selector_provider.dart';
+import 'package:buildtrack_app/features/reports/domain/report_scope.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/cashflow_line_chart.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/category_pie_chart.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/monthly_flow_chart.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/recent_expenses_table.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/recent_payments_table.dart';
 import 'package:buildtrack_app/features/reports/presentation/widgets/worker_cost_table.dart';
+import 'package:buildtrack_app/features/reports/services/report_export_data_builder.dart';
+import 'package:buildtrack_app/features/reports/services/report_chart_exporter.dart';
+import 'package:buildtrack_app/features/reports/services/report_document_actions.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -32,15 +39,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
-  const ReportsScreen({this.projectId, super.key});
+  const ReportsScreen({
+    this.projectId,
+    this.exportDataBuilder,
+    this.documentActions,
+    this.chartExporter,
+    super.key,
+  });
 
   final String? projectId;
+  final ReportExportDataBuilder? exportDataBuilder;
+  final ReportDocumentActions? documentActions;
+  final ReportChartExporter? chartExporter;
 
   @override
   ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
+  ReportExportProgress? _exportProgress;
+  bool _isExporting = false;
+  bool _cancelExport = false;
+
   @override
   void initState() {
     super.initState();
@@ -59,8 +79,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     Future.microtask(() {
       if (mounted) {
         ref.read(reportProjectIdProvider.notifier).state = widget.projectId;
+        final scope = ref.read(reportScopeProvider);
+        ref.read(reportScopeProvider.notifier).state = scope.copyWith(
+          projectId: widget.projectId,
+        );
       }
     });
+  }
+
+  Future<void> _pickScopeDate({required bool start}) async {
+    final scope = ref.read(effectiveReportScopeProvider);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDate: start ? scope.startDate : scope.endDate,
+    );
+    if (picked == null || !mounted) return;
+    final next = start
+        ? scope.copyWith(
+            startDate: DateTime(picked.year, picked.month, picked.day),
+          )
+        : scope.copyWith(
+            endDate: DateTime(
+              picked.year,
+              picked.month,
+              picked.day,
+              23,
+              59,
+              59,
+              999,
+            ),
+          );
+    if (next.startDate.isAfter(next.endDate)) return;
+    ref.read(reportScopeProvider.notifier).state = next;
   }
 
   Future<void> _export({
@@ -134,8 +186,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     var includeWeekly = true;
     var includeEntities = true;
     var includeDaily = true;
-    DateTime? startDate;
-    DateTime? endDate;
+    final scope = ref.read(effectiveReportScopeProvider);
+    DateTime? startDate = scope.startDate;
+    DateTime? endDate = scope.endDate;
 
     String dateLabel(DateTime? value) => value == null
         ? l10n.t('dateRange')
@@ -281,12 +334,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     required bool includeEntities,
     required bool includeDaily,
   }) async {
+    setState(() {
+      _isExporting = true;
+      _cancelExport = false;
+      _exportProgress = const ReportExportProgress(
+        stage: ReportExportStage.expenses,
+        loadedRecords: 0,
+      );
+    });
     try {
       final workspaceId = ref.read(activeWorkspaceIdProvider);
-      final entitySummaries = workspaceId == null
-          ? const <EntitySummary>[]
-          : (ref.read(entityAggregationsProvider(workspaceId)).valueOrNull ??
-                const <EntitySummary>[]);
+      if (workspaceId == null || workspaceId.isEmpty) {
+        _showExportError(l10n, StateError('missing workspace'));
+        return;
+      }
 
       // The daily breakdown is derived from expenses, so fetch them whenever
       // either the expenses section or the daily section is requested.
@@ -302,42 +363,38 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         59,
         999,
       );
-      var expenses = const <Expense>[];
-      if ((includeExpenses || includeDaily) && workspaceId != null) {
-        final page = await ref
-            .read(expenseRepositoryProvider)
-            .fetchExpensesPage(
-              workspaceId,
-              projectId: project.id,
-              startDate: effectiveStartDate,
-              endDate: inclusiveEndDate,
-              pageSize: 500,
-            );
-        expenses = page.items;
-      }
-
-      var payments = const <PaymentRecord>[];
-      if (includePayments && workspaceId != null) {
-        final page = await ref
-            .read(paymentRepositoryProvider)
-            .fetchPaymentsPage(
-              workspaceId,
-              projectId: project.id,
-              startDate: effectiveStartDate,
-              endDate: inclusiveEndDate,
-              pageSize: 500,
-            );
-        payments = page.items;
-      }
+      final reportData =
+          await (widget.exportDataBuilder ??
+                  ReportExportDataBuilder(
+                    expenseRepository: ref.read(expenseRepositoryProvider),
+                    paymentRepository: ref.read(paymentRepositoryProvider),
+                  ))
+              .build(
+                workspaceId: workspaceId,
+                projectId: project.id,
+                startDate: effectiveStartDate,
+                endDate: inclusiveEndDate,
+                includeExpenses: includeExpenses,
+                includePayments: includePayments,
+                includeEntities: includeEntities,
+                includeDaily: includeDaily,
+                includeWeekly: includeWeekly,
+                isCancelled: () => _cancelExport,
+                onProgress: (progress) {
+                  if (mounted) {
+                    setState(() => _exportProgress = progress);
+                  }
+                },
+              );
 
       final exporter = const ReportPdfExporter();
       final documentBytes = await exporter.buildCustomReportPdf(
         l10n: l10n,
         project: project,
-        expenses: expenses,
-        payments: payments,
-        insights: insights,
-        entitySummaries: entitySummaries,
+        expenses: reportData.expenses,
+        payments: reportData.payments,
+        insights: includeWeekly ? reportData.insights : insights,
+        entitySummaries: reportData.entitySummaries,
         currency: currency,
         startDate: effectiveStartDate,
         endDate: inclusiveEndDate,
@@ -348,8 +405,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         includeDaily: includeDaily,
       );
       await Printing.layoutPdf(onLayout: (_) async => documentBytes);
+    } on ReportExportCancelled {
+      // Cancellation is user initiated and does not surface as an error.
     } catch (error) {
       _showExportError(l10n, error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+          _exportProgress = null;
+        });
+      }
     }
   }
 
@@ -362,14 +428,35 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ..showSnackBar(SnackBar(content: Text(l10n.t('reportExportFailed'))));
   }
 
+  Future<void> _shareChart({
+    required AppLocalizations l10n,
+    required String filename,
+    required Future<Uint8List> Function(ReportChartExporter exporter) build,
+  }) async {
+    final bytes = await build(
+      widget.chartExporter ?? const ReportChartExporter(),
+    );
+    final result = await (widget.documentActions ?? ReportDocumentActions())
+        .shareDocument(bytes: bytes, filename: filename);
+    if (result.isFailed) {
+      _showExportError(l10n, result.error ?? StateError('chart share failed'));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final usageAsync = ref.watch(currentUsageProvider);
     final locale = Localizations.localeOf(context).languageCode;
-    final currentProjectId = ref.watch(reportProjectIdProvider);
+    final reportScope = ref.watch(effectiveReportScopeProvider);
+    final currentProjectId = reportScope.projectId;
     final projectsAsync = ref.watch(projectsProvider);
+    final selectorState = ref.watch(reportProjectSelectorProvider);
+    final selectorProjects = selectorState.projects;
+    final availableProjects = selectorProjects.isNotEmpty
+        ? selectorProjects
+        : projectsAsync.valueOrNull ?? const <Project>[];
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
@@ -441,14 +528,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               weeklyInsights: weeklyInsights,
                               onExportProject: () async {
                                 HapticFeedback.lightImpact();
-                                final projects = ref
-                                    .read(projectsProvider)
-                                    .valueOrNull;
                                 final metrics = ref
                                     .read(reportMetricsProvider)
                                     .valueOrNull;
-                                final selectedProject = projects
-                                    ?.where(
+                                final selectedProject = availableProjects
+                                    .where(
                                       (project) =>
                                           project.id == currentProjectId,
                                     )
@@ -477,14 +561,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               },
                               onExportCombined: () async {
                                 HapticFeedback.lightImpact();
-                                final projects = ref
-                                    .read(projectsProvider)
-                                    .valueOrNull;
                                 final metrics = ref
                                     .read(reportMetricsProvider)
                                     .valueOrNull;
-                                final selectedProject = projects
-                                    ?.where(
+                                final selectedProject = availableProjects
+                                    .where(
                                       (project) =>
                                           project.id == currentProjectId,
                                     )
@@ -508,11 +589,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               },
                               onBuildCustomReport: () async {
                                 HapticFeedback.lightImpact();
-                                final projects = ref
-                                    .read(projectsProvider)
-                                    .valueOrNull;
-                                final selectedProject = projects
-                                    ?.where(
+                                final selectedProject = availableProjects
+                                    .where(
                                       (project) =>
                                           project.id == currentProjectId,
                                     )
@@ -565,43 +643,69 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       horizontal: 20,
                       vertical: 8,
                     ),
-                    child: projectsAsync.when(
-                      data: (projects) {
-                        if (projects.isEmpty) {
-                          return Text(
-                            l10n.t('noProjectsYet'),
-                            style: const TextStyle(color: AppColors.textBody),
-                          );
-                        }
-
-                        return BelowDropdownField<String>(
-                          label: l10n.t('selectProject'),
-                          value: projects.any((p) => p.id == currentProjectId)
-                              ? currentProjectId
-                              : null,
-                          entries: projects
-                              .map(
-                                (project) => DropdownMenuEntry(
-                                  value: project.id,
-                                  label: project.name,
-                                ),
-                              )
-                              .toList(),
-                          onSelected: (value) {
-                            ref.read(reportProjectIdProvider.notifier).state =
-                                value;
-                          },
-                        );
+                    child: _ReportScopeControls(
+                      scope: reportScope,
+                      projects: availableProjects,
+                      selectorState: selectorState,
+                      onProjectSelected: (value) {
+                        ref.read(reportProjectIdProvider.notifier).state =
+                            value;
+                        ref.read(reportScopeProvider.notifier).state =
+                            reportScope.copyWith(projectId: value);
                       },
-                      loading: () => const SizedBox.shrink(),
-                      error: (error, _) => Text(error.toString()),
+                      onToggleArchived: (value) => ref
+                          .read(reportProjectSelectorProvider.notifier)
+                          .showArchived(value),
+                      onLoadMore: () => ref
+                          .read(reportProjectSelectorProvider.notifier)
+                          .loadMore(),
+                      onPickStart: () => _pickScopeDate(start: true),
+                      onPickEnd: () => _pickScopeDate(start: false),
+                    ),
+                  ),
+                ),
+              if (_isExporting)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 10),
+                            Text(
+                              l10n.t(
+                                'reportExportProgress',
+                                params: {
+                                  'count':
+                                      '${_exportProgress?.loadedRecords ?? 0}',
+                                },
+                              ),
+                            ),
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: TextButton(
+                                onPressed: () =>
+                                    setState(() => _cancelExport = true),
+                                child: Text(l10n.t('cancelExport')),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               if (roleIsLoading)
                 const SliverFillRemaining(
                   hasScrollBody: false,
-                  child: _LoadingWidget(),
+                  child: AppLoadingSkeleton(),
                 )
               else if (hasWorkspace && !canAccessReports)
                 SliverFillRemaining(
@@ -609,7 +713,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: _ErrorCard(message: l10n.t('reportAccessDenied')),
+                      child: AppRecoverableError(
+                        message: l10n.t('reportAccessDenied'),
+                      ),
                     ),
                   ),
                 )
@@ -642,11 +748,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _SectionHeader(title: l10n.t('currentSnapshot')),
+                      SectionHeader(title: l10n.t('currentSnapshot')),
                       const SizedBox(height: 12),
                       summaryAsync.when(
                         data: (summary) => summary.isEmpty
-                            ? _EmptyCard(label: l10n.t('noWorkspaceSelected'))
+                            ? AppEmptyState(
+                                message: l10n.t('noWorkspaceSelected'),
+                              )
                             : GridView.count(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 12,
@@ -689,42 +797,103 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ),
                                 ],
                               ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 24),
                       categoryAsync.when(
-                        data: (data) => CategoryPieChart(
-                          data: data,
-                          currency: currency,
-                          locale: locale,
+                        data: (data) => _ShareableChart(
+                          onShare: data.values.any((value) => value != 0)
+                              ? () => _shareChart(
+                                  l10n: l10n,
+                                  filename: 'expense-breakdown.pdf',
+                                  build: (exporter) =>
+                                      exporter.buildCategoryChartPdf(
+                                        title: l10n.t('expenseBreakdown'),
+                                        categoryTotals: data,
+                                        currency: currency,
+                                      ),
+                                )
+                              : null,
+                          child: CategoryPieChart(
+                            data: data,
+                            currency: currency,
+                            locale: locale,
+                          ),
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
                       flowAsync.when(
-                        data: (data) => MonthlyFlowChart(
-                          data: data,
-                          currency: currency,
-                          locale: locale,
+                        data: (data) => _ShareableChart(
+                          onShare:
+                              data.any(
+                                (item) =>
+                                    item.expenses != 0 || item.income != 0,
+                              )
+                              ? () => _shareChart(
+                                  l10n: l10n,
+                                  filename: 'monthly-flow.pdf',
+                                  build: (exporter) =>
+                                      exporter.buildMonthlyFlowChartPdf(
+                                        title: l10n.t('monthlyCashFlow'),
+                                        points: data,
+                                        currency: currency,
+                                      ),
+                                )
+                              : null,
+                          child: MonthlyFlowChart(
+                            data: data,
+                            currency: currency,
+                            locale: locale,
+                          ),
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
                       flowAsync.when(
-                        data: (data) => CashflowLineChart(
-                          data: data,
-                          currency: currency,
-                          locale: locale,
+                        data: (data) => _ShareableChart(
+                          onShare:
+                              data.any(
+                                (item) =>
+                                    item.expenses != 0 || item.income != 0,
+                              )
+                              ? () => _shareChart(
+                                  l10n: l10n,
+                                  filename: 'cashflow-trend.pdf',
+                                  build: (exporter) =>
+                                      exporter.buildCashflowChartPdf(
+                                        title: l10n.t('cashFlowTrend'),
+                                        expenses: data.fold(
+                                          0,
+                                          (sum, item) => sum + item.expenses,
+                                        ),
+                                        income: data.fold(
+                                          0,
+                                          (sum, item) => sum + item.income,
+                                        ),
+                                        currency: currency,
+                                      ),
+                                )
+                              : null,
+                          child: CashflowLineChart(
+                            data: data,
+                            currency: currency,
+                            locale: locale,
+                          ),
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 24),
                       expensesAsync.when(
@@ -732,9 +901,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           expenses: expenses,
                           locale: locale,
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
                       paymentsAsync.when(
@@ -743,9 +913,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           currency: currency,
                           locale: locale,
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
                       workersAsync.when(
@@ -754,9 +925,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           currency: currency,
                           locale: locale,
                         ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
-                        loading: () => const _LoadingWidget(),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
+                        loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
                       metricsAsync.when(
@@ -777,8 +949,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       ?.copyWith(color: AppColors.textBody),
                                 ),
                               ),
-                        error: (error, _) =>
-                            _ErrorCard(message: error.toString()),
+                        error: (error, _) => AppRecoverableError(
+                          message: appErrorMessage(l10n, error),
+                        ),
                         loading: () => const SizedBox.shrink(),
                       ),
                       const SizedBox(height: 24),
@@ -834,6 +1007,143 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 }
 
+class _ReportScopeControls extends StatelessWidget {
+  const _ReportScopeControls({
+    required this.scope,
+    required this.projects,
+    required this.selectorState,
+    required this.onProjectSelected,
+    required this.onToggleArchived,
+    required this.onLoadMore,
+    required this.onPickStart,
+    required this.onPickEnd,
+  });
+
+  final ReportScope scope;
+  final List<Project> projects;
+  final ReportProjectSelectorState selectorState;
+  final ValueChanged<String?> onProjectSelected;
+  final ValueChanged<bool> onToggleArchived;
+  final VoidCallback onLoadMore;
+  final VoidCallback onPickStart;
+  final VoidCallback onPickEnd;
+
+  String _date(DateTime value) => value.toIso8601String().split('T').first;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (selectorState.isLoading && projects.isEmpty) {
+      return const AppLoadingSkeleton(lineCount: 2);
+    }
+    if (selectorState.error != null && projects.isEmpty) {
+      return AppRecoverableError(
+        message: appErrorMessage(l10n, selectorState.error!),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('reportScope'),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (projects.isEmpty)
+          AppEmptyState(message: l10n.t('noProjectsYet'))
+        else
+          BelowDropdownField<String>(
+            label: l10n.t('selectProject'),
+            value: projects.any((item) => item.id == scope.projectId)
+                ? scope.projectId
+                : null,
+            entries: projects
+                .map(
+                  (project) =>
+                      DropdownMenuEntry(value: project.id, label: project.name),
+                )
+                .toList(growable: false),
+            onSelected: onProjectSelected,
+          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilterChip(
+              selected: selectorState.showingArchived,
+              label: Text(l10n.t('showArchivedProjects')),
+              onSelected: onToggleArchived,
+            ),
+            OutlinedButton.icon(
+              onPressed: onPickStart,
+              icon: const Icon(Icons.event_outlined),
+              label: Text(
+                l10n.t(
+                  'reportStartDate',
+                  params: {'value': _date(scope.startDate)},
+                ),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: onPickEnd,
+              icon: const Icon(Icons.event_available_outlined),
+              label: Text(
+                l10n.t(
+                  'reportEndDate',
+                  params: {'value': _date(scope.endDate)},
+                ),
+              ),
+            ),
+            if (selectorState.hasMore)
+              TextButton.icon(
+                onPressed: selectorState.isLoadingMore ? null : onLoadMore,
+                icon: selectorState.isLoadingMore
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.expand_more),
+                label: Text(l10n.t('loadMore')),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ShareableChart extends StatelessWidget {
+  const _ShareableChart({required this.child, required this.onShare});
+
+  final Widget child;
+  final VoidCallback? onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onShare == null) return child;
+    final l10n = AppLocalizations.of(context);
+    return Stack(
+      children: [
+        child,
+        PositionedDirectional(
+          top: 8,
+          end: 8,
+          child: IconButton.filledTonal(
+            tooltip: l10n.t('shareChart'),
+            onPressed: onShare,
+            icon: const Icon(Icons.share_outlined),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ReportsHeaderTitle extends StatelessWidget {
   const _ReportsHeaderTitle({required this.fallbackRoute, required this.title});
 
@@ -883,67 +1193,60 @@ class _ReportsHeaderActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          if (currentProjectId != null)
-            _ExportButton(label: l10n.t('exportPdf'), onTap: onExportProject),
-          if (currentProjectId != null) const SizedBox(width: 8),
-          if (weeklyInsights != null)
-            _ExportButton(
-              label: l10n.t('exportWeeklyReport'),
-              onTap: onExportWeekly,
-            ),
-          if (weeklyInsights != null && currentProjectId != null)
-            const SizedBox(width: 8),
-          if (weeklyInsights != null && currentProjectId != null)
-            _ExportButton(
-              label: l10n.t('exportCombinedReport'),
-              onTap: onExportCombined,
-            ),
-          const SizedBox(width: 8),
-          _ExportButton(
-            label: l10n.t('entitySummary'),
-            onTap: onOpenEntitySummary,
+    return PopupMenuButton<_ReportAction>(
+      tooltip: l10n.t('reportExports'),
+      onSelected: (action) {
+        switch (action) {
+          case _ReportAction.project:
+            onExportProject();
+          case _ReportAction.weekly:
+            onExportWeekly();
+          case _ReportAction.combined:
+            onExportCombined();
+          case _ReportAction.entities:
+            onOpenEntitySummary();
+          case _ReportAction.custom:
+            onBuildCustomReport();
+        }
+      },
+      itemBuilder: (context) => [
+        if (currentProjectId != null)
+          PopupMenuItem(
+            value: _ReportAction.project,
+            child: Text(l10n.t('exportPdf')),
           ),
-          if (currentProjectId != null && weeklyInsights != null)
-            const SizedBox(width: 8),
-          if (currentProjectId != null && weeklyInsights != null)
-            _ExportButton(
-              label: l10n.t('buildCustomReport'),
-              onTap: onBuildCustomReport,
-            ),
-        ],
-      ),
+        if (weeklyInsights != null)
+          PopupMenuItem(
+            value: _ReportAction.weekly,
+            child: Text(l10n.t('exportWeeklyReport')),
+          ),
+        if (weeklyInsights != null && currentProjectId != null)
+          PopupMenuItem(
+            value: _ReportAction.combined,
+            child: Text(l10n.t('exportCombinedReport')),
+          ),
+        PopupMenuItem(
+          value: _ReportAction.entities,
+          child: Text(l10n.t('entitySummary')),
+        ),
+        if (currentProjectId != null && weeklyInsights != null)
+          PopupMenuItem(
+            value: _ReportAction.custom,
+            child: Text(l10n.t('buildCustomReport')),
+          ),
+      ],
+      child: _ExportButton(label: l10n.t('reportExports'), onTap: null),
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: AppColors.textBody,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
-}
+enum _ReportAction { project, weekly, combined, entities, custom }
 
 class _ExportButton extends StatelessWidget {
   const _ExportButton({required this.label, required this.onTap});
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -974,79 +1277,6 @@ class _ExportButton extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.dangerLight,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppColors.danger),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: AppColors.danger,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LoadingWidget extends StatelessWidget {
-  const _LoadingWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: CircularProgressIndicator(),
       ),
     );
   }

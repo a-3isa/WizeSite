@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -56,7 +57,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
         if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
       }
     }
 
@@ -283,9 +284,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                           ..hideCurrentSnackBar()
                           ..showSnackBar(
                             SnackBar(
-                              content: Text(
-                                l10n.t('unexpectedErrorTryAgain'),
-                              ),
+                              content: Text(l10n.t('unexpectedErrorTryAgain')),
                             ),
                           );
                       }
@@ -342,7 +341,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
           loading: () => const SizedBox.shrink(),
         ),
       ),

@@ -31,39 +31,40 @@ void main() {
     expect('${entity.toMap()}', isNot(contains('base64')));
   });
 
-  testWidgets('entity attachment preview/open is blocked for unauthorized roles', (
-    tester,
-  ) async {
-    var opened = false;
-    final attachment = Attachment(
-      id: 'attachment_1',
-      fileName: 'receipt.pdf',
-      storagePath: 'entities/entity_1/receipt.pdf',
-      downloadUrl: 'https://example.com/receipt.pdf',
-      contentType: 'application/pdf',
-      uploadedAt: DateTime.utc(2026, 5, 2),
-    );
+  testWidgets(
+    'entity attachment preview/open is blocked for unauthorized roles',
+    (tester) async {
+      var opened = false;
+      final attachment = Attachment(
+        id: 'attachment_1',
+        fileName: 'receipt.pdf',
+        storagePath: 'entities/entity_1/receipt.pdf',
+        downloadUrl: 'https://example.com/receipt.pdf',
+        contentType: 'application/pdf',
+        uploadedAt: DateTime.utc(2026, 5, 2),
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AttachmentTile(
-            attachment: attachment,
-            canAccess: false,
-            deniedMessage: 'Only accounting users can open attachments.',
-            onOpen: () => opened = true,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentTile(
+              attachment: attachment,
+              canAccess: false,
+              deniedMessage: 'Only accounting users can open attachments.',
+              onOpen: () => opened = true,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byIcon(Icons.open_in_new));
-    await tester.pump();
+      await tester.tap(find.byIcon(Icons.open_in_new));
+      await tester.pump();
 
-    expect(opened, isFalse);
-    expect(
-      find.text('Only accounting users can open attachments.'),
-      findsOneWidget,
-    );
-  });
+      expect(opened, isFalse);
+      expect(
+        find.text('Only accounting users can open attachments.'),
+        findsOneWidget,
+      );
+    },
+  );
 }

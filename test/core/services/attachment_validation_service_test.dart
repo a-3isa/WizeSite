@@ -8,7 +8,9 @@ void main() {
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('attachment_validation_test_');
+    tempDir = await Directory.systemTemp.createTemp(
+      'attachment_validation_test_',
+    );
   });
 
   tearDown(() async {
@@ -33,7 +35,10 @@ void main() {
   });
 
   test('validatePickedFile rejects oversized file', () {
-    final file = PlatformFile(name: 'large.pdf', size: AttachmentValidationService.maxFileBytes + 1);
+    final file = PlatformFile(
+      name: 'large.pdf',
+      size: AttachmentValidationService.maxFileBytes + 1,
+    );
     final error = AttachmentValidationService.validatePickedFile(file);
 
     expect(error, isNotNull);
@@ -42,7 +47,9 @@ void main() {
 
   test('validateLocalFile rejects missing file', () async {
     final missingPath = tempDir.uri.resolve('missing.pdf').toFilePath();
-    final error = await AttachmentValidationService.validateLocalFile(missingPath);
+    final error = await AttachmentValidationService.validateLocalFile(
+      missingPath,
+    );
 
     expect(error, isNotNull);
     expect(error, contains('not found'));
@@ -52,7 +59,9 @@ void main() {
     final file = File('${tempDir.path}/receipt.pdf');
     await file.writeAsBytes(List<int>.filled(32, 0));
 
-    final error = await AttachmentValidationService.validateLocalFile(file.path);
+    final error = await AttachmentValidationService.validateLocalFile(
+      file.path,
+    );
 
     expect(error, isNull);
   });

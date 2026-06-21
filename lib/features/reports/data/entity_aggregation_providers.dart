@@ -279,8 +279,8 @@ String _domainEntityId(Map<String, dynamic> data, String entityType) {
   final idKey = entityType == 'worker'
       ? 'workerId'
       : entityType == 'contractor'
-          ? 'contractorId'
-          : 'providerId';
+      ? 'contractorId'
+      : 'providerId';
   final value = '${data[idKey] ?? ''}'.trim();
   return value.isEmpty ? 'unassigned' : value;
 }
@@ -289,8 +289,8 @@ String _domainEntityName(Map<String, dynamic> data, String entityType) {
   final nameKey = entityType == 'worker'
       ? 'workerName'
       : entityType == 'contractor'
-          ? 'contractorName'
-          : 'providerName';
+      ? 'contractorName'
+      : 'providerName';
   final value = '${data[nameKey] ?? ''}'.trim();
   return value.isEmpty ? 'Unassigned' : value;
 }

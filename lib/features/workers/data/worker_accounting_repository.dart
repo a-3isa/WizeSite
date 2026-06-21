@@ -11,9 +11,36 @@ class WorkerAccountingRepository {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('worker_accounting_records');
 
+  CollectionReference<Map<String, dynamic>> get _summaries =>
+      _firestore.collection('worker_accounting_summaries');
+
+  static String summaryDocId(String workspaceId, String workerId) =>
+      '${workspaceId}_$workerId';
+
+  /// Reads the maintained, exact summary for a worker. Returns null when no
+  /// summary has been computed yet. Totals are independent of the
+  /// [fetchForWorker] page cap.
+  Future<WorkerAccountingSummary?> fetchSummary({
+    required String workspaceId,
+    required String workerId,
+  }) async {
+    final snap = await _summaries
+        .doc(summaryDocId(workspaceId, workerId))
+        .get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      return null;
+    }
+    return WorkerAccountingSummary.fromMap(snap.id, data);
+  }
+
   Future<void> save(WorkerAccountingRecord record) {
-    return _collection.doc(record.id).set({
+    final doc = record.id.isEmpty
+        ? _collection.doc()
+        : _collection.doc(record.id);
+    return doc.set({
       ...record.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

@@ -7,11 +7,5 @@ class PaymentStatuses {
   static const refunded = 'refunded';
   static const cancelled = 'cancelled';
 
-  static const values = <String>[
-    unpaid,
-    partial,
-    paid,
-    refunded,
-    cancelled,
-  ];
+  static const values = <String>[unpaid, partial, paid, refunded, cancelled];
 }

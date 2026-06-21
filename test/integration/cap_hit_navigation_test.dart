@@ -127,6 +127,8 @@ GoRouter _buildRouter() {
         path: '/subscription/limit',
         builder: (context, state) => LimitReachedScreen(
           limitType: state.uri.queryParameters['limit'] ?? 'generic',
+          current: int.tryParse(state.uri.queryParameters['current'] ?? ''),
+          max: int.tryParse(state.uri.queryParameters['max'] ?? ''),
         ),
       ),
       GoRoute(
@@ -270,6 +272,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Subscription Success Screen'), findsOneWidget);
+  });
+
+  testWidgets('limit screen explains blocked quota and opens plans directly', (
+    tester,
+  ) async {
+    final router = _buildRouter();
+    router.go('/subscription/limit?limit=expensesPerMonth&current=30&max=30');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+          purchaseCoordinatorProvider.overrideWithValue(
+            _FakePurchaseCoordinator(PaywallPresentationResult.notSupported),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Monthly Expense Limit Reached'), findsOneWidget);
+    expect(
+      find.text(
+        'You have used 30 of 30 monthly expense entries on the Free plan. Upgrade to Pro to keep adding expenses.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Upgrade to Pro'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Plans Screen'), findsOneWidget);
   });
 
   testWidgets('navigates to add expense when quota allows', (tester) async {

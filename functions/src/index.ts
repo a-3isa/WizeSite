@@ -736,6 +736,110 @@ export function workerEntryTotalCost(data: TriggerDocData): number {
   return finiteNumber(data.daysWorked) * finiteNumber(data.dailyWage);
 }
 
+const VALID_WORKER_STATUSES = new Set(["active", "inactive", "terminated"]);
+
+export function normalizeWorkerStatus(input: unknown): string {
+  const status = `${input ?? "active"}`.trim().toLowerCase();
+  if (!VALID_WORKER_STATUSES.has(status)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Worker status must be active, inactive, or terminated.",
+    );
+  }
+  return status;
+}
+
+export function workerAccountingAmounts(data: TriggerDocData): {
+  totalAmount: number;
+  confirmedPaid: number;
+  confirmedOutstanding: number;
+  unresolvedLegacyCount: number;
+} {
+  const totalAmount = finiteNumber(data.amount);
+  const paymentStatus = `${data.paymentStatus ?? ""}`.trim().toLowerCase();
+  if (paymentStatus === "paid") {
+    return {
+      totalAmount,
+      confirmedPaid: totalAmount,
+      confirmedOutstanding: 0,
+      unresolvedLegacyCount: 0,
+    };
+  }
+  if (paymentStatus === "unpaid") {
+    return {
+      totalAmount,
+      confirmedPaid: 0,
+      confirmedOutstanding: totalAmount,
+      unresolvedLegacyCount: 0,
+    };
+  }
+  if (paymentStatus === "partial") {
+    const rawPaid = data.paidAmount;
+    const paidAmount = rawPaid == null ? Number.NaN : Number(rawPaid);
+    if (
+      !Number.isFinite(paidAmount) ||
+      paidAmount <= 0 ||
+      paidAmount >= totalAmount
+    ) {
+      return {
+        totalAmount,
+        confirmedPaid: 0,
+        confirmedOutstanding: 0,
+        unresolvedLegacyCount: 1,
+      };
+    }
+    return {
+      totalAmount,
+      confirmedPaid: paidAmount,
+      confirmedOutstanding: totalAmount - paidAmount,
+      unresolvedLegacyCount: 0,
+    };
+  }
+  return {
+    totalAmount,
+    confirmedPaid: 0,
+    confirmedOutstanding: 0,
+    unresolvedLegacyCount: 1,
+  };
+}
+
+export function buildWorkerAccountingSummaryPayload(input: {
+  workspaceId: string;
+  workerId: string;
+  records: TriggerDocData[];
+}): TriggerDocData {
+  const totals = input.records.reduce<{
+    totalAmount: number;
+    confirmedPaid: number;
+    confirmedOutstanding: number;
+    unresolvedLegacyCount: number;
+  }>(
+    (sum, record) => {
+      const amounts = workerAccountingAmounts(record);
+      sum.totalAmount += amounts.totalAmount;
+      sum.confirmedPaid += amounts.confirmedPaid;
+      sum.confirmedOutstanding += amounts.confirmedOutstanding;
+      sum.unresolvedLegacyCount += amounts.unresolvedLegacyCount;
+      return sum;
+    },
+    {
+      totalAmount: 0,
+      confirmedPaid: 0,
+      confirmedOutstanding: 0,
+      unresolvedLegacyCount: 0,
+    },
+  );
+  return {
+    workspaceId: input.workspaceId,
+    workerId: input.workerId,
+    totalAmount: totals.totalAmount,
+    confirmedPaid: totals.confirmedPaid,
+    confirmedOutstanding: totals.confirmedOutstanding,
+    unresolvedLegacyCount: totals.unresolvedLegacyCount,
+    recordCount: input.records.length,
+  };
+}
+
 function changedTimestamp(
   before: TriggerDocData,
   after: TriggerDocData,
@@ -818,9 +922,27 @@ export function hasRelevantWorkerEntryFieldsChanged(
   );
 }
 
+export function hasRelevantWorkerAccountingFieldsChanged(
+  before: TriggerDocData,
+  after: TriggerDocData,
+): boolean {
+  return (
+    changedString(before, after, "workspaceId") ||
+    changedString(before, after, "workerId") ||
+    changedNumber(before, after, "amount") ||
+    changedNumber(before, after, "paidAmount") ||
+    changedString(before, after, "paymentStatus")
+  );
+}
+
 type AggregateTarget = {
   workspaceId: string;
   projectId: string;
+};
+
+type WorkerAccountingTarget = {
+  workspaceId: string;
+  workerId: string;
 };
 
 function aggregateTargetFromDoc(
@@ -848,6 +970,35 @@ function aggregateTargetsFromChange(
       continue;
     }
     targets.set(`${target.workspaceId}::${target.projectId}`, target);
+  }
+  return [...targets.values()];
+}
+
+function workerAccountingTargetFromDoc(
+  data: TriggerDocData | undefined,
+): WorkerAccountingTarget | null {
+  if (!data) {
+    return null;
+  }
+  const workspaceId = `${data.workspaceId ?? ""}`.trim();
+  const workerId = `${data.workerId ?? ""}`.trim();
+  if (!workspaceId || !workerId) {
+    return null;
+  }
+  return { workspaceId, workerId };
+}
+
+function workerAccountingTargetsFromChange(
+  before: TriggerDocData | undefined,
+  after: TriggerDocData | undefined,
+): WorkerAccountingTarget[] {
+  const targets = new Map<string, WorkerAccountingTarget>();
+  for (const item of [before, after]) {
+    const target = workerAccountingTargetFromDoc(item);
+    if (!target) {
+      continue;
+    }
+    targets.set(`${target.workspaceId}::${target.workerId}`, target);
   }
   return [...targets.values()];
 }
@@ -1342,6 +1493,12 @@ function buildProjectMetricsPayload(input: {
   riskLevel: string;
   healthStatus: string;
   categoryTotals: Record<string, number>;
+  entityTotals: Record<string, number>;
+  paymentMethodTotals: Record<string, number>;
+  weeklyExpenses: number;
+  weeklyIncome: number;
+  equipmentExpenses: number;
+  recentTransactions: Record<string, unknown>[];
   monthlyFlow: MonthlyFlowPoint[];
   topWorkers: TopWorkerMetric[];
   recentExpenses: Record<string, unknown>[];
@@ -1368,6 +1525,13 @@ function buildProjectMetricsPayload(input: {
     riskLevel: input.riskLevel,
     healthStatus: input.healthStatus,
     categoryTotals: input.categoryTotals,
+    entityTotals: input.entityTotals,
+    paymentMethodTotals: input.paymentMethodTotals,
+    weeklyExpenses: input.weeklyExpenses,
+    weeklyIncome: input.weeklyIncome,
+    weeklyNet: input.weeklyIncome - input.weeklyExpenses,
+    totalEquipmentCost: input.equipmentExpenses,
+    recentTransactions: input.recentTransactions,
     monthlyFlow: input.monthlyFlow,
     topWorkers: input.topWorkers,
     recentExpenses: input.recentExpenses,
@@ -1375,14 +1539,10 @@ function buildProjectMetricsPayload(input: {
   };
 }
 
-async function recomputeWorkspaceMetrics(workspaceId: string): Promise<void> {
-  const projectMetricsSnap = await db
-    .collection("project_metrics")
-    .where("workspaceId", "==", workspaceId)
-    .where("isArchived", "==", false)
-    .get();
-
-  const metrics = projectMetricsSnap.docs.map((doc) => doc.data());
+export function buildWorkspaceMetricsPayload(
+  workspaceId: string,
+  metrics: TriggerDocData[],
+): TriggerDocData {
   const activeProjects = metrics.filter(
     (project) => `${project.status ?? "active"}` === "active",
   ).length;
@@ -1396,7 +1556,60 @@ async function recomputeWorkspaceMetrics(workspaceId: string): Promise<void> {
     0,
   );
 
-  await writeIfChanged(db.collection("workspace_metrics").doc(workspaceId), {
+  const weeklyExpenses = metrics.reduce(
+    (sum, project) => sum + Number(project.weeklyExpenses ?? 0),
+    0,
+  );
+  const weeklyIncome = metrics.reduce(
+    (sum, project) => sum + Number(project.weeklyIncome ?? 0),
+    0,
+  );
+  const categoryTotals: Record<string, number> = {};
+  const entityTotals: Record<string, number> = {};
+  const paymentMethodTotals: Record<string, number> = {};
+  const recentTransactions: Record<string, unknown>[] = [];
+  let laborTotal = 0;
+  let equipmentTotal = 0;
+
+  for (const project of metrics) {
+    for (const [key, value] of Object.entries(
+      (project.categoryTotals as Record<string, number> | undefined) ?? {},
+    )) {
+      categoryTotals[key] = (categoryTotals[key] ?? 0) + Number(value);
+    }
+    for (const [key, value] of Object.entries(
+      (project.entityTotals as Record<string, number> | undefined) ?? {},
+    )) {
+      entityTotals[key] = (entityTotals[key] ?? 0) + Number(value);
+    }
+    for (const [key, value] of Object.entries(
+      (project.paymentMethodTotals as Record<string, number> | undefined) ?? {},
+    )) {
+      paymentMethodTotals[key] =
+        (paymentMethodTotals[key] ?? 0) + Number(value);
+    }
+    laborTotal += Number(project.totalLaborCost ?? 0);
+    equipmentTotal += Number(project.totalEquipmentCost ?? 0);
+    recentTransactions.push(
+      ...(((project.recentTransactions as Record<string, unknown>[] | undefined) ?? [])),
+    );
+  }
+
+  const topKey = (totals: Record<string, number>): string | null => {
+    const sorted = Object.entries(totals).sort((a, b) => {
+      const difference = b[1] - a[1];
+      return difference !== 0 ? difference : a[0].localeCompare(b[0]);
+    });
+    return sorted[0]?.[0] ?? null;
+  };
+
+  recentTransactions.sort((a, b) => {
+    const aDate = Date.parse(`${a.date ?? ""}`) || 0;
+    const bDate = Date.parse(`${b.date ?? ""}`) || 0;
+    return bDate - aDate;
+  });
+
+  return {
     workspaceId,
     totalProjects: metrics.length,
     activeProjects,
@@ -1405,7 +1618,59 @@ async function recomputeWorkspaceMetrics(workspaceId: string): Promise<void> {
     totalPayments: totalIncome,
     net: totalIncome - totalExpenses,
     netProfit: totalIncome - totalExpenses,
-  });
+    weeklyExpenses,
+    weeklyIncome,
+    weeklyNet: weeklyIncome - weeklyExpenses,
+    topCategory: topKey(categoryTotals),
+    topEntity: topKey(entityTotals),
+    categoryTotals,
+    entityTotals,
+    laborTotal,
+    equipmentTotal,
+    paymentMethodTotals,
+    recentTransactions: recentTransactions.slice(0, 10),
+  };
+}
+
+async function recomputeWorkspaceMetrics(workspaceId: string): Promise<void> {
+  const projectMetricsSnap = await db
+    .collection("project_metrics")
+    .where("workspaceId", "==", workspaceId)
+    .where("isArchived", "==", false)
+    .get();
+  const metrics = projectMetricsSnap.docs.map((doc) => doc.data());
+  await writeIfChanged(
+    db.collection("workspace_metrics").doc(workspaceId),
+    buildWorkspaceMetricsPayload(workspaceId, metrics),
+  );
+}
+
+async function recomputeWorkerAccountingSummary(
+  workspaceId: string,
+  workerId: string,
+): Promise<void> {
+  const summaryRef = db
+    .collection("worker_accounting_summaries")
+    .doc(`${workspaceId}_${workerId}`);
+  const recordsSnap = await db
+    .collection("worker_accounting_records")
+    .where("workspaceId", "==", workspaceId)
+    .where("workerId", "==", workerId)
+    .get();
+
+  if (recordsSnap.empty) {
+    await summaryRef.delete().catch(() => undefined);
+    return;
+  }
+
+  await writeIfChanged(
+    summaryRef,
+    buildWorkerAccountingSummaryPayload({
+      workspaceId,
+      workerId,
+      records: recordsSnap.docs.map((doc) => doc.data()),
+    }),
+  );
 }
 
 async function replaceScopedSummaryDocs(
@@ -2881,6 +3146,7 @@ export const createWorker = onCall(async (request) => {
   const name = requireString(data, "name");
   const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
   const billingType = billingTypeRaw === "project" ? "project" : "daily";
+  const status = normalizeWorkerStatus(data.status);
   const dailyWage = requireNumber(data, "dailyWage");
   if (billingType === "daily" && dailyWage <= 0) {
     throw new HttpsError(
@@ -2899,6 +3165,7 @@ export const createWorker = onCall(async (request) => {
     billingType,
     workerType: `${data.workerType ?? ""}`.trim(),
     notes: `${data.notes ?? ""}`.trim(),
+    status,
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientCreatedAt: parseTimestamp(data.clientCreatedAt),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
@@ -2952,6 +3219,7 @@ export const updateWorker = onCall(async (request) => {
       "Archived workers cannot be edited.",
     );
   }
+  const status = normalizeWorkerStatus(data.status ?? worker.status ?? "active");
 
   await workerRef.update({
     name,
@@ -2960,6 +3228,7 @@ export const updateWorker = onCall(async (request) => {
     billingType,
     workerType: `${data.workerType ?? ""}`.trim(),
     notes: `${data.notes ?? ""}`.trim(),
+    status,
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -3433,19 +3702,76 @@ export const ensureUserWorkspaceBootstrap = onCall(async (request) => {
   });
 });
 
-export const inviteMemberByEmail = onCall(async (request) => {
+export async function setActiveWorkspaceForUser(input: {
+  uid: string;
+  workspaceId: string;
+}): Promise<{workspaceId: string}> {
+  const uid = input.uid.trim();
+  const workspaceId = input.workspaceId.trim();
+  if (!uid || !workspaceId) {
+    throw new HttpsError("invalid-argument", "Missing workspace selection");
+  }
+
+  const role = await roleForUser(workspaceId, uid);
+  if (!role) {
+    const workspaceSnap = await db.collection("workspaces").doc(workspaceId).get();
+    if (`${workspaceSnap.data()?.ownerId ?? ""}` !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "User is not a member of this workspace",
+      );
+    }
+    await membershipRef(workspaceId, uid).set(
+      {
+        workspaceId,
+        userId: uid,
+        role: "owner",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+  }
+  await db.collection("users").doc(uid).set(
+    {
+      id: uid,
+      workspaceId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    {merge: true},
+  );
+  return {workspaceId};
+}
+
+export const setActiveWorkspace = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
   const data = request.data as Record<string, unknown>;
-  const workspaceId = requireString(data, "workspaceId");
-  const ownerRole = await assertMember(workspaceId, request.auth.uid);
+  return setActiveWorkspaceForUser({
+    uid: request.auth.uid,
+    workspaceId: requireString(data, "workspaceId"),
+  });
+});
+
+export async function inviteMemberByEmailForUser(input: {
+  ownerUid: string;
+  workspaceId: string;
+  email: string;
+  role?: string;
+}): Promise<{userId: string; workspaceId: string}> {
+  const ownerUid = input.ownerUid.trim();
+  const workspaceId = input.workspaceId.trim();
+  const ownerRole = await assertMember(workspaceId, ownerUid);
   if (ownerRole !== "owner") {
     throw new HttpsError("permission-denied", "Only owner can invite members");
   }
 
-  const email = normalizeEmail(requireString(data, "email"));
-  const role = `${data.role ?? "member"}`.trim() || "member";
+  const email = normalizeEmail(input.email);
+  if (!email) {
+    throw new HttpsError("invalid-argument", "Missing required field: email");
+  }
+  const role = `${input.role ?? "member"}`.trim() || "member";
   const userSnap = await db
     .collection("users")
     .where("email", "==", email)
@@ -3496,18 +3822,10 @@ export const inviteMemberByEmail = onCall(async (request) => {
     workspaceId,
     userId,
     role,
-    createdBy: request.auth.uid,
+    createdBy: ownerUid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-
-  await db.collection("users").doc(userId).set(
-    {
-      workspaceId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
 
   await upsertNotificationForUsers({
     workspaceId,
@@ -3515,6 +3833,21 @@ export const inviteMemberByEmail = onCall(async (request) => {
     type: "team_invite_added",
     title: "Workspace Access Granted",
     message: "You were added to a workspace team.",
+  });
+
+  return {userId, workspaceId};
+}
+
+export const inviteMemberByEmail = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+  const data = request.data as Record<string, unknown>;
+  return inviteMemberByEmailForUser({
+    ownerUid: request.auth.uid,
+    workspaceId: requireString(data, "workspaceId"),
+    email: requireString(data, "email"),
+    role: `${data.role ?? "member"}`,
   });
 });
 
@@ -3828,18 +4161,69 @@ async function recomputeProjectSummary(
     })
     .slice(0, 5);
 
-  const expenseRecords = expensesSnap.docs.map((doc) => ({
+  const expenseRecords: TriggerDocData[] = expensesSnap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as TriggerDocData),
   }));
-  const paymentRecords = paymentsSnap.docs.map((doc) => ({
+  const paymentRecords: TriggerDocData[] = paymentsSnap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as TriggerDocData),
   }));
-  const workerEntryRecords = workerEntriesSnap.docs.map((doc) => ({
+  const workerEntryRecords: TriggerDocData[] = workerEntriesSnap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as TriggerDocData),
   }));
+  const weekStart = new Date();
+  weekStart.setUTCHours(0, 0, 0, 0);
+  weekStart.setUTCDate(weekStart.getUTCDate() - 6);
+  const inCurrentWeek = (record: Record<string, unknown>): boolean => {
+    const date = parseTimestamp(record.date)?.toDate();
+    return date != null && date >= weekStart;
+  };
+  const weeklyManualExpenses = expenseRecords
+    .filter(inCurrentWeek)
+    .reduce((sum, record) => sum + Number(record.amount ?? 0), 0);
+  const weeklyLaborExpenses = workerEntryRecords
+    .filter(inCurrentWeek)
+    .reduce((sum, record) => sum + workerEntryTotalCost(record), 0);
+  const weeklyIncome = paymentRecords
+    .filter(inCurrentWeek)
+    .reduce((sum, record) => sum + Number(record.amount ?? 0), 0);
+  const entityTotals: Record<string, number> = {};
+  const paymentMethodTotals: Record<string, number> = {};
+  for (const record of expenseRecords) {
+    const entity = `${record.entityName ?? record.supplierName ?? ""}`.trim();
+    if (entity) {
+      entityTotals[entity] = (entityTotals[entity] ?? 0) + Number(record.amount ?? 0);
+    }
+  }
+  for (const record of paymentRecords) {
+    const entity = `${record.entityName ?? record.clientName ?? ""}`.trim();
+    if (entity) {
+      entityTotals[entity] = (entityTotals[entity] ?? 0) + Number(record.amount ?? 0);
+    }
+    const method = `${record.paymentMethod ?? "unknown"}`.trim() || "unknown";
+    paymentMethodTotals[method] =
+      (paymentMethodTotals[method] ?? 0) + Number(record.amount ?? 0);
+  }
+  const recentTransactions = [
+    ...recentExpenses.map((record) => ({
+      id: `${record.id ?? ""}`,
+      type: "expense",
+      title: `${record.entityName ?? record.supplierName ?? record.category ?? ""}`,
+      amount: Number(record.amount ?? 0),
+      date: parseTimestamp(record.date)?.toDate().toISOString() ?? "",
+    })),
+    ...recentPayments.map((record) => ({
+      id: `${record.id ?? ""}`,
+      type: "payment",
+      title: `${record.entityName ?? record.clientName ?? ""}`,
+      amount: Number(record.amount ?? 0),
+      date: parseTimestamp(record.date)?.toDate().toISOString() ?? "",
+    })),
+  ]
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, 10);
 
   await writeIfChanged(
     projectMetricsRef,
@@ -3860,6 +4244,12 @@ async function recomputeProjectSummary(
       riskLevel,
       healthStatus,
       categoryTotals,
+      entityTotals,
+      paymentMethodTotals,
+      weeklyExpenses: weeklyManualExpenses + weeklyLaborExpenses,
+      weeklyIncome,
+      equipmentExpenses: Number(categoryTotals.equipment ?? 0),
+      recentTransactions,
       monthlyFlow,
       topWorkers,
       recentExpenses,
@@ -3945,6 +4335,7 @@ async function recomputeProjectSummary(
 type ExpenseWrittenParams = { expenseId?: string };
 type PaymentWrittenParams = { paymentId?: string };
 type WorkerEntryWrittenParams = { entryId?: string };
+type WorkerAccountingWrittenParams = { recordId?: string };
 
 export async function handleExpenseWriteRecompute(
   event: FirestoreWrittenEventLike<ExpenseWrittenParams>,
@@ -4003,6 +4394,29 @@ export async function handleWorkerEntryWriteRecompute(
   );
 }
 
+export async function handleWorkerAccountingWriteRecompute(
+  event: FirestoreWrittenEventLike<WorkerAccountingWrittenParams>,
+): Promise<void> {
+  const after = event.data?.after?.data();
+  const before = event.data?.before?.data();
+  if (
+    before &&
+    after &&
+    !hasRelevantWorkerAccountingFieldsChanged(before, after)
+  ) {
+    return;
+  }
+  const targets = workerAccountingTargetsFromChange(before, after);
+  if (targets.length === 0) {
+    return;
+  }
+  await Promise.all(
+    targets.map(({ workspaceId, workerId }) =>
+      recomputeWorkerAccountingSummary(workspaceId, workerId),
+    ),
+  );
+}
+
 export const onExpenseWriteRecompute = onDocumentWritten(
   "expenses/{expenseId}",
   handleExpenseWriteRecompute,
@@ -4016,6 +4430,11 @@ export const onPaymentWriteRecompute = onDocumentWritten(
 export const onWorkerEntryWriteRecompute = onDocumentWritten(
   "worker_entries/{entryId}",
   handleWorkerEntryWriteRecompute,
+);
+
+export const onWorkerAccountingWriteRecompute = onDocumentWritten(
+  "worker_accounting_records/{recordId}",
+  handleWorkerAccountingWriteRecompute,
 );
 
 type ProjectWrittenParams = { projectId?: string };

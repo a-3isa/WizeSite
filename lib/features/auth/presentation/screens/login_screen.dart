@@ -23,7 +23,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _showPassword = false;
   String? _error;
+  String? _emailError;
+  String? _passwordError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final userId = ref.read(activeUserIdProvider);
+      final workspaceId = ref.read(activeWorkspaceIdProvider);
+      if (userId != null &&
+          userId.isNotEmpty &&
+          workspaceId != null &&
+          workspaceId.isNotEmpty) {
+        context.go(AppRoutes.dashboard);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -36,14 +57,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final l10n = AppLocalizations.of(context);
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = l10n.t('pleaseEnterEmailAndPassword'));
+    final emailError = email.isEmpty ? l10n.t('loginEmailRequired') : null;
+    final passwordError = password.isEmpty
+        ? l10n.t('loginPasswordRequired')
+        : null;
+    if (emailError != null || passwordError != null) {
+      setState(() {
+        _emailError = emailError;
+        _passwordError = passwordError;
+        _error = null;
+      });
       return;
     }
 
     setState(() {
       _loading = true;
       _error = null;
+      _emailError = null;
+      _passwordError = null;
     });
     final auth = ref.read(firebaseAuthProvider);
     try {
@@ -198,10 +229,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.construction_rounded, // App Logo Placeholder
-                  size: 64,
-                  color: AppColors.constructionOrange,
+                Image.asset(
+                  'assets/branding/app_icon.png',
+                  key: const Key('login_app_icon'),
+                  height: 72,
+                  width: 72,
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -241,15 +273,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         decoration: InputDecoration(
                           labelText: l10n.t('email'),
                           prefixIcon: const Icon(Icons.email_outlined),
+                          errorText: _emailError,
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: !_showPassword,
                         decoration: InputDecoration(
                           labelText: l10n.t('password'),
                           prefixIcon: const Icon(Icons.lock_outline),
+                          errorText: _passwordError,
+                          suffixIcon: IconButton(
+                            key: const Key('password_visibility_toggle'),
+                            onPressed: () =>
+                                setState(() => _showPassword = !_showPassword),
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                          ),
                         ),
                       ),
                       if (_error != null) ...[
@@ -318,30 +362,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final supported = ref.watch(googleSignInSupportedProvider);
-                    return supported.when(
-                      data: (isSupported) => isSupported
-                          ? OutlinedButton.icon(
-                              onPressed: _loading ? null : _loginWithGoogle,
-                              icon: Image.network(
-                                'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
-                                height: 20,
-                                width: 20,
-                                errorBuilder: (c, e, s) =>
-                                    const Icon(Icons.g_mobiledata, size: 24),
-                              ),
-                              label: Text(l10n.t('continueWithGoogle')),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: AppColors.surfaceSolid,
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, _) => const SizedBox.shrink(),
-                    );
-                  },
+                SizedBox(
+                  key: const Key('google_sign_in_slot'),
+                  height: 48,
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final supported = ref.watch(
+                        googleSignInSupportedProvider,
+                      );
+                      return supported.when(
+                        data: (isSupported) => isSupported
+                            ? OutlinedButton.icon(
+                                onPressed: _loading ? null : _loginWithGoogle,
+                                icon: Image.asset(
+                                  'assets/branding/google_g.png',
+                                  height: 20,
+                                  width: 20,
+                                ),
+                                label: Text(l10n.t('continueWithGoogle')),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: AppColors.surfaceSolid,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, _) => const SizedBox.shrink(),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(

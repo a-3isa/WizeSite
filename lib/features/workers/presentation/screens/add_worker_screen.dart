@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -8,6 +9,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,6 +41,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
   final _notesController = TextEditingController();
   String _workerType = 'other';
   String _billingType = 'daily';
+  WorkerStatus _status = WorkerStatus.active;
   bool _loading = false;
   bool _importingContact = false;
   bool _prefilling = false;
@@ -72,6 +75,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
           _workerType = _workerTypes.contains(worker.workerType)
               ? worker.workerType
               : 'other';
+          _status = worker.status;
           _notesController.text = worker.notes;
         });
       }
@@ -140,6 +144,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               billingType: _billingType,
               workerType: _workerType,
               notes: _notesController.text.trim(),
+              status: _status,
             );
       } else {
         await ref
@@ -152,13 +157,14 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               billingType: _billingType,
               workerType: _workerType,
               notes: _notesController.text.trim(),
+              status: _status,
             );
       }
       if (mounted) {
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = appErrorMessage(l10n, e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -304,6 +310,21 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                         setState(() => _workerType = value ?? _workerType),
                   ),
                   const SizedBox(height: 12),
+                  BelowDropdownField<WorkerStatus>(
+                    label: l10n.t('status'),
+                    value: _status,
+                    entries: WorkerStatus.values
+                        .map(
+                          (status) => DropdownMenuEntry(
+                            value: status,
+                            label: _statusLabel(l10n, status),
+                          ),
+                        )
+                        .toList(),
+                    onSelected: (value) =>
+                        setState(() => _status = value ?? _status),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _notesController,
                     maxLines: 3,
@@ -330,5 +351,13 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
               ),
       ),
     );
+  }
+
+  String _statusLabel(AppLocalizations l10n, WorkerStatus status) {
+    return switch (status) {
+      WorkerStatus.active => l10n.t('workerStatusActive'),
+      WorkerStatus.inactive => l10n.t('workerStatusInactive'),
+      WorkerStatus.terminated => l10n.t('workerStatusTerminated'),
+    };
   }
 }

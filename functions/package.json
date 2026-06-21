@@ -10,6 +10,8 @@
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions --config ../firebase.deploy.json",
     "lint": "echo \"No lint configured\"",
+    "backfill:entity-last-used": "npm run build && node lib/entity_last_used_backfill.js",
+    "init:worker-accounting-summaries": "npm run build && node lib/worker_accounting_summary_initializer.js",
     "test": "npm run build && node --test \"lib/**/*.test.js\""
   },
   "dependencies": {

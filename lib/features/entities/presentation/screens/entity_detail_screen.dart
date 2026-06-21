@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
@@ -57,7 +58,9 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
           invalidMessages.add(l10n.t('attachmentMissing'));
           continue;
         }
-        final uploaded = await ref.read(storageUploadServiceProvider).uploadAttachment(
+        final uploaded = await ref
+            .read(storageUploadServiceProvider)
+            .uploadAttachment(
               userId: userId,
               localFilePath: file.path!,
               fileName: file.name,
@@ -75,7 +78,9 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
           ),
         );
       }
-      await ref.read(entityRepositoryProvider).saveAttachments(
+      await ref
+          .read(entityRepositoryProvider)
+          .saveAttachments(
             entityId: widget.entityId,
             attachments: attachments
                 .map((attachment) => attachment.toMap())
@@ -86,7 +91,7 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = '${l10n.t('failed')}: $error');
+        setState(() => _error = appErrorMessage(l10n, error));
       }
     } finally {
       if (mounted) {
@@ -101,10 +106,13 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('entitySummary'))),
       body: FutureBuilder(
-        future: ref.read(entityRepositoryProvider).getEntityById(widget.entityId),
+        future: ref
+            .read(entityRepositoryProvider)
+            .getEntityById(widget.entityId),
         builder: (context, snapshot) {
           final entity = snapshot.data;
-          if (snapshot.connectionState == ConnectionState.waiting && entity == null) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              entity == null) {
             return const Center(child: CircularProgressIndicator());
           }
           if (entity == null) {
@@ -138,10 +146,8 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
                 Text(l10n.t('noDataYet'))
               else
                 ...entity.attachments.map(
-                  (attachment) => AttachmentTile(
-                    attachment: attachment,
-                    canAccess: true,
-                  ),
+                  (attachment) =>
+                      AttachmentTile(attachment: attachment, canAccess: true),
                 ),
             ],
           );

@@ -2,14 +2,25 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
+import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_record_draft.dart';
+import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_save_adapter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+
+typedef DomainAccountingSave =
+    Future<void> Function(DomainAccountingRecordDraft draft);
+
+typedef DomainAccountingHeaderBuilder =
+    Widget? Function(BuildContext context, WidgetRef ref, String workspaceId);
 
 class DomainAccountingRecordsScreen extends ConsumerWidget {
   const DomainAccountingRecordsScreen({
@@ -20,6 +31,9 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
     required this.ownerId,
     required this.ownerName,
     this.projectId,
+    this.onSave,
+    this.headerBuilder,
+    this.showPaidAmountField = false,
     super.key,
   });
 
@@ -30,24 +44,23 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
   final String ownerId;
   final String ownerName;
   final String? projectId;
+  final DomainAccountingSave? onSave;
+  final DomainAccountingHeaderBuilder? headerBuilder;
+  final bool showPaidAmountField;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
-    final query = workspaceId == null
-        ? null
-        : ref
-              .watch(firestoreProvider)
-              .collection(collectionName)
-              .where('workspaceId', isEqualTo: workspaceId)
-              .where(ownerIdField, isEqualTo: ownerId)
-              .orderBy('date', descending: true)
-              .limit(50);
+    final roleAsync = ref.watch(currentAccountingRoleProvider);
+    final role = roleAsync.valueOrNull;
+    final canAccessAccounting =
+        roleAsync.hasValue && ref.watch(canAccessAccountingProvider(role));
+    final roleIsLoading = workspaceId != null && roleAsync.isLoading;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t(titleKey))),
-      floatingActionButton: workspaceId == null
+      floatingActionButton: workspaceId == null || !canAccessAccounting
           ? null
           : FloatingActionButton(
               onPressed: () => _showEntryForm(context, ref, workspaceId),
@@ -55,20 +68,46 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
             ),
       body: workspaceId == null
           ? Center(child: Text(l10n.t('pleaseLoginFirst')))
+          : roleIsLoading
+          ? const AppLoadingSkeleton()
+          : !canAccessAccounting
+          ? _DeniedAccountingState(message: l10n.t('reportAccessDenied'))
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: query!.snapshots(),
+              stream: ref
+                  .watch(firestoreProvider)
+                  .collection(collectionName)
+                  .where('workspaceId', isEqualTo: workspaceId)
+                  .where(ownerIdField, isEqualTo: ownerId)
+                  .orderBy('date', descending: true)
+                  .limit(50)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text(snapshot.error.toString()));
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: AppRecoverableError(
+                      message: appErrorMessage(l10n, snapshot.error),
+                    ),
+                  );
                 }
                 if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const AppLoadingSkeleton(lineCount: 6);
                 }
                 final records = snapshot.data!.docs
                     .map((doc) => _AccountingRecord(doc.id, doc.data()))
                     .toList(growable: false);
+                final header = headerBuilder?.call(context, ref, workspaceId);
                 if (records.isEmpty) {
-                  return Center(child: Text(l10n.t('noDataYet')));
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (header != null) ...[
+                        header,
+                        const SizedBox(height: 8),
+                      ],
+                      AppEmptyState(message: l10n.t('noDataYet')),
+                    ],
+                  );
                 }
                 final total = records.fold<double>(
                   0,
@@ -77,6 +116,7 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    if (header != null) ...[header, const SizedBox(height: 8)],
                     Card(
                       child: ListTile(
                         title: Text(l10n.t('totalExpenses')),
@@ -152,9 +192,11 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
     final descriptionController = TextEditingController();
     final amountController = TextEditingController();
     final notesController = TextEditingController();
+    final paidAmountController = TextEditingController();
     var paymentMethod = 'cash';
     var paymentStatus = 'paid';
     var date = DateTime.now();
+    String? formError;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -225,6 +267,16 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                       () => paymentStatus = value ?? paymentStatus,
                     ),
                   ),
+                  if (showPaidAmountField && paymentStatus == 'partial') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: paidAmountController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: l10n.t('workerPaidAmountLabel'),
+                      ),
+                    ),
+                  ],
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(
@@ -253,6 +305,10 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                     maxLines: 2,
                     decoration: InputDecoration(labelText: l10n.t('notes')),
                   ),
+                  if (formError != null) ...[
+                    const SizedBox(height: 12),
+                    Text(formError!, style: const TextStyle(color: Colors.red)),
+                  ],
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: () async {
@@ -261,25 +317,42 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                       if (amount <= 0) {
                         return;
                       }
-                      final doc = ref
-                          .read(firestoreProvider)
-                          .collection(collectionName)
-                          .doc();
-                      await doc.set({
-                        'workspaceId': workspaceId,
-                        'projectId': projectId ?? '',
-                        ownerIdField: ownerId,
-                        ownerNameField: ownerName,
-                        'description': descriptionController.text.trim(),
-                        'amount': amount,
-                        'date': Timestamp.fromDate(date),
-                        'paymentMethod': paymentMethod,
-                        'paymentStatus': paymentStatus,
-                        'notes': notesController.text.trim(),
-                        'attachments': const [],
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
+                      final paidAmount =
+                          paidAmountController.text.trim().isEmpty
+                          ? null
+                          : double.tryParse(paidAmountController.text.trim());
+                      try {
+                        final draft = DomainAccountingRecordDraft(
+                          workspaceId: workspaceId,
+                          projectId: projectId ?? '',
+                          ownerIdField: ownerIdField,
+                          ownerNameField: ownerNameField,
+                          ownerId: ownerId,
+                          ownerName: ownerName,
+                          description: descriptionController.text.trim(),
+                          amount: amount,
+                          date: date,
+                          paymentMethod: paymentMethod,
+                          paymentStatus: paymentStatus,
+                          paidAmount: paidAmount,
+                          notes: notesController.text.trim(),
+                        );
+                        await (onSave ??
+                            (draft) => ref
+                                .read(domainAccountingSaveAdapterProvider)
+                                .save(
+                                  collectionName: collectionName,
+                                  draft: draft,
+                                ))(draft);
+                      } catch (error) {
+                        setSheetState(() {
+                          formError =
+                              error is DomainAccountingValidationException
+                              ? l10n.t(error.messageKey)
+                              : appErrorMessage(l10n, error);
+                        });
+                        return;
+                      }
                       if (context.mounted) {
                         Navigator.pop(context);
                       }
@@ -296,7 +369,24 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
 
     descriptionController.dispose();
     amountController.dispose();
+    paidAmountController.dispose();
     notesController.dispose();
+  }
+}
+
+class _DeniedAccountingState extends StatelessWidget {
+  const _DeniedAccountingState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: AppRecoverableError(message: message),
+      ),
+    );
   }
 }
 

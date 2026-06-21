@@ -27,6 +27,16 @@ if (!emulatorHost) {
     fullName?: string | null;
     photoUrl?: string | null;
   }) => Promise<{workspaceId: string; created: boolean}>;
+  let setActiveWorkspaceForUser: (input: {
+    uid: string;
+    workspaceId: string;
+  }) => Promise<{workspaceId: string}>;
+  let inviteMemberByEmailForUser: (input: {
+    ownerUid: string;
+    workspaceId: string;
+    email: string;
+    role?: string;
+  }) => Promise<{userId: string; workspaceId: string}>;
 
   async function seedBaseData() {
     await env.clearFirestore();
@@ -132,6 +142,11 @@ if (!emulatorHost) {
         userId: "accounting_1",
         role: "accountingApproved",
       });
+      await setDoc(doc(db, "memberships", "workspace_owner_entry_1"), {
+        workspaceId: "workspace_owner",
+        userId: "entry_1",
+        role: "entryOnly",
+      });
       await setDoc(doc(db, "entity_summaries", "entity_summary_owner"), {
         id: "entity_summary_owner",
         workspaceId: "workspace_owner",
@@ -150,6 +165,65 @@ if (!emulatorHost) {
         fileName: "receipt.pdf",
         storagePath: "attachments/owner/receipt.pdf",
         contentType: "application/pdf",
+      });
+      await setDoc(doc(db, "entities", "entity_owner"), {
+        id: "entity_owner",
+        workspaceId: "workspace_owner",
+        name: "Acme Contractors",
+        normalizedName: "acme contractors",
+        type: "contractor",
+        lastUsedAt: new Date(),
+        createdAt: new Date(),
+      });
+      await setDoc(doc(db, "notifications", "notification_owner"), {
+        workspaceId: "workspace_owner",
+        targetUserId: "member_1",
+        title: "Budget updated",
+        message: "Review the latest totals",
+        createdAt: new Date(),
+      });
+      await setDoc(doc(db, "workspace_metrics", "workspace_owner"), {
+        workspaceId: "workspace_owner",
+        totalExpenses: 100,
+      });
+      await setDoc(doc(db, "project_metrics", "project_owner"), {
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        totalExpenses: 100,
+      });
+      await setDoc(doc(db, "worker_accounting_records", "worker_record_owner"), {
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        workerId: "worker_owner",
+        workerName: "Worker Owner",
+        description: "Weekly settlement",
+        amount: 300,
+        date: new Date(),
+        paymentMethod: "cash",
+        paymentStatus: "partial",
+        paidAmount: 125,
+        notes: "",
+      });
+      await setDoc(doc(db, "contractor_accounting_records", "contractor_record_owner"), {
+        workspaceId: "workspace_owner",
+        projectId: "project_owner",
+        contractorId: "contractor_owner",
+        contractorName: "Contractor Owner",
+        description: "Contractor invoice",
+        amount: 400,
+        date: new Date(),
+        paymentMethod: "cash",
+        paymentStatus: "paid",
+        notes: "",
+      });
+      await setDoc(doc(db, "worker_accounting_summaries", "workspace_owner_worker_owner"), {
+        workspaceId: "workspace_owner",
+        workerId: "worker_owner",
+        totalAmount: 300,
+        confirmedPaid: 125,
+        confirmedOutstanding: 175,
+        unresolvedLegacyCount: 0,
+        recordCount: 1,
       });
     });
   }
@@ -171,6 +245,8 @@ if (!emulatorHost) {
 
     const indexModule = await import("./index");
     bootstrapWorkspaceForUser = indexModule.bootstrapWorkspaceForUser;
+    setActiveWorkspaceForUser = indexModule.setActiveWorkspaceForUser;
+    inviteMemberByEmailForUser = indexModule.inviteMemberByEmailForUser;
   });
 
   test.after(async () => {
@@ -244,6 +320,120 @@ if (!emulatorHost) {
 
     await assertSucceeds(getDoc(doc(adminDb, "entity_summaries", "entity_summary_owner")));
     await assertSucceeds(getDoc(doc(accountingDb, "attachments", "attachment_owner")));
+  });
+
+  test("workspace members can read the entity directory; non-members cannot", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+    const attackerDb = env.authenticatedContext("attacker_1").firestore();
+
+    await assertSucceeds(getDoc(doc(memberDb, "entities", "entity_owner")));
+    await assertFails(getDoc(doc(attackerDb, "entities", "entity_owner")));
+  });
+
+  test("workspace members can create and touch entities but not reassign workspace", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertSucceeds(
+      setDoc(doc(memberDb, "entities", "entity_new"), {
+        workspaceId: "workspace_owner",
+        name: "New Supplier",
+        normalizedName: "new supplier",
+        type: "supplier",
+        createdAt: new Date(),
+        lastUsedAt: new Date(),
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(memberDb, "entities", "entity_owner"), {
+        lastUsedAt: new Date(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(memberDb, "entities", "entity_owner"), {
+        workspaceId: "workspace_other",
+      }),
+    );
+  });
+
+  test("notification target can change only readAt", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+    const notificationRef = doc(memberDb, "notifications", "notification_owner");
+
+    await assertSucceeds(updateDoc(notificationRef, {readAt: new Date()}));
+    await assertFails(updateDoc(notificationRef, {title: "Changed"}));
+    await assertFails(
+      updateDoc(doc(ownerDb, "notifications", "notification_owner"), {
+        readAt: new Date(),
+      }),
+    );
+  });
+
+  test("financial metrics are accounting-role restricted", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+    const entryDb = env.authenticatedContext("entry_1").firestore();
+    const adminDb = env.authenticatedContext("admin_1").firestore();
+
+    await assertFails(getDoc(doc(memberDb, "workspace_metrics", "workspace_owner")));
+    await assertFails(getDoc(doc(memberDb, "project_metrics", "project_owner")));
+    await assertFails(getDoc(doc(entryDb, "workspace_metrics", "workspace_owner")));
+    await assertFails(getDoc(doc(entryDb, "project_metrics", "project_owner")));
+    await assertSucceeds(getDoc(doc(adminDb, "workspace_metrics", "workspace_owner")));
+    await assertSucceeds(getDoc(doc(adminDb, "project_metrics", "project_owner")));
+  });
+
+  test("domain accounting records and worker summaries are accounting-role restricted", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+    const entryDb = env.authenticatedContext("entry_1").firestore();
+    const accountingDb = env.authenticatedContext("accounting_1").firestore();
+
+    await assertFails(getDoc(doc(memberDb, "worker_accounting_records", "worker_record_owner")));
+    await assertFails(getDoc(doc(entryDb, "worker_accounting_records", "worker_record_owner")));
+    await assertFails(getDoc(doc(memberDb, "contractor_accounting_records", "contractor_record_owner")));
+    await assertFails(getDoc(doc(entryDb, "worker_accounting_summaries", "workspace_owner_worker_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "worker_accounting_records", "worker_record_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "contractor_accounting_records", "contractor_record_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "worker_accounting_summaries", "workspace_owner_worker_owner")));
+  });
+
+  test("worker accounting partial writes require a valid paid amount", async () => {
+    await seedBaseData();
+    const accountingDb = env.authenticatedContext("accounting_1").firestore();
+    const validRecord = {
+      workspaceId: "workspace_owner",
+      projectId: "project_owner",
+      workerId: "worker_owner",
+      workerName: "Worker Owner",
+      description: "Valid partial",
+      amount: 300,
+      date: new Date(),
+      paymentMethod: "cash",
+      paymentStatus: "partial",
+      notes: "",
+    };
+
+    await assertFails(
+      setDoc(doc(accountingDb, "worker_accounting_records", "partial_missing"), {
+        ...validRecord,
+      }),
+    );
+    await assertFails(
+      setDoc(doc(accountingDb, "worker_accounting_records", "partial_too_high"), {
+        ...validRecord,
+        paidAmount: 300,
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(accountingDb, "worker_accounting_records", "partial_valid"), {
+        ...validRecord,
+        paidAmount: 125,
+      }),
+    );
   });
 
   test("workspace owner can add members", async () => {
@@ -370,6 +560,33 @@ if (!emulatorHost) {
     await assertFails(
       updateDoc(doc(memberDb, "workers", "worker_owner"), {
         billingType: "weekly",
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test("worker writes reject invalid status while preserving legacy default", async () => {
+    await seedBaseData();
+    const memberDb = env.authenticatedContext("member_1").firestore();
+
+    await assertFails(
+      setDoc(doc(memberDb, "workers", "worker_bad_status"), {
+        id: "worker_bad_status",
+        workspaceId: "workspace_owner",
+        name: "Invalid Status Worker",
+        phoneNumber: "0100111",
+        dailyWage: 100,
+        billingType: "daily",
+        workerType: "laborer",
+        notes: "",
+        isArchived: false,
+        status: "suspended",
+      }),
+    );
+
+    await assertSucceeds(
+      updateDoc(doc(memberDb, "workers", "worker_owner"), {
+        status: "inactive",
         updatedAt: new Date(),
       }),
     );
@@ -546,4 +763,146 @@ if (!emulatorHost) {
       assert.equal(userSnap.data()?.workspaceId, "shared_workspace");
     });
   });
+
+  test("active workspace switch persists only valid memberships", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "member_1"), {
+        id: "member_1",
+        workspaceId: "personal_ws",
+      });
+      await setDoc(doc(db, "workspaces", "personal_ws"), {
+        id: "personal_ws",
+        ownerId: "member_1",
+        name: "Personal Workspace",
+      });
+      await setDoc(doc(db, "workspaces", "shared_ws"), {
+        id: "shared_ws",
+        ownerId: "owner_2",
+        name: "Shared Workspace",
+      });
+      await setDoc(doc(db, "workspaces", "other_ws"), {
+        id: "other_ws",
+        ownerId: "owner_3",
+        name: "Other Workspace",
+      });
+      await setDoc(doc(db, "memberships", "personal_ws_member_1"), {
+        workspaceId: "personal_ws",
+        userId: "member_1",
+        role: "owner",
+      });
+      await setDoc(doc(db, "memberships", "shared_ws_member_1"), {
+        workspaceId: "shared_ws",
+        userId: "member_1",
+        role: "member",
+      });
+    });
+
+    const result = await setActiveWorkspaceForUser({
+      uid: "member_1",
+      workspaceId: "shared_ws",
+    });
+
+    assert.equal(result.workspaceId, "shared_ws");
+    await assert.rejects(
+      setActiveWorkspaceForUser({
+        uid: "member_1",
+        workspaceId: "other_ws",
+      }),
+      (error: unknown) => {
+        assert.equal((error as {code?: string}).code, "permission-denied");
+        return true;
+      },
+    );
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "member_1"));
+      assert.equal(userSnap.data()?.workspaceId, "shared_ws");
+    });
+  });
+
+  test("active workspace switch repairs owned workspace without membership", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "owner_1"), {
+        id: "owner_1",
+        workspaceId: "other_ws",
+      });
+      await setDoc(doc(db, "workspaces", "personal_ws"), {
+        id: "personal_ws",
+        ownerId: "owner_1",
+        name: "Personal Workspace",
+      });
+    });
+
+    const result = await setActiveWorkspaceForUser({
+      uid: "owner_1",
+      workspaceId: "personal_ws",
+    });
+
+    assert.equal(result.workspaceId, "personal_ws");
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "owner_1"));
+      const membershipSnap = await getDoc(
+        doc(db, "memberships", "personal_ws_owner_1"),
+      );
+      assert.equal(userSnap.data()?.workspaceId, "personal_ws");
+      assert.equal(membershipSnap.data()?.role, "owner");
+    });
+  });
+
+  test("email invite adds membership without changing invitee active workspace", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "owner_1"), {
+        id: "owner_1",
+        email: "owner@example.com",
+        workspaceId: "owner_ws",
+      });
+      await setDoc(doc(db, "users", "invitee_1"), {
+        id: "invitee_1",
+        email: "invitee@example.com",
+        workspaceId: "personal_ws",
+      });
+      await setDoc(doc(db, "workspaces", "owner_ws"), {
+        id: "owner_ws",
+        ownerId: "owner_1",
+        name: "Owner Workspace",
+      });
+      await setDoc(doc(db, "memberships", "owner_ws_owner_1"), {
+        workspaceId: "owner_ws",
+        userId: "owner_1",
+        role: "owner",
+      });
+    });
+
+    const result = await inviteMemberByEmailForUser({
+      ownerUid: "owner_1",
+      workspaceId: "owner_ws",
+      email: "INVITEE@example.com",
+      role: "member",
+    });
+
+    assert.equal(result.userId, "invitee_1");
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const userSnap = await getDoc(doc(db, "users", "invitee_1"));
+      const membershipSnap = await getDoc(
+        doc(db, "memberships", "owner_ws_invitee_1"),
+      );
+      const notificationSnap = await getDoc(
+        doc(db, "notifications", "team_invite_added_workspace_invitee_1"),
+      );
+      assert.equal(userSnap.data()?.workspaceId, "personal_ws");
+      assert.equal(membershipSnap.data()?.role, "member");
+      assert.equal(notificationSnap.data()?.workspaceId, "owner_ws");
+      assert.equal(notificationSnap.data()?.targetUserId, "invitee_1");
+    });
+  });
+
 }

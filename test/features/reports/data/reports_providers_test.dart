@@ -1,16 +1,98 @@
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
+import 'package:buildtrack_app/features/reports/domain/report_scope.dart';
+import 'package:buildtrack_app/features/reports/data/report_project_selector_provider.dart';
+import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+
+class _MockExpenseRepository extends Mock implements ExpenseRepository {}
+
+class _MockPaymentRepository extends Mock implements PaymentRepository {}
 
 void main() {
   group('report providers', () {
+    test('report scope defaults to month-to-date', () {
+      final now = DateTime(2026, 6, 15, 14, 30);
+      final scope = ReportScope.monthToDate(projectId: 'project_1', now: now);
+
+      expect(scope.projectId, 'project_1');
+      expect(scope.startDate, DateTime(2026, 6));
+      expect(scope.endDate, DateTime(2026, 6, 15, 23, 59, 59, 999));
+      expect(scope.contains(DateTime(2026, 6, 1)), isTrue);
+      expect(scope.contains(DateTime(2026, 5, 31, 23, 59)), isFalse);
+      expect(scope.copyWith(projectId: null).projectId, isNull);
+    });
+
+    test('effective scope keeps legacy project selection during migration', () {
+      final container = ProviderContainer(
+        overrides: [
+          reportNowProvider.overrideWithValue(DateTime(2026, 6, 15)),
+          reportProjectIdProvider.overrideWith((ref) => 'project_1'),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final scope = container.read(effectiveReportScopeProvider);
+
+      expect(scope.projectId, 'project_1');
+      expect(scope.startDate, DateTime(2026, 6));
+    });
+
+    test('report project selector can page archived projects', () async {
+      final active = Project(
+        id: 'active_1',
+        workspaceId: 'workspace_1',
+        name: 'Active',
+        clientName: 'Client',
+        contractValue: 100,
+        status: 'active',
+        completionPercentage: 10,
+        totalExpenses: 0,
+        totalPayments: 0,
+        netProfit: 0,
+        isArchived: false,
+      );
+      final archived = Project(
+        id: 'archived_1',
+        workspaceId: 'workspace_1',
+        name: 'Archived',
+        clientName: 'Client',
+        contractValue: 100,
+        status: 'completed',
+        completionPercentage: 100,
+        totalExpenses: 0,
+        totalPayments: 0,
+        netProfit: 0,
+        isArchived: true,
+      );
+      final controller = ReportProjectSelectorController(
+        loadActivePage: ({cursor}) async =>
+            FirestorePage<Project>(items: [active], hasMore: false),
+        loadArchivedPage: ({cursor}) async =>
+            FirestorePage<Project>(items: [archived], hasMore: false),
+      );
+
+      await controller.loadInitial();
+      expect(controller.state.projects.map((item) => item.id), ['active_1']);
+
+      await controller.showArchived(true);
+      expect(controller.state.projects.map((item) => item.id), ['archived_1']);
+      expect(controller.state.showingArchived, isTrue);
+    });
+
     test('report summary includes queued expense and payment deltas', () async {
       final container = ProviderContainer(
         overrides: [
@@ -724,12 +806,29 @@ void main() {
           'paymentMethod': 'cash',
           'paymentStatus': 'paid',
         });
+        await firestore
+            .collection('worker_accounting_records')
+            .doc('w_old')
+            .set({
+              'workspaceId': 'workspace_1',
+              'projectId': 'project_1',
+              'workerId': 'worker_old',
+              'workerName': 'Old Worker',
+              'description': 'Outside scope',
+              'amount': 777,
+              'date': DateTime.utc(2026, 5, 31),
+              'paymentMethod': 'cash',
+              'paymentStatus': 'paid',
+            });
 
         final container = ProviderContainer(
           overrides: [
             firestoreProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             reportProjectIdProvider.overrideWith((ref) => 'project_1'),
+            currentAccountingRoleProvider.overrideWith(
+              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            ),
           ],
         );
         addTearDown(container.dispose);
@@ -746,12 +845,248 @@ void main() {
         final transport = await container.read(
           reportTransportAccountingRecordsProvider.future,
         );
+        final topWorkers = container.read(topWorkersProvider).requireValue;
 
         expect(workers.map((item) => item.id), ['w1']);
+        expect(topWorkers.single.name, 'Sam');
+        expect(topWorkers.single.totalCost, 120);
         expect(contractors.single.contractorName, 'Mina Contracting');
         expect(equipment.single.providerName, 'Lift Rentals');
         expect(transport.single.providerName, 'Fast Trucks');
       },
     );
+
+    test(
+      'one project and date scope drives metrics categories flow and tables',
+      () async {
+        final expenses = _MockExpenseRepository();
+        final payments = _MockPaymentRepository();
+        final start = DateTime.utc(2026, 6, 1);
+        final end = DateTime.utc(2026, 6, 15, 23, 59, 59, 999);
+        final inScopeExpense = Expense(
+          id: 'expense_in',
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          projectName: 'Tower A',
+          category: 'materials',
+          amount: 120,
+          currency: 'EGP',
+          date: DateTime.utc(2026, 6, 10),
+          notes: '',
+          supplierName: '',
+          paymentMethod: 'cash',
+          inputMethod: 'manual',
+          transcript: '',
+          source: '',
+          storagePath: '',
+          attachments: const [],
+          isArchived: false,
+        );
+        final wrongProjectExpense = Expense(
+          id: 'expense_other',
+          workspaceId: 'workspace_1',
+          projectId: 'project_2',
+          projectName: 'Tower B',
+          category: 'equipment',
+          amount: 900,
+          currency: 'EGP',
+          date: DateTime.utc(2026, 6, 11),
+          notes: '',
+          supplierName: '',
+          paymentMethod: 'cash',
+          inputMethod: 'manual',
+          transcript: '',
+          source: '',
+          storagePath: '',
+          attachments: const [],
+          isArchived: false,
+        );
+        final oldExpense = Expense(
+          id: 'expense_old',
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          projectName: 'Tower A',
+          category: 'labor',
+          amount: 500,
+          currency: 'EGP',
+          date: DateTime.utc(2026, 5, 31),
+          notes: '',
+          supplierName: '',
+          paymentMethod: 'cash',
+          inputMethod: 'manual',
+          transcript: '',
+          source: '',
+          storagePath: '',
+          attachments: const [],
+          isArchived: false,
+        );
+        final inScopePayment = PaymentRecord(
+          id: 'payment_in',
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          amount: 300,
+          date: DateTime.utc(2026, 6, 12),
+          paymentMethod: 'bank',
+          notes: '',
+          attachments: const [],
+          isArchived: false,
+        );
+        final latePayment = PaymentRecord(
+          id: 'payment_late',
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          amount: 700,
+          date: DateTime.utc(2026, 6, 16),
+          paymentMethod: 'bank',
+          notes: '',
+          attachments: const [],
+          isArchived: false,
+        );
+        when(
+          () => expenses.fetchExpensesPage(
+            'workspace_1',
+            projectId: 'project_1',
+            startDate: start,
+            endDate: end,
+            cursor: null,
+            pageSize: 500,
+          ),
+        ).thenAnswer(
+          (_) async => FirestorePage(
+            items: [inScopeExpense, wrongProjectExpense, oldExpense],
+            hasMore: false,
+          ),
+        );
+        when(
+          () => payments.fetchPaymentsPage(
+            'workspace_1',
+            projectId: 'project_1',
+            startDate: start,
+            endDate: end,
+            cursor: null,
+            pageSize: 500,
+          ),
+        ).thenAnswer(
+          (_) async => FirestorePage(
+            items: [inScopePayment, latePayment],
+            hasMore: false,
+          ),
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            currentAccountingRoleProvider.overrideWith(
+              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            ),
+            reportScopeProvider.overrideWith(
+              (ref) => ReportScope(
+                projectId: 'project_1',
+                startDate: start,
+                endDate: end,
+              ),
+            ),
+            expenseRepositoryProvider.overrideWithValue(expenses),
+            paymentRepositoryProvider.overrideWithValue(payments),
+            reportBaseMetricsProvider.overrideWith(
+              (ref) => Stream.value(
+                const ReportMetrics(
+                  projectId: 'project_1',
+                  projectName: 'Tower A',
+                  status: 'active',
+                  isArchived: false,
+                  totalExpenses: 999,
+                  totalIncome: 999,
+                  net: 0,
+                  categoryTotals: {},
+                  monthlyFlow: [],
+                  topWorkers: [],
+                  recentExpenses: [],
+                  recentPayments: [],
+                ),
+              ),
+            ),
+            reportPendingActionsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await container.read(reportScopedRowsProvider.future);
+        await container.read(reportBaseMetricsProvider.future);
+        await container.read(reportPendingActionsProvider.future);
+
+        final metrics = container.read(reportMetricsProvider).requireValue!;
+        expect(metrics.totalExpenses, 120);
+        expect(metrics.totalIncome, 300);
+        expect(metrics.net, 180);
+        expect(metrics.recentExpenses.map((item) => item.id), ['expense_in']);
+        expect(metrics.recentPayments.map((item) => item.id), ['payment_in']);
+        expect(container.read(expensesByCategoryProvider).requireValue, {
+          'materials': 120,
+        });
+        expect(
+          container.read(monthlyFlowProvider).requireValue.single.expenses,
+          120,
+        );
+        expect(container.read(reportSummaryProvider).requireValue['net'], 180);
+      },
+    );
+
+    test('denied roles short-circuit report data reads', () async {
+      final expenses = _MockExpenseRepository();
+      final payments = _MockPaymentRepository();
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('project_metrics').doc('project_1').set({
+        'projectId': 'project_1',
+        'totalExpenses': 100,
+      });
+      final container = ProviderContainer(
+        overrides: [
+          firestoreProvider.overrideWithValue(firestore),
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          currentAccountingRoleProvider.overrideWith(
+            (ref) => Stream.value(AccountingAccessRoleType.member),
+          ),
+          reportScopeProvider.overrideWith(
+            (ref) => ReportScope.monthToDate(
+              projectId: 'project_1',
+              now: DateTime.utc(2026, 6, 15),
+            ),
+          ),
+          expenseRepositoryProvider.overrideWithValue(expenses),
+          paymentRepositoryProvider.overrideWithValue(payments),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(await container.read(reportScopedRowsProvider.future), isNull);
+      expect(await container.read(reportBaseMetricsProvider.future), isNull);
+      expect(
+        await container.read(reportWorkerAccountingRecordsProvider.future),
+        isEmpty,
+      );
+      verifyNever(
+        () => expenses.fetchExpensesPage(
+          any(),
+          projectId: any(named: 'projectId'),
+          startDate: any(named: 'startDate'),
+          endDate: any(named: 'endDate'),
+          cursor: any(named: 'cursor'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      );
+      verifyNever(
+        () => payments.fetchPaymentsPage(
+          any(),
+          projectId: any(named: 'projectId'),
+          startDate: any(named: 'startDate'),
+          endDate: any(named: 'endDate'),
+          cursor: any(named: 'cursor'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      );
+    });
   });
 }

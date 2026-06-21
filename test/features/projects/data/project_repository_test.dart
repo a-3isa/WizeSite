@@ -229,4 +229,283 @@ void main() {
     expect(page.items.single.totalPayments, 300);
     expect(page.items.single.netProfit, 300);
   });
+
+  test('active project warm stream is capped to 50 most recent rows', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (var index = 0; index < 60; index++) {
+      await firestore.collection('projects').doc('project_$index').set({
+        'workspaceId': 'workspace_1',
+        'name': 'Project $index',
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': 'active',
+        'completionPercentage': 0,
+        'totalExpenses': 0,
+        'totalPayments': 0,
+        'netProfit': 0,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 1, 1).add(Duration(days: index)),
+      });
+    }
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final projects = await repository.watchProjects('workspace_1').first;
+
+    expect(projects, hasLength(50));
+    expect(projects.first.id, 'project_59');
+    expect(projects.last.id, 'project_10');
+  });
+
+  test('name browse pages use stable project-field ordering', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (final entry in [
+      ('project_c', 'Beta'),
+      ('project_b', 'Alpha'),
+      ('project_a', 'Alpha'),
+    ]) {
+      await firestore.collection('projects').doc(entry.$1).set({
+        'id': entry.$1,
+        'workspaceId': 'workspace_1',
+        'name': entry.$2,
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': 'active',
+        'completionPercentage': 0,
+        'totalExpenses': 0,
+        'totalPayments': 0,
+        'netProfit': 0,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 1, 1),
+      });
+    }
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final first = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.name,
+        pageSize: 2,
+      ),
+    );
+    final second = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.name,
+        pageSize: 2,
+      ),
+      cursor: first.nextCursor,
+    );
+
+    expect(first.items.map((item) => item.id), ['project_a', 'project_b']);
+    expect(second.items.map((item) => item.id), ['project_c']);
+  });
+
+  test('financial browse preserves global metric order across pages', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (final entry in [
+      ('project_a', 'Alpha', 1000.0),
+      ('project_b', 'Beta', 900.0),
+      ('project_c', 'Gamma', 800.0),
+    ]) {
+      await firestore.collection('projects').doc(entry.$1).set({
+        'id': entry.$1,
+        'workspaceId': 'workspace_1',
+        'name': entry.$2,
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': 'active',
+        'completionPercentage': 0,
+        'totalExpenses': 0,
+        'totalPayments': 0,
+        'netProfit': 0,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 1, 1),
+      });
+      await firestore.collection('project_metrics').doc(entry.$1).set({
+        'workspaceId': 'workspace_1',
+        'projectId': entry.$1,
+        'projectName': entry.$2,
+        'status': 'active',
+        'isArchived': false,
+        'totalExpenses': entry.$3,
+        'totalIncome': entry.$3 + 200,
+        'net': 200,
+        'netProfit': 200,
+      });
+    }
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final first = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.highestExpense,
+        pageSize: 2,
+      ),
+    );
+    final second = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.highestExpense,
+        pageSize: 2,
+      ),
+      cursor: first.nextCursor,
+    );
+
+    expect(first.items.map((item) => item.id), ['project_a', 'project_b']);
+    expect(first.items.map((item) => item.totalExpenses), [1000, 900]);
+    expect(second.items.map((item) => item.id), ['project_c']);
+    expect(second.items.single.totalExpenses, 800);
+  });
+
+  test('recent browse uses project id as a stable date tie-breaker', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (final id in ['project_a', 'project_b', 'project_c']) {
+      await firestore.collection('projects').doc(id).set({
+        'id': id,
+        'workspaceId': 'workspace_1',
+        'name': id,
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': id == 'project_c' ? 'completed' : 'active',
+        'completionPercentage': 0,
+        'totalExpenses': 0,
+        'totalPayments': 0,
+        'netProfit': 0,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 6, 1),
+      });
+    }
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final first = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.recent,
+        pageSize: 2,
+      ),
+    );
+    final second = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.recent,
+        pageSize: 2,
+      ),
+      cursor: first.nextCursor,
+    );
+    final completed = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(workspaceId: 'workspace_1', status: 'completed'),
+    );
+
+    expect(first.items.map((item) => item.id), ['project_a', 'project_b']);
+    expect(second.items.map((item) => item.id), ['project_c']);
+    expect(completed.items.map((item) => item.id), ['project_c']);
+  });
+
+  test('archived project page excludes active projects', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (final archived in [false, true]) {
+      final id = archived ? 'archived' : 'active';
+      await firestore.collection('projects').doc(id).set({
+        'id': id,
+        'workspaceId': 'workspace_1',
+        'name': id,
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': 'completed',
+        'completionPercentage': 100,
+        'totalExpenses': 0,
+        'totalPayments': 0,
+        'netProfit': 0,
+        'isArchived': archived,
+        'createdAt': DateTime.utc(2026, 6, 1),
+      });
+    }
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final page = await repository.fetchArchivedProjectsPage('workspace_1');
+
+    expect(page.items.map((item) => item.id), ['archived']);
+  });
+
+  test('income and net sorts use their maintained metric fields', () async {
+    final firestore = FakeFirebaseFirestore();
+    final metrics = {
+      'project_a': (expenses: 1000, income: 100, net: -900),
+      'project_b': (expenses: 900, income: 2000, net: 1100),
+      'project_c': (expenses: 800, income: 1000, net: 200),
+    };
+    for (final entry in metrics.entries) {
+      await firestore.collection('projects').doc(entry.key).set({
+        'id': entry.key,
+        'workspaceId': 'workspace_1',
+        'name': entry.key,
+        'clientName': 'Client',
+        'contractValue': 100,
+        'status': 'active',
+        'completionPercentage': 0,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 6, 1),
+      });
+      await firestore.collection('project_metrics').doc(entry.key).set({
+        'workspaceId': 'workspace_1',
+        'projectId': entry.key,
+        'projectName': entry.key,
+        'status': 'active',
+        'isArchived': false,
+        'totalExpenses': entry.value.expenses,
+        'totalIncome': entry.value.income,
+        'net': entry.value.net,
+      });
+    }
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    final income = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.highestIncome,
+      ),
+    );
+    final net = await repository.fetchProjectBrowsePage(
+      const ProjectBrowseQuery(
+        workspaceId: 'workspace_1',
+        sort: ProjectBrowseSort.highestNet,
+      ),
+    );
+
+    expect(income.items.map((item) => item.id), [
+      'project_b',
+      'project_c',
+      'project_a',
+    ]);
+    expect(net.items.map((item) => item.id), [
+      'project_b',
+      'project_c',
+      'project_a',
+    ]);
+  });
 }

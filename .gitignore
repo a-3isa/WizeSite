@@ -110,3 +110,12 @@ _error
 .svn/
 .swiftpm/
 migrate_working_dir/
+
+
+
+
+wize-site-firebase-adminsdk-fbsvc-59e5c56971.json
+# Firebase CLI debug logs
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log

@@ -1,13 +1,35 @@
+import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Ordering options for an exact-type entity directory.
+enum EntityDirectorySort {
+  /// Most-recently used first (by `lastUsedAt` timestamp).
+  recent,
+
+  /// Alphabetical by normalized name.
+  name,
+
+  /// By document id (stable, total order).
+  id,
+}
 
 abstract interface class EntityRepository {
   Stream<List<AppEntity>> watchEntities(
     String workspaceId, {
     String? type,
     int limit,
+  });
+
+  /// Cursor-paged directory of entities of an exact [type], ordered by [sort].
+  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+    String workspaceId, {
+    required String type,
+    EntityDirectorySort sort,
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize,
   });
 
   Future<List<AppEntity>> searchEntities(
@@ -47,10 +69,9 @@ class FirebaseEntityRepository implements EntityRepository {
   }
 
   Query<Map<String, dynamic>> _baseQuery(String workspaceId, {String? type}) {
-    var query = _firestore.collection('entities').where(
-          'workspaceId',
-          isEqualTo: workspaceId,
-        );
+    var query = _firestore
+        .collection('entities')
+        .where('workspaceId', isEqualTo: workspaceId);
     if (type != null && type.isNotEmpty) {
       query = query.where('type', isEqualTo: type);
     }
@@ -66,9 +87,65 @@ class FirebaseEntityRepository implements EntityRepository {
     return _baseQuery(workspaceId, type: type)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => AppEntity.fromMap(doc.id, doc.data()))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => AppEntity.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  @override
+  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+    String workspaceId, {
+    required String type,
+    EntityDirectorySort sort = EntityDirectorySort.recent,
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+  }) async {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('entities')
+        .where('workspaceId', isEqualTo: workspaceId)
+        .where('type', isEqualTo: type);
+
+    query = switch (sort) {
+      EntityDirectorySort.recent =>
+        query
+            .orderBy('lastUsedAt', descending: true)
+            .orderBy('normalizedName')
+            .orderBy('id'),
+      EntityDirectorySort.name => query.orderBy('normalizedName').orderBy('id'),
+      EntityDirectorySort.id => query.orderBy('id'),
+    };
+
+    if (cursor != null) {
+      query = switch (sort) {
+        EntityDirectorySort.recent => query.startAfter([
+          cursor.data()?['lastUsedAt'],
+          cursor.data()?['normalizedName'],
+          cursor.data()?['id'] ?? cursor.id,
+        ]),
+        EntityDirectorySort.name => query.startAfter([
+          cursor.data()?['normalizedName'],
+          cursor.data()?['id'] ?? cursor.id,
+        ]),
+        EntityDirectorySort.id => query.startAfter([
+          cursor.data()?['id'] ?? cursor.id,
+        ]),
+      };
+    }
+
+    query = query.limit(pageSize);
+
+    final snap = await query.get();
+    final items = snap.docs
+        .map((doc) => AppEntity.fromMap(doc.id, doc.data()))
+        .toList(growable: false);
+
+    return FirestorePage<AppEntity>(
+      items: items,
+      hasMore: snap.docs.length == pageSize,
+      nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
+    );
   }
 
   @override
@@ -88,10 +165,9 @@ class FirebaseEntityRepository implements EntityRepository {
       queryRef = queryRef.where('type', isEqualTo: type);
     }
     final snap = await queryRef.get();
-    final entities = snap.docs
-        .map((doc) => AppEntity.fromMap(doc.id, doc.data()))
-        .toList()
-      ..sort(_compareRecentFirst);
+    final entities =
+        snap.docs.map((doc) => AppEntity.fromMap(doc.id, doc.data())).toList()
+          ..sort(_compareRecentFirst);
     return entities.take(limit).toList(growable: false);
   }
 
@@ -155,6 +231,7 @@ class FirebaseEntityRepository implements EntityRepository {
         'lastUsedAt': FieldValue.serverTimestamp(),
         'attachments': const [],
       });
+      await ref.set({'id': ref.id}, SetOptions(merge: true));
       final createdSnap = await ref.get();
       if (!createdSnap.exists) {
         return null;

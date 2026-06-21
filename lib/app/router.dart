@@ -17,6 +17,7 @@ import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.
 import 'package:buildtrack_app/features/contractors/presentation/screens/contractors_screen.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/equipment/presentation/screens/equipment_screen.dart';
+import 'package:buildtrack_app/features/entities/presentation/screens/resource_directory_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expense_detail_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expenses_screen.dart';
@@ -33,6 +34,7 @@ import 'package:buildtrack_app/features/reports/presentation/screens/entity_aggr
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/sync_status_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/team_management_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/limit_reached_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/manage_subscription_screen.dart';
@@ -53,6 +55,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final rootRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final dashboardRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final addRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+  final reportsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final projectsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final refresh = _RouterRefreshNotifier(auth.authStateChanges());
   ref.onDispose(refresh.dispose);
@@ -117,17 +120,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
-        path: AppRoutes.reports,
-        name: 'reports',
-        pageBuilder: (context, state) {
-          final projectId = state.uri.queryParameters['projectId'];
-          return smoothAppPage<void>(
-            key: state.pageKey,
-            child: ReportsScreen(projectId: projectId),
-          );
-        },
-      ),
-      GoRoute(
         path: AppRoutes.entitySummary,
         name: 'entitySummary',
         pageBuilder: (context, state) => smoothAppPage<void>(
@@ -159,6 +151,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: const TeamManagementScreen(),
         ),
       ),
+      GoRoute(
+        path: AppRoutes.syncStatus,
+        name: 'syncStatus',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const SyncStatusScreen(),
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return AppBottomNavShell(navigationShell: navigationShell);
@@ -181,6 +181,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: AppRoutes.add,
                 name: 'add',
                 builder: (context, state) => const AddHubScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            observers: [reportsRouteObserver],
+            routes: [
+              GoRoute(
+                path: AppRoutes.reports,
+                name: 'reports',
+                builder: (context, state) => ReportsScreen(
+                  projectId: state.uri.queryParameters['projectId'],
+                ),
               ),
             ],
           ),
@@ -327,9 +339,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'paymentDetail',
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final projectId = state.uri.queryParameters['projectId'];
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: PaymentDetailScreen(paymentId: id),
+            child: PaymentDetailScreen(paymentId: id, projectId: projectId),
           );
         },
       ),
@@ -338,9 +351,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'paymentEdit',
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final projectId = state.uri.queryParameters['projectId'];
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: AddPaymentScreen(paymentId: id),
+            child: AddPaymentScreen(paymentId: id, projectId: projectId),
           );
         },
       ),
@@ -419,6 +433,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutes.contractorsDirectory,
+        name: 'contractorsDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.contractor,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.equipmentDirectory,
+        name: 'equipmentDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.equipment,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.transportProvidersDirectory,
+        name: 'transportProvidersDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.transport,
+          ),
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.contractors,
         name: 'contractors',
         pageBuilder: (context, state) {
@@ -482,9 +526,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'subscriptionLimit',
         pageBuilder: (context, state) {
           final limitType = state.uri.queryParameters['limit'] ?? 'generic';
+          final current = int.tryParse(
+            state.uri.queryParameters['current'] ?? '',
+          );
+          final max = int.tryParse(state.uri.queryParameters['max'] ?? '');
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: LimitReachedScreen(limitType: limitType),
+            child: LimitReachedScreen(
+              limitType: limitType,
+              current: current,
+              max: max,
+            ),
           );
         },
       ),

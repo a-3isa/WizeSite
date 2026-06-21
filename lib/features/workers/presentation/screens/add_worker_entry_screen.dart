@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
@@ -323,7 +324,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                             setState(() => _workerId = value),
                       );
                     },
-                    error: (e, _) => Text(e.toString()),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
                     loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
@@ -339,7 +340,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                           .toList(),
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
-                    error: (e, _) => Text(e.toString()),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
                     loading: () => const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),

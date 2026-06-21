@@ -1,6 +1,8 @@
+import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,6 +75,22 @@ class _FakeEntityRepository implements EntityRepository {
   const _FakeEntityRepository(this.entities);
 
   final List<AppEntity> entities;
+
+  @override
+  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+    String workspaceId, {
+    required String type,
+    EntityDirectorySort sort = EntityDirectorySort.recent,
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+  }) async {
+    final items = entities
+        .where((entity) => entity.workspaceId == workspaceId)
+        .where((entity) => entity.type == type)
+        .take(pageSize)
+        .toList(growable: false);
+    return FirestorePage(items: items, hasMore: false);
+  }
 
   @override
   Future<AppEntity?> ensureEntity({

@@ -9,11 +9,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class WorkerRepository {
-  Stream<List<WorkerProfile>> watchWorkers(String workspaceId);
+  /// Watches non-archived workers. When [statuses] is provided, only workers
+  /// whose [WorkerProfile.status] is in the set are emitted. Status filtering
+  /// is independent of the archived flag (archived workers are always excluded).
+  Stream<List<WorkerProfile>> watchWorkers(
+    String workspaceId, {
+    Set<WorkerStatus>? statuses,
+  });
   Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
+    Set<WorkerStatus>? statuses,
   });
   Future<WorkerProfile?> getWorker(String workerId);
   Future<void> createWorker({
@@ -25,6 +32,7 @@ abstract interface class WorkerRepository {
     required String billingType,
     String? workerType,
     String? notes,
+    WorkerStatus status = WorkerStatus.active,
   });
 
   Future<void> updateWorker({
@@ -35,6 +43,7 @@ abstract interface class WorkerRepository {
     required String billingType,
     String? workerType,
     String? notes,
+    WorkerStatus? status,
   });
 
   Future<void> archiveWorker(String workerId);
@@ -82,7 +91,10 @@ class FirebaseWorkerRepository implements WorkerRepository {
   final OfflineActionQueue _queue;
 
   @override
-  Stream<List<WorkerProfile>> watchWorkers(String workspaceId) {
+  Stream<List<WorkerProfile>> watchWorkers(
+    String workspaceId, {
+    Set<WorkerStatus>? statuses,
+  }) {
     final baseStream = _firestore
         .collection('workers')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -99,7 +111,14 @@ class FirebaseWorkerRepository implements WorkerRepository {
       List<OfflineAction> actions = const [];
 
       void emit() {
-        controller.add(_applyPendingWorkers(current, actions, workspaceId));
+        final workers = _applyPendingWorkers(current, actions, workspaceId);
+        controller.add(
+          statuses == null
+              ? workers
+              : workers
+                    .where((worker) => statuses.contains(worker.status))
+                    .toList(growable: false),
+        );
       }
 
       final baseSub = baseStream.listen((items) {
@@ -122,6 +141,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     String workspaceId, {
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
+    Set<WorkerStatus>? statuses,
   }) async {
     var query = _firestore
         .collection('workers')
@@ -137,6 +157,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     final snap = await query.get();
     final items = snap.docs
         .map((doc) => WorkerProfile.fromMap(doc.id, doc.data()))
+        .where((worker) => statuses == null || statuses.contains(worker.status))
         .toList();
 
     return FirestorePage<WorkerProfile>(
@@ -165,6 +186,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     required String billingType,
     String? workerType,
     String? notes,
+    WorkerStatus status = WorkerStatus.active,
   }) async {
     await _mutationService.createWorker(
       workspaceId: workspaceId,
@@ -174,6 +196,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       billingType: billingType,
       workerType: workerType,
       notes: notes,
+      status: status.value,
     );
   }
 
@@ -186,6 +209,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
     required String billingType,
     String? workerType,
     String? notes,
+    WorkerStatus? status,
   }) async {
     final worker = await getWorker(workerId);
     if (worker == null) {
@@ -200,6 +224,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       billingType: billingType,
       workerType: workerType,
       notes: notes,
+      status: (status ?? worker.status).value,
     );
   }
 
@@ -259,6 +284,9 @@ class FirebaseWorkerRepository implements WorkerRepository {
         workerType: '${action.payload['workerType'] ?? current.workerType}',
         notes: '${action.payload['notes'] ?? current.notes}',
         isArchived: current.isArchived,
+        status: WorkerStatus.fromValue(
+          action.payload['status'] as String? ?? current.status.value,
+        ),
         clientMutationId: current.clientMutationId,
       );
     }
@@ -299,6 +327,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
       workerType: '${payload['workerType'] ?? ''}',
       notes: '${payload['notes'] ?? ''}',
       isArchived: false,
+      status: WorkerStatus.fromValue(payload['status'] as String?),
       clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );
   }

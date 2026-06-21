@@ -58,6 +58,16 @@ class AppLocalizations {
     'memberRole': 'Member',
     'ownerRole': 'Owner',
     'allProjectsOption': 'All Projects',
+    'all': 'All',
+    'allStatuses': 'All statuses',
+    'projectSortRecent': 'Recent',
+    'projectSortName': 'Name',
+    'projectSortHighestExpense': 'Highest expense',
+    'projectSortHighestIncome': 'Highest income',
+    'projectSortHighestNet': 'Highest net',
+    'projectFinancialAccessRestricted':
+        'Financial project details are restricted for your role.',
+    'confirmArchiveProject': 'Archive this project?',
     'selectProject': 'Select a Project',
     'selectProjectToViewReport': 'Please select a project to view its report.',
     'projectReport': 'Project Report',
@@ -129,6 +139,8 @@ class AppLocalizations {
     'forgotPassword': 'Forgot Password',
     'email': 'Email',
     'password': 'Password',
+    'loginEmailRequired': 'Enter your email.',
+    'loginPasswordRequired': 'Enter your password.',
     'skip': 'Skip',
     'next': 'Next',
     'loading': 'Loading...',
@@ -210,6 +222,7 @@ class AppLocalizations {
     'pleaseLoginFirst': 'Please login first.',
     'overview': 'Overview',
     'quickActions': 'Quick Actions',
+    'chooseWorkspace': 'Choose workspace',
     'totalExpenses': 'Total Expenses',
     'totalIncome': 'Total Income',
     'netProfit': 'Net Profit',
@@ -322,6 +335,20 @@ class AppLocalizations {
     'editWorkerTitle': 'Edit Worker',
     'workerList': 'Workers List',
     'workerListSubtitle': 'View and manage your workers.',
+    'resources': 'Resources',
+    'workerDirectory': 'Worker directory',
+    'workerDirectorySubtitle': 'Open worker profiles and accounting.',
+    'contractorsDirectory': 'Contractors',
+    'contractorsDirectorySubtitle': 'Browse contractor profiles and records.',
+    'equipmentDirectory': 'Equipment providers',
+    'equipmentDirectorySubtitle': 'Browse equipment providers and records.',
+    'transportDirectory': 'Transport providers',
+    'transportDirectorySubtitle': 'Browse transport providers and records.',
+    'noContractorsYet': 'No contractors yet.',
+    'noEquipmentProvidersYet': 'No equipment providers yet.',
+    'noTransportProvidersYet': 'No transport providers yet.',
+    'searchResources': 'Search resources',
+    'lastUsedAtLabel': 'Last used: {value}',
     'addWorkerSubtitle': 'Add a new worker profile to your workspace.',
     'addWorkerEntryTitle': 'Add Worker Entry',
     'editWorkerEntryTitle': 'Edit Worker Entry',
@@ -458,6 +485,20 @@ class AppLocalizations {
     'usageLimitReached': 'Usage Limit Reached',
     'freePlanLimitsMessage':
         'You are on the Free plan with strict usage limits. Upgrade to Pro to continue this action.',
+    'limitUsageMessage':
+        'You have used {current} of {max} {limitLabel} on the Free plan. Upgrade to Pro to {upgradeAction}.',
+    'limitUsageActiveProjects': 'active projects',
+    'limitUsageExpenses': 'monthly expense entries',
+    'limitUsagePayments': 'monthly payment entries',
+    'limitUsageWorkerEntries': 'monthly worker entries',
+    'limitUsageTeamMembers': 'team members',
+    'limitUsageGeneric': 'available actions',
+    'limitUpgradeActionActiveProjects': 'create more active projects',
+    'limitUpgradeActionExpenses': 'keep adding expenses',
+    'limitUpgradeActionPayments': 'keep adding payments',
+    'limitUpgradeActionWorkerEntries': 'keep adding worker entries',
+    'limitUpgradeActionTeamMembers': 'invite more team members',
+    'limitUpgradeActionGeneric': 'continue',
     'maybeLater': 'Maybe later',
     'purchaseCancelled': 'Purchase was cancelled.',
     'nativePaywallNotSupported':
@@ -525,6 +566,131 @@ class AppLocalizations {
     'wageWithValue': 'Wage: {value}',
     'totalWageWithValue': 'Total Wage: {value}',
     'workerEntryLine': '{days} d × {wage} = {total}',
+    // --- Review improvement pack (Phase 1 localization inventory) ---
+    // Navigation
+    'navigationHomeTab': 'Home tab',
+    'navigationAddTab': 'Add tab',
+    'navigationReportsTab': 'Reports tab',
+    'navigationProjectsTab': 'Projects tab',
+    // Unread notifications
+    'unreadNotificationsCount': '{count} unread notifications',
+    'markAllRead': 'Mark all as read',
+    'viewAllNotifications': 'View all notifications',
+    // Loading and recovery states
+    'loadingContent': 'Loading content',
+    'somethingWentWrong': 'Something went wrong',
+    'tryAgain': 'Try again',
+    'recoverableErrorTitle': 'We hit a snag',
+    // Voice countdown and playback
+    'voiceCountdownRemaining': '{seconds}s remaining',
+    'voiceRecordingInProgress': 'Recording…',
+    'voicePlayRecording': 'Play recording',
+    'voiceRerecord': 'Re-record',
+    'voiceProcessing': 'Processing…',
+    // Filter removal
+    'removeFilter': 'Remove filter',
+    'clearAllFilters': 'Clear all filters',
+    'activeFilters': 'Active filters',
+    // Bulk archive
+    'selectionMode': 'Select items',
+    'archiveSelected': 'Archive selected',
+    'bulkArchiveConfirm': 'Archive {count} selected items?',
+    'bulkArchivePartialFailure':
+        'Some items could not be archived. Tap retry to try again.',
+    // Report scope and export
+    'reportScope': 'Report scope',
+    'reportDateRange': 'Date range',
+    'reportExports': 'Exports',
+    'reportStartDate': 'From: {value}',
+    'reportEndDate': 'To: {value}',
+    'showArchivedProjects': 'Show archived projects',
+    'loadMore': 'Load more',
+    'reportExportProgress': 'Loaded {count} records',
+    'cancelExport': 'Cancel export',
+    'noDataYet': 'No data yet',
+    'printReport': 'Print',
+    'shareReport': 'Share',
+    'shareChart': 'Share chart',
+    // Worker status
+    'workerStatusActive': 'Active',
+    'workerStatusInactive': 'Inactive',
+    'workerStatusTerminated': 'Terminated',
+    // Plan comparison
+    'comparePlans': 'Compare plans',
+    'planRecommended': 'Recommended',
+    'planFeatureIncluded': 'Included',
+    'planFeatureNotIncluded': 'Not included',
+    'plansUnavailableTitle': 'Plans unavailable',
+    'plansUnavailableMessage':
+        'Store offers are unavailable right now. Try again shortly.',
+    'plansRecoveredAfterRetry': 'Plans loaded after retry.',
+    'planFeatureUnlimitedProjects': 'Unlimited projects',
+    'planFeaturePrioritySupport': 'Priority support',
+    'planFeatureAdvancedReports': 'Advanced reports',
+    // Settings help and legal
+    'aboutApp': 'About app',
+    'settingsSaveFailed':
+        'Could not save settings. Your previous value was restored.',
+    'appVersion': 'App version',
+    'helpAndSupport': 'Help & Support',
+    'privacyPolicy': 'Privacy Policy',
+    'termsOfService': 'Terms of Service',
+    'runDiagnostics': 'Run diagnostics',
+    'crashlyticsDiagnostics': 'Crashlytics diagnostics',
+    'sendTestNonFatalError': 'Send test non-fatal error',
+    'crashlyticsNonFatalSent': 'Non-fatal sent',
+    'runDiagnosticsConfirmTitle': 'Run diagnostics?',
+    'runDiagnosticsConfirmMessage':
+        'This can send a diagnostic report or terminate the app.',
+    'forceCrash': 'Force crash',
+    'forceCrashKillsApp': 'Force crash (kills app)',
+    'forceCrashConfirmTitle': 'Force crash?',
+    'forceCrashConfirmMessage':
+        'This will terminate the app immediately. Continue only during diagnostics.',
+    // Sync outcomes
+    'syncStatus': 'Sync status',
+    'syncStatusSubtitle':
+        'Review pending, failed, and recently resolved sync items.',
+    'syncPending': 'Pending sync',
+    'syncFailed': 'Sync failed',
+    'syncNeedsAttention': 'Needs attention',
+    'syncRecentlyResolved': 'Recently resolved',
+    'syncStatusEmpty': 'No pending or recent sync activity.',
+    'syncNoPending': 'Nothing is waiting to sync.',
+    'syncNoFailed': 'No failed sync items.',
+    'syncNoNeedsAttention': 'No sync items need attention.',
+    'syncNoResolved': 'No recently resolved sync items.',
+    'offlineSyncStatusUnavailable':
+        'Sync status is unavailable right now. Try again shortly.',
+    'syncResolvedNewerKept':
+        'A newer version was kept. Your older change was not applied.',
+    'syncResolvedApplied': 'Your change was applied successfully.',
+    'retrySync': 'Retry sync',
+    // Sanitized failure messages (see core/utils/app_error_messages.dart)
+    'errorNetwork': 'No connection. Check your network and try again.',
+    'errorPermissionDenied': 'You do not have permission to do this.',
+    'errorUnauthenticated': 'Please sign in again to continue.',
+    'errorNotFound': 'That item is no longer available.',
+    'errorQuota': 'Your plan limit has been reached.',
+    'errorStorage':
+        'File transfer failed. Check your connection and try again.',
+    'errorAuth': 'Sign-in failed. Please try again.',
+    'errorAuthInvalidCredentials':
+        'Incorrect email or password. Please try again.',
+    'errorRecording':
+        'Recording failed. Check microphone access and try again.',
+    'errorUnknown': 'Something went wrong. Please try again.',
+    // Worker accounting partial payments (see worker_accounting_record.dart)
+    'workerPaidAmountRequired':
+        'Enter the amount paid for this partial record.',
+    'workerPaidAmountTooLow': 'The paid amount must be greater than zero.',
+    'workerPaidAmountTooHigh':
+        'The paid amount must be less than the total amount.',
+    'workerPaidAmountLabel': 'Amount paid',
+    'workerLegacyPartialUnresolved':
+        'This older partial record has no recorded paid amount, so it is excluded from confirmed totals.',
+    'workerConfirmedPaid': 'Confirmed paid',
+    'workerConfirmedOutstanding': 'Outstanding',
   };
 
   static final _ar = <String, String>{
@@ -565,6 +731,16 @@ class AppLocalizations {
     'memberRole': 'عضو',
     'ownerRole': 'مالك',
     'allProjectsOption': 'كل المشاريع',
+    'all': 'الكل',
+    'allStatuses': 'كل الحالات',
+    'projectSortRecent': 'الأحدث',
+    'projectSortName': 'الاسم',
+    'projectSortHighestExpense': 'الأعلى مصروفات',
+    'projectSortHighestIncome': 'الأعلى دخلًا',
+    'projectSortHighestNet': 'الأعلى صافيًا',
+    'projectFinancialAccessRestricted':
+        'التفاصيل المالية للمشاريع غير متاحة لدورك.',
+    'confirmArchiveProject': 'هل تريد أرشفة هذا المشروع؟',
     'selectProject': 'اختر مشروعاً',
     'selectProjectToViewReport': 'يرجى اختيار مشروع لعرض التقرير.',
     'projectReport': 'تقرير المشروع',
@@ -625,6 +801,8 @@ class AppLocalizations {
     'forgotPassword': 'نسيت كلمة المرور',
     'email': 'البريد الإلكتروني',
     'password': 'كلمة المرور',
+    'loginEmailRequired': 'أدخل بريدك الإلكتروني.',
+    'loginPasswordRequired': 'أدخل كلمة المرور.',
     'skip': 'تخطي',
     'next': 'التالي',
     'loading': 'جاري التحميل...',
@@ -691,6 +869,7 @@ class AppLocalizations {
     'pleaseLoginFirst': 'يرجى تسجيل الدخول أولاً.',
     'overview': 'نظرة عامة',
     'quickActions': 'إجراءات سريعة',
+    'chooseWorkspace': 'اختر مساحة العمل',
     'totalExpenses': 'إجمالي المصروفات',
     'totalIncome': 'إجمالي الإيرادات',
     'netProfit': 'صافي الربح',
@@ -801,6 +980,20 @@ class AppLocalizations {
     'editWorkerTitle': 'تعديل عامل',
     'workerList': 'قائمة العمال',
     'workerListSubtitle': 'عرض وإدارة العمال.',
+    'resources': 'Resources',
+    'workerDirectory': 'Worker directory',
+    'workerDirectorySubtitle': 'Open worker profiles and accounting.',
+    'contractorsDirectory': 'Contractors',
+    'contractorsDirectorySubtitle': 'Browse contractor profiles and records.',
+    'equipmentDirectory': 'Equipment providers',
+    'equipmentDirectorySubtitle': 'Browse equipment providers and records.',
+    'transportDirectory': 'Transport providers',
+    'transportDirectorySubtitle': 'Browse transport providers and records.',
+    'noContractorsYet': 'No contractors yet.',
+    'noEquipmentProvidersYet': 'No equipment providers yet.',
+    'noTransportProvidersYet': 'No transport providers yet.',
+    'searchResources': 'Search resources',
+    'lastUsedAtLabel': 'Last used: {value}',
     'addWorkerSubtitle': 'إضافة ملف عامل جديد إلى مساحة العمل.',
     'addWorkerEntryTitle': 'إإضافة سجل عامل',
     'editWorkerEntryTitle': 'تعديل سجل عامل',
@@ -928,6 +1121,20 @@ class AppLocalizations {
     'usageLimitReached': 'تم الوصول لحد الاستخدام',
     'freePlanLimitsMessage':
         'أنت على الخطة المجانية بحدود استخدام صارمة. قم بالترقية إلى برو لمتابعة هذا الإجراء.',
+    'limitUsageMessage':
+        'استخدمت {current} من {max} {limitLabel} في الخطة المجانية. قم بالترقية إلى برو من أجل {upgradeAction}.',
+    'limitUsageActiveProjects': 'مشاريع نشطة',
+    'limitUsageExpenses': 'إدخالات مصروفات شهرية',
+    'limitUsagePayments': 'إدخالات مدفوعات شهرية',
+    'limitUsageWorkerEntries': 'إدخالات عمال شهرية',
+    'limitUsageTeamMembers': 'أعضاء فريق',
+    'limitUsageGeneric': 'إجراءات متاحة',
+    'limitUpgradeActionActiveProjects': 'إنشاء المزيد من المشاريع النشطة',
+    'limitUpgradeActionExpenses': 'متابعة إضافة المصروفات',
+    'limitUpgradeActionPayments': 'متابعة إضافة المدفوعات',
+    'limitUpgradeActionWorkerEntries': 'متابعة إضافة إدخالات العمال',
+    'limitUpgradeActionTeamMembers': 'دعوة المزيد من أعضاء الفريق',
+    'limitUpgradeActionGeneric': 'المتابعة',
     'maybeLater': 'لاحقاً',
     'purchaseCancelled': 'تم إلغاء عملية الشراء.',
     'nativePaywallNotSupported':
@@ -995,6 +1202,126 @@ class AppLocalizations {
     'wageWithValue': 'الأجر: {value}',
     'totalWageWithValue': 'إجمالي الأجر: {value}',
     'workerEntryLine': '{days} يوم × {wage} = {total}',
+    // --- Review improvement pack (Phase 1 localization inventory) ---
+    // Navigation
+    'navigationHomeTab': 'تبويب الرئيسية',
+    'navigationAddTab': 'تبويب الإضافة',
+    'navigationReportsTab': 'تبويب التقارير',
+    'navigationProjectsTab': 'تبويب المشاريع',
+    // Unread notifications
+    'unreadNotificationsCount': '{count} إشعارات غير مقروءة',
+    'markAllRead': 'تعليم الكل كمقروء',
+    'viewAllNotifications': 'عرض جميع الإشعارات',
+    // Loading and recovery states
+    'loadingContent': 'جارٍ تحميل المحتوى',
+    'somethingWentWrong': 'حدث خطأ ما',
+    'tryAgain': 'حاول مرة أخرى',
+    'recoverableErrorTitle': 'واجهتنا مشكلة',
+    // Voice countdown and playback
+    'voiceCountdownRemaining': 'يتبقى {seconds} ثانية',
+    'voiceRecordingInProgress': 'جارٍ التسجيل…',
+    'voicePlayRecording': 'تشغيل التسجيل',
+    'voiceRerecord': 'إعادة التسجيل',
+    'voiceProcessing': 'جارٍ المعالجة…',
+    // Filter removal
+    'removeFilter': 'إزالة عامل التصفية',
+    'clearAllFilters': 'مسح جميع عوامل التصفية',
+    'activeFilters': 'عوامل التصفية النشطة',
+    // Bulk archive
+    'selectionMode': 'تحديد العناصر',
+    'archiveSelected': 'أرشفة المحدد',
+    'bulkArchiveConfirm': 'أرشفة {count} عناصر محددة؟',
+    'bulkArchivePartialFailure':
+        'تعذّرت أرشفة بعض العناصر. اضغط إعادة المحاولة.',
+    // Report scope and export
+    'reportScope': 'نطاق التقرير',
+    'reportDateRange': 'النطاق الزمني',
+    'reportExports': 'التصدير',
+    'reportStartDate': 'من: {value}',
+    'reportEndDate': 'إلى: {value}',
+    'showArchivedProjects': 'عرض المشاريع المؤرشفة',
+    'loadMore': 'تحميل المزيد',
+    'reportExportProgress': 'تم تحميل {count} سجلات',
+    'cancelExport': 'إلغاء التصدير',
+    'noDataYet': 'لا توجد بيانات بعد',
+    'printReport': 'طباعة',
+    'shareReport': 'مشاركة',
+    'shareChart': 'مشاركة الرسم البياني',
+    // Worker status
+    'workerStatusActive': 'نشط',
+    'workerStatusInactive': 'غير نشط',
+    'workerStatusTerminated': 'منتهٍ',
+    // Plan comparison
+    'comparePlans': 'قارن الخطط',
+    'planRecommended': 'موصى به',
+    'planFeatureIncluded': 'مضمّن',
+    'planFeatureNotIncluded': 'غير مضمّن',
+    'plansUnavailableTitle': 'الخطط غير متاحة',
+    'plansUnavailableMessage':
+        'عروض المتجر غير متاحة الآن. حاول مرة أخرى بعد قليل.',
+    'plansRecoveredAfterRetry': 'تم تحميل الخطط بعد إعادة المحاولة.',
+    'planFeatureUnlimitedProjects': 'مشاريع غير محدودة',
+    'planFeaturePrioritySupport': 'دعم ذو أولوية',
+    'planFeatureAdvancedReports': 'تقارير متقدمة',
+    // Settings help and legal
+    'aboutApp': 'حول التطبيق',
+    'settingsSaveFailed': 'تعذر حفظ الإعدادات. تمت استعادة القيمة السابقة.',
+    'appVersion': 'إصدار التطبيق',
+    'helpAndSupport': 'المساعدة والدعم',
+    'privacyPolicy': 'سياسة الخصوصية',
+    'termsOfService': 'شروط الخدمة',
+    'runDiagnostics': 'تشغيل التشخيص',
+    'crashlyticsDiagnostics': 'تشخيص Crashlytics',
+    'sendTestNonFatalError': 'إرسال خطأ اختباري غير قاتل',
+    'crashlyticsNonFatalSent': 'تم إرسال الخطأ غير القاتل',
+    'runDiagnosticsConfirmTitle': 'تشغيل التشخيص؟',
+    'runDiagnosticsConfirmMessage': 'قد يرسل هذا تقرير تشخيص أو يغلق التطبيق.',
+    'forceCrash': 'إغلاق اختباري',
+    'forceCrashKillsApp': 'إغلاق اختباري (يغلق التطبيق)',
+    'forceCrashConfirmTitle': 'إغلاق التطبيق؟',
+    'forceCrashConfirmMessage':
+        'سيؤدي هذا إلى إغلاق التطبيق فوراً. تابع فقط أثناء التشخيص.',
+    // Sync outcomes
+    'syncStatus': 'حالة المزامنة',
+    'syncStatusSubtitle':
+        'راجع عناصر المزامنة المعلقة والفاشلة والتي تم حلها مؤخراً.',
+    'syncPending': 'بانتظار المزامنة',
+    'syncFailed': 'فشلت المزامنة',
+    'syncNeedsAttention': 'تحتاج إلى مراجعة',
+    'syncRecentlyResolved': 'تم حلها مؤخراً',
+    'syncStatusEmpty': 'لا توجد أنشطة مزامنة معلقة أو حديثة.',
+    'syncNoPending': 'لا يوجد شيء بانتظار المزامنة.',
+    'syncNoFailed': 'لا توجد عناصر مزامنة فاشلة.',
+    'syncNoNeedsAttention': 'لا توجد عناصر مزامنة تحتاج إلى مراجعة.',
+    'syncNoResolved': 'لا توجد عناصر مزامنة محلولة مؤخراً.',
+    'offlineSyncStatusUnavailable':
+        'حالة المزامنة غير متاحة الآن. حاول مرة أخرى بعد قليل.',
+    'syncResolvedNewerKept':
+        'تم الاحتفاظ بنسخة أحدث. لم يتم تطبيق تغييرك الأقدم.',
+    'syncResolvedApplied': 'تم تطبيق تغييرك بنجاح.',
+    'retrySync': 'إعادة المزامنة',
+    // Sanitized failure messages (see core/utils/app_error_messages.dart)
+    'errorNetwork': 'لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.',
+    'errorPermissionDenied': 'ليس لديك صلاحية للقيام بذلك.',
+    'errorUnauthenticated': 'يرجى تسجيل الدخول مرة أخرى للمتابعة.',
+    'errorNotFound': 'هذا العنصر لم يعد متاحًا.',
+    'errorQuota': 'لقد وصلت إلى حد خطتك.',
+    'errorStorage': 'فشل نقل الملف. تحقق من اتصالك وحاول مرة أخرى.',
+    'errorAuth': 'فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.',
+    'errorAuthInvalidCredentials':
+        'البريد الإلكتروني أو كلمة المرور غير صحيحة. حاول مرة أخرى.',
+    'errorRecording': 'فشل التسجيل. تحقق من إذن الميكروفون وحاول مرة أخرى.',
+    'errorUnknown': 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
+    // Worker accounting partial payments
+    'workerPaidAmountRequired': 'أدخل المبلغ المدفوع لهذا السجل الجزئي.',
+    'workerPaidAmountTooLow': 'يجب أن يكون المبلغ المدفوع أكبر من صفر.',
+    'workerPaidAmountTooHigh':
+        'يجب أن يكون المبلغ المدفوع أقل من المبلغ الإجمالي.',
+    'workerPaidAmountLabel': 'المبلغ المدفوع',
+    'workerLegacyPartialUnresolved':
+        'هذا السجل الجزئي القديم لا يحتوي على مبلغ مدفوع مسجّل، لذا يُستبعد من الإجماليات المؤكدة.',
+    'workerConfirmedPaid': 'المدفوع المؤكد',
+    'workerConfirmedOutstanding': 'المتبقي',
   };
 
   static final _localized = <String, Map<String, String>>{'en': _en, 'ar': _ar};
@@ -1140,6 +1467,55 @@ class AppLocalizations {
         return t('teamMemberLimitReached');
       default:
         return t('usageLimitReached');
+    }
+  }
+
+  String limitMessage(String limitType, {int? current, int? max}) {
+    if (current == null || max == null) {
+      return t('freePlanLimitsMessage');
+    }
+    return t(
+      'limitUsageMessage',
+      params: {
+        'current': '$current',
+        'max': '$max',
+        'limitLabel': limitUsageLabel(limitType),
+        'upgradeAction': limitUpgradeAction(limitType),
+      },
+    );
+  }
+
+  String limitUsageLabel(String limitType) {
+    switch (limitType) {
+      case 'activeProjects':
+        return t('limitUsageActiveProjects');
+      case 'expensesPerMonth':
+        return t('limitUsageExpenses');
+      case 'paymentsPerMonth':
+        return t('limitUsagePayments');
+      case 'workerEntriesPerMonth':
+        return t('limitUsageWorkerEntries');
+      case 'teamMembers':
+        return t('limitUsageTeamMembers');
+      default:
+        return t('limitUsageGeneric');
+    }
+  }
+
+  String limitUpgradeAction(String limitType) {
+    switch (limitType) {
+      case 'activeProjects':
+        return t('limitUpgradeActionActiveProjects');
+      case 'expensesPerMonth':
+        return t('limitUpgradeActionExpenses');
+      case 'paymentsPerMonth':
+        return t('limitUpgradeActionPayments');
+      case 'workerEntriesPerMonth':
+        return t('limitUpgradeActionWorkerEntries');
+      case 'teamMembers':
+        return t('limitUpgradeActionTeamMembers');
+      default:
+        return t('limitUpgradeActionGeneric');
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -343,7 +344,7 @@ class _ExpenseFormBodyState extends ConsumerState<_ExpenseFormBody> {
               });
             },
           ),
-          error: (e, _) => Text(e.toString()),
+          error: (e, _) => Text(appErrorMessage(l10n, e)),
           loading: () => const SizedBox.shrink(),
         ),
         const SizedBox(height: 12),
@@ -733,7 +734,7 @@ class _WorkerEntryFormBodyState extends ConsumerState<_WorkerEntryFormBody> {
               onSelected: (value) => setState(() => _workerId = value),
             );
           },
-          error: (e, _) => Text(e.toString()),
+          error: (e, _) => Text(appErrorMessage(l10n, e)),
           loading: () => const SizedBox.shrink(),
         ),
         const SizedBox(height: 12),
@@ -746,7 +747,7 @@ class _WorkerEntryFormBodyState extends ConsumerState<_WorkerEntryFormBody> {
                 .toList(),
             onSelected: (value) => setState(() => _projectId = value),
           ),
-          error: (e, _) => Text(e.toString()),
+          error: (e, _) => Text(appErrorMessage(l10n, e)),
           loading: () => const SizedBox.shrink(),
         ),
         const SizedBox(height: 12),

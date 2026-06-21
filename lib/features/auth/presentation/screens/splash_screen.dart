@@ -17,8 +17,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  bool _showProgress = false;
-
   @override
   void initState() {
     super.initState();
@@ -35,7 +33,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted) return;
 
     if (restored == null) {
-      await Future<void>.delayed(const Duration(milliseconds: 800));
       if (mounted) context.go(AppRoutes.features);
       return;
     }
@@ -43,13 +40,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     ref.read(activeUserIdProvider.notifier).state = restored.userId;
     ref.read(activeWorkspaceIdProvider.notifier).state = restored.workspaceId;
 
-    setState(() => _showProgress = true);
-
-    await Future.wait([
-      ref.read(appPrefetcherProvider).warmCritical(),
-      Future<void>.delayed(const Duration(milliseconds: 800)),
-    ]);
-
+    unawaited(ref.read(appPrefetcherProvider).warmCritical());
     if (mounted) context.go(AppRoutes.dashboard);
   }
 
@@ -71,11 +62,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.construction,
-                    color: Colors.white,
-                    size: 72,
-                  ),
+                  const Icon(Icons.construction, color: Colors.white, size: 72),
                   const SizedBox(height: 16),
                   Text(
                     l10n.t('appName'),
@@ -93,16 +80,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 ],
               ),
             ),
-            if (_showProgress)
-              const Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: LinearProgressIndicator(
-                  backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
           ],
         ),
       ),

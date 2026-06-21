@@ -9,19 +9,23 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/features/common/presentation/controllers/transaction_bulk_archive_controller.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/reports/services/report_document_actions.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:printing/printing.dart';
 
 class PaymentsScreen extends ConsumerStatefulWidget {
   const PaymentsScreen({this.projectId, super.key});
@@ -81,6 +85,63 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       _endDateFilter = null;
       _searchController.clear();
     });
+  }
+
+  void _removePaymentFilter(String id) {
+    setState(() {
+      switch (id) {
+        case 'method':
+          _paymentMethodFilter = null;
+        case 'status':
+          _paymentStatusFilter = null;
+        case 'entity':
+          _entityFilterId = null;
+          _entityFilterName = '';
+        case 'entityType':
+          _entityTypeFilter = null;
+        case 'date':
+          _startDateFilter = null;
+          _endDateFilter = null;
+        case 'search':
+          _searchController.clear();
+      }
+    });
+  }
+
+  List<ActiveFilter> _activePaymentFilters(AppLocalizations l10n) {
+    return [
+      if (_paymentMethodFilter != null)
+        ActiveFilter(
+          id: 'method',
+          label: l10n.paymentMethodLabel(_paymentMethodFilter!),
+        ),
+      if (_paymentStatusFilter != null)
+        ActiveFilter(
+          id: 'status',
+          label: l10n.paymentStatusLabel(_paymentStatusFilter!),
+        ),
+      if (_entityFilterId != null || _entityFilterName.isNotEmpty)
+        ActiveFilter(
+          id: 'entity',
+          label: '${l10n.t('entityName')}: $_entityFilterName',
+        ),
+      if (_entityTypeFilter != null)
+        ActiveFilter(
+          id: 'entityType',
+          label: _entityTypeLabel(l10n, _entityTypeFilter!),
+        ),
+      if (_startDateFilter != null || _endDateFilter != null)
+        ActiveFilter(
+          id: 'date',
+          label:
+              '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} - ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
+        ),
+      if (_searchController.text.trim().isNotEmpty)
+        ActiveFilter(
+          id: 'search',
+          label: 'Search: ${_searchController.text.trim()}',
+        ),
+    ];
   }
 
   Future<void> _openPaymentFilterSheet() async {
@@ -474,7 +535,9 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
   }
 
   Future<void> _openEditPayment(PaymentRecord payment) async {
-    await context.push(AppRoutes.paymentEditPath(payment.id));
+    await context.push(
+      AppRoutes.paymentEditPath(payment.id, projectId: _selectedProjectId),
+    );
     if (mounted) {
       await _refresh();
     }
@@ -527,7 +590,53 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     }
   }
 
-  Future<void> _exportPdf() async {
+  Future<void> _archiveSelectedPayments(AppLocalizations l10n) async {
+    final controller = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
+    final result = await controller.archiveSelected(
+      archiveOne: ref.read(paymentRepositoryProvider).archivePayment,
+      confirm: (selectedCount) async {
+        return await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: Text(
+                  l10n.t(
+                    'bulkArchiveConfirm',
+                    params: {'count': '$selectedCount'},
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(l10n.t('cancel')),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(l10n.t('archive')),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+      },
+    );
+    if (!mounted || result == null || result.cancelled) return;
+    setState(() {
+      _payments.removeWhere((item) => result.succeeded.contains(item.id));
+    });
+    if (result.queued) {
+      await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
+      unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
+    }
+    if (result.failed.isNotEmpty) {
+      pushAppUiNotice(ref, l10n.t('bulkArchivePartialFailure'));
+    } else if (result.queued) {
+      pushAppUiNotice(ref, l10n.t('queuedForSync'));
+    }
+  }
+
+  Future<void> _exportPdf({required bool share}) async {
     final l10n = AppLocalizations.of(context);
     final payments = _filteredPayments();
     if (payments.isEmpty) {
@@ -563,14 +672,24 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         endDate: _endDateFilter,
         filterSummary: filterParts.isEmpty ? null : filterParts.join(', '),
       );
-      await Printing.layoutPdf(onLayout: (_) async => bytes);
+      final actions = ReportDocumentActions();
+      final result = share
+          ? await actions.shareDocument(bytes: bytes, filename: 'payments.pdf')
+          : await actions.printDocument(bytes: bytes, name: l10n.t('payments'));
+      if (result.isFailed && mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(appErrorMessage(l10n, result.error))),
+          );
+      }
     } catch (error) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+        ..showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
     }
   }
 
@@ -628,6 +747,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
+    final bulkState = ref.watch(transactionBulkArchiveControllerProvider);
+    final bulkController = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
     final fallbackRoute =
         _selectedProjectId == null || _selectedProjectId!.isEmpty
         ? AppRoutes.projects
@@ -640,19 +763,62 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           context: context,
           title: l10n.t('payments'),
           fallbackRoute: fallbackRoute,
-          actions: [
-            IconButton(
-              tooltip: l10n.t('exportPdf'),
-              onPressed: _exportPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-            ),
-          ],
+          actions: bulkState.isSelecting
+              ? [
+                  IconButton(
+                    tooltip: l10n.t('selectionMode'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : () => bulkController.selectAll(
+                            filtered.map((payment) => payment.id),
+                          ),
+                    icon: const Icon(Icons.select_all),
+                  ),
+                  IconButton(
+                    tooltip: l10n.t('archiveSelected'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : () => _archiveSelectedPayments(l10n),
+                    icon: bulkState.isInProgress
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.archive_outlined),
+                  ),
+                  IconButton(
+                    tooltip: l10n.t('cancel'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : bulkController.clear,
+                    icon: const Icon(Icons.close),
+                  ),
+                ]
+              : [
+                  PopupMenuButton<String>(
+                    tooltip: l10n.t('exportPdf'),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    onSelected: (value) => _exportPdf(share: value == 'share'),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'print',
+                        child: Text(l10n.t('printReport')),
+                      ),
+                      PopupMenuItem(
+                        value: 'share',
+                        child: Text(l10n.t('shareReport')),
+                      ),
+                    ],
+                  ),
+                ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openAddPayment,
-          icon: const Icon(Icons.add),
-          label: Text(l10n.t('addPayment')),
-        ),
+        floatingActionButton: bulkState.isSelecting
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _openAddPayment,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.t('addPayment')),
+              ),
         body: Column(
           children: [
             Padding(
@@ -687,7 +853,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     _refresh();
                   },
                 ),
-                error: (error, _) => Text(error.toString()),
+                error: (error, _) =>
+                    AppRecoverableError(message: appErrorMessage(l10n, error)),
                 loading: () => const SizedBox.shrink(),
               ),
             ),
@@ -737,52 +904,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                   horizontal: 16,
                   vertical: 8,
                 ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (_paymentMethodFilter != null)
-                      FilterChip(
-                        label: Text(
-                          l10n.paymentMethodLabel(_paymentMethodFilter!),
-                        ),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                    if (_paymentStatusFilter != null)
-                      FilterChip(
-                        label: Text(
-                          l10n.paymentStatusLabel(_paymentStatusFilter!),
-                        ),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                    if (_entityFilterId != null && _entityFilterName.isNotEmpty)
-                      FilterChip(
-                        label: Text('Entity: $_entityFilterName'),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                    if (_entityTypeFilter != null)
-                      FilterChip(
-                        label: Text(_entityTypeLabel(l10n, _entityTypeFilter!)),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                    if (_searchController.text.trim().isNotEmpty)
-                      FilterChip(
-                        label: Text('Search: ${_searchController.text.trim()}'),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                    ActionChip(
-                      avatar: const Icon(Icons.clear),
-                      label: Text(l10n.t('clearFilters')),
-                      onPressed: _clearPaymentFilters,
-                    ),
-                    if (_startDateFilter != null || _endDateFilter != null)
-                      FilterChip(
-                        label: Text(
-                          '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} – ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
-                        ),
-                        onSelected: (_) => _clearPaymentFilters(),
-                      ),
-                  ],
+                child: ActiveFilterBar(
+                  filters: _activePaymentFilters(l10n),
+                  onRemove: _removePaymentFilter,
+                  onClearAll: _clearPaymentFilters,
                 ),
               ),
             const SizedBox(height: 16),
@@ -819,12 +944,21 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 120),
-          Center(
-            child: Text(
-              _payments.isEmpty
-                  ? l10n.t('noPaymentsYet')
-                  : l10n.t('noFilterResults'),
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _hasActivePaymentFilters
+                ? AppEmptyState(
+                    icon: Icons.filter_alt_off_outlined,
+                    message: l10n.t('noFilterResults'),
+                    actionLabel: l10n.t('clearFilters'),
+                    onAction: _clearPaymentFilters,
+                  )
+                : AppEmptyState(
+                    icon: Icons.payments_outlined,
+                    message: l10n.t('noPaymentsYet'),
+                    actionLabel: l10n.t('addPayment'),
+                    onAction: _openAddPayment,
+                  ),
           ),
         ],
       );
@@ -865,32 +999,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           children: entry.value.map((payment) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                child: ListTile(
-                  onTap: () =>
-                      context.push(AppRoutes.paymentDetailPath(payment.id)),
-                  title: Text(
-                    '${Formatters.money(payment.amount, currencyCode: currency, locale: locale)} | ${l10n.paymentMethodLabel(payment.paymentMethod)}',
-                  ),
-                  subtitle: Text(_paymentSubtitle(payment, l10n)),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) async {
-                      if (value == 'edit') {
-                        await _openEditPayment(payment);
-                        return;
-                      }
-                      await _archivePayment(context, l10n, payment);
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Text(l10n.t('archive')),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: _paymentCard(context, l10n, payment, currency, locale),
             );
           }).toList(),
         );
@@ -917,15 +1026,9 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(_error.toString(), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('retry')),
-                  ),
-                ],
+              child: AppRecoverableError(
+                message: appErrorMessage(l10n, _error),
+                onRetry: _refresh,
               ),
             ),
           ),
@@ -939,12 +1042,21 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 120),
-          Center(
-            child: Text(
-              _payments.isEmpty
-                  ? l10n.t('noPaymentsYet')
-                  : l10n.t('noFilterResults'),
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _hasActivePaymentFilters
+                ? AppEmptyState(
+                    icon: Icons.filter_alt_off_outlined,
+                    message: l10n.t('noFilterResults'),
+                    actionLabel: l10n.t('clearFilters'),
+                    onAction: _clearPaymentFilters,
+                  )
+                : AppEmptyState(
+                    icon: Icons.payments_outlined,
+                    message: l10n.t('noPaymentsYet'),
+                    actionLabel: l10n.t('addPayment'),
+                    onAction: _openAddPayment,
+                  ),
           ),
         ],
       );
@@ -969,15 +1081,60 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Card(
-            child: ListTile(
-              onTap: () =>
-                  context.push(AppRoutes.paymentDetailPath(payment.id)),
-              title: Text(
-                '${Formatters.money(payment.amount, currencyCode: currency, locale: locale)} | ${l10n.paymentMethodLabel(payment.paymentMethod)}',
-              ),
-              subtitle: Text(_paymentSubtitle(payment, l10n)),
-              trailing: Row(
+          child: _paymentCard(context, l10n, payment, currency, locale),
+        );
+      },
+    );
+  }
+
+  Widget _paymentCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    PaymentRecord payment,
+    String currency,
+    String locale,
+  ) {
+    final bulkState = ref.watch(transactionBulkArchiveControllerProvider);
+    final bulkController = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
+    final selected = bulkState.isSelected(payment.id);
+
+    return Card(
+      child: ListTile(
+        selected: selected,
+        leading: bulkState.isSelecting
+            ? Checkbox(
+                value: selected,
+                onChanged: bulkState.isInProgress
+                    ? null
+                    : (_) => bulkController.toggle(payment.id),
+              )
+            : null,
+        onLongPress: bulkState.isInProgress
+            ? null
+            : () => bulkController.toggle(payment.id),
+        onTap: () {
+          if (bulkState.isSelecting) {
+            if (!bulkState.isInProgress) {
+              bulkController.toggle(payment.id);
+            }
+            return;
+          }
+          context.push(
+            AppRoutes.paymentDetailPath(
+              payment.id,
+              projectId: _selectedProjectId,
+            ),
+          );
+        },
+        title: Text(
+          '${Formatters.money(payment.amount, currencyCode: currency, locale: locale)} | ${l10n.paymentMethodLabel(payment.paymentMethod)}',
+        ),
+        subtitle: Text(_paymentSubtitle(payment, l10n)),
+        trailing: bulkState.isSelecting
+            ? null
+            : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (payment.attachments.isNotEmpty)
@@ -1003,10 +1160,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                   ),
                 ],
               ),
-            ),
-          ),
-        );
-      },
+      ),
     );
   }
 

@@ -49,11 +49,7 @@ class AppTelemetry {
         'duration_ms': stopwatch.elapsedMilliseconds,
         'error': error.toString(),
       });
-      await recordError(
-        error,
-        stackTrace,
-        reason: event,
-      );
+      await recordError(error, stackTrace, reason: event);
       rethrow;
     }
   }

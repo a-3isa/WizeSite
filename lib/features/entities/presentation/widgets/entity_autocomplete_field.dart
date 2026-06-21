@@ -24,10 +24,12 @@ class EntityAutocompleteField extends ConsumerStatefulWidget {
   final void Function(String? entityId, String? entityName) onChanged;
 
   @override
-  ConsumerState<EntityAutocompleteField> createState() => _EntityAutocompleteFieldState();
+  ConsumerState<EntityAutocompleteField> createState() =>
+      _EntityAutocompleteFieldState();
 }
 
-class _EntityAutocompleteFieldState extends ConsumerState<EntityAutocompleteField> {
+class _EntityAutocompleteFieldState
+    extends ConsumerState<EntityAutocompleteField> {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
   List<AppEntity> _suggestions = [];
@@ -62,7 +64,9 @@ class _EntityAutocompleteFieldState extends ConsumerState<EntityAutocompleteFiel
       widget.onChanged(null, null);
       return;
     }
-    if (_selectedId != null && widget.initialEntityName != null && text != widget.initialEntityName) {
+    if (_selectedId != null &&
+        widget.initialEntityName != null &&
+        text != widget.initialEntityName) {
       _selectedId = null;
     }
     widget.onChanged(_selectedId, text);
@@ -84,7 +88,12 @@ class _EntityAutocompleteFieldState extends ConsumerState<EntityAutocompleteFiel
     try {
       final results = await ref
           .read(entityRepositoryProvider)
-          .searchEntities(widget.workspaceId, trimmed, type: widget.entityType, limit: 10);
+          .searchEntities(
+            widget.workspaceId,
+            trimmed,
+            type: widget.entityType,
+            limit: 10,
+          );
       if (!mounted) return;
       setState(() => _suggestions = results);
     } catch (_) {

@@ -1,7 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
+import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,22 +27,87 @@ class _FakeContactsService extends ContactsService {
   Future<ContactPermissionStatus> requestPermission() async => permissionStatus;
 }
 
-Widget _testApp(ContactsService contactsService) {
+class _FakeWorkerRepository implements WorkerRepository {
+  _FakeWorkerRepository({this.worker});
+
+  final WorkerProfile? worker;
+  WorkerStatus? createdStatus;
+  WorkerStatus? updatedStatus;
+
+  @override
+  Future<void> createWorker({
+    required String workspaceId,
+    required String userId,
+    required String name,
+    required String phoneNumber,
+    required double dailyWage,
+    required String billingType,
+    String? workerType,
+    String? notes,
+    WorkerStatus status = WorkerStatus.active,
+  }) async {
+    createdStatus = status;
+  }
+
+  @override
+  Future<void> updateWorker({
+    required String workerId,
+    required String name,
+    required String phoneNumber,
+    required double dailyWage,
+    required String billingType,
+    String? workerType,
+    String? notes,
+    WorkerStatus? status,
+  }) async {
+    updatedStatus = status;
+  }
+
+  @override
+  Future<void> archiveWorker(String workerId) async {}
+
+  @override
+  Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
+    String workspaceId, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+    Set<WorkerStatus>? statuses,
+  }) async =>
+      FirestorePage(items: worker == null ? [] : [worker!], hasMore: false);
+
+  @override
+  Future<WorkerProfile?> getWorker(String workerId) async => worker;
+
+  @override
+  Stream<List<WorkerProfile>> watchWorkers(
+    String workspaceId, {
+    Set<WorkerStatus>? statuses,
+  }) => Stream.value(worker == null ? [] : [worker!]);
+}
+
+Widget _testApp(
+  ContactsService contactsService, {
+  WorkerRepository? workerRepository,
+  String? workerId,
+}) {
+  final overrides = [
+    activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+    activeUserIdProvider.overrideWith((ref) => 'user_1'),
+    contactsServiceProvider.overrideWithValue(contactsService),
+    if (workerRepository != null)
+      workerRepositoryProvider.overrideWithValue(workerRepository),
+  ];
   return ProviderScope(
-    overrides: [
-      activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-      activeUserIdProvider.overrideWith((ref) => 'user_1'),
-      contactsServiceProvider.overrideWithValue(contactsService),
-    ],
-    child: const MaterialApp(
-      localizationsDelegates: [
+    overrides: overrides,
+    child: MaterialApp(
+      localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: AddWorkerScreen(),
+      home: AddWorkerScreen(workerId: workerId),
     ),
   );
 }
@@ -111,4 +180,54 @@ void main() {
       expect(find.text('0100'), findsOneWidget);
     },
   );
+
+  testWidgets('AddWorkerScreen prefills and saves worker status on edit', (
+    tester,
+  ) async {
+    final repository = _FakeWorkerRepository(
+      worker: const WorkerProfile(
+        id: 'w1',
+        workspaceId: 'workspace_1',
+        name: 'Sam Worker',
+        phoneNumber: '0100',
+        dailyWage: 100,
+        billingType: 'daily',
+        workerType: 'other',
+        notes: '',
+        isArchived: false,
+        status: WorkerStatus.inactive,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _testApp(
+        const _FakeContactsService(
+          permissionStatus: ContactPermissionStatus.denied,
+          pickResult: PickedContactResult.cancelled(),
+        ),
+        workerRepository: repository,
+        workerId: 'w1',
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Inactive'), findsOneWidget);
+
+    await tester.tap(find.text('Inactive').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Terminated').last);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Update Worker'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Update Worker'));
+    await tester.pumpAndSettle();
+
+    expect(repository.updatedStatus, WorkerStatus.terminated);
+  });
 }

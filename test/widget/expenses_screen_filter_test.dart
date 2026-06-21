@@ -158,8 +158,10 @@ GoRouter _router() {
 
 void main() {
   testWidgets(
-    'ExpensesScreen shows active search chip and clear all restores results',
+    'ExpensesScreen supports compact filters, grouping, bulk archive, and empty CTA',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final repository = _FakeExpenseRepository([
         _expense(id: 'expense_1', amount: 100, supplierName: 'Steel Supplier'),
         _expense(id: 'expense_2', amount: 200, supplierName: 'Paint Crew'),
@@ -195,20 +197,56 @@ void main() {
       expect(find.textContaining('Unpaid'), findsWidgets);
       expect(find.text('100 USD | Materials'), findsOneWidget);
       expect(find.text('200 USD | Materials'), findsOneWidget);
+      expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Group by'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await tester.enterText(find.byType(TextField).first, 'steel');
       await tester.pumpAndSettle();
 
       expect(find.text('Search: steel'), findsOneWidget);
-      expect(find.text('Clear filters'), findsOneWidget);
+      expect(find.byTooltip('Remove filter'), findsOneWidget);
       expect(find.text('100 USD | Materials'), findsOneWidget);
       expect(find.text('200 USD | Materials'), findsNothing);
 
-      await tester.tap(find.text('Clear filters'));
+      await tester.tap(find.byTooltip('Remove filter'));
       await tester.pumpAndSettle();
 
       expect(find.text('100 USD | Materials'), findsOneWidget);
       expect(find.text('200 USD | Materials'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, 'missing');
+      await tester.pumpAndSettle();
+
+      expect(find.text('No matching results.'), findsOneWidget);
+      expect(find.text('Clear filters'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('100 USD | Materials'));
+      await tester.pump();
+
+      expect(find.byTooltip('Archive selected'), findsOneWidget);
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      expect(find.text('Archive 1 selected items?'), findsOneWidget);
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+      expect(find.text('100 USD | Materials'), findsNothing);
+
+      await tester.ensureVisible(find.text('200 USD | Materials'));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('200 USD | Materials'));
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('No expenses yet.'), findsOneWidget);
+      expect(find.text('Add Expense'), findsWidgets);
+      expect(tester.takeException(), isNull);
     },
   );
 }

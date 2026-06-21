@@ -9,7 +9,10 @@ import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
@@ -17,13 +20,14 @@ import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/expenses/presentation/models/expense_group.dart';
 import 'package:buildtrack_app/features/expenses/presentation/widgets/expense_group_section.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
+import 'package:buildtrack_app/features/common/presentation/controllers/transaction_bulk_archive_controller.dart';
+import 'package:buildtrack_app/features/reports/services/report_document_actions.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:printing/printing.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({required this.projectId, super.key});
@@ -141,6 +145,104 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       _endDateFilter = null;
       _searchController.clear();
     });
+  }
+
+  /// Removes only the named filter, leaving the others applied.
+  void _removeExpenseFilter(String id) {
+    setState(() {
+      switch (id) {
+        case 'category':
+          _categoryFilter = null;
+        case 'method':
+          _paymentMethodFilter = null;
+        case 'status':
+          _paymentStatusFilter = null;
+        case 'supplier':
+          _supplierFilter = null;
+        case 'entity':
+          _entityFilterId = null;
+          _entityFilterName = '';
+        case 'entityType':
+          _entityTypeFilter = null;
+        case 'date':
+          _startDateFilter = null;
+          _endDateFilter = null;
+        case 'search':
+          _searchController.clear();
+      }
+    });
+  }
+
+  List<ActiveFilter> _activeExpenseFilters(AppLocalizations l10n) {
+    final filters = <ActiveFilter>[];
+    if (_categoryFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'category',
+          label: l10n.expenseCategoryLabel(_categoryFilter!),
+        ),
+      );
+    }
+    if (_paymentMethodFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'method',
+          label: l10n.paymentMethodLabel(_paymentMethodFilter!),
+        ),
+      );
+    }
+    if (_paymentStatusFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'status',
+          label: l10n.paymentStatusLabel(_paymentStatusFilter!),
+        ),
+      );
+    }
+    if (_supplierFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'supplier',
+          label: '${l10n.t('supplierName')}: $_supplierFilter',
+        ),
+      );
+    }
+    if (_entityFilterId != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'entity',
+          label: _entityFilterName.isNotEmpty
+              ? '${l10n.t('entityName')}: $_entityFilterName'
+              : l10n.t('entitySummary'),
+        ),
+      );
+    }
+    if (_entityTypeFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'entityType',
+          label: _entityTypeLabel(l10n, _entityTypeFilter!),
+        ),
+      );
+    }
+    if (_startDateFilter != null || _endDateFilter != null) {
+      filters.add(
+        ActiveFilter(
+          id: 'date',
+          label:
+              '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} – ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
+        ),
+      );
+    }
+    if (_searchController.text.trim().isNotEmpty) {
+      filters.add(
+        ActiveFilter(
+          id: 'search',
+          label: 'Search: ${_searchController.text.trim()}',
+        ),
+      );
+    }
+    return filters;
   }
 
   Future<void> _openExpenseFilterSheet() async {
@@ -581,6 +683,52 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     }
   }
 
+  Future<void> _archiveSelectedExpenses(AppLocalizations l10n) async {
+    final controller = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
+    final result = await controller.archiveSelected(
+      archiveOne: ref.read(expenseRepositoryProvider).archiveExpense,
+      confirm: (selectedCount) async {
+        return await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: Text(
+                  l10n.t(
+                    'bulkArchiveConfirm',
+                    params: {'count': '$selectedCount'},
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(l10n.t('cancel')),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(l10n.t('archive')),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+      },
+    );
+    if (!mounted || result == null || result.cancelled) return;
+    setState(() {
+      _expenses.removeWhere((item) => result.succeeded.contains(item.id));
+    });
+    if (result.queued) {
+      await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
+      unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
+    }
+    if (result.failed.isNotEmpty) {
+      pushAppUiNotice(ref, l10n.t('bulkArchivePartialFailure'));
+    } else if (result.queued) {
+      pushAppUiNotice(ref, l10n.t('queuedForSync'));
+    }
+  }
+
   List<Expense> _filteredExpenses() {
     final search = _searchController.text.trim().toLowerCase();
     return _expenses
@@ -639,7 +787,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         .toList(growable: false);
   }
 
-  Future<void> _exportPdf() async {
+  Future<void> _exportPdf({required bool share}) async {
     final l10n = AppLocalizations.of(context);
     final expenses = _filteredExpenses();
     if (expenses.isEmpty) {
@@ -678,14 +826,27 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         endDate: _endDateFilter,
         filterSummary: filterParts.isEmpty ? null : filterParts.join(', '),
       );
-      await Printing.layoutPdf(onLayout: (_) async => bytes);
+      final actions = ReportDocumentActions();
+      final result = share
+          ? await actions.shareDocument(bytes: bytes, filename: 'expenses.pdf')
+          : await actions.printDocument(
+              bytes: bytes,
+              name: l10n.t('expenseList'),
+            );
+      if (result.isFailed && mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(appErrorMessage(l10n, result.error))),
+          );
+      }
     } catch (error) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+        ..showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
     }
   }
 
@@ -693,7 +854,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filteredExpenses();
+    final bulkState = ref.watch(transactionBulkArchiveControllerProvider);
+    final bulkController = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
     final locale = Localizations.localeOf(context).languageCode;
+    final currency =
+        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final today = DateTime.now();
     final summaryScope = workspaceId == null || workspaceId.isEmpty
@@ -714,31 +882,88 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
           context: context,
           title: l10n.t('expenseList'),
           fallbackRoute: AppRoutes.projectDetailPath(widget.projectId),
-          actions: [
-            IconButton(
-              tooltip: l10n.t('exportPdf'),
-              onPressed: _exportPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-            ),
-          ],
+          actions: bulkState.isSelecting
+              ? [
+                  IconButton(
+                    tooltip: l10n.t('selectionMode'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : () => bulkController.selectAll(
+                            filtered.map((expense) => expense.id),
+                          ),
+                    icon: const Icon(Icons.select_all),
+                  ),
+                  IconButton(
+                    tooltip: l10n.t('archiveSelected'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : () => _archiveSelectedExpenses(l10n),
+                    icon: bulkState.isInProgress
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.archive_outlined),
+                  ),
+                  IconButton(
+                    tooltip: l10n.t('cancel'),
+                    onPressed: bulkState.isInProgress
+                        ? null
+                        : bulkController.clear,
+                    icon: const Icon(Icons.close),
+                  ),
+                ]
+              : [
+                  PopupMenuButton<String>(
+                    tooltip: l10n.t('exportPdf'),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    onSelected: (value) => _exportPdf(share: value == 'share'),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'print',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.print_outlined, size: 20),
+                            const SizedBox(width: 12),
+                            Text(l10n.t('printReport')),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'share',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.ios_share, size: 20),
+                            const SizedBox(width: 12),
+                            Text(l10n.t('shareReport')),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openAddExpense,
-          icon: const Icon(Icons.add),
-          label: Text(l10n.t('addExpense')),
-        ),
+        floatingActionButton: bulkState.isSelecting
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _openAddExpense,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.t('addExpense')),
+              ),
         body: Column(
           children: [
             summaryAsync.when(
               data: (summary) => _ExpenseSummaryCards(
                 summary: summary,
                 locale: locale,
-                currency: 'EGP',
+                currency: currency,
                 l10n: l10n,
               ),
               error: (error, _) => Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text(error.toString()),
+                child: AppRecoverableError(
+                  message: appErrorMessage(l10n, error),
+                ),
               ),
               loading: () => const LinearProgressIndicator(minHeight: 2),
             ),
@@ -826,70 +1051,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                   horizontal: 16,
                   vertical: 8,
                 ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (_categoryFilter != null)
-                      FilterChip(
-                        label: Text(
-                          l10n.expenseCategoryLabel(_categoryFilter!),
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_paymentMethodFilter != null)
-                      FilterChip(
-                        label: Text(
-                          l10n.paymentMethodLabel(_paymentMethodFilter!),
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_paymentStatusFilter != null)
-                      FilterChip(
-                        label: Text(
-                          l10n.paymentStatusLabel(_paymentStatusFilter!),
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_supplierFilter != null)
-                      FilterChip(
-                        label: Text(
-                          '${l10n.t('supplierName')}: $_supplierFilter',
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_entityFilterId != null)
-                      FilterChip(
-                        label: Text(
-                          _entityFilterName.isNotEmpty
-                              ? '${l10n.t('entityName')}: $_entityFilterName'
-                              : l10n.t('entitySummary'),
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_entityTypeFilter != null)
-                      FilterChip(
-                        label: Text(_entityTypeLabel(l10n, _entityTypeFilter!)),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_startDateFilter != null || _endDateFilter != null)
-                      FilterChip(
-                        label: Text(
-                          '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} – ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
-                        ),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    if (_searchController.text.trim().isNotEmpty)
-                      FilterChip(
-                        label: Text('Search: ${_searchController.text.trim()}'),
-                        onSelected: (_) => _clearExpenseFilters(),
-                      ),
-                    ActionChip(
-                      avatar: const Icon(Icons.clear),
-                      label: Text(l10n.t('clearFilters')),
-                      onPressed: _clearExpenseFilters,
-                    ),
-                  ],
+                child: ActiveFilterBar(
+                  filters: _activeExpenseFilters(l10n),
+                  onRemove: _removeExpenseFilter,
+                  onClearAll: _clearExpenseFilters,
                 ),
               ),
             const SizedBox(height: 4),
@@ -922,20 +1087,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          const SizedBox(height: 120),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(_error.toString(), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('retry')),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 80),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: AppRecoverableError(
+              message: appErrorMessage(l10n, _error),
+              onRetry: _refresh,
             ),
           ),
         ],
@@ -943,17 +1100,27 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     }
 
     if (filtered.isEmpty) {
+      final filtersActive = _hasActiveExpenseFilters;
       return ListView(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          const SizedBox(height: 120),
-          Center(
-            child: Text(
-              _expenses.isEmpty
-                  ? l10n.t('noExpensesYet')
-                  : l10n.t('noFilterResults'),
-            ),
+          const SizedBox(height: 80),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: filtersActive
+                ? AppEmptyState(
+                    icon: Icons.filter_alt_off_outlined,
+                    message: l10n.t('noFilterResults'),
+                    actionLabel: l10n.t('clearFilters'),
+                    onAction: _clearExpenseFilters,
+                  )
+                : AppEmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    message: l10n.t('noExpensesYet'),
+                    actionLabel: l10n.t('addExpense'),
+                    onAction: _openAddExpense,
+                  ),
           ),
         ],
       );
@@ -1029,41 +1196,74 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     Expense expense,
     String locale,
   ) {
+    final bulkState = ref.watch(transactionBulkArchiveControllerProvider);
+    final bulkController = ref.read(
+      transactionBulkArchiveControllerProvider.notifier,
+    );
+    final selected = bulkState.isSelected(expense.id);
     final projectLabel = expense.projectName.isEmpty
         ? expense.projectId
         : expense.projectName;
     return Card(
       child: ListTile(
-        onTap: () => context.push(
-          AppRoutes.expenseDetailPath(expense.id, projectId: widget.projectId),
-        ),
+        selected: selected,
+        leading: bulkState.isSelecting
+            ? Checkbox(
+                value: selected,
+                onChanged: bulkState.isInProgress
+                    ? null
+                    : (_) => bulkController.toggle(expense.id),
+              )
+            : null,
+        onLongPress: bulkState.isInProgress
+            ? null
+            : () => bulkController.toggle(expense.id),
+        onTap: () {
+          if (bulkState.isSelecting) {
+            if (!bulkState.isInProgress) {
+              bulkController.toggle(expense.id);
+            }
+            return;
+          }
+          context.push(
+            AppRoutes.expenseDetailPath(
+              expense.id,
+              projectId: widget.projectId,
+            ),
+          );
+        },
         title: Text(
           '${Formatters.money(expense.amount, currencyCode: expense.currency, locale: locale)} | ${l10n.expenseCategoryLabel(expense.category)}',
         ),
         subtitle: Text(_expenseSubtitle(expense, projectLabel, l10n)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (expense.attachments.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: Icon(Icons.attach_file, size: 20),
+        trailing: bulkState.isSelecting
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (expense.attachments.isNotEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: Icon(Icons.attach_file, size: 20),
+                    ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        await _openEditExpense(expense);
+                        return;
+                      }
+                      await _archiveExpense(context, l10n, expense);
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.t('archive')),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            PopupMenuButton<String>(
-              onSelected: (value) async {
-                if (value == 'edit') {
-                  await _openEditExpense(expense);
-                  return;
-                }
-                await _archiveExpense(context, l10n, expense);
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
-                PopupMenuItem(value: 'delete', child: Text(l10n.t('archive'))),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

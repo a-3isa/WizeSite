@@ -22,10 +22,7 @@ void main() {
   });
 
   test('treats not-found and invalid-argument as terminal invalid targets', () {
-    expect(
-      SyncErrorClassifier.isTerminalCode('not-found'),
-      isTrue,
-    );
+    expect(SyncErrorClassifier.isTerminalCode('not-found'), isTrue);
     expect(
       SyncErrorClassifier.categoryFrom(
         code: 'invalid-argument',

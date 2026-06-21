@@ -1,6 +1,8 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/core/services/voice_recorder_service.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_record_screen.dart';
@@ -24,6 +26,11 @@ void main() {
           voiceRecorderServiceProvider.overrideWithValue(recorder),
           microphonePermissionServiceProvider.overrideWithValue(
             _FakeMicrophonePermissionService(),
+          ),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream<UserSettings>.value(
+              UserSettings.defaults(userId: '', email: ''),
+            ),
           ),
         ],
         child: const MaterialApp(

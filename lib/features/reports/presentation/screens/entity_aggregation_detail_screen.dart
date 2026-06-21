@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -6,32 +7,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
+typedef EntitySummaryPdfAction =
+    Future<void> Function(
+      BuildContext context,
+      WidgetRef ref,
+      EntitySummary summary,
+    );
+
 class EntityAggregationDetailScreen extends ConsumerWidget {
-  const EntityAggregationDetailScreen({required this.summary, super.key});
+  const EntityAggregationDetailScreen({
+    required this.summary,
+    this.onExportPdf,
+    super.key,
+  });
 
   final EntitySummary summary;
+  final EntitySummaryPdfAction? onExportPdf;
 
   Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
-    final currency =
-        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
     try {
-      final bytes = await const ReportPdfExporter().buildEntitySummaryReportPdf(
-        l10n: l10n,
-        summaries: [summary],
-        selectedType: 'all',
-        currency: currency,
-      );
-      await Printing.layoutPdf(onLayout: (_) async => bytes);
+      final injectedExport = onExportPdf;
+      if (injectedExport != null) {
+        await injectedExport(context, ref, summary);
+      } else {
+        await _buildAndPrintPdf(context, ref);
+      }
     } catch (error) {
       if (!context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('${l10n.t('failed')}: $error')));
+        ..showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
     }
+  }
+
+  Future<void> _buildAndPrintPdf(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final currency =
+        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
+        'EGP';
+    final bytes = await const ReportPdfExporter().buildEntitySummaryReportPdf(
+      l10n: l10n,
+      summaries: [summary],
+      selectedType: 'all',
+      currency: currency,
+    );
+    await Printing.layoutPdf(onLayout: (_) async => bytes);
   }
 
   @override
@@ -99,10 +122,7 @@ class _MetricRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(label),
-      trailing: Text(
-        value,
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
+      trailing: Text(value, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -183,7 +184,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString());
+        setState(() => _error = appErrorMessage(l10n, e));
       }
     } finally {
       if (mounted) {

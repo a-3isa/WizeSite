@@ -1,36 +1,37 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
-import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final notificationItemsProvider = StreamProvider((ref) {
-  final workspaceId = ref.watch(activeWorkspaceIdProvider);
-  final userId = ref.watch(activeUserIdProvider);
-  if (workspaceId == null ||
-      workspaceId.isEmpty ||
-      userId == null ||
-      userId.isEmpty) {
-    return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
-  }
-  return ref
-      .watch(firestoreProvider)
-      .collection('notifications')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('targetUserId', isEqualTo: userId)
-      .orderBy('createdAt', descending: true)
-      .limit(50)
-      .snapshots();
-});
-
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  final Set<String> _markingRead = {};
+
+  void _markDisplayedRead(Iterable<String> ids) {
+    final pending = ids.where((id) => _markingRead.add(id)).toList();
+    if (pending.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await ref.read(notificationRepositoryProvider).markRead(pending);
+      } finally {
+        _markingRead.removeAll(pending);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final notificationsAsync = ref.watch(notificationItemsProvider);
     return AppBackScope(
@@ -42,13 +43,24 @@ class NotificationsScreen extends ConsumerWidget {
           fallbackRoute: AppRoutes.dashboard,
         ),
         body: notificationsAsync.when(
-          data: (snap) {
-            if (snap.docs.isEmpty) {
-              return Center(child: Text(l10n.t('noNotificationsYet')));
+          data: (items) {
+            if (items.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: AppEmptyState(
+                    icon: Icons.notifications_none,
+                    message: l10n.t('noNotificationsYet'),
+                  ),
+                ),
+              );
             }
+            _markDisplayedRead(
+              items.where((item) => item.isUnread).map((item) => item.id),
+            );
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: snap.docs.length + 1,
+              itemCount: items.length + 1,
               separatorBuilder: (_, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -60,19 +72,28 @@ class NotificationsScreen extends ConsumerWidget {
                     ),
                   );
                 }
-                final item = snap.docs[index - 1].data();
+                final item = items[index - 1];
                 return Card(
                   child: ListTile(
-                    leading: const Icon(Icons.notification_important),
-                    title: Text(item['title'] as String? ?? ''),
-                    subtitle: Text(item['message'] as String? ?? ''),
+                    leading: Icon(
+                      item.isUnread
+                          ? Icons.notification_important
+                          : Icons.notifications_none,
+                    ),
+                    title: Text(item.title),
+                    subtitle: Text(item.message),
                   ),
                 );
               },
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: AppRecoverableError(message: appErrorMessage(l10n, error)),
+            ),
+          ),
+          loading: () => const AppLoadingSkeleton(),
         ),
       ),
     );

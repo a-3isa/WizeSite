@@ -45,6 +45,18 @@ class VoiceRecorderService {
     return '$trimmed${separator}voice_$timestamp$recordingFileExtension';
   }
 
+  /// Emits the live microphone level normalized to the 0.0–1.0 range, derived
+  /// from the recorder's dBFS amplitude readings.
+  Stream<double> amplitudeStream({
+    Duration interval = const Duration(milliseconds: 200),
+  }) {
+    return _recorder.onAmplitudeChanged(interval).map((amplitude) {
+      const minDb = -45.0;
+      final current = amplitude.current.clamp(minDb, 0.0);
+      return (current - minDb) / (0.0 - minDb);
+    });
+  }
+
   Future<String?> stop() {
     return _recorder.stop();
   }

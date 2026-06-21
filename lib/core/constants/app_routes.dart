@@ -15,6 +15,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String profileEdit = '/settings/profile';
   static const String teamManagement = '/settings/team';
+  static const String syncStatus = '/settings/sync';
 
   static const String createProject = '/create-project';
   static const String projectDetail = '/project/:id';
@@ -33,6 +34,9 @@ class AppRoutes {
   static const String voiceExpense = '/voice-expense';
   static const String addPayment = '/add-payment';
   static const String workers = '/workers';
+  static const String contractorsDirectory = '/contractors';
+  static const String equipmentDirectory = '/equipment';
+  static const String transportProvidersDirectory = '/transport-providers';
   static const String workerDetail = '/worker/:id';
   static const String workerEdit = '/worker/:id/edit';
   static const String addWorker = '/add-worker';
@@ -64,11 +68,17 @@ class AppRoutes {
       _withOptionalQuery(addPayment, {'projectId': projectId});
   static String paymentsPath({String? projectId}) =>
       _withOptionalQuery(payments, {'projectId': projectId});
-  static String paymentDetailPath(String id) => '/payment/$id';
-  static String paymentEditPath(String id) => '/payment/$id/edit';
+  static String paymentDetailPath(String id, {String? projectId}) =>
+      _withOptionalQuery('/payment/$id', {'projectId': projectId});
+  static String paymentEditPath(String id, {String? projectId}) =>
+      _withOptionalQuery('/payment/$id/edit', {'projectId': projectId});
 
   static String workerDetailPath(String id) => '/worker/$id';
   static String workerEditPath(String id) => '/worker/$id/edit';
+  static String contractorsDirectoryPath() => contractorsDirectory;
+  static String equipmentDirectoryPath() => equipmentDirectory;
+  static String transportProvidersDirectoryPath() =>
+      transportProvidersDirectory;
   static String workerEntryPath(String id, {String? projectId}) =>
       _withOptionalQuery('/worker-entry/$id', {'projectId': projectId});
   static String workerAccountingPath(
@@ -101,8 +111,15 @@ class AppRoutes {
   static String reportsPath({String? projectId}) =>
       _withOptionalQuery(reports, {'projectId': projectId});
   static String entitySummaryPath() => entitySummary;
-  static String subscriptionLimitPath(String limitType) =>
-      _withOptionalQuery(subscriptionLimit, {'limit': limitType});
+  static String subscriptionLimitPath(
+    String limitType, {
+    int? current,
+    int? max,
+  }) => _withOptionalQuery(subscriptionLimit, {
+    'limit': limitType,
+    'current': current?.toString(),
+    'max': max?.toString(),
+  });
 
   static String _withOptionalQuery(
     String path,

@@ -331,64 +331,109 @@ void main() {
     expect(find.textContaining('project_2'), findsNothing);
   });
 
-  testWidgets('PaymentsScreen shows active search chip and clears filters', (
-    tester,
-  ) async {
-    final fakeProjectRepository = _FakeProjectRepository(
-      activeProjects: [_project(1)],
-      firstPage: const FirestorePage<Project>(items: [], hasMore: false),
-    );
-    final fakePaymentRepository = _FakePaymentRepository({
-      null: [
-        _payment(
-          id: 'pay_1',
-          projectId: 'project_1',
-          amount: 100,
-          paymentStatus: 'partial',
-          entityName: 'Steel Supplier',
-          description: 'invoice advance',
-        ),
-        _payment(
-          id: 'pay_2',
-          projectId: 'project_1',
-          amount: 200,
-          entityName: 'Paint Crew',
-        ),
-      ],
-    });
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
-          projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
-          paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+  testWidgets(
+    'PaymentsScreen supports compact filters, bulk archive, and empty CTA',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final fakeProjectRepository = _FakeProjectRepository(
+        activeProjects: [_project(1)],
+        firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+      );
+      final fakePaymentRepository = _FakePaymentRepository({
+        null: [
+          _payment(
+            id: 'pay_1',
+            projectId: 'project_1',
+            amount: 100,
+            paymentStatus: 'partial',
+            entityName: 'Steel Supplier',
+            description: 'invoice advance',
+          ),
+          _payment(
+            id: 'pay_2',
+            projectId: 'project_1',
+            amount: 200,
+            entityName: 'Paint Crew',
+          ),
         ],
-        child: MaterialApp.router(routerConfig: _paymentsRouter()),
-      ),
-    );
+      });
 
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+            projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
+            paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+          ],
+          child: MaterialApp.router(routerConfig: _paymentsRouter()),
+        ),
+      );
 
-    expect(find.textContaining('100'), findsOneWidget);
-    expect(find.textContaining('200'), findsOneWidget);
-    expect(find.textContaining('Steel Supplier'), findsOneWidget);
-    expect(find.textContaining('Partial'), findsOneWidget);
+      await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, 'Search'), 'invoice');
-    await tester.pumpAndSettle();
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsOneWidget);
+      expect(find.textContaining('Steel Supplier'), findsOneWidget);
+      expect(find.textContaining('Partial'), findsOneWidget);
+      expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Group by entity'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
-    expect(find.text('Search: invoice'), findsOneWidget);
-    expect(find.text('Clear filters'), findsOneWidget);
-    expect(find.textContaining('100'), findsOneWidget);
-    expect(find.textContaining('200'), findsNothing);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search'),
+        'invoice',
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Clear filters'));
-    await tester.pumpAndSettle();
+      expect(find.text('Search: invoice'), findsOneWidget);
+      expect(find.byTooltip('Remove filter'), findsOneWidget);
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsNothing);
 
-    expect(find.textContaining('100'), findsOneWidget);
-    expect(find.textContaining('200'), findsOneWidget);
-  });
+      await tester.tap(find.byTooltip('Remove filter'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search'),
+        'missing',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No matching results.'), findsOneWidget);
+      expect(find.text('Clear filters'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.textContaining('100').first);
+      await tester.pump();
+
+      expect(find.byTooltip('Archive selected'), findsOneWidget);
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      expect(find.text('Archive 1 selected items?'), findsOneWidget);
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('100'), findsNothing);
+
+      await tester.ensureVisible(find.textContaining('200').first);
+      await tester.pumpAndSettle();
+      await tester.longPress(find.textContaining('200').first);
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('No payments yet.'), findsOneWidget);
+      expect(find.text('Add Payment'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('ProjectsScreen loads the next page when scrolled', (
     tester,

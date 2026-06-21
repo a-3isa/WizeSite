@@ -69,9 +69,7 @@ class GoogleAuthService {
     );
     final serverClientId = kIsWeb ? null : (rawId.isEmpty ? null : rawId);
 
-    await _googleSignIn.initialize(
-      serverClientId: serverClientId,
-    );
+    await _googleSignIn.initialize(serverClientId: serverClientId);
     _initialized = true;
   }
 }

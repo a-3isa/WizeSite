@@ -4,9 +4,12 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -55,6 +58,10 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   bool _isLoadingMore = false;
   bool _hasMore = true;
   String? _workspaceId;
+  String? _statusFilter;
+  ProjectBrowseSort _sort = ProjectBrowseSort.recent;
+  bool _canAccessFinancial = false;
+  bool _roleResolved = false;
 
   @override
   void initState() {
@@ -79,6 +86,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         unawaited(_refreshIfCurrentRoute());
       },
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
@@ -138,21 +146,6 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       return;
     }
 
-    final provisioned = ref.read(projectsProvider).valueOrNull;
-    if (provisioned != null && mounted) {
-      setState(() {
-        _projects
-          ..clear()
-          ..addAll(provisioned);
-        _cursor = null;
-        _error = null;
-        _hasMore = false;
-        _isLoadingInitial = false;
-        _isLoadingMore = false;
-      });
-      return;
-    }
-
     if (mounted) {
       setState(() {
         _projects.clear();
@@ -200,13 +193,25 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
 
     try {
-      final page = await ref
-          .read(projectRepositoryProvider)
-          .fetchProjectsPage(
-            workspaceId,
-            cursor: reset ? null : _cursor,
-            pageSize: _pageSize,
-          );
+      final repository = ref.read(projectRepositoryProvider);
+      final page = repository is ProjectBrowseRepository
+          ? await (repository as ProjectBrowseRepository)
+                .fetchProjectBrowsePage(
+                  ProjectBrowseQuery(
+                    workspaceId: workspaceId,
+                    status: _statusFilter,
+                    sort: _canAccessFinancial || !_sort.isFinancial
+                        ? _sort
+                        : ProjectBrowseSort.recent,
+                    pageSize: _pageSize,
+                  ),
+                  cursor: reset ? null : _cursor,
+                )
+          : await repository.fetchProjectsPage(
+              workspaceId,
+              cursor: reset ? null : _cursor,
+              pageSize: _pageSize,
+            );
       if (!mounted) {
         return;
       }
@@ -243,7 +248,25 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
   }
 
-  Future<void> _archiveProject(Project project) async {
+  Future<void> _archiveProject(Project project, AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.t('archive')),
+        content: Text(l10n.t('confirmArchiveProject')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.t('archive')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     await ref.read(projectRepositoryProvider).archiveProject(project.id);
     if (!mounted) {
       return;
@@ -304,20 +327,24 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(projectsProvider, (_, next) {
-      if (!mounted) return;
-      final items = next.valueOrNull;
-      if (items != null) {
-        setState(() {
-          _projects
-            ..clear()
-            ..addAll(items);
-          _isLoadingInitial = false;
-          _hasMore = false;
-        });
-      }
-    });
     final l10n = AppLocalizations.of(context);
+    final roleAsync = ref.watch(currentAccountingRoleProvider);
+    final canAccessFinancial =
+        roleAsync.valueOrNull?.canAccessAccounting == true;
+    if (roleAsync.hasValue &&
+        (!_roleResolved || _canAccessFinancial != canAccessFinancial)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _roleResolved = true;
+          _canAccessFinancial = canAccessFinancial;
+          if (!canAccessFinancial && _sort.isFinancial) {
+            _sort = ProjectBrowseSort.recent;
+          }
+        });
+        unawaited(_refresh());
+      });
+    }
     final filtered = _filteredProjects();
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
@@ -356,6 +383,33 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               ),
             ),
             const SizedBox(height: 12),
+            _ProjectBrowseControls(
+              status: _statusFilter,
+              sort: _sort,
+              canAccessFinancial: _canAccessFinancial,
+              l10n: l10n,
+              onStatusChanged: (value) {
+                setState(() => _statusFilter = value);
+                unawaited(_refresh());
+              },
+              onSortChanged: (value) {
+                setState(() => _sort = value);
+                unawaited(_refresh());
+              },
+            ),
+            if (_roleResolved && !_canAccessFinancial)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(l10n.t('projectFinancialAccessRestricted')),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
@@ -387,19 +441,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(
-                    _error.toString(),
-                    style: const TextStyle(color: AppColors.danger),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('retry')),
-                  ),
-                ],
+              child: AppRecoverableError(
+                message: appErrorMessage(l10n, _error),
+                onRetry: _refresh,
               ),
             ),
           ),
@@ -541,39 +585,54 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          Formatters.money(
-                            project.netProfit,
-                            currencyCode: currency,
-                            locale: locale,
+                    if (_canAccessFinancial) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                positiveProfit
+                                    ? Icons.trending_up
+                                    : Icons.trending_down,
+                                size: 18,
+                                color: profitColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                Formatters.money(
+                                  project.netProfit,
+                                  currencyCode: currency,
+                                  locale: locale,
+                                ),
+                                style: TextStyle(
+                                  color: profitColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
-                          style: TextStyle(
-                            color: profitColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          const SizedBox(height: 4),
+                          Text(
+                            positiveProfit ? l10n.t('profit') : l10n.t('loss'),
+                            style: const TextStyle(
+                              color: AppColors.textBody,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          positiveProfit ? l10n.t('profit') : l10n.t('loss'),
-                          style: const TextStyle(
-                            color: AppColors.textBody,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     PopupMenuButton<String>(
                       onSelected: (value) async {
                         if (value == 'delete') {
                           await _deleteProject(project, l10n);
                           return;
                         }
-                        await _archiveProject(project);
+                        await _archiveProject(project, l10n);
                       },
                       itemBuilder: (context) => [
                         PopupMenuItem(
@@ -612,6 +671,88 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _ProjectBrowseControls extends StatelessWidget {
+  const _ProjectBrowseControls({
+    required this.status,
+    required this.sort,
+    required this.canAccessFinancial,
+    required this.l10n,
+    required this.onStatusChanged,
+    required this.onSortChanged,
+  });
+
+  final String? status;
+  final ProjectBrowseSort sort;
+  final bool canAccessFinancial;
+  final AppLocalizations l10n;
+  final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<ProjectBrowseSort> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final statuses = <(String?, String)>[
+      (null, l10n.t('allStatuses')),
+      ('active', l10n.projectStatusLabel('active')),
+      ('completed', l10n.projectStatusLabel('completed')),
+      ('paused', l10n.projectStatusLabel('paused')),
+    ];
+    final sorts = <(ProjectBrowseSort, String)>[
+      (ProjectBrowseSort.recent, l10n.t('projectSortRecent')),
+      (ProjectBrowseSort.name, l10n.t('projectSortName')),
+      if (canAccessFinancial) ...[
+        (ProjectBrowseSort.highestExpense, l10n.t('projectSortHighestExpense')),
+        (ProjectBrowseSort.highestIncome, l10n.t('projectSortHighestIncome')),
+        (ProjectBrowseSort.highestNet, l10n.t('projectSortHighestNet')),
+      ],
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: statuses
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ChoiceChip(
+                        label: Text(item.$2),
+                        selected: status == item.$1,
+                        onSelected: (_) => onStatusChanged(item.$1),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: sorts
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ChoiceChip(
+                        label: Text(item.$2),
+                        selected: sort == item.$1,
+                        onSelected: (_) => onSortChanged(item.$1),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }

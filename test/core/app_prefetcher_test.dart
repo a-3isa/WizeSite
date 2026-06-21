@@ -40,6 +40,17 @@ void main() {
     ]);
   });
 
+  test('warmReports primes reportable project selection', () {
+    final warmed = <AppPrefetchTarget>[];
+    final prefetcher = AppPrefetcher(
+      warm: ({required target, projectId}) => warmed.add(target),
+    );
+
+    prefetcher.warmReports();
+
+    expect(warmed, [AppPrefetchTarget.allProjects]);
+  });
+
   test('warmProjectReport carries the target project id', () {
     final calls = <({AppPrefetchTarget target, String? projectId})>[];
     final prefetcher = AppPrefetcher(
@@ -98,51 +109,60 @@ void main() {
 
     await prefetcher.warmCritical();
 
-    expect(warmed, containsAll([
-      AppPrefetchTarget.dashboardSummary,
-      AppPrefetchTarget.currentSubscription,
-      AppPrefetchTarget.currentUsage,
-      AppPrefetchTarget.currentUserSettings,
-      AppPrefetchTarget.projects,
-      AppPrefetchTarget.workers,
-    ]));
+    expect(
+      warmed,
+      containsAll([
+        AppPrefetchTarget.dashboardSummary,
+        AppPrefetchTarget.currentSubscription,
+        AppPrefetchTarget.currentUsage,
+        AppPrefetchTarget.currentUserSettings,
+        AppPrefetchTarget.projects,
+        AppPrefetchTarget.workers,
+      ]),
+    );
     expect(warmed, hasLength(6));
   });
 
-  test('warmCritical returns a future that resolves when all warms complete', () async {
-    final completers = <AppPrefetchTarget, Completer<void>>{};
-    final prefetcher = AppPrefetcher(
-      warm: ({required target, projectId}) {
-        return completers.putIfAbsent(target, Completer<void>.new).future;
-      },
-    );
-
-    var resolved = false;
-    unawaited(prefetcher.warmCritical().then((_) => resolved = true));
-
-    await Future<void>.delayed(Duration.zero);
-    expect(resolved, isFalse);
-
-    for (final c in completers.values) {
-      c.complete();
-    }
-    await Future<void>.delayed(Duration.zero);
-    expect(resolved, isTrue);
-  });
-
-  test('warmCritical resolves after timeout even when warms are still pending', () {
-    fakeAsync((fake) {
+  test(
+    'warmCritical returns a future that resolves when all warms complete',
+    () async {
+      final completers = <AppPrefetchTarget, Completer<void>>{};
       final prefetcher = AppPrefetcher(
-        warm: ({required target, projectId}) => Completer<void>().future,
+        warm: ({required target, projectId}) {
+          return completers.putIfAbsent(target, Completer<void>.new).future;
+        },
       );
+
       var resolved = false;
       unawaited(prefetcher.warmCritical().then((_) => resolved = true));
 
-      fake.elapse(const Duration(seconds: 4));
+      await Future<void>.delayed(Duration.zero);
       expect(resolved, isFalse);
 
-      fake.elapse(const Duration(seconds: 2));
+      for (final c in completers.values) {
+        c.complete();
+      }
+      await Future<void>.delayed(Duration.zero);
       expect(resolved, isTrue);
-    });
-  });
+    },
+  );
+
+  test(
+    'warmCritical resolves after timeout even when warms are still pending',
+    () {
+      fakeAsync((fake) {
+        final prefetcher = AppPrefetcher(
+          warm: ({required target, projectId}) => Completer<void>().future,
+        );
+        var resolved = false;
+        unawaited(prefetcher.warmCritical().then((_) => resolved = true));
+
+        fake.elapse(const Duration(seconds: 4));
+        expect(resolved, isFalse);
+
+        fake.elapse(const Duration(seconds: 2));
+        expect(resolved, isTrue);
+      });
+    },
+  );
 }

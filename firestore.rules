@@ -69,6 +69,51 @@ service cloud.firestore {
       return type in ["daily", "project"];
     }
 
+    function validWorkerStatus(status) {
+      return status in ["active", "inactive", "terminated"];
+    }
+
+    function validPaymentStatus(status) {
+      return status in ["paid", "unpaid", "partial"];
+    }
+
+    function validAccountingRecord(data) {
+      return canAccessAccounting(data.workspaceId)
+        && data.workspaceId is string
+        && data.workspaceId.size() > 0
+        && data.projectId is string
+        && data.projectId.size() > 0
+        && data.description is string
+        && data.amount is number
+        && data.amount > 0
+        && data.date is timestamp
+        && data.paymentMethod is string
+        && validPaymentStatus(data.paymentStatus)
+        && data.notes is string;
+    }
+
+    function validWorkerAccountingRecord(data) {
+      return validAccountingRecord(data)
+        && data.workerId is string
+        && data.workerId.size() > 0
+        && data.workerName is string
+        && (
+          data.paymentStatus != "partial"
+          || (
+            data.paidAmount is number
+            && data.paidAmount > 0
+            && data.paidAmount < data.amount
+          )
+        );
+    }
+
+    function validDomainAccountingRecord(data, ownerIdField, ownerNameField) {
+      return validAccountingRecord(data)
+        && data[ownerIdField] is string
+        && data[ownerIdField].size() > 0
+        && data[ownerNameField] is string;
+    }
+
     function validWorkerDailyWageForBillingType(dailyWage, billingType) {
       return (
         billingType == "daily"
@@ -199,7 +244,11 @@ service cloud.firestore {
         )
         && request.resource.data.workerType is string
         && request.resource.data.notes is string
-        && request.resource.data.isArchived is bool;
+        && request.resource.data.isArchived is bool
+        && (
+          !request.resource.data.keys().hasAny(["status"])
+          || validWorkerStatus(request.resource.data.status)
+        );
     }
 
     function validWorkerUpdate() {
@@ -219,6 +268,10 @@ service cloud.firestore {
         && request.resource.data.workerType is string
         && request.resource.data.notes is string
         && request.resource.data.isArchived is bool
+        && (
+          !request.resource.data.keys().hasAny(["status"])
+          || validWorkerStatus(request.resource.data.status)
+        )
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "name",
@@ -227,6 +280,7 @@ service cloud.firestore {
           "billingType",
           "workerType",
           "notes",
+          "status",
           "isArchived",
           "updatedAt"
         ]);
@@ -291,10 +345,59 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /worker_accounting_records/{recordId} {
+      allow read: if canAccessAccounting(resource.data.workspaceId);
+      allow create: if validWorkerAccountingRecord(request.resource.data);
+      allow update: if canAccessAccounting(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && validWorkerAccountingRecord(request.resource.data);
+      allow delete: if canAccessAccounting(resource.data.workspaceId);
+    }
+
+    match /contractor_accounting_records/{recordId} {
+      allow read: if canAccessAccounting(resource.data.workspaceId);
+      allow create: if validDomainAccountingRecord(request.resource.data, "contractorId", "contractorName");
+      allow update: if canAccessAccounting(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && validDomainAccountingRecord(request.resource.data, "contractorId", "contractorName");
+      allow delete: if canAccessAccounting(resource.data.workspaceId);
+    }
+
+    match /equipment_accounting_records/{recordId} {
+      allow read: if canAccessAccounting(resource.data.workspaceId);
+      allow create: if validDomainAccountingRecord(request.resource.data, "equipmentId", "equipmentName");
+      allow update: if canAccessAccounting(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && validDomainAccountingRecord(request.resource.data, "equipmentId", "equipmentName");
+      allow delete: if canAccessAccounting(resource.data.workspaceId);
+    }
+
+    match /transport_provider_accounting_records/{recordId} {
+      allow read: if canAccessAccounting(resource.data.workspaceId);
+      allow create: if validDomainAccountingRecord(request.resource.data, "providerId", "providerName");
+      allow update: if canAccessAccounting(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && validDomainAccountingRecord(request.resource.data, "providerId", "providerName");
+      allow delete: if canAccessAccounting(resource.data.workspaceId);
+    }
+
     match /workers/{workerId} {
       allow read: if inWorkspace(resource.data.workspaceId);
       allow create: if validWorkerWrite();
       allow update: if validWorkerUpdate();
+      allow delete: if false;
+    }
+
+    match /entities/{entityId} {
+      // Directory + autocomplete reads are visible to any workspace member.
+      allow read: if inWorkspace(resource.data.workspaceId);
+      allow create: if inWorkspace(request.resource.data.workspaceId)
+        && request.resource.data.workspaceId is string
+        && request.resource.data.workspaceId.size() > 0
+        && request.resource.data.name is string;
+      // Members may touch lastUsedAt / id / attachments but not reassign the workspace.
+      allow update: if inWorkspace(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId;
       allow delete: if false;
     }
 
@@ -312,16 +415,26 @@ service cloud.firestore {
       allow read: if signedIn()
         && request.auth.uid == resource.data.targetUserId
         && inWorkspace(resource.data.workspaceId);
-      allow write: if false;
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.targetUserId
+        && inWorkspace(resource.data.workspaceId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt"])
+        && request.resource.data.readAt is timestamp;
+      allow create, delete: if false;
     }
 
     match /workspace_metrics/{workspaceId} {
-      allow read: if inWorkspace(workspaceId);
+      allow read: if canAccessAccounting(workspaceId);
       allow write: if false;
     }
 
     match /project_metrics/{projectId} {
-      allow read: if inWorkspace(resource.data.workspaceId);
+      allow read: if canAccessAccounting(resource.data.workspaceId);
+      allow write: if false;
+    }
+
+    match /worker_accounting_summaries/{summaryId} {
+      allow read: if canAccessAccounting(resource.data.workspaceId);
       allow write: if false;
     }
 

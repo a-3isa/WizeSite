@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -64,17 +65,20 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     try {
       String? photoUrl = settings.photoUrl;
       if (_localPhotoPath != null && _localPhotoPath!.isNotEmpty) {
-        photoUrl = await ref.read(profileRepositoryProvider).uploadProfilePhoto(
+        photoUrl = await ref
+            .read(profileRepositoryProvider)
+            .uploadProfilePhoto(
               userId: userId,
               localFilePath: _localPhotoPath!,
             );
       }
 
-      await ref.read(profileRepositoryProvider).updateProfile(
-            fullName: fullName,
-            photoUrl: photoUrl,
-          );
-      await ref.read(userSettingsRepositoryProvider).cacheProfileUpdate(
+      await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(fullName: fullName, photoUrl: photoUrl);
+      await ref
+          .read(userSettingsRepositoryProvider)
+          .cacheProfileUpdate(
             userId: userId,
             fullName: fullName,
             photoUrl: photoUrl,
@@ -85,7 +89,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = appErrorMessage(l10n, error));
       }
     } finally {
       if (mounted) {
@@ -115,12 +119,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                   : settings.fullName;
             }
 
-            final ImageProvider<Object>? imageProvider =
-                _localPhotoPath != null
-                    ? FileImage(File(_localPhotoPath!))
-                    : (settings.photoUrl.isNotEmpty
-                        ? NetworkImage(settings.photoUrl)
-                        : null);
+            final ImageProvider<Object>? imageProvider = _localPhotoPath != null
+                ? FileImage(File(_localPhotoPath!))
+                : (settings.photoUrl.isNotEmpty
+                      ? NetworkImage(settings.photoUrl)
+                      : null);
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -179,7 +182,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
           loading: () => const SizedBox.shrink(),
         ),
       ),

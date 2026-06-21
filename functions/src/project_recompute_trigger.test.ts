@@ -83,6 +83,20 @@ function workerEntryWriteEvent(
   };
 }
 
+function workerAccountingWriteEvent(
+  before: TriggerData | undefined,
+  after: TriggerData | undefined,
+  recordId = "worker_record_1",
+) {
+  return {
+    data: {
+      before: snapshotOf(before),
+      after: snapshotOf(after),
+    },
+    params: { recordId },
+  };
+}
+
 test("summary builder maintains project, weekly, entity, and category payloads", async () => {
   const { buildAccountingSummaryPayloads } = await import("./index");
   const now = new Date(Date.UTC(2026, 4, 28, 10));
@@ -180,6 +194,75 @@ test("summary builder maintains project, weekly, entity, and category payloads",
   assert.equal(Number(laborSummary.transactionCount ?? 0), 1);
 });
 
+test("worker accounting summary builder excludes unresolved legacy partials from confirmed totals", async () => {
+  const { buildWorkerAccountingSummaryPayload } = await import("./index");
+
+  const summary = buildWorkerAccountingSummaryPayload({
+    workspaceId: "workspace_1",
+    workerId: "worker_1",
+    records: [
+      { amount: 100, paymentStatus: "paid" },
+      { amount: 200, paymentStatus: "unpaid" },
+      { amount: 300, paymentStatus: "partial", paidAmount: 125 },
+      { amount: 400, paymentStatus: "partial" },
+    ],
+  });
+
+  assert.equal(Number(summary.totalAmount ?? 0), 1000);
+  assert.equal(Number(summary.confirmedPaid ?? 0), 225);
+  assert.equal(Number(summary.confirmedOutstanding ?? 0), 375);
+  assert.equal(Number(summary.unresolvedLegacyCount ?? 0), 1);
+  assert.equal(Number(summary.recordCount ?? 0), 4);
+});
+
+test("workspace metrics builder composes bounded financial dashboard data", async () => {
+  const {buildWorkspaceMetricsPayload} = await import("./index");
+  const payload = buildWorkspaceMetricsPayload("workspace_1", [
+    {
+      projectId: "project_1",
+      status: "active",
+      isArchived: false,
+      totalExpenses: 500,
+      totalIncome: 900,
+      weeklyExpenses: 80,
+      weeklyIncome: 120,
+      categoryTotals: {materials: 300, labor: 200},
+      entityTotals: {Acme: 400},
+      paymentMethodTotals: {cash: 120},
+      totalLaborCost: 200,
+      totalEquipmentCost: 40,
+      recentTransactions: [
+        {id: "payment_1", type: "payment", title: "Client", amount: 120, date: "2026-06-15T10:00:00.000Z"},
+      ],
+    },
+    {
+      projectId: "project_2",
+      status: "completed",
+      isArchived: false,
+      totalExpenses: 100,
+      totalIncome: 50,
+      weeklyExpenses: 20,
+      weeklyIncome: 10,
+      categoryTotals: {materials: 100},
+      entityTotals: {Acme: 50, Beta: 90},
+      paymentMethodTotals: {bank: 10},
+      totalLaborCost: 0,
+      totalEquipmentCost: 10,
+      recentTransactions: [],
+    },
+  ]);
+
+  assert.equal(payload.totalProjects, 2);
+  assert.equal(payload.activeProjects, 1);
+  assert.equal(payload.totalExpenses, 600);
+  assert.equal(payload.totalIncome, 950);
+  assert.equal(payload.weeklyExpenses, 100);
+  assert.equal(payload.weeklyIncome, 130);
+  assert.equal(payload.topCategory, "materials");
+  assert.equal(payload.topEntity, "Acme");
+  assert.equal((payload.recentTransactions as unknown[]).length, 1);
+});
+
 if (!emulatorHost) {
   test(
     "Project trigger emulator tests require FIRESTORE_EMULATOR_HOST (skipped)",
@@ -198,6 +281,9 @@ if (!emulatorHost) {
   let handleExpenseWriteRecompute: RecomputeHandler<{ expenseId?: string }>;
   let handlePaymentWriteRecompute: RecomputeHandler<{ paymentId?: string }>;
   let handleWorkerEntryWriteRecompute: RecomputeHandler<{ entryId?: string }>;
+  let handleWorkerAccountingWriteRecompute: RecomputeHandler<{
+    recordId?: string;
+  }>;
   let createExpenseWithQuotaForUser: (
     uid: string,
     data: Record<string, unknown>,
@@ -313,6 +399,8 @@ if (!emulatorHost) {
     handlePaymentWriteRecompute = indexModule.handlePaymentWriteRecompute;
     handleWorkerEntryWriteRecompute =
       indexModule.handleWorkerEntryWriteRecompute;
+    handleWorkerAccountingWriteRecompute =
+      indexModule.handleWorkerAccountingWriteRecompute;
     createExpenseWithQuotaForUser = indexModule.createExpenseWithQuotaForUser;
     createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
     createWorkerEntryWithQuotaForUser =
@@ -616,6 +704,60 @@ if (!emulatorHost) {
       "worker-entry recompute must not mutate projects/{projectId}",
     );
     assert.equal(metricsSnap.exists, true);
+  });
+
+  test("worker accounting recompute maintains exact worker summary", async () => {
+    await seedRecomputeInputs();
+    const paidRecordRef = db
+      .collection("worker_accounting_records")
+      .doc("worker_record_paid");
+    const partialRecordRef = db
+      .collection("worker_accounting_records")
+      .doc("worker_record_partial");
+    await paidRecordRef.set({
+      workspaceId,
+      projectId: "project_1",
+      workerId: "worker_1",
+      workerName: "Worker One",
+      description: "Paid wage",
+      amount: 100,
+      paymentMethod: "cash",
+      paymentStatus: "paid",
+      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      notes: "",
+    });
+    await partialRecordRef.set({
+      workspaceId,
+      projectId: "project_1",
+      workerId: "worker_1",
+      workerName: "Worker One",
+      description: "Partial wage",
+      amount: 300,
+      paidAmount: 125,
+      paymentMethod: "cash",
+      paymentStatus: "partial",
+      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      notes: "",
+    });
+
+    const partialAfter = (await partialRecordRef.get()).data() as TriggerData;
+    await handleWorkerAccountingWriteRecompute(
+      workerAccountingWriteEvent(
+        undefined,
+        partialAfter,
+        "worker_record_partial",
+      ),
+    );
+
+    const summarySnap = await db
+      .collection("worker_accounting_summaries")
+      .doc(`${workspaceId}_worker_1`)
+      .get();
+    const summary = summarySnap.data() ?? {};
+    assert.equal(Number(summary.totalAmount ?? 0), 400);
+    assert.equal(Number(summary.confirmedPaid ?? 0), 225);
+    assert.equal(Number(summary.confirmedOutstanding ?? 0), 175);
+    assert.equal(Number(summary.recordCount ?? 0), 2);
   });
 
   test("expense trigger skips writes when irrelevant fields change", async () => {

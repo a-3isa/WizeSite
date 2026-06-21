@@ -80,7 +80,9 @@ class AppEntity {
       'normalizedName': normalizedName,
       'type': type,
       'createdAt': createdAt.toIso8601String(),
-      'attachments': attachments.map((attachment) => attachment.toMap()).toList(),
+      'attachments': attachments
+          .map((attachment) => attachment.toMap())
+          .toList(),
       if (lastUsedAt != null) 'lastUsedAt': lastUsedAt!.toIso8601String(),
       'clientMutationId': clientMutationId,
     };

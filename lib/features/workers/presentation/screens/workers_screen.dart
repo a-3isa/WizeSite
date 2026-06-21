@@ -3,7 +3,9 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -41,6 +43,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
   bool _isLoadingMore = false;
   bool _hasMore = true;
   String? _workspaceId;
+  WorkerStatus? _selectedStatus;
 
   @override
   void initState() {
@@ -161,6 +164,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
             workspaceId,
             cursor: reset ? null : _cursor,
             pageSize: _pageSize,
+            statuses: _selectedStatus == null ? null : {_selectedStatus!},
           );
       if (!mounted) {
         return;
@@ -217,11 +221,14 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
 
   List<WorkerProfile> _filteredWorkers() {
     final search = _searchController.text.trim().toLowerCase();
-    if (search.isEmpty) {
-      return List<WorkerProfile>.unmodifiable(_workers);
-    }
     return _workers
         .where((worker) {
+          if (_selectedStatus != null && worker.status != _selectedStatus) {
+            return false;
+          }
+          if (search.isEmpty) {
+            return true;
+          }
           final haystack =
               '${worker.name} ${worker.phoneNumber} ${worker.workerType}'
                   .toLowerCase();
@@ -278,6 +285,14 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
               ),
             ),
             const SizedBox(height: 16),
+            _StatusFilters(
+              selectedStatus: _selectedStatus,
+              onSelected: (status) {
+                setState(() => _selectedStatus = status);
+                _refresh();
+              },
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
@@ -298,27 +313,27 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _workers.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _workers.isEmpty) {
       return ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          const SizedBox(height: 120),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(_error.toString(), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('retry')),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 80),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: AppRecoverableError(
+              message: appErrorMessage(l10n, _error),
+              onRetry: _refresh,
             ),
           ),
         ],
@@ -330,10 +345,13 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          const SizedBox(height: 120),
-          Center(
-            child: Text(
-              _workers.isEmpty ? l10n.t('noWorkersYet') : l10n.t('noDataYet'),
+          const SizedBox(height: 80),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: AppEmptyState(
+              message: _workers.isEmpty
+                  ? l10n.t('noWorkersYet')
+                  : l10n.t('noDataYet'),
             ),
           ),
         ],
@@ -364,11 +382,21 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
               onTap: () => context.push(AppRoutes.workerDetailPath(worker.id)),
               leading: const Icon(Icons.engineering),
               title: Text(worker.name),
-              subtitle: Text(
-                '${worker.phoneNumber} | ${worker.billingType == 'project' ? l10n.t('billingTypeProject') : l10n.t(
-                        'wageWithValue',
-                        params: {'value': Formatters.money(worker.dailyWage, currencyCode: currency, locale: locale)},
-                      )}',
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${worker.phoneNumber} | ${worker.billingType == 'project' ? l10n.t('billingTypeProject') : l10n.t(
+                            'wageWithValue',
+                            params: {'value': Formatters.money(worker.dailyWage, currencyCode: currency, locale: locale)},
+                          )}',
+                  ),
+                  const SizedBox(height: 6),
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(_workerStatusLabel(l10n, worker.status)),
+                  ),
+                ],
               ),
               trailing: PopupMenuButton<String>(
                 onSelected: (value) async {
@@ -391,5 +419,63 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
         );
       },
     );
+  }
+
+  String _workerStatusLabel(AppLocalizations l10n, WorkerStatus status) {
+    return switch (status) {
+      WorkerStatus.active => l10n.t('workerStatusActive'),
+      WorkerStatus.inactive => l10n.t('workerStatusInactive'),
+      WorkerStatus.terminated => l10n.t('workerStatusTerminated'),
+    };
+  }
+}
+
+class _StatusFilters extends StatelessWidget {
+  const _StatusFilters({
+    required this.selectedStatus,
+    required this.onSelected,
+  });
+
+  final WorkerStatus? selectedStatus;
+  final ValueChanged<WorkerStatus?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final filters = <(WorkerStatus?, String)>[
+      (null, l10n.t('all')),
+      (WorkerStatus.active, _workerStatusLabel(l10n, WorkerStatus.active)),
+      (WorkerStatus.inactive, _workerStatusLabel(l10n, WorkerStatus.inactive)),
+      (
+        WorkerStatus.terminated,
+        _workerStatusLabel(l10n, WorkerStatus.terminated),
+      ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          for (final filter in filters)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 8),
+              child: FilterChip(
+                label: Text(filter.$2),
+                selected: selectedStatus == filter.$1,
+                onSelected: (_) => onSelected(filter.$1),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _workerStatusLabel(AppLocalizations l10n, WorkerStatus status) {
+    return switch (status) {
+      WorkerStatus.active => l10n.t('workerStatusActive'),
+      WorkerStatus.inactive => l10n.t('workerStatusInactive'),
+      WorkerStatus.terminated => l10n.t('workerStatusTerminated'),
+    };
   }
 }
