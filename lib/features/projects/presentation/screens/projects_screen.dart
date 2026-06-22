@@ -10,6 +10,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -374,12 +375,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: TextField(
+              child: AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('search'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
+                labelText: l10n.t('search'),
               ),
             ),
             const SizedBox(height: 12),
@@ -430,7 +428,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _projects.isEmpty) {
@@ -710,48 +715,90 @@ class _ProjectBrowseControls extends StatelessWidget {
       ],
     ];
 
+    final selectedStatus = statuses.firstWhere((item) => item.$1 == status).$2;
+    final selectedSort = sorts.firstWhere((item) => item.$1 == sort).$2;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: statuses
-                  .map(
-                    (item) => Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 8),
-                      child: ChoiceChip(
-                        label: Text(item.$2),
-                        selected: status == item.$1,
-                        onSelected: (_) => onStatusChanged(item.$1),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
+          Expanded(
+            child: _ProjectMenuButton<String?>(
+              key: const Key('qa_projects_filter'),
+              icon: Icons.filter_list,
+              label: selectedStatus,
+              items: statuses,
+              value: status,
+              onSelected: onStatusChanged,
             ),
           ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: sorts
-                  .map(
-                    (item) => Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 8),
-                      child: ChoiceChip(
-                        label: Text(item.$2),
-                        selected: sort == item.$1,
-                        onSelected: (_) => onSortChanged(item.$1),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ProjectMenuButton<ProjectBrowseSort>(
+              key: const Key('qa_projects_sort'),
+              icon: Icons.sort,
+              label: selectedSort,
+              items: sorts,
+              value: sort,
+              onSelected: onSortChanged,
             ),
           ),
-          const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+class _ProjectMenuButton<T> extends StatelessWidget {
+  const _ProjectMenuButton({
+    required super.key,
+    required this.icon,
+    required this.label,
+    required this.items,
+    required this.value,
+    required this.onSelected,
+  });
+
+  final IconData icon;
+  final String label;
+  final List<(T, String)> items;
+  final T value;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<T>(
+      initialValue: value,
+      onSelected: onSelected,
+      itemBuilder: (context) => items
+          .map(
+            (item) => PopupMenuItem<T>(
+              value: item.$1,
+              child: Row(
+                children: [
+                  if (item.$1 == value) const Icon(Icons.check, size: 18),
+                  if (item.$1 == value) const SizedBox(width: 8),
+                  Text(item.$2),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.borderGrey),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
       ),
     );
   }

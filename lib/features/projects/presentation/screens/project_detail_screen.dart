@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
@@ -161,7 +162,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
-          loading: () => const SizedBox.shrink(),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

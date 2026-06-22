@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
@@ -158,6 +161,45 @@ GoRouter _router() {
 
 void main() {
   testWidgets(
+    'ExpensesScreen shows loading content while first page resolves',
+    (tester) async {
+      final repository = _PendingExpenseRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+            expenseRepositoryProvider.overrideWithValue(repository),
+            expenseQuickSummaryProvider.overrideWith(
+              (ref, scope) => Stream.value(
+                const ExpenseQuickSummary(
+                  todayExpenses: 0,
+                  weeklyExpenses: 0,
+                  monthlyExpenses: 0,
+                  transactionCount: 0,
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+      expect(find.textContaining('Steel Supplier'), findsNothing);
+
+      repository.completeFirstPage([
+        _expense(id: 'expense_1', amount: 100, supplierName: 'Steel Supplier'),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppLoadingSkeleton), findsNothing);
+      expect(find.textContaining('Steel Supplier'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'ExpensesScreen supports compact filters, grouping, bulk archive, and empty CTA',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -198,6 +240,7 @@ void main() {
       expect(find.text('100 USD | Materials'), findsOneWidget);
       expect(find.text('200 USD | Materials'), findsOneWidget);
       expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Quick entry'), findsNothing);
       expect(find.text('Group by'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
@@ -249,4 +292,35 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+class _PendingExpenseRepository extends _FakeExpenseRepository {
+  _PendingExpenseRepository() : super(const []);
+
+  final _firstPageCompleter = Completer<FirestorePage<Expense>>();
+
+  @override
+  Future<FirestorePage<Expense>> fetchExpensesPage(
+    String workspaceId, {
+    required String projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? category,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+  }) {
+    return _firstPageCompleter.future;
+  }
+
+  void completeFirstPage(List<Expense> items) {
+    _firstPageCompleter.complete(
+      FirestorePage<Expense>(items: items, hasMore: false),
+    );
+  }
 }

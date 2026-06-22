@@ -85,6 +85,52 @@ flutter {
     source = "../.."
 }
 
+val devOnlyGeneratedPlugins = listOf(
+    "flutter_native_splash",
+    "integration_test",
+)
+
+fun sanitizeReleaseGeneratedPluginRegistrant() {
+    val registrant = layout.projectDirectory.file(
+        "src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+    )
+    val file = registrant.asFile
+    if (!file.exists()) {
+        return
+    }
+
+    var content = file.readText()
+    devOnlyGeneratedPlugins.forEach { pluginName ->
+        val pattern = Regex(
+            """(?s)\n    try \{\R      flutterEngine\.getPlugins\(\)\.add\(new [^;]+;\R    \} catch \(Exception e\) \{\R      Log\.e\(TAG, "Error registering plugin $pluginName, [^"]+", e\);\R    \}""",
+        )
+        content = content.replace(pattern, "")
+    }
+    file.writeText(content)
+}
+
+tasks.register("sanitizeReleaseGeneratedPluginRegistrant") {
+    doLast {
+        sanitizeReleaseGeneratedPluginRegistrant()
+    }
+}
+
+tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
+    dependsOn("sanitizeReleaseGeneratedPluginRegistrant")
+    doFirst {
+        sanitizeReleaseGeneratedPluginRegistrant()
+    }
+}
+
+tasks.matching { it.name == "uploadCrashlyticsMappingFileRelease" }.configureEach {
+    onlyIf {
+        providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING")
+            .map { it.equals("true", ignoreCase = true) }
+            .orElse(false)
+            .get()
+    }
+}
+
 dependencies {
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     profileImplementation("com.google.firebase:firebase-appcheck-debug")

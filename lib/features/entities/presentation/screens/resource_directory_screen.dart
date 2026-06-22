@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -6,6 +8,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
@@ -42,6 +45,154 @@ enum ResourceDirectoryType {
   final String emptyKey;
 }
 
+extension _ResourceDirectoryActions on _ResourceDirectoryScreenState {
+  Future<void> _showResourceForm({AppEntity? entity}) async {
+    final l10n = AppLocalizations.of(context);
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return;
+    }
+    final nameController = TextEditingController(text: entity?.name ?? '');
+    final rateController = TextEditingController(
+      text: entity?.defaultRate?.toString() ?? '',
+    );
+    final unitController = TextEditingController(text: entity?.rateUnit ?? '');
+    final phoneController = TextEditingController(
+      text: entity?.phoneNumber ?? '',
+    );
+    final notesController = TextEditingController(text: entity?.notes ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(entity == null ? l10n.t('add') : l10n.t('edit')),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: InputDecoration(labelText: l10n.t('entityName')),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? l10n.t('fillRequiredFields')
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: rateController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(labelText: l10n.t('defaultRate')),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: unitController,
+                  decoration: InputDecoration(labelText: l10n.t('rateUnit')),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(labelText: l10n.t('phoneNumber')),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: notesController,
+                  maxLines: 3,
+                  decoration: InputDecoration(labelText: l10n.t('notes')),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() != true) {
+                return;
+              }
+              final repository = ref.read(entityRepositoryProvider);
+              final rate = double.tryParse(rateController.text.trim());
+              if (entity == null) {
+                await repository.createEntity(
+                  workspaceId: workspaceId,
+                  name: nameController.text,
+                  type: widget.type.entityType,
+                  defaultRate: rate,
+                  rateUnit: unitController.text,
+                  phoneNumber: phoneController.text,
+                  notes: notesController.text,
+                );
+              } else {
+                await repository.updateEntity(
+                  entityId: entity.id,
+                  name: nameController.text,
+                  type: widget.type.entityType,
+                  defaultRate: rate,
+                  rateUnit: unitController.text,
+                  phoneNumber: phoneController.text,
+                  notes: notesController.text,
+                );
+              }
+              if (context.mounted) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            child: Text(l10n.t('save')),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    rateController.dispose();
+    unitController.dispose();
+    phoneController.dispose();
+    notesController.dispose();
+    if (saved == true) {
+      await _loadInitial();
+    }
+  }
+
+  Future<void> _confirmDelete(AppEntity entity) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.t('delete')),
+        content: Text(
+          l10n.t('deleteResourceConfirm', params: {'name': entity.name}),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.t('delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await ref.read(entityRepositoryProvider).deleteEntity(entity.id);
+    if (mounted) {
+      await _loadInitial();
+    }
+  }
+}
+
 class ResourceDirectoryScreen extends ConsumerStatefulWidget {
   const ResourceDirectoryScreen({required this.type, super.key});
 
@@ -56,6 +207,7 @@ class _ResourceDirectoryScreenState
     extends ConsumerState<ResourceDirectoryScreen> {
   final _searchController = TextEditingController();
   final _items = <AppEntity>[];
+  Timer? _searchDebounce;
   DocumentSnapshot<Map<String, dynamic>>? _cursor;
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -70,8 +222,18 @@ class _ResourceDirectoryScreenState
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _loadInitial();
+      }
+    });
   }
 
   Future<void> _loadInitial() async {
@@ -186,19 +348,27 @@ class _ResourceDirectoryScreenState
     };
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.t(widget.type.titleKey))),
+      appBar: AppBar(
+        title: Text(l10n.t(widget.type.titleKey)),
+        actions: [
+          TextButton.icon(
+            key: const Key('qa_resource_add'),
+            onPressed: () => _showResourceForm(),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.t('add')),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              TextField(
+              AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('searchResources'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
-                onChanged: (_) => _loadInitial(),
+                labelText: l10n.t('searchResources'),
+                onChanged: _handleSearchChanged,
               ),
               const SizedBox(height: 16),
               if (!canAccessFinancial)
@@ -291,7 +461,21 @@ class _ResourceDirectoryScreenState
                 ],
               ],
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: PopupMenuButton<String>(
+              key: Key('qa_resource_actions_${entity.id}'),
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    _showResourceForm(entity: entity);
+                  case 'delete':
+                    _confirmDelete(entity);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
+                PopupMenuItem(value: 'delete', child: Text(l10n.t('delete'))),
+              ],
+            ),
             onTap: () => _openEntity(entity),
           ),
         );

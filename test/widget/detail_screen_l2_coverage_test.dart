@@ -1,14 +1,19 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/entities/presentation/screens/entity_detail_screen.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expense_detail_screen.dart';
+import 'package:buildtrack_app/features/payments/domain/payment.dart';
+import 'package:buildtrack_app/features/payments/presentation/screens/payment_detail_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -23,6 +28,30 @@ import 'package:mocktail/mocktail.dart';
 class _MockStorageUploadService extends Mock implements StorageUploadService {}
 
 void main() {
+  testWidgets('expense detail shows a loading skeleton while loading', (
+    tester,
+  ) async {
+    final expense = Completer<Expense?>();
+
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          storageUploadServiceProvider.overrideWithValue(
+            _MockStorageUploadService(),
+          ),
+          expenseDetailsProvider.overrideWith(
+            (ref, expenseId) => expense.future,
+          ),
+        ],
+        child: const ExpenseDetailScreen(expenseId: 'expense_1'),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+  });
+
   testWidgets('expense detail shows a sanitized provider error', (
     tester,
   ) async {
@@ -97,6 +126,62 @@ void main() {
     expect(find.textContaining('Urgent delivery'), findsOneWidget);
   });
 
+  testWidgets('expense detail renders inline previews for image attachments', (
+    tester,
+  ) async {
+    final expense = Expense(
+      id: 'expense_1',
+      workspaceId: 'workspace_1',
+      projectId: 'project_1',
+      projectName: 'Villa Build',
+      category: 'materials',
+      amount: 1250,
+      currency: 'USD',
+      date: DateTime.utc(2026, 6, 17),
+      notes: '',
+      supplierName: 'Steel Supplier',
+      paymentMethod: 'cash',
+      paymentStatus: 'paid',
+      inputMethod: 'manual',
+      transcript: '',
+      source: '',
+      storagePath: '',
+      isArchived: false,
+      attachments: [
+        Attachment(
+          id: 'image_1',
+          fileName: 'receipt.png',
+          storagePath: 'attachments/receipt.png',
+          contentType: 'image/png',
+          downloadUrl: 'https://example.com/receipt.png',
+          uploadedAt: DateTime.utc(2026, 6, 17),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          storageUploadServiceProvider.overrideWithValue(
+            _MockStorageUploadService(),
+          ),
+          expenseRepositoryProvider.overrideWithValue(
+            _FakeExpenseRepository(expense),
+          ),
+        ],
+        child: const ExpenseDetailScreen(expenseId: 'expense_1'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('qa_expense_image_preview_image_1')),
+      findsOneWidget,
+    );
+    expect(find.byType(Image), findsOneWidget);
+  });
+
   testWidgets('worker detail shows a sanitized provider error', (tester) async {
     await tester.pumpWidget(
       _localizedApp(
@@ -122,6 +207,92 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('raw worker secret'), findsNothing);
+  });
+
+  testWidgets('payment detail shows a loading skeleton while loading', (
+    tester,
+  ) async {
+    final payment = Completer<PaymentRecord?>();
+
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          paymentDetailsProvider.overrideWith(
+            (ref, paymentId) => payment.future,
+          ),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+          ),
+        ],
+        child: const PaymentDetailScreen(paymentId: 'payment_1'),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+  });
+
+  testWidgets('worker detail shows a loading skeleton while worker loads', (
+    tester,
+  ) async {
+    final worker = Completer<WorkerProfile?>();
+
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          workerDetailsProvider.overrideWith((ref, workerId) => worker.future),
+          workerEntriesProvider.overrideWith(
+            (ref, workerId) => const Stream.empty(),
+          ),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+          ),
+        ],
+        child: const WorkerDetailScreen(workerId: 'worker_1'),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+  });
+
+  testWidgets('worker detail shows a loading skeleton while entries load', (
+    tester,
+  ) async {
+    final entries = StreamController<List<WorkerEntryRecord>>();
+    addTearDown(entries.close);
+
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          workerDetailsProvider.overrideWith(
+            (ref, workerId) async => const WorkerProfile(
+              id: 'worker_1',
+              workspaceId: 'workspace_1',
+              name: 'Sam Worker',
+              phoneNumber: '0100',
+              dailyWage: 250,
+              billingType: 'daily',
+              workerType: 'mason',
+              notes: '',
+              isArchived: false,
+            ),
+          ),
+          workerEntriesProvider.overrideWith((ref, workerId) => entries.stream),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+          ),
+        ],
+        child: const WorkerDetailScreen(workerId: 'worker_1'),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
   });
 
   testWidgets('worker detail renders the selected worker and recent entries', (
@@ -257,6 +428,35 @@ class _FakeEntityRepository implements EntityRepository {
   }) async {
     return entity.name == name ? entity : null;
   }
+
+  @override
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return entity;
+  }
+
+  @override
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return entity;
+  }
+
+  @override
+  Future<void> deleteEntity(String entityId) async {}
 
   @override
   Future<void> saveAttachments({

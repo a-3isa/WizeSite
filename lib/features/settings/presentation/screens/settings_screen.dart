@@ -10,6 +10,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
+import 'package:buildtrack_app/core/widgets/usage_card.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -336,6 +337,7 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
+    final usageAsync = ref.watch(currentUsageProvider);
     final cachedSub = subscriptionAsync.valueOrNull;
     if (cachedSub != null) {
       return Column(
@@ -346,6 +348,15 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
             onUpgrade: onUpgrade,
             onManage: onManage,
           ),
+          const SizedBox(height: 12),
+          usageAsync.when(
+            data: (usage) => UsageCard(usage: usage),
+            error: (_, _) => const SizedBox.shrink(),
+            loading: () => const AppLoadingSkeleton(
+              lineCount: 3,
+              padding: EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
           if (subscriptionAsync.isLoading)
             const Padding(
               padding: EdgeInsets.only(top: 8),
@@ -355,11 +366,24 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
       );
     }
     return subscriptionAsync.when(
-      data: (sub) => _SubscriptionCard(
-        l10n: l10n,
-        sub: sub,
-        onUpgrade: onUpgrade,
-        onManage: onManage,
+      data: (sub) => Column(
+        children: [
+          _SubscriptionCard(
+            l10n: l10n,
+            sub: sub,
+            onUpgrade: onUpgrade,
+            onManage: onManage,
+          ),
+          const SizedBox(height: 12),
+          usageAsync.when(
+            data: (usage) => UsageCard(usage: usage),
+            error: (_, _) => const SizedBox.shrink(),
+            loading: () => const AppLoadingSkeleton(
+              lineCount: 3,
+              padding: EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
+        ],
       ),
       error: (e, _) => AppRecoverableError(message: appErrorMessage(l10n, e)),
       loading: () => const _SubscriptionLoadingCard(),

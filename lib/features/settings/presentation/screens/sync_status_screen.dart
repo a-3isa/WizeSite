@@ -40,7 +40,7 @@ class SyncStatusScreen extends ConsumerWidget {
         error: (error, _) => AppRecoverableError(
           message: l10n.t('offlineSyncStatusUnavailable'),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingSkeleton(lineCount: 6),
       ),
     );
   }

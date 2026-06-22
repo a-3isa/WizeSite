@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/settings/data/profile_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
@@ -182,8 +183,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

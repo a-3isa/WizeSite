@@ -1,8 +1,15 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
+import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
+import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
+import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -149,5 +156,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(activeWorkspaceIdProvider), 'personal_ws');
+  });
+
+  testWidgets('dashboard shows resources instead of quick actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          dashboardSnapshotProvider.overrideWith(
+            (ref, workspaceId) => Stream.value(DashboardSnapshot.restricted()),
+          ),
+          notificationItemsProvider.overrideWith((ref) => Stream.value(const [])),
+          unreadNotificationCountProvider.overrideWith((ref) => 0),
+          currentUsageProvider.overrideWith(
+            (ref) => Stream.value(
+              UsageSnapshot.empty(limits: PlanLimits.free()),
+            ),
+          ),
+          currentSubscriptionStreamProvider.overrideWith(
+            (ref) => Stream.value(SubscriptionState.free()),
+          ),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const DashboardScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Resources'), findsOneWidget);
+    expect(find.byKey(const Key('qa_resource_workers')), findsOneWidget);
+    expect(find.byKey(const Key('qa_resource_contractors')), findsOneWidget);
+    expect(find.byKey(const Key('qa_add_expense')), findsNothing);
+    expect(find.text('Monthly Usage'), findsNothing);
   });
 }

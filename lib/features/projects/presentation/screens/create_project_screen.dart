@@ -10,6 +10,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:flutter/material.dart';
@@ -245,7 +246,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       fallbackRoute: fallbackRoute,
       child: Scaffold(
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : SafeArea(
                 child: CustomScrollView(
                   slivers: [

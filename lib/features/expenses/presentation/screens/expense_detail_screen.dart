@@ -11,6 +11,7 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
@@ -171,10 +172,34 @@ class ExpenseDetailScreen extends ConsumerWidget {
                         if (expense.attachments.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Text(
-                            'Attachments',
+                            l10n.t('attachments'),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
+                          for (final attachment in expense.attachments.where(
+                            _isImageAttachment,
+                          ))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  attachment.downloadUrl ?? '',
+                                  key: Key(
+                                    'qa_expense_image_preview_${attachment.id}',
+                                  ),
+                                  height: 180,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    height: 120,
+                                    color: Colors.black12,
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.broken_image),
+                                  ),
+                                ),
+                              ),
+                            ),
                           Column(
                             children: expense.attachments
                                 .map(
@@ -341,10 +366,24 @@ class ExpenseDetailScreen extends ConsumerWidget {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );
+  }
+
+  bool _isImageAttachment(Attachment attachment) {
+    final contentType = attachment.contentType.toLowerCase();
+    if (contentType.startsWith('image/')) {
+      return attachment.downloadUrl?.trim().isNotEmpty == true;
+    }
+    final fileName = attachment.fileName.toLowerCase();
+    return attachment.downloadUrl?.trim().isNotEmpty == true &&
+        (fileName.endsWith('.png') ||
+            fileName.endsWith('.jpg') ||
+            fileName.endsWith('.jpeg') ||
+            fileName.endsWith('.webp'));
   }
 }

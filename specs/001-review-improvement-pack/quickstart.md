@@ -29,7 +29,7 @@ After `package_info_plus` or asset declarations are added, rerun `flutter pub ge
 ## 3. Required Implementation Order
 
 1. Add shared loading/error/empty presentation primitives, localization keys, local sign-in assets, and package-info dependency.
-2. Replace the shell mapping with Home/Add/Reports/Projects and add navigation/RTL/semantics tests before removing the arc launcher.
+2. Replace the shell mapping with Home and Projects branches plus the central Add popup, and add navigation/RTL/semantics tests before removing obsolete add/report shell destinations.
 3. Add notification unread state, badge, rules tests, and dashboard navigation.
 4. Extend the existing workspace metrics recomputation, role-gate restricted dashboard metrics, compose Home from one maintained workspace document plus local queue state, and add refresh or recovery states.
 5. Complete voice capture timing, waveform, playback, currency, and localized failure handling.
@@ -76,7 +76,8 @@ flutter test test/widget/reports_screen_test.dart
 flutter test test/features/reports/services/report_export_data_builder_test.dart
 flutter test test/features/reports/services/report_pdf_exporter_test.dart
 flutter test test/features/entities/data/entity_repository_test.dart
-flutter test test/widget/add_hub_screen_test.dart
+flutter test test/widget/app_bottom_nav_shell_test.dart
+flutter test test/widget/dashboard_screen_test.dart
 flutter test test/widget/resource_directory_screen_test.dart
 flutter test test/features/workers/worker_accounting_test.dart
 ```
@@ -112,7 +113,7 @@ firebase emulators:exec --only firestore "npm --prefix functions test"
 
 ### Main experience
 
-- Verify Home, Add, Reports, and Projects on a narrow phone and a larger device.
+- Verify Home, Projects, the central Add popup, and project-scoped Reports on a narrow phone and a larger device.
 - Verify Android back behavior and branch state restoration.
 - Verify notification unread badge clears after viewing notifications and stays consistent after restart/sign-in on another device.
 - Verify dashboard refresh, skeletons, sanitized errors, quick-action ordering, upgrade placement, and non-color profit/loss meaning.
@@ -137,7 +138,7 @@ firebase emulators:exec --only firestore "npm --prefix functions test"
 
 ### Resources, subscription, settings, and auth
 
-- Open the top-level Add destination and verify its Resources section directly reaches workers, contractors, equipment, and transport directories.
+- Open Home and verify its Resources section directly reaches workers, contractors, equipment, and transport directories.
 - Sign in as member or entry-only and confirm dashboard financial cards, financial project sorts, project financial metrics, and worker accounting never render restricted financial data or trigger raw access failures.
 - Run the entity backfill twice, verify the second run makes no changes, then confirm legacy entities missing `lastUsedAt` remain visible in deterministic directory order.
 - Initialize worker summaries, then verify paid, unpaid, valid partial, and legacy unresolved partial worker records produce exact totals even when more than 50 records exist and show an incomplete-data explanation where required.
@@ -222,15 +223,15 @@ PDF tests continue to emit the expected offline font-download fallback warnings 
 
 ### Phase 3 - User Story 1 (completed 2026-06-15)
 
-- Replaced the unreachable three-branch/speed-dial shell with persistent Home, Add, Reports, and Projects branches, branch reselection, Home back fallback, localized semantics, and destination prefetching.
-- Added Add Hub action semantics and an in-flight route guard so rapid taps do not stack duplicate forms.
+- Replaced the unreachable three-branch/speed-dial shell with Home and Projects branches plus a central Add popup for Expense, Payment, and Voice Expense actions.
+- Removed the standalone Add Hub route; Add actions now stay centralized in the bottom-shell popup and Resources live on Home.
 - Added typed, bounded, target-user notification data with backward-compatible unread parsing, unread badge state, mark-read writes, shared loading/empty/recovery UI, and rules limiting targets to `readAt` updates only.
 - Consolidated dashboard finance into one accounting-role-gated `workspace_metrics` snapshot plus pending queue overlay. Denied roles receive a friendly restricted state without starting financial reads. Backend recomputation now includes weekly totals, top category/entity, category/entity/payment summaries, labor/equipment totals, and at most 10 recent transactions.
 - Reordered Home to sync feedback, quick actions, overview, usage, and upgrade; added pull-to-refresh, notification navigation, stable skeleton/retry states, sanitized errors, and explicit profit/loss icons.
 
 ```powershell
 flutter analyze  # No issues found
-flutter test test/widget/app_bottom_nav_shell_test.dart test/widget/add_hub_screen_test.dart test/widget/notifications_screen_test.dart test/features/dashboard/data/dashboard_providers_test.dart test/widget/dashboard_screen_test.dart test/core/app_prefetcher_test.dart  # 21 passed
+flutter test test/widget/app_bottom_nav_shell_test.dart test/widget/notifications_screen_test.dart test/features/dashboard/data/dashboard_providers_test.dart test/widget/dashboard_screen_test.dart test/core/app_prefetcher_test.dart
 Push-Location functions; npm test; Pop-Location  # 9 passed, 2 emulator-dependent suites skipped
 ```
 
@@ -456,7 +457,7 @@ Checkpoint commands:
 ```powershell
 flutter test test/features/workers/worker_accounting_test.dart test/widget/worker_accounting_screen_test.dart --reporter compact  # 19 passed
 firebase emulators:exec --only firestore "npm --prefix functions test"  # 59 passed, 0 skipped
-flutter test test/features/projects/data/project_repository_test.dart test/widget/projects_screen_test.dart test/features/reports/data/reports_providers_test.dart test/widget/reports_screen_test.dart test/features/reports/services/report_export_data_builder_test.dart test/features/reports/services/report_chart_exporter_test.dart test/features/entities/data/entity_repository_test.dart test/widget/add_hub_screen_test.dart test/widget/resource_directory_screen_test.dart test/features/workers/worker_status_test.dart test/features/workers/worker_accounting_test.dart test/widget/worker_accounting_screen_test.dart test/features/performance/accounting_query_performance_test.dart test/widget/entity_aggregation_screen_test.dart --reporter compact  # 96 passed
+flutter test test/features/projects/data/project_repository_test.dart test/widget/projects_screen_test.dart test/features/reports/data/reports_providers_test.dart test/widget/reports_screen_test.dart test/features/reports/services/report_export_data_builder_test.dart test/features/reports/services/report_chart_exporter_test.dart test/features/entities/data/entity_repository_test.dart test/widget/app_bottom_nav_shell_test.dart test/widget/dashboard_screen_test.dart test/widget/resource_directory_screen_test.dart test/features/workers/worker_status_test.dart test/features/workers/worker_accounting_test.dart test/widget/worker_accounting_screen_test.dart test/features/performance/accounting_query_performance_test.dart test/widget/entity_aggregation_screen_test.dart --reporter compact
 flutter analyze  # No issues found
 ```
 
@@ -488,14 +489,14 @@ flutter analyze  # No issues found
 
 Closed the cross-cutting cleanup and verification tasks that can be completed safely in the local workspace:
 
-- **T100/T101 cleanup audit**: Replaced remaining duplicate private `_SectionHeader` widgets in Add Hub, Reports, and Settings with the shared `SectionHeader`; removed the stale reports cleanup comment; localized the debug-only Crashlytics diagnostics labels; confirmed targeted screens no longer expose raw `error.toString()` rendering in the audited paths. `DomainAccountingRecordsScreen` continues to use `appErrorMessage`.
+- **T100/T101 cleanup audit**: Removed the obsolete Add Hub surface, kept Add actions in the central bottom-shell popup, replaced remaining duplicate private `_SectionHeader` widgets in Reports and Settings with the shared `SectionHeader`, removed the stale reports cleanup comment, localized the debug-only Crashlytics diagnostics labels, and confirmed targeted screens no longer expose raw `error.toString()` rendering in the audited paths. `DomainAccountingRecordsScreen` continues to use `appErrorMessage`.
 - **T102 accessibility/RTL coverage**: Added `test/widget/accessibility_rtl_test.dart` covering Arabic RTL shell destinations, quick-action button semantics, Reports export discoverability, and project-card status/profit cues that do not rely on color alone.
 - **T103 formatter correctness**: Added stable English/Arabic money and count assertions in `test/core/formatters_test.dart`; added `Formatters.count`; made Arabic money/count output deterministic with Arabic-Indic digits plus Arabic thousands/decimal separators; fixed worker accounting summaries to pass the active UI locale instead of relying on formatter defaults.
 
 Checkpoint commands:
 
 ```powershell
-flutter test test/localization/localization_coverage_test.dart test/widget/settings_screen_test.dart test/widget/add_hub_screen_test.dart test/widget/reports_screen_test.dart --reporter compact  # 28 passed
+flutter test test/localization/localization_coverage_test.dart test/widget/settings_screen_test.dart test/widget/app_bottom_nav_shell_test.dart test/widget/dashboard_screen_test.dart test/widget/reports_screen_test.dart --reporter compact
 flutter test test/widget/accessibility_rtl_test.dart --reporter compact  # 4 passed
 flutter test test/core/formatters_test.dart --reporter compact  # 5 passed
 flutter test test/widget/worker_accounting_screen_test.dart --plain-name "owner sees maintained full-ledger worker summary" --reporter compact  # 1 passed

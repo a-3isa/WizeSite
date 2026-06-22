@@ -110,6 +110,7 @@ class AppLocalizations {
     'openSettings': 'Open Settings',
     'save': 'Save',
     'cancel': 'Cancel',
+    'delete': 'Delete',
     'workerAccounting': 'Worker accounting',
     'contractorAccounting': 'Contractor accounting',
     'equipmentAccounting': 'Equipment accounting',
@@ -349,6 +350,13 @@ class AppLocalizations {
     'noTransportProvidersYet': 'No transport providers yet.',
     'searchResources': 'Search resources',
     'lastUsedAtLabel': 'Last used: {value}',
+    'defaultRate': 'Default rate',
+    'rateUnit': 'Rate unit',
+    'manualInput': 'Manual input',
+    'chooseSavedResource': 'Choose saved',
+    'quantity': 'Quantity',
+    'deleteResourceConfirm':
+        'Delete {name}? Historical expenses keep their saved names.',
     'addWorkerSubtitle': 'Add a new worker profile to your workspace.',
     'addWorkerEntryTitle': 'Add Worker Entry',
     'editWorkerEntryTitle': 'Edit Worker Entry',
@@ -364,7 +372,6 @@ class AppLocalizations {
     'noEntriesYet': 'No entries yet.',
     'totalLaborCost': 'Total Labor Cost',
     'editWorker': 'Edit Worker',
-    'addEntry': 'Add Entry',
     'buildozerFinancialReport': 'Buildozer Financial Report',
     'workspace': 'Workspace',
     'generated': 'Generated',
@@ -390,7 +397,6 @@ class AppLocalizations {
     'groupByEntity': 'Group by entity',
     'ungroup': 'Ungroup',
     'unassigned': 'Unassigned',
-    'quickEntry': 'Quick entry',
     'saveAndAddAnother': 'Save & add another',
     'weeklyInsights': 'Weekly insights',
     'weeklySummary': 'Weekly summary',
@@ -530,6 +536,8 @@ class AppLocalizations {
     'paymentMethodBank': 'Bank Transfer',
     'paymentMethodCheck': 'Check',
     'expenseCategoryLabor': 'Labor',
+    'expenseCategoryWorker': 'Worker',
+    'expenseCategoryContractor': 'Contractor',
     'expenseCategoryMaterials': 'Materials',
     'expenseCategoryEquipment': 'Equipment',
     'expenseCategoryTransport': 'Transport',
@@ -570,7 +578,6 @@ class AppLocalizations {
     // Navigation
     'navigationHomeTab': 'Home tab',
     'navigationAddTab': 'Add tab',
-    'navigationReportsTab': 'Reports tab',
     'navigationProjectsTab': 'Projects tab',
     // Unread notifications
     'unreadNotificationsCount': '{count} unread notifications',
@@ -772,6 +779,7 @@ class AppLocalizations {
     'confirm': 'تأكيد',
     'save': 'حفظ',
     'cancel': 'إلغاء',
+    'delete': 'Delete',
     'workerAccounting': 'محاسبة العامل',
     'contractorAccounting': 'محاسبة المقاول',
     'equipmentAccounting': 'محاسبة المعدات',
@@ -994,6 +1002,13 @@ class AppLocalizations {
     'noTransportProvidersYet': 'No transport providers yet.',
     'searchResources': 'Search resources',
     'lastUsedAtLabel': 'Last used: {value}',
+    'defaultRate': 'Default rate',
+    'rateUnit': 'Rate unit',
+    'manualInput': 'Manual input',
+    'chooseSavedResource': 'Choose saved',
+    'quantity': 'Quantity',
+    'deleteResourceConfirm':
+        'Delete {name}? Historical expenses keep their saved names.',
     'addWorkerSubtitle': 'إضافة ملف عامل جديد إلى مساحة العمل.',
     'addWorkerEntryTitle': 'إإضافة سجل عامل',
     'editWorkerEntryTitle': 'تعديل سجل عامل',
@@ -1009,7 +1024,6 @@ class AppLocalizations {
     'noEntriesYet': 'لا توجد سجلات بعد.',
     'totalLaborCost': 'إجمالي تكلفة العمالة',
     'editWorker': 'تعديل العامل',
-    'addEntry': 'إضافة سجل',
     'buildozerFinancialReport': 'تقرير بيلدوزر المالي',
     'workspace': 'مساحة العمل',
     'generated': 'تم الإنشاء',
@@ -1035,7 +1049,6 @@ class AppLocalizations {
     'groupByEntity': 'تجميع حسب الكيان',
     'ungroup': 'إلغاء التجميع',
     'unassigned': 'غير مخصص',
-    'quickEntry': 'إدخال سريع',
     'saveAndAddAnother': 'حفظ وإضافة آخر',
     'weeklyInsights': 'رؤى أسبوعية',
     'weeklySummary': 'ملخص أسبوعي',
@@ -1166,6 +1179,8 @@ class AppLocalizations {
     'paymentMethodBank': 'تحويل بنكي',
     'paymentMethodCheck': 'شيك',
     'expenseCategoryLabor': 'عمالة',
+    'expenseCategoryWorker': 'Worker',
+    'expenseCategoryContractor': 'Contractor',
     'expenseCategoryMaterials': 'مواد',
     'expenseCategoryEquipment': 'معدات',
     'expenseCategoryTransport': 'نقل',
@@ -1206,7 +1221,6 @@ class AppLocalizations {
     // Navigation
     'navigationHomeTab': 'تبويب الرئيسية',
     'navigationAddTab': 'تبويب الإضافة',
-    'navigationReportsTab': 'تبويب التقارير',
     'navigationProjectsTab': 'تبويب المشاريع',
     // Unread notifications
     'unreadNotificationsCount': '{count} إشعارات غير مقروءة',
@@ -1364,6 +1378,10 @@ class AppLocalizations {
     switch (category) {
       case 'labor':
         return t('expenseCategoryLabor');
+      case 'worker':
+        return t('expenseCategoryWorker');
+      case 'contractor':
+        return t('expenseCategoryContractor');
       case 'materials':
         return t('expenseCategoryMaterials');
       case 'equipment':

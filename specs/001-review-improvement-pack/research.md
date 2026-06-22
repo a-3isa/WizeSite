@@ -9,14 +9,14 @@
 - Rewrite each reviewed screen from the wireframes: rejected because it would discard working accounting and offline behavior.
 - Treat the review as one large UI refactor: rejected because failures would be difficult to isolate and the constitution requires incremental delivery.
 
-## Decision: Use a four-branch indexed shell and make AddHub canonical
+## Decision: Use a focused shell with a central Add popup
 
-**Rationale**: The router already has an indexed shell with an unreachable `AddHubScreen`. Home, Add, Reports, and Projects can become stable branches while the add hub preserves all current creation actions. Retiring the arc launcher removes duplicate navigation state and its fixed-angle RTL risk.
+**Rationale**: Home and Projects are the persistent navigation branches, while the center Add control opens a popup for Add Expense, Add Payment, and Voice Expense. This preserves immediate creation access without reintroducing a standalone Add screen, removes the obsolete `AddHubScreen` and quick-entry route, and keeps Resources discoverable from Home.
 
 **Alternatives considered**:
 
-- Keep the two-tab shell and add more dashboard links: rejected because core destinations would remain hidden.
-- Keep both the arc launcher and a full Add destination: rejected because two competing add experiences create inconsistent semantics and repeated-tap behavior.
+- Keep a standalone Add destination: rejected because it competes with the central popup and makes Add behave like a navigable content tab.
+- Keep both the old AddHub and the new popup: rejected because two competing add experiences create inconsistent semantics and repeated-tap behavior.
 
 ## Decision: Store notification read state as nullable `readAt`
 
@@ -112,7 +112,7 @@
 
 ## Decision: Build resource directories from the canonical entities collection
 
-**Rationale**: Contractors, equipment providers, and transport providers already appear as typed entities and have accounting detail routes. Paged type-filtered directories avoid inventing duplicate collections and allow cross-project browsing. The top-level Add destination will expose a visible Resources section linking to workers and all three typed directories so route existence is not mistaken for discoverability.
+**Rationale**: Contractors, equipment providers, and transport providers already appear as typed entities and have accounting detail routes. Paged type-filtered directories avoid inventing duplicate collections and allow cross-project browsing. Home exposes a visible Resources section linking to workers and all three typed directories so route existence is not mistaken for discoverability.
 
 **Alternatives considered**:
 

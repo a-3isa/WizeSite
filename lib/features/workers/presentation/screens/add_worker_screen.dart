@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -234,7 +235,7 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
           fallbackRoute: _fallbackRoute(),
         ),
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [

@@ -18,12 +18,7 @@ GoRouter _router() {
         builder: (context, state, shell) =>
             AppBottomNavShell(navigationShell: shell),
         branches: [
-          for (final route in const [
-            AppRoutes.dashboard,
-            AppRoutes.add,
-            AppRoutes.reports,
-            AppRoutes.projects,
-          ])
+          for (final route in const [AppRoutes.dashboard, AppRoutes.projects])
             StatefulShellBranch(
               routes: [
                 GoRoute(path: route, builder: (context, state) => Text(route)),
@@ -36,7 +31,7 @@ GoRouter _router() {
 }
 
 void main() {
-  testWidgets('shell exposes four stable reachable destinations', (
+  testWidgets('shell exposes home/projects and central add popup', (
     tester,
   ) async {
     final router = _router();
@@ -57,10 +52,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    expect(find.text('Reports'), findsNothing);
     for (final entry in const {
-      'Add': AppRoutes.add,
-      'Reports': AppRoutes.reports,
       'Projects': AppRoutes.projects,
       'Home': AppRoutes.dashboard,
     }.entries) {
@@ -74,7 +68,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, AppRoutes.dashboard);
 
-    await tester.tap(find.text('Reports'));
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add Expense'), findsOneWidget);
+    expect(find.text('Add Payment'), findsOneWidget);
+    expect(find.text('Voice Expense'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.dashboard);
+
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Projects'));
     await tester.pumpAndSettle();
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();

@@ -952,7 +952,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         error: (error, _) => AppRecoverableError(
                           message: appErrorMessage(l10n, error),
                         ),
-                        loading: () => const SizedBox.shrink(),
+                        loading: () => const AppLoadingSkeleton(
+                          lineCount: 2,
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       usageAsync.when(
@@ -993,7 +996,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           ),
                         ),
                         error: (_, _) => const SizedBox.shrink(),
-                        loading: () => const SizedBox.shrink(),
+                        loading: () => const AppLoadingSkeleton(
+                          lineCount: 3,
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                        ),
                       ),
                       const SizedBox(height: 32),
                     ]),

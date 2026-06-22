@@ -135,7 +135,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           fallbackRoute: AppRoutes.settings,
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [

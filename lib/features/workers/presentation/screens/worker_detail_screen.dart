@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -127,7 +128,7 @@ class WorkerDetailScreen extends ConsumerWidget {
                       child: FilledButton.tonal(
                         onPressed: () =>
                             context.push(AppRoutes.workerEntryPath(worker.id)),
-                        child: Text(l10n.t('addEntry')),
+                        child: Text(l10n.t('addWorkerEntry')),
                       ),
                     ),
                   ],
@@ -334,13 +335,17 @@ class WorkerDetailScreen extends ConsumerWidget {
                     );
                   },
                   error: (error, _) => Text(appErrorMessage(l10n, error)),
-                  loading: () => const SizedBox.shrink(),
+                  loading: () => const AppLoadingSkeleton(
+                    lineCount: 3,
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
                 ),
               ],
             );
           },
-          error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

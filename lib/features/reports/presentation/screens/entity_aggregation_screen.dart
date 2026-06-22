@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
@@ -136,7 +137,7 @@ class _EntityAggregationScreenState
               : const [],
         ),
         body: roleIsLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : hasWorkspace && !canAccessReports
             ? Center(
                 child: Padding(
@@ -325,8 +326,7 @@ class _EntityAggregationScreenState
                             ],
                           );
                         },
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
+                        loading: () => const AppLoadingSkeleton(lineCount: 8),
                         error: (error, _) =>
                             Center(child: Text(appErrorMessage(l10n, error))),
                       ),

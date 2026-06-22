@@ -9,7 +9,6 @@ const Map<String, List<String>> _reviewPackKeyGroups = {
   'navigation': [
     'navigationHomeTab',
     'navigationAddTab',
-    'navigationReportsTab',
     'navigationProjectsTab',
   ],
   'unread notifications': [

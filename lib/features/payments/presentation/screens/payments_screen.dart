@@ -13,6 +13,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/common/presentation/controllers/transaction_bulk_archive_controller.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -855,18 +856,18 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                 ),
                 error: (error, _) =>
                     AppRecoverableError(message: appErrorMessage(l10n, error)),
-                loading: () => const SizedBox.shrink(),
+                loading: () => const AppLoadingSkeleton(
+                  lineCount: 2,
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
+              child: AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('search'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
+                labelText: l10n.t('search'),
               ),
             ),
             const SizedBox(height: 12),
@@ -1015,7 +1016,14 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _payments.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _payments.isEmpty) {

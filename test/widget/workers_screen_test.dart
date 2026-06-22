@@ -51,8 +51,17 @@ void main() {
     expect(find.widgetWithText(FilterChip, 'Active'), findsOneWidget);
     expect(find.widgetWithText(FilterChip, 'Inactive'), findsOneWidget);
     expect(find.widgetWithText(FilterChip, 'Terminated'), findsOneWidget);
+    expect(find.byKey(const Key('qa_worker_add')), findsOneWidget);
+    expect(find.byKey(const Key('qa_worker_actions_w1')), findsOneWidget);
     expect(find.widgetWithText(Chip, 'Inactive'), findsOneWidget);
     expect(find.widgetWithText(Chip, 'Terminated'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('qa_worker_actions_w1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilterChip, 'Inactive'));
     await tester.pumpAndSettle();

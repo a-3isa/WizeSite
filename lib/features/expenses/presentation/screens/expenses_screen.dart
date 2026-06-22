@@ -13,6 +13,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
@@ -969,35 +970,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: TextField(
+              child: AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('search'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
+                labelText: l10n.t('search'),
               ),
             ),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _openExpenseFilterSheet,
-                      icon: const Icon(Icons.filter_list),
-                      label: Text(l10n.t('filters')),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => context.push(AppRoutes.addEntry),
-                      icon: const Icon(Icons.flash_on),
-                      label: Text(l10n.t('quickEntry')),
-                    ),
-                  ),
-                ],
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _openExpenseFilterSheet,
+                  icon: const Icon(Icons.filter_list),
+                  label: Text(l10n.t('filters')),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -1080,7 +1067,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       return _buildGroupedContent(context, l10n, filtered, locale);
     }
     if (_isLoadingInitial && _expenses.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _expenses.isEmpty) {

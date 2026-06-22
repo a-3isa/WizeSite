@@ -53,6 +53,28 @@ abstract interface class EntityRepository {
     String? type,
   });
 
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  });
+
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  });
+
+  Future<void> deleteEntity(String entityId);
+
   Future<void> saveAttachments({
     required String entityId,
     required List<Map<String, dynamic>> attachments,
@@ -240,6 +262,93 @@ class FirebaseEntityRepository implements EntityRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
+    }
+    final trimmedRateUnit = rateUnit?.trim();
+    final trimmedPhoneNumber = phoneNumber?.trim();
+    final trimmedNotes = notes?.trim();
+    final ref = _firestore.collection('entities').doc();
+    final payload = <String, dynamic>{
+      'id': ref.id,
+      'workspaceId': workspaceId,
+      'name': trimmed,
+      'normalizedName': normalizeName(trimmed),
+      'type': type,
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastUsedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'attachments': const [],
+    };
+    if (defaultRate != null) {
+      payload['defaultRate'] = defaultRate;
+    }
+    if (trimmedRateUnit?.isNotEmpty == true) {
+      payload['rateUnit'] = trimmedRateUnit;
+    }
+    if (trimmedPhoneNumber?.isNotEmpty == true) {
+      payload['phoneNumber'] = trimmedPhoneNumber;
+    }
+    if (trimmedNotes?.isNotEmpty == true) {
+      payload['notes'] = trimmedNotes;
+    }
+    await ref.set(payload);
+    final created = await ref.get();
+    return AppEntity.fromMap(ref.id, created.data() ?? const {});
+  }
+
+  @override
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
+    }
+    final ref = _firestore.collection('entities').doc(entityId);
+    await ref.set({
+      'name': trimmed,
+      'normalizedName': normalizeName(trimmed),
+      'type': type,
+      'defaultRate': defaultRate ?? FieldValue.delete(),
+      'rateUnit': rateUnit?.trim().isNotEmpty == true
+          ? rateUnit!.trim()
+          : FieldValue.delete(),
+      'phoneNumber': phoneNumber?.trim().isNotEmpty == true
+          ? phoneNumber!.trim()
+          : FieldValue.delete(),
+      'notes': notes?.trim().isNotEmpty == true
+          ? notes!.trim()
+          : FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastUsedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    final updated = await ref.get();
+    return AppEntity.fromMap(entityId, updated.data() ?? const {});
+  }
+
+  @override
+  Future<void> deleteEntity(String entityId) {
+    return _firestore.collection('entities').doc(entityId).delete();
   }
 
   @override

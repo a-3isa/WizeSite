@@ -121,9 +121,9 @@ pubspec.yaml
 
 ### Navigation and dashboard
 
-- Expand the indexed shell to Home, Add, Reports, and Projects.
-- Make `AddHubScreen` the canonical Add destination and retire the arc speed dial only after action parity, semantics, RTL, and navigation tests pass.
-- Add a visible Resources section to `AddHubScreen` with direct entries for workers, contractors, equipment, and transport directories.
+- Keep the indexed shell focused on Home and Projects, with the center Add control opening a popup menu for Add Expense, Add Payment, and Voice Expense.
+- Remove the obsolete `AddHubScreen` and old quick-entry route after action parity, semantics, RTL, and navigation tests pass.
+- Add a visible Resources section to Home with direct entries for workers, contractors, equipment, and transport directories.
 - Keep Notifications as a visible dashboard app-bar action with a bounded unread badge derived from the targeted notification feed.
 - Extend the existing `workspace_metrics/{workspaceId}` recomputation with current-week totals, top values, category/labor/equipment/payment summaries, and bounded recent transaction references; build one `DashboardSnapshot` from that single maintained document plus the local pending queue overlay; and short-circuit dashboard financial providers for denied roles so Home still shows sync visibility, notifications, and non-financial quick actions without restricted metric reads.
 

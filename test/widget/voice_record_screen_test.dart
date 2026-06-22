@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -10,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 class _FakeRecorder implements VoiceRecorderHandle {
   Object? startError;
@@ -95,6 +97,62 @@ Future<VoiceCaptureController> _pumpScreen(
 }
 
 void main() {
+  testWidgets(
+    'back navigation falls back to dashboard when voice is opened directly',
+    (tester) async {
+      final controller = VoiceCaptureController(
+        recorder: _FakeRecorder(),
+        player: _FakePlayer(),
+        currencyCode: 'USD',
+      );
+      final router = GoRouter(
+        initialLocation: AppRoutes.voiceExpense,
+        routes: [
+          GoRoute(
+            path: AppRoutes.dashboard,
+            builder: (_, _) => const Scaffold(body: Text('Dashboard fallback')),
+          ),
+          GoRoute(
+            path: AppRoutes.voiceExpense,
+            builder: (_, _) => const VoiceRecordScreen(),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectsProvider.overrideWith(
+              (ref) => Stream<List<Project>>.value(const []),
+            ),
+            microphonePermissionServiceProvider.overrideWithValue(
+              _GrantedPermissionService(),
+            ),
+            voiceCaptureControllerProvider.overrideWith((ref) => controller),
+          ],
+          child: MaterialApp.router(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dashboard fallback'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'idle state shows the mic and start prompt, no playback control',
     (tester) async {

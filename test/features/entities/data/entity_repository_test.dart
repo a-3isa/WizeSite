@@ -113,6 +113,44 @@ void main() {
 
       expect(matches.map((entity) => entity.id), ['recent', 'old']);
     });
+
+    test('creates updates and hard deletes typed resource profiles', () async {
+      final firestore = FakeFirebaseFirestore();
+      final repository = FirebaseEntityRepository(firestore);
+
+      final created = await repository.createEntity(
+        workspaceId: 'workspace_1',
+        name: 'Crane Crew',
+        type: 'equipmentProvider',
+        defaultRate: 450,
+        rateUnit: 'day',
+        phoneNumber: '0100',
+        notes: 'Crawler crane',
+      );
+
+      expect(created.name, 'Crane Crew');
+      expect(created.defaultRate, 450);
+      expect(created.rateUnit, 'day');
+
+      final updated = await repository.updateEntity(
+        entityId: created.id,
+        name: 'Crane Crew Updated',
+        type: 'equipmentProvider',
+        defaultRate: 500,
+        rateUnit: 'hour',
+        phoneNumber: '0111',
+        notes: 'Updated note',
+      );
+
+      expect(updated.name, 'Crane Crew Updated');
+      expect(updated.defaultRate, 500);
+      expect(updated.rateUnit, 'hour');
+      expect(updated.phoneNumber, '0111');
+
+      await repository.deleteEntity(created.id);
+      final deleted = await firestore.collection('entities').doc(created.id).get();
+      expect(deleted.exists, isFalse);
+    });
   });
 
   group('entity directory paging (exact type)', () {

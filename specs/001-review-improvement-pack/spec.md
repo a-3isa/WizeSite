@@ -20,7 +20,7 @@ As an active workspace member, I want the app's primary destinations and high-fr
 
 **Acceptance Scenarios**:
 
-1. **Given** a signed-in user on the main shell, **When** they look for Home, Add, Reports, and Projects, **Then** each destination is visibly reachable from the primary navigation without requiring a workaround.
+1. **Given** a signed-in user on the main shell, **When** they look for Home, Projects, add actions, and project reports, **Then** Home and Projects are persistent branches, the center Add control opens the Add Expense/Add Payment/Voice Expense popup, and reports are reachable from the selected project without a standalone Reports tab.
 2. **Given** a signed-in user with unread notifications, **When** they view the main shell, **Then** they can reach notifications from a clearly visible entry point and can tell that unread items exist.
 3. **Given** a user opens the home experience, **When** the screen loads, **Then** high-frequency actions appear before lower-priority summaries and the user can refresh the page explicitly.
 4. **Given** a list or chart has no available data, **When** the user reaches that state, **Then** the app explains what is missing and offers the most relevant next action instead of showing a blank or confusing surface.
@@ -65,7 +65,7 @@ As an owner, manager, or accountant, I want project, report, and entity views to
 1. **Given** a user is reviewing projects, **When** they filter by status or change the sort/view controls, **Then** the list updates to reflect the selected project subset and the requested ordering across the complete matching result set, not only the currently loaded page.
 2. **Given** a user opens reports for a selected project, **When** they choose a date range, **Then** charts, tables, and exports reflect that project and that period consistently.
 3. **Given** a user requests a custom export, **When** the export is generated, **Then** it includes only the selected project's data for the chosen time window and excludes unrelated projects.
-4. **Given** a user opens the top-level Add destination, **When** they need an organization-wide resource view, **Then** a visible Resources section lets them browse workers, contractors, equipment, and transport records across projects.
+4. **Given** a user opens Home, **When** they need an organization-wide resource view, **Then** a visible Resources section lets them browse workers, contractors, equipment, and transport records across projects.
 5. **Given** a chart or summary has no meaningful data for the chosen period, **When** the user views it, **Then** the app explains the empty state instead of rendering an unlabeled or ambiguous visualization.
 6. **Given** a workspace contains many projects or records, **When** a user changes project scope, report scope, or export scope, **Then** the app remains understandable by either responding promptly or clearly showing that work is still in progress.
 7. **Given** a user switches between supported languages, **When** financial amounts and counts are shown, **Then** the values remain readable, appropriately localized, and free of ambiguous formatting.
@@ -147,7 +147,7 @@ As a user managing my account and subscription, I want authentication, settings,
 - **FR-020**: The system MUST present report export choices in a discoverable way that does not rely on users horizontally scrolling to find hidden actions.
 - **FR-021**: The system MUST provide friendly empty states for charts, tables, and summaries when the chosen report scope has no data.
 - **FR-021A**: The system MUST let users export or share an individual report visualization when they need a chart artifact without the rest of the report package.
-- **FR-022**: The system MUST provide a visible Resources section in the top-level Add destination with direct cross-project browse access for workers, contractors, equipment providers, and transport providers, not only project-specific routes.
+- **FR-022**: The system MUST provide a visible Resources section on Home with direct cross-project browse access for workers, contractors, equipment providers, and transport providers, not only project-specific routes.
 - **FR-023**: The system MUST allow users to search the worker directory and distinguish worker status when browsing worker records.
 - **FR-024**: The system MUST show worker accounting total cost, confirmed paid amount, and confirmed remaining balance from an exact full-worker summary rather than only the currently visible page of records. Paid records contribute their full amount; unpaid records contribute zero paid; partial records use an explicit paid amount between zero and the record amount; legacy partial records without that value are excluded from confirmed paid and confirmed remaining totals and trigger a visible incomplete-data explanation rather than an estimate; and worker-only partial-payment controls MUST not appear on contractor, equipment, or transport accounting flows.
 - **FR-025**: The system MUST show live subscription offers using the user's actual available pricing, or present an explicit unavailable state with retry guidance when live pricing cannot be loaded.
@@ -202,7 +202,7 @@ As a user managing my account and subscription, I want authentication, settings,
 
 ### Measurable Outcomes
 
-- **SC-001**: In a moderated usability study with at least 20 returning users, at least 90% can reach Home, Add, Reports, Projects, and Notifications within 10 seconds from the signed-in shell without assistance.
+- **SC-001**: In a moderated usability study with at least 20 returning users, at least 90% can reach Home, Projects, central add actions, project-scoped reports, and Notifications within 10 seconds from the signed-in shell without assistance.
 - **SC-002**: In a moderated study with at least 20 participants, at least 90% can complete voice recording, playback review, and draft submission on their first attempt.
 - **SC-003**: Across an automated sample containing at least 20 project/date combinations, 100% of custom report exports match the selected project and reporting period with no unrelated records.
 - **SC-004**: In a release-candidate audit of every targeted empty, loading, offline, and recoverable failure state, at least 95% provide both a visible explanation and a next-step action.

@@ -193,7 +193,7 @@ The earlier "66-FR" review note was stale; the trace below is against the live s
 | FR-020 | PASS | Discoverable report export menu is covered by T052/T066 and reports screen tests. |
 | FR-021 | PASS | Report chart/table/summary empty states are covered by T052/T066 and reports screen tests. |
 | FR-021A | PASS | Single-chart PDF/share export is covered by T054/T065/T066 and `test/features/reports/services/report_chart_exporter_test.dart`. |
-| FR-022 | PASS | Top-level Resources section and route handoff are covered by T056/T069-T071 and Add Hub/resource directory tests. |
+| FR-022 | PASS | Home Resources section and route handoff are covered by T056/T069-T071 and dashboard/resource directory tests. |
 | FR-023 | PASS | Worker directory search/status is covered by T057/T072-T074 and worker status/screen tests. |
 | FR-024 | PASS | Exact maintained worker accounting totals are covered by T058/T075/T076 and worker accounting tests. |
 | FR-025 | PASS | Live subscription offers/unavailable retry state are covered by T079/T087-T089 and plans tests. |
@@ -213,7 +213,7 @@ The earlier "66-FR" review note was stale; the trace below is against the live s
 | FR-037 | PASS | Offline/reconnecting banner stability is covered by T098 plus shell/dashboard tests. |
 | FR-037A | PASS | Conflict-resolution outcome visibility is covered by T084/T094-T096 and offline conflict/sync status tests. |
 | FR-038 | PASS | Profit/loss uses icon/text beyond color in dashboard/project coverage (T019/T050/T102/T103). |
-| FR-039 | PASS | Quick-action semantic labels are covered by T015/T019/T102 and Add Hub/accessibility tests. |
+| FR-039 | PASS | Central Add and quick-action semantic labels are covered by T015/T019/T102 and shell/accessibility tests. |
 | FR-040 | PASS | RTL launcher/shell behavior is covered by T014/T015/T102 and accessibility RTL tests. |
 | FR-041 | PASS | Long-running report/export progress feedback is covered by T052/T066/T067 and reports/export tests. |
 | FR-042 | PASS | Scope discipline is enforced by the task breakdown and review corrections; no unrelated architecture replacement was introduced. |
@@ -230,7 +230,7 @@ The earlier "66-FR" review note was stale; the trace below is against the live s
 | FR-053 | PASS | Coherent dashboard refresh snapshot is covered by T018/T019/T028-T030 and dashboard/provider tests. |
 | FR-054 | PASS | Cleanup/supporting engineering scope is covered by T100-T109, L1-2, L2, formatter/analyzer/test gates, and rollout notes. |
 | FR-055 | PASS | Debug/hardcoded user-facing labels are covered by T100/T101 and the broad sanitization sweep. |
-| FR-056 | PASS | Duplicate quick-action launches/repeated taps are covered by T014/T022/T030 and shell/Add Hub/prefetch tests. |
+| FR-056 | PASS | Duplicate quick-action launches/repeated taps are covered by T014/T022/T030 and shell/prefetch tests. |
 
 **L4 verdict:** no new release-blocking gaps were found in the FR trace. The trace confirms the existing task
 mapping in `tasks.md` (`US1` T014-T031, `US2` T032-T048, `US3` T049-T078, `US4` T079-T099, and cross-cutting

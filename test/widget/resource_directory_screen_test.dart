@@ -51,6 +51,7 @@ void main() {
       expect(find.text('Bravo Build'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), 'bravo');
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
       expect(repository.searchCalls.single.$2, 'bravo');
       await tester.tap(find.text('Bravo Build'));
@@ -141,6 +142,73 @@ void main() {
       );
     },
   );
+
+  testWidgets('resource directory exposes add edit and delete actions', (
+    tester,
+  ) async {
+    final repository = _FakeEntityRepository(
+      pages: [
+        FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
+      ],
+    );
+    final router = GoRouter(
+      initialLocation: AppRoutes.contractorsDirectory,
+      routes: [
+        GoRoute(
+          path: AppRoutes.contractorsDirectory,
+          builder: (_, _) => const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.contractor,
+          ),
+        ),
+      ],
+    );
+
+    await _pump(tester, repository: repository, router: router);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('qa_resource_add')), findsOneWidget);
+    expect(find.byKey(const Key('qa_resource_actions_c1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('qa_resource_actions_c1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+  });
+
+  testWidgets('resource directory debounces search input', (tester) async {
+    final repository = _FakeEntityRepository(
+      pages: [
+        FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
+      ],
+      searchResults: [_entity('c2', 'Bravo Build')],
+    );
+    final router = GoRouter(
+      initialLocation: AppRoutes.contractorsDirectory,
+      routes: [
+        GoRoute(
+          path: AppRoutes.contractorsDirectory,
+          builder: (_, _) => const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.contractor,
+          ),
+        ),
+      ],
+    );
+
+    await _pump(tester, repository: repository, router: router);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'b');
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.enterText(find.byType(TextField), 'br');
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.enterText(find.byType(TextField), 'bra');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(repository.searchCalls, isEmpty);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(repository.searchCalls.single.$2, 'bra');
+  });
 }
 
 AppEntity _entity(String id, String name, {String type = 'contractor'}) =>
@@ -226,6 +294,57 @@ class _FakeEntityRepository implements EntityRepository {
     required String name,
     String? type,
   }) async => null;
+
+  @override
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return AppEntity(
+      id: 'created',
+      workspaceId: workspaceId,
+      name: name,
+      normalizedName: name.toLowerCase(),
+      type: type,
+      createdAt: DateTime(2026),
+      defaultRate: defaultRate,
+      rateUnit: rateUnit ?? '',
+      phoneNumber: phoneNumber ?? '',
+      notes: notes ?? '',
+    );
+  }
+
+  @override
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return AppEntity(
+      id: entityId,
+      workspaceId: 'workspace_1',
+      name: name,
+      normalizedName: name.toLowerCase(),
+      type: type,
+      createdAt: DateTime(2026),
+      defaultRate: defaultRate,
+      rateUnit: rateUnit ?? '',
+      phoneNumber: phoneNumber ?? '',
+      notes: notes ?? '',
+    );
+  }
+
+  @override
+  Future<void> deleteEntity(String entityId) async {}
 
   @override
   Future<AppEntity?> getEntityById(String entityId) async => null;

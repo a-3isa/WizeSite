@@ -5,6 +5,8 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -244,12 +246,9 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: TextField(
+                child: AppSearchField(
                   controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: l10n.t('search'),
-                    prefixIcon: const Icon(Icons.search),
-                  ),
+                  labelText: l10n.t('search'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -272,7 +271,14 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
     List<Project> filtered,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _projects.isEmpty) {

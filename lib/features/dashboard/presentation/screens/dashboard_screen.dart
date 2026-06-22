@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
-import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -10,13 +9,11 @@ import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
-import 'package:buildtrack_app/core/widgets/usage_card.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
-import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +30,6 @@ class DashboardScreen extends ConsumerWidget {
     final pendingSyncCount = ref.watch(offlinePendingCountProvider);
     final deadLetterCount = ref.watch(offlineDeadLetterCountProvider);
     final unreadCount = ref.watch(unreadNotificationCountProvider);
-    final usageAsync = ref.watch(currentUsageProvider);
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final currency =
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
@@ -61,7 +57,6 @@ class DashboardScreen extends ConsumerWidget {
         ref.invalidate(dashboardSnapshotProvider(workspaceId));
       }
       ref.invalidate(notificationItemsProvider);
-      ref.invalidate(currentUsageProvider);
       ref.invalidate(currentSubscriptionStreamProvider);
       await Future.wait([
         if (workspaceId != null && workspaceId.isNotEmpty)
@@ -129,13 +124,9 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
               const WorkspaceSwitcher(),
               const SizedBox(height: 20),
-              SectionHeader(title: l10n.t('quickActions')),
+              SectionHeader(title: l10n.t('resources')),
               const SizedBox(height: 12),
-              _QuickActions(
-                onAction: (type, route) {
-                  _onQuotaAction(context, ref, type, route);
-                },
-              ),
+              const _ResourceLinks(),
               const SizedBox(height: 24),
               SectionHeader(title: l10n.t('overview')),
               const SizedBox(height: 12),
@@ -158,12 +149,6 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              usageAsync.when(
-                data: (usage) => UsageCard(usage: usage),
-                error: (_, _) => const SizedBox.shrink(),
-                loading: () => const SizedBox.shrink(),
-              ),
-              const SizedBox(height: 16),
               subscriptionAsync.when(
                 data: (subscription) => subscription.tier == PlanTier.free
                     ? _UpgradeCard(
@@ -171,7 +156,10 @@ class DashboardScreen extends ConsumerWidget {
                       )
                     : const SizedBox.shrink(),
                 error: (_, _) => const SizedBox.shrink(),
-                loading: () => const SizedBox.shrink(),
+                loading: () => const AppLoadingSkeleton(
+                  lineCount: 2,
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                ),
               ),
             ],
           ),
@@ -261,7 +249,10 @@ class _WorkspaceSwitcherState extends ConsumerState<WorkspaceSwitcher> {
           ),
         );
       },
-      loading: () => const SizedBox.shrink(),
+      loading: () => const AppLoadingSkeleton(
+        lineCount: 2,
+        padding: EdgeInsets.symmetric(vertical: 8),
+      ),
       error: (_, _) => const SizedBox.shrink(),
     );
   }
@@ -430,10 +421,8 @@ class DashboardFinancialSection extends StatelessWidget {
   }
 }
 
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.onAction});
-
-  final void Function(LimitType type, String route) onAction;
+class _ResourceLinks extends StatelessWidget {
+  const _ResourceLinks();
 
   @override
   Widget build(BuildContext context) {
@@ -446,44 +435,41 @@ class _QuickActions extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.8,
       children: [
-        _QuickActionCard(
-          qaKey: const Key('qa_add_expense'),
-          icon: Icons.receipt_long_outlined,
-          label: l10n.t('addExpense'),
-          color: AppColors.danger,
-          onTap: () =>
-              onAction(LimitType.expensesPerMonth, AppRoutes.addExpense),
-        ),
-        _QuickActionCard(
-          qaKey: const Key('qa_add_payment'),
-          icon: Icons.payments_outlined,
-          label: l10n.t('addPayment'),
-          color: AppColors.success,
-          onTap: () =>
-              onAction(LimitType.paymentsPerMonth, AppRoutes.addPayment),
-        ),
-        _QuickActionCard(
-          qaKey: const Key('qa_workers_list'),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_workers'),
           icon: Icons.engineering_outlined,
           label: l10n.t('workers'),
           color: AppColors.warning,
           onTap: () => context.push(AppRoutes.workers),
         ),
-        _QuickActionCard(
-          qaKey: const Key('qa_create_project'),
-          icon: Icons.dashboard_customize_outlined,
-          label: l10n.t('createProject'),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_contractors'),
+          icon: Icons.handyman_outlined,
+          label: l10n.t('contractorsDirectory'),
           color: AppColors.constructionOrange,
-          onTap: () =>
-              onAction(LimitType.activeProjects, AppRoutes.createProject),
+          onTap: () => context.push(AppRoutes.contractorsDirectory),
+        ),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_equipment'),
+          icon: Icons.construction_outlined,
+          label: l10n.t('equipmentDirectory'),
+          color: AppColors.success,
+          onTap: () => context.push(AppRoutes.equipmentDirectory),
+        ),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_transport'),
+          icon: Icons.local_shipping_outlined,
+          label: l10n.t('transportDirectory'),
+          color: AppColors.danger,
+          onTap: () => context.push(AppRoutes.transportProvidersDirectory),
         ),
       ],
     );
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({
+class _ResourceCard extends StatelessWidget {
+  const _ResourceCard({
     required this.qaKey,
     required this.icon,
     required this.label,
@@ -593,39 +579,4 @@ class _UpgradeCard extends StatelessWidget {
       ),
     );
   }
-}
-
-void _onQuotaAction(
-  BuildContext context,
-  WidgetRef ref,
-  LimitType type,
-  String route,
-) {
-  ref.read(appPrefetcherProvider).warmAddEntry();
-  final workspaceId = ref.read(activeWorkspaceIdProvider);
-  if (workspaceId == null ||
-      workspaceId.isEmpty ||
-      AppLimits.usageLimitsDisabled) {
-    context.push(route);
-    return;
-  }
-  final subscription = ref.read(currentSubscriptionStreamProvider).value;
-  if (subscription != null &&
-      subscription.isActiveOrTrial &&
-      subscription.tier == PlanTier.pro) {
-    context.push(route);
-    return;
-  }
-  final usage = ref.read(currentUsageProvider).value;
-  if (usage == null || usage.currentByType(type) + 1 <= usage.maxByType(type)) {
-    context.push(route);
-    return;
-  }
-  context.push(
-    AppRoutes.subscriptionLimitPath(
-      type.name,
-      current: usage.currentByType(type),
-      max: usage.maxByType(type),
-    ),
-  );
 }

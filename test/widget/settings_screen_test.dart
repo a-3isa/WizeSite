@@ -6,6 +6,7 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
+import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -153,6 +154,25 @@ void main() {
             ),
             currentSubscriptionStreamProvider.overrideWith(
               (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUsageProvider.overrideWith(
+              (ref) => Stream.value(
+                const UsageSnapshot(
+                  periodKey: '202606',
+                  activeProjects: 1,
+                  expensesCount: 7,
+                  paymentsCount: 3,
+                  workerEntriesCount: 2,
+                  memberCount: 1,
+                  limits: PlanLimits(
+                    activeProjects: 1,
+                    expensesPerMonth: 30,
+                    paymentsPerMonth: 30,
+                    workerEntriesPerMonth: 30,
+                    teamMembers: 1,
+                  ),
+                ),
+              ),
             ),
           ],
           child: MaterialApp.router(routerConfig: _router()),
@@ -368,6 +388,25 @@ void main() {
                 ),
               ),
             ),
+            currentUsageProvider.overrideWith(
+              (ref) => Stream.value(
+                const UsageSnapshot(
+                  periodKey: '202606',
+                  activeProjects: 1,
+                  expensesCount: 7,
+                  paymentsCount: 2,
+                  workerEntriesCount: 0,
+                  memberCount: 1,
+                  limits: PlanLimits(
+                    activeProjects: 1,
+                    expensesPerMonth: 30,
+                    paymentsPerMonth: 30,
+                    workerEntriesPerMonth: 30,
+                    teamMembers: 1,
+                  ),
+                ),
+              ),
+            ),
             currentSubscriptionStreamProvider.overrideWith((ref) {
               final key = ref.watch(refreshKeyProvider);
               if (key == 0) {
@@ -383,6 +422,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Free Plan'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Monthly Usage'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Monthly Usage'), findsOneWidget);
+      expect(find.textContaining('7 / 30'), findsOneWidget);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(SettingsScreen)),
@@ -392,7 +438,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Free Plan'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsWidgets);
     },
   );
 }

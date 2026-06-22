@@ -4,21 +4,22 @@ This contract defines observable behavior for implementation and widget/integrat
 
 ## Main Shell
 
-- The signed-in shell exposes Home, Add, Reports, and Projects as persistent destinations.
-- Add opens the canonical add hub containing expense, payment, worker entry, and voice expense actions.
+- The signed-in shell exposes Home and Projects as persistent destinations.
+- The center Add control opens a popup with Add Expense, Add Payment, and Voice Expense actions without becoming its own shell branch.
+- Reports are reachable from project-scoped report actions, not from a standalone shell tab.
 - No configured shell branch is unreachable.
 - Repeated taps do not create duplicate routes or duplicate loading overlays.
 - Notifications are reachable from the dashboard app bar and show an unread badge when the bounded feed contains unread items.
 
 ## Dashboard
 
-- Offline/sync status and quick actions appear before long-form metrics and insights.
+- Offline/sync status and Resources appear before long-form metrics and insights.
 - Pull-to-refresh refreshes the dashboard snapshot, subscription/usage state, and notification badge as one visible action.
 - Loading sections show stable placeholders; failures show localized recovery copy and retry actions.
 - Missing top entity/category values show explanatory no-data copy.
 - Profit/loss uses text or iconography in addition to color.
 - Eligible users can find the upgrade path without traversing all insights.
-- Users without accounting access still see notifications, sync visibility, and non-financial quick actions, but dashboard financial summaries are replaced with a localized restricted-financial state.
+- Users without accounting access still see notifications, sync visibility, and non-financial resources, but dashboard financial summaries are replaced with a localized restricted-financial state.
 
 ## Voice Expense
 
@@ -59,7 +60,7 @@ This contract defines observable behavior for implementation and widget/integrat
 
 ## Resource Directories
 
-- The top-level Add destination contains a visible Resources section with direct cross-project browse entries for workers, contractors, equipment providers, and transport providers.
+- The dashboard Resources section contains direct cross-project browse entries for workers, contractors, equipment providers, and transport providers.
 - Worker search covers name, phone, and worker type; worker status is visible and filterable.
 - Worker accounting shows total cost, confirmed paid, and confirmed remaining. Legacy partial records without explicit paid amounts trigger an incomplete-data explanation and are never estimated.
 - Worker accounting reads its summary from an exact maintained full-worker total, not from the currently visible ledger page.

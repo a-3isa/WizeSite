@@ -43,12 +43,7 @@ void main() {
           builder: (context, state, shell) =>
               AppBottomNavShell(navigationShell: shell),
           branches: [
-            for (final route in const [
-              AppRoutes.dashboard,
-              AppRoutes.add,
-              AppRoutes.reports,
-              AppRoutes.projects,
-            ])
+            for (final route in const [AppRoutes.dashboard, AppRoutes.projects])
               StatefulShellBranch(
                 routes: [
                   GoRoute(
@@ -90,18 +85,21 @@ void main() {
       Directionality.of(tester.element(find.text(l10n.t('home')).first)),
       TextDirection.rtl,
     );
-    for (final key in ['home', 'add', 'reports', 'projects']) {
+    for (final key in ['home', 'add', 'projects']) {
       expect(find.text(l10n.t(key)), findsOneWidget);
     }
   });
 
-  testWidgets('dashboard quick actions expose button semantics', (
-    tester,
-  ) async {
+  testWidgets('dashboard resources expose button semantics', (tester) async {
     await tester.pumpWidget(_dashboardApp());
     await tester.pumpAndSettle();
 
-    for (final label in ['Add Expense', 'Add Payment', 'Workers']) {
+    for (final label in [
+      'Workers',
+      'Contractors',
+      'Equipment providers',
+      'Transport providers',
+    ]) {
       final matchingSemantics = tester
           .widgetList<Semantics>(find.byType(Semantics))
           .where((widget) => widget.properties.label == label)

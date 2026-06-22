@@ -11,6 +11,10 @@ class AppEntity {
     this.attachments = const [],
     this.lastUsedAt,
     this.clientMutationId = '',
+    this.defaultRate,
+    this.rateUnit = '',
+    this.phoneNumber = '',
+    this.notes = '',
   });
 
   final String id;
@@ -22,6 +26,10 @@ class AppEntity {
   final List<Attachment> attachments;
   final DateTime? lastUsedAt;
   final String clientMutationId;
+  final double? defaultRate;
+  final String rateUnit;
+  final String phoneNumber;
+  final String notes;
 
   factory AppEntity.fromMap(String id, Map<String, dynamic> map) {
     final name = '${map['name'] ?? ''}'.trim();
@@ -37,6 +45,10 @@ class AppEntity {
           ? null
           : _parseDate(map['lastUsedAt']),
       clientMutationId: '${map['clientMutationId'] ?? ''}',
+      defaultRate: (map['defaultRate'] as num?)?.toDouble(),
+      rateUnit: '${map['rateUnit'] ?? ''}',
+      phoneNumber: '${map['phoneNumber'] ?? ''}',
+      notes: '${map['notes'] ?? ''}',
     );
   }
 
@@ -85,6 +97,10 @@ class AppEntity {
           .toList(),
       if (lastUsedAt != null) 'lastUsedAt': lastUsedAt!.toIso8601String(),
       'clientMutationId': clientMutationId,
+      if (defaultRate != null) 'defaultRate': defaultRate,
+      if (rateUnit.isNotEmpty) 'rateUnit': rateUnit,
+      if (phoneNumber.isNotEmpty) 'phoneNumber': phoneNumber,
+      if (notes.isNotEmpty) 'notes': notes,
     };
   }
 }

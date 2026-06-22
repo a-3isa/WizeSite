@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
@@ -69,6 +71,61 @@ void main() {
     expect(selectedName, 'Steel Recent');
     expect(find.text('Steel Old'), findsNothing);
   });
+
+  testWidgets('ignores stale suggestions when a slower search completes late', (
+    tester,
+  ) async {
+    final repository = _ControlledSearchEntityRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [entityRepositoryProvider.overrideWithValue(repository)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EntityAutocompleteField(
+              workspaceId: 'workspace_1',
+              entityType: 'supplier',
+              label: 'Supplier',
+              onChanged: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'st');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(repository.queries, ['st']);
+
+    await tester.enterText(find.byType(TextField), 'steel');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(repository.queries, ['st', 'steel']);
+
+    repository.complete('steel', [_entity(id: 'latest', name: 'Steel Latest')]);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Steel Latest'), findsOneWidget);
+    expect(find.text('Steel Stale'), findsNothing);
+
+    repository.complete('st', [_entity(id: 'stale', name: 'Steel Stale')]);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Steel Latest'), findsOneWidget);
+    expect(find.text('Steel Stale'), findsNothing);
+  });
+}
+
+AppEntity _entity({required String id, required String name}) {
+  return AppEntity(
+    id: id,
+    workspaceId: 'workspace_1',
+    name: name,
+    normalizedName: name.toLowerCase(),
+    type: 'supplier',
+    createdAt: DateTime.utc(2026, 5, 1),
+  );
 }
 
 class _FakeEntityRepository implements EntityRepository {
@@ -100,6 +157,57 @@ class _FakeEntityRepository implements EntityRepository {
   }) async {
     return null;
   }
+
+  @override
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return AppEntity(
+      id: 'created',
+      workspaceId: workspaceId,
+      name: name,
+      normalizedName: name.toLowerCase(),
+      type: type,
+      createdAt: DateTime(2026),
+      defaultRate: defaultRate,
+      rateUnit: rateUnit ?? '',
+      phoneNumber: phoneNumber ?? '',
+      notes: notes ?? '',
+    );
+  }
+
+  @override
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    return AppEntity(
+      id: entityId,
+      workspaceId: 'workspace_1',
+      name: name,
+      normalizedName: name.toLowerCase(),
+      type: type,
+      createdAt: DateTime(2026),
+      defaultRate: defaultRate,
+      rateUnit: rateUnit ?? '',
+      phoneNumber: phoneNumber ?? '',
+      notes: notes ?? '',
+    );
+  }
+
+  @override
+  Future<void> deleteEntity(String entityId) async {}
 
   @override
   Future<AppEntity?> getEntityById(String entityId) async {
@@ -149,5 +257,29 @@ class _FakeEntityRepository implements EntityRepository {
     int limit = 20,
   }) {
     return Stream.value(entities.take(limit).toList(growable: false));
+  }
+}
+
+class _ControlledSearchEntityRepository extends _FakeEntityRepository {
+  _ControlledSearchEntityRepository() : super(const []);
+
+  final List<String> queries = [];
+  final Map<String, Completer<List<AppEntity>>> _pending = {};
+
+  @override
+  Future<List<AppEntity>> searchEntities(
+    String workspaceId,
+    String query, {
+    String? type,
+    int limit = 20,
+  }) {
+    queries.add(query);
+    final completer = Completer<List<AppEntity>>();
+    _pending[query] = completer;
+    return completer.future;
+  }
+
+  void complete(String query, List<AppEntity> results) {
+    _pending.remove(query)?.complete(results);
   }
 }

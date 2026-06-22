@@ -9,7 +9,6 @@ class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String projects = '/projects';
   static const String archivedProjects = '/projects/archived';
-  static const String add = '/add';
   static const String reports = '/reports';
   static const String entitySummary = '/entity-summary';
   static const String settings = '/settings';
@@ -22,7 +21,6 @@ class AppRoutes {
   static const String projectEdit = '/project/:id/edit';
   static const String projectExpenses = '/project/:projectId/expenses';
 
-  static const String addEntry = '/add-entry';
   static const String addExpense = '/add-expense';
   static const String expenseDetail = '/expense/:id';
   static const String expenseEdit = '/expense/:id/edit';

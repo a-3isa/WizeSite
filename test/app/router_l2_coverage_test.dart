@@ -38,6 +38,8 @@ void main() {
     expect(routePaths, contains(AppRoutes.contractorsDirectory));
     expect(routePaths, contains(AppRoutes.equipmentDirectory));
     expect(routePaths, contains(AppRoutes.transportProvidersDirectory));
+    expect(routePaths, isNot(contains('/add')));
+    expect(routePaths, isNot(contains('/add-entry')));
   });
 
   test('resolveAppRedirect keeps authenticated workspace routes in app', () {

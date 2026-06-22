@@ -2,6 +2,8 @@ class AccountingCategories {
   const AccountingCategories._();
 
   static const materials = 'materials';
+  static const worker = 'worker';
+  static const contractor = 'contractor';
   static const labor = 'labor';
   static const transport = 'transport';
   static const equipment = 'equipment';
@@ -12,6 +14,8 @@ class AccountingCategories {
 
   static const values = <String>[
     materials,
+    worker,
+    contractor,
     labor,
     transport,
     equipment,

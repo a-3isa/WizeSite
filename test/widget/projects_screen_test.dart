@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/archived_projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
@@ -15,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 Project _project(String id, double net, {String status = 'active'}) {
   return Project(
@@ -156,7 +161,79 @@ Widget _app(ProjectRepository repository, AccountingAccessRoleType role) {
   );
 }
 
+Widget _archivedApp(ProjectRepository repository) {
+  final router = GoRouter(
+    initialLocation: '/projects/archived',
+    routes: [
+      GoRoute(
+        path: '/projects',
+        builder: (_, _) => const Scaffold(body: SizedBox.shrink()),
+      ),
+      GoRoute(
+        path: '/projects/archived',
+        builder: (_, _) => const ArchivedProjectsScreen(),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+      projectRepositoryProvider.overrideWithValue(repository),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
+}
+
 void main() {
+  testWidgets('shows loading content while the first project page resolves', (
+    tester,
+  ) async {
+    final repository = _PendingProjectRepository();
+
+    await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+    expect(find.text('Project high'), findsNothing);
+
+    repository.completeFirstPage(
+      FirestorePage(items: [_project('high', 500)], hasMore: false),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppLoadingSkeleton), findsNothing);
+    expect(find.text('Project high'), findsOneWidget);
+  });
+
+  testWidgets('shows loading content while archived projects resolve', (
+    tester,
+  ) async {
+    final repository = _PendingArchivedProjectRepository();
+
+    await tester.pumpWidget(_archivedApp(repository));
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+    expect(find.text('Project old'), findsNothing);
+
+    repository.completeFirstPage(
+      FirestorePage(items: [_project('old', 0)], hasMore: false),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppLoadingSkeleton), findsNothing);
+    expect(find.text('Project old'), findsOneWidget);
+  });
+
   testWidgets('owner can page, filter, and use financial project sorts', (
     tester,
   ) async {
@@ -179,7 +256,12 @@ void main() {
     await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('qa_projects_sort')));
+    await tester.pumpAndSettle();
     expect(find.text('Highest expense'), findsOneWidget);
+    await tester.tap(find.text('Highest expense'));
+    await tester.pumpAndSettle();
+    expect(repository.queries.last.sort, ProjectBrowseSort.highestExpense);
     expect(find.byIcon(Icons.trending_up), findsWidgets);
     expect(find.byIcon(Icons.trending_down), findsOneWidget);
     expect(find.textContaining('500'), findsWidgets);
@@ -192,6 +274,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Project tail'), findsOneWidget);
 
+    await tester.tap(find.byKey(const Key('qa_projects_filter')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Completed'));
     await tester.pumpAndSettle();
     expect(repository.queries.last.status, 'completed');
@@ -242,4 +326,52 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.archivedIds, ['archive_me']);
   });
+}
+
+class _PendingProjectRepository extends _FakeProjectRepository {
+  _PendingProjectRepository()
+    : _firstPageCompleter = Completer<FirestorePage<Project>>(),
+      super(firstPage: const FirestorePage(items: [], hasMore: false));
+
+  final Completer<FirestorePage<Project>> _firstPageCompleter;
+
+  @override
+  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  }) {
+    queries.add(request);
+    if (cursor != null) {
+      return Future.value(secondPage);
+    }
+    return _firstPageCompleter.future;
+  }
+
+  void completeFirstPage(FirestorePage<Project> page) {
+    _firstPageCompleter.complete(page);
+  }
+}
+
+class _PendingArchivedProjectRepository extends _FakeProjectRepository {
+  _PendingArchivedProjectRepository()
+    : _firstPageCompleter = Completer<FirestorePage<Project>>(),
+      super(firstPage: const FirestorePage(items: [], hasMore: false));
+
+  final Completer<FirestorePage<Project>> _firstPageCompleter;
+
+  @override
+  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+    String workspaceId, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+  }) {
+    if (cursor != null) {
+      return Future.value(const FirestorePage(items: [], hasMore: false));
+    }
+    return _firstPageCompleter.future;
+  }
+
+  void completeFirstPage(FirestorePage<Project> page) {
+    _firstPageCompleter.complete(page);
+  }
 }

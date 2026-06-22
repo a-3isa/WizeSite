@@ -385,7 +385,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                               )
                             : const SizedBox.shrink(),
-                        loading: () => const SizedBox.shrink(),
+                        loading: () =>
+                            const LinearProgressIndicator(minHeight: 2),
                         error: (_, _) => const SizedBox.shrink(),
                       );
                     },

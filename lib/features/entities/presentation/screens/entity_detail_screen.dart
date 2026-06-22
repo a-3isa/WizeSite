@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:file_picker/file_picker.dart';
@@ -113,7 +114,7 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
           final entity = snapshot.data;
           if (snapshot.connectionState == ConnectionState.waiting &&
               entity == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const AppLoadingSkeleton(lineCount: 8);
           }
           if (entity == null) {
             return Center(child: Text(l10n.t('noDataYet')));

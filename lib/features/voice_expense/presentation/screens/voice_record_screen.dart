@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_capture_state.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
@@ -180,7 +181,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
     if (!mounted) {
       return;
     }
-    appNavigateBack(context, fallbackRoute: AppRoutes.add);
+    appNavigateBack(context, fallbackRoute: AppRoutes.dashboard);
   }
 
   void _syncPulse(VoiceCaptureState state) {
@@ -411,7 +412,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
               ],
             );
           },
-          loading: () => const SizedBox.shrink(),
+          loading: () => const AppLoadingSkeleton(lineCount: 4),
           error: (error, _) =>
               Center(child: Text(l10n.t('somethingWentWrong'))),
         ),

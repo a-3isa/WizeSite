@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -264,24 +265,25 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
       child: Scaffold(
         appBar: appBackAppBar(
           context: context,
-          title: l10n.t('workers'),
+          title: l10n.t('workerDirectory'),
           fallbackRoute: AppRoutes.projects,
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openAddWorker,
-          icon: const Icon(Icons.add),
-          label: Text(l10n.t('addWorkerTitle')),
+          actions: [
+            TextButton.icon(
+              key: const Key('qa_worker_add'),
+              onPressed: _openAddWorker,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.t('add')),
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
         body: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: TextField(
+              child: AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('search'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
+                labelText: l10n.t('search'),
               ),
             ),
             const SizedBox(height: 16),
@@ -399,6 +401,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
                 ],
               ),
               trailing: PopupMenuButton<String>(
+                key: Key('qa_worker_actions_${worker.id}'),
                 onSelected: (value) async {
                   if (value == 'edit') {
                     await _openEditWorker(worker);
@@ -408,10 +411,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
                 },
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text(l10n.t('archive')),
-                  ),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.t('delete'))),
                 ],
               ),
             ),

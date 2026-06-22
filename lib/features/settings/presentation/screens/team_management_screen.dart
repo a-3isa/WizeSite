@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,8 +255,9 @@ class _TeamManagementScreenState extends ConsumerState<TeamManagementScreen> {
                       .toList(),
                 );
               },
-              error: (error, _) => Center(child: Text(appErrorMessage(l10n, error))),
-              loading: () => const SizedBox.shrink(),
+              error: (error, _) =>
+                  Center(child: Text(appErrorMessage(l10n, error))),
+              loading: () => const AppLoadingSkeleton(lineCount: 4),
             ),
           ],
         ),

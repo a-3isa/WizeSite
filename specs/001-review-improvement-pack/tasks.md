@@ -47,14 +47,14 @@
 
 ## Phase 3: User Story 1 - Reach Core Actions Faster (Priority: P1) MVP
 
-**Goal**: Users can reach Home, Add, Reports, Projects, and Notifications directly, while the dashboard prioritizes action and presents coherent loading, refresh, error, summary, and upgrade states.
+**Goal**: Users can reach Home, Projects, the central Add popup, project-scoped reports, and Notifications directly, while the dashboard prioritizes resources and presents coherent loading, refresh, error, summary, and upgrade states.
 
 **Independent Test**: From a signed-in shell, navigate among all four branches, open Notifications with an unread badge, use every Add action, refresh the dashboard, and verify stable loading/recovery states without hidden destinations or duplicate launches.
 
 ### Tests for User Story 1
 
 - [X] T014 [P] [US1] Write router and shell widget tests for four stable branches, active-branch reselection, Android back behavior, repeated taps, and no unreachable Add branch in `test/widget/app_bottom_nav_shell_test.dart`
-- [X] T015 [P] [US1] Write Add hub action-parity and localized semantics tests for expense, payment, worker entry, and voice expense actions in `test/widget/add_hub_screen_test.dart`
+- [X] T015 [P] [US1] Write central Add popup action-parity and localized semantics tests for expense, payment, and voice expense actions in `test/widget/app_bottom_nav_shell_test.dart`
 - [X] T016 [P] [US1] Write notification provider/screen tests for bounded targeted reads, missing `readAt` as unread, badge count, mark-read behavior, loading, empty, and sanitized error states in `test/widget/notifications_screen_test.dart`
 - [X] T017 [P] [US1] Add Firestore emulator rules tests proving only the target user can change only `readAt` in `functions/src/firestore_rules.test.ts`
 - [X] T018 [P] [US1] Write dashboard provider and backend recomputation tests for one coherent `DashboardSnapshot`, one bounded `workspace_metrics` read, member/entry-only short-circuiting, current-week/top-value aggregation, bounded recent references, pending-queue deduplication, and friendly missing or restricted financial states in `test/features/dashboard/data/dashboard_providers_test.dart` and `functions/src/project_recompute_trigger.test.ts`
@@ -62,9 +62,9 @@
 
 ### Implementation for User Story 1
 
-- [X] T020 [US1] Add Home, Add, Reports, and Projects as indexed shell branches and preserve route redirects in `lib/app/router.dart`
+- [X] T020 [US1] Keep Home and Projects as indexed shell branches, restore the central Add popup, route standalone `/reports` requests to project-scoped reports, and preserve route redirects in `lib/app/router.dart`
 - [X] T021 [US1] Replace the two-tab/arc mapping with four persistent `NavigationDestination` items, localized semantics, stable branch indexes, and preserved offline-banner space in `lib/core/widgets/app_bottom_nav_shell.dart`
-- [X] T022 [US1] Complete action parity in `lib/features/add/presentation/screens/add_hub_screen.dart`, remove obsolete commented action blocks, and prevent duplicate launches while prefetch is active
+- [X] T022 [US1] Complete action parity in the central Add popup in `lib/core/widgets/app_bottom_nav_shell.dart`, remove obsolete Add Hub/Add Entry surfaces, and keep destination prefetching on navigation actions
 - [X] T023 [P] [US1] Add backward-compatible notification parsing and unread calculation in `lib/features/notifications/domain/notification_item.dart`
 - [X] T024 [US1] Move the bounded targeted query and mark-read operation into `lib/features/notifications/data/notification_repository.dart` and expose Riverpod providers from `lib/features/notifications/data/notification_providers.dart`
 - [X] T025 [US1] Update `lib/features/notifications/presentation/screens/notifications_screen.dart` to use typed items, mark displayed items read, and render shared loading/empty/recovery states
@@ -127,7 +127,7 @@
 - [X] T053 [P] [US3] Preserve project/date exclusion and multi-page export cases in `test/features/reports/services/report_export_data_builder_test.dart`
 - [X] T054 [P] [US3] Write focused chart PDF/share tests for category, cashflow, and monthly-flow datasets in `test/features/reports/services/report_chart_exporter_test.dart`
 - [X] T055 [P] [US3] Extend entity repository tests for post-backfill legacy visibility plus paged exact-type directories ordered by timestamp/name/ID in `test/features/entities/data/entity_repository_test.dart`
-- [X] T056 [P] [US3] Write Add Hub/resource directory widget tests proving the visible Resources section reaches worker, contractor, equipment, and transport cross-project lists, including pagination, search, route handoff, denied financial totals, and non-worker accounting flows never exposing worker partial-payment controls in `test/widget/add_hub_screen_test.dart` and `test/widget/resource_directory_screen_test.dart`
+- [X] T056 [P] [US3] Write Home Resources/resource directory widget tests proving the visible Resources section reaches worker, contractor, equipment, and transport cross-project lists, including pagination, search, route handoff, denied financial totals, and non-worker accounting flows never exposing worker partial-payment controls in `test/widget/dashboard_screen_test.dart` and `test/widget/resource_directory_screen_test.dart`
 - [X] T057 [P] [US3] Add worker model/repository/widget tests for active/inactive/terminated defaults, filters, edit persistence, and separate archive behavior in `test/features/workers/worker_status_test.dart`
 - [X] T058 [P] [US3] Extend worker accounting tests for denied-role short-circuiting, exact maintained-summary totals beyond 50 records, paid/unpaid/partial calculation rules, `paidAmount` validation, confirmed totals, and unresolved legacy-partial explanations in `test/features/workers/worker_accounting_test.dart`
 - [X] T059 [P] [US3] Add member/entry-only denial coverage for `workspace_metrics`, `project_metrics`, `worker_accounting_summaries`, and domain-accounting collections; add worker status and partial-payment validation cases; and keep entity backfill idempotency cases in `functions/src/firestore_rules.test.ts`, `functions/src/worker_mutation.test.ts`, and `functions/src/entity_last_used_backfill.test.ts`
@@ -145,7 +145,7 @@
 - [X] T068 [US3] Add an idempotent cursor-batched admin backfill command for missing entity `lastUsedAt` in `functions/src/entity_last_used_backfill.ts` and `functions/package.json`, and add timestamp/name/ID cursor-paged exact-type directory methods to `lib/features/entities/data/entity_repository.dart`
 - [X] T069 [P] [US3] Add a reusable typed entity directory with search, pagination, access-gated totals, and accounting-route handoff in `lib/features/entities/presentation/screens/resource_directory_screen.dart`
 - [X] T070 [US3] Replace project-only contractor/equipment/transport entry routes with top-level directory routes plus existing detail routes in `lib/core/constants/app_routes.dart` and `lib/app/router.dart`
-- [X] T071 [US3] Wire worker, contractor, equipment, and transport directory entries into a visible Resources section in `lib/features/add/presentation/screens/add_hub_screen.dart` and configure typed directory screens in `lib/features/contractors/presentation/screens/contractors_screen.dart`, `lib/features/equipment/presentation/screens/equipment_screen.dart`, and `lib/features/transport/presentation/screens/transport_providers_screen.dart`
+- [X] T071 [US3] Wire worker, contractor, equipment, and transport directory entries into a visible Home Resources section in `lib/features/dashboard/presentation/screens/dashboard_screen.dart` and configure typed directory screens in `lib/features/contractors/presentation/screens/contractors_screen.dart`, `lib/features/equipment/presentation/screens/equipment_screen.dart`, and `lib/features/transport/presentation/screens/transport_providers_screen.dart`
 - [X] T072 [P] [US3] Add backward-compatible `status` parsing/serialization to `lib/features/workers/domain/worker_models.dart`
 - [X] T073 [US3] Persist and filter worker status independently from archive in `lib/features/workers/data/worker_repository.dart` and `lib/features/workers/presentation/screens/add_worker_screen.dart`
 - [X] T074 [US3] Add worker status filters/badges and shared loading/error/empty states in `lib/features/workers/presentation/screens/workers_screen.dart`
@@ -199,7 +199,7 @@
 
 **Purpose**: Close accessibility, localization, cleanup, performance, and release-verification work across all selected stories.
 
-- [X] T100 [P] Remove obsolete commented UI and remaining duplicate private `_SectionHeader`, `_ErrorCard`, `_LoadingWidget`, and empty-state implementations from `lib/features/add/presentation/screens/add_hub_screen.dart`, `lib/features/voice_expense/presentation/screens/voice_record_screen.dart`, `lib/features/reports/presentation/screens/reports_screen.dart`, and `lib/features/settings/presentation/screens/settings_screen.dart`
+- [X] T100 [P] Remove obsolete Add Hub/Add Entry UI and remaining duplicate private `_SectionHeader`, `_ErrorCard`, `_LoadingWidget`, and empty-state implementations from `lib/core/widgets/app_bottom_nav_shell.dart`, `lib/features/voice_expense/presentation/screens/voice_record_screen.dart`, `lib/features/reports/presentation/screens/reports_screen.dart`, and `lib/features/settings/presentation/screens/settings_screen.dart`
 - [X] T101 [P] Audit targeted screens including `lib/features/common/presentation/screens/domain_accounting_records_screen.dart` for hardcoded/debug-only production labels and raw exception rendering, then replace them through `lib/app/localization/app_localizations.dart` and `lib/core/utils/app_error_messages.dart`
 - [X] T102 [P] Add RTL, semantics, and non-color status regression coverage for shell, quick actions, reports, and project cards in `test/widget/accessibility_rtl_test.dart`
 - [X] T103 Add stable Arabic/English money and count formatting cases in `test/core/formatters_test.dart` and correct ambiguous output in `lib/core/utils/formatters.dart`
@@ -274,7 +274,7 @@ Task: T038 Preserve payment navigation regressions in test/widget/payment_naviga
 Task: T049 Extend project repository query tests in test/features/projects/data/project_repository_test.dart
 Task: T051 Extend report scope provider tests in test/features/reports/data/reports_providers_test.dart
 Task: T054 Write chart export tests in test/features/reports/services/report_chart_exporter_test.dart
-Task: T056 Write Add Hub resource discoverability and directory tests
+Task: T056 Write Home Resources discoverability and directory tests
 Task: T057 Add worker status tests in test/features/workers/worker_status_test.dart
 ```
 
@@ -294,7 +294,7 @@ Task: T085 Write sync status tests in test/widget/sync_status_screen_test.dart
 
 1. Complete Phase 1 and Phase 2.
 2. Complete US1 through T031.
-3. Stop and validate the four-branch shell, notifications, Add hub, and dashboard independently.
+3. Stop and validate the shell, central Add popup, notifications, Home Resources, and dashboard independently.
 4. Demo or release the US1 increment before taking on the remaining review pack if schedule requires staged delivery.
 
 ### Incremental Delivery

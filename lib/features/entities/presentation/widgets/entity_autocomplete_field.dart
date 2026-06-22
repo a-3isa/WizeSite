@@ -13,6 +13,7 @@ class EntityAutocompleteField extends ConsumerStatefulWidget {
     this.entityType,
     this.initialEntityId,
     this.initialEntityName,
+    this.showAllOnEmpty = false,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class EntityAutocompleteField extends ConsumerStatefulWidget {
   final String? entityType;
   final String? initialEntityId;
   final String? initialEntityName;
+  final bool showAllOnEmpty;
   final void Function(String? entityId, String? entityName) onChanged;
 
   @override
@@ -35,6 +37,7 @@ class _EntityAutocompleteFieldState
   List<AppEntity> _suggestions = [];
   Timer? _debounce;
   String? _selectedId;
+  int _requestVersion = 0;
 
   @override
   void initState() {
@@ -43,11 +46,13 @@ class _EntityAutocompleteFieldState
     _selectedId = widget.initialEntityId;
     _fetchSuggestions(_controller.text);
     _controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _controller.dispose();
     _focusNode.dispose();
     _debounce?.cancel();
@@ -56,12 +61,19 @@ class _EntityAutocompleteFieldState
 
   void _onTextChanged() {
     final text = _controller.text.trim();
+    _debounce?.cancel();
     if (text.isEmpty) {
+      _requestVersion++;
       setState(() {
-        _suggestions = [];
         _selectedId = null;
+        if (!widget.showAllOnEmpty) {
+          _suggestions = [];
+        }
       });
       widget.onChanged(null, null);
+      if (widget.showAllOnEmpty && _focusNode.hasFocus) {
+        _fetchSuggestions('');
+      }
       return;
     }
     if (_selectedId != null &&
@@ -70,15 +82,21 @@ class _EntityAutocompleteFieldState
       _selectedId = null;
     }
     widget.onChanged(_selectedId, text);
-    _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
       _fetchSuggestions(text);
     });
   }
 
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && widget.showAllOnEmpty) {
+      _fetchSuggestions(_controller.text);
+    }
+  }
+
   Future<void> _fetchSuggestions(String query) async {
+    final requestVersion = ++_requestVersion;
     final trimmed = query.trim();
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty && !widget.showAllOnEmpty) {
       if (mounted) {
         setState(() => _suggestions = []);
       }
@@ -94,10 +112,10 @@ class _EntityAutocompleteFieldState
             type: widget.entityType,
             limit: 10,
           );
-      if (!mounted) return;
+      if (!mounted || requestVersion != _requestVersion) return;
       setState(() => _suggestions = results);
     } catch (_) {
-      if (mounted) {
+      if (mounted && requestVersion == _requestVersion) {
         setState(() => _suggestions = []);
       }
     }

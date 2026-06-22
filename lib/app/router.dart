@@ -6,8 +6,6 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
-import 'package:buildtrack_app/features/add/presentation/screens/add_entry_screen.dart';
-import 'package:buildtrack_app/features/add/presentation/screens/add_hub_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
@@ -54,8 +52,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
   final rootRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final dashboardRouteObserver = RouteObserver<ModalRoute<dynamic>>();
-  final addRouteObserver = RouteObserver<ModalRoute<dynamic>>();
-  final reportsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final projectsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final refresh = _RouterRefreshNotifier(auth.authStateChanges());
   ref.onDispose(refresh.dispose);
@@ -175,28 +171,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
-            observers: [addRouteObserver],
-            routes: [
-              GoRoute(
-                path: AppRoutes.add,
-                name: 'add',
-                builder: (context, state) => const AddHubScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            observers: [reportsRouteObserver],
-            routes: [
-              GoRoute(
-                path: AppRoutes.reports,
-                name: 'reports',
-                builder: (context, state) => ReportsScreen(
-                  projectId: state.uri.queryParameters['projectId'],
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
             observers: [projectsRouteObserver],
             routes: [
               GoRoute(
@@ -207,6 +181,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        name: 'reports',
+        redirect: (context, state) {
+          final projectId = state.uri.queryParameters['projectId'];
+          return projectId == null || projectId.isEmpty
+              ? AppRoutes.projects
+              : null;
+        },
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: ReportsScreen(
+            projectId: state.uri.queryParameters['projectId'],
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.createProject,
@@ -254,18 +244,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return smoothAppPage<void>(
             key: state.pageKey,
             child: ExpensesScreen(projectId: projectId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.addEntry,
-        name: 'addEntry',
-        pageBuilder: (context, state) {
-          final tabParam = state.uri.queryParameters['tab'];
-          final initialTab = int.tryParse(tabParam ?? '0') ?? 0;
-          return smoothAppPage<void>(
-            key: state.pageKey,
-            child: AddEntryScreen(initialTab: initialTab),
           );
         },
       ),

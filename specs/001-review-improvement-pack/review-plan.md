@@ -62,7 +62,7 @@ mapping by opening the code + test. Any FR with no asserting test ⇒ **WEAK**, 
 
 ### US1 — Shell & dashboard — FR-001–005A, 038–040, 044–045, 050, 053, 056
 - **Trace**: `lib/core/widgets/app_bottom_nav_shell.dart`, `lib/app/router.dart`,
-  `lib/features/add/presentation/screens/add_hub_screen.dart`,
+  `lib/features/dashboard/presentation/screens/dashboard_screen.dart`,
   `lib/features/notifications/data/notification_repository.dart` + `notification_providers.dart`,
   `lib/features/dashboard/domain/dashboard_snapshot.dart`, `dashboard_providers.dart`,
   `functions/src/index.ts` (`workspace_metrics` recompute).

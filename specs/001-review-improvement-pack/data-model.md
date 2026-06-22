@@ -18,7 +18,7 @@ Represents one stable branch in the signed-in shell.
 
 **Validation Rules**
 
-- Home, Add, Reports, and Projects must each map to exactly one reachable branch.
+- Home and Projects must each map to exactly one reachable branch; the center Add control opens the add-action popup and Reports remain reachable from project-scoped report actions rather than as a standalone shell branch.
 - Branch indexes must not change based on locale or workspace state.
 - Re-selecting the active branch returns it to its initial location using existing shell behavior.
 

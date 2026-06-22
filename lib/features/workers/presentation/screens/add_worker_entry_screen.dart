@@ -12,6 +12,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -294,7 +295,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
           fallbackRoute: _fallbackRoute(),
         ),
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -325,7 +326,10 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       );
                     },
                     error: (e, _) => Text(appErrorMessage(l10n, e)),
-                    loading: () => const SizedBox.shrink(),
+                    loading: () => const AppLoadingSkeleton(
+                      lineCount: 2,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   projectsAsync.when(
@@ -341,7 +345,10 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
                     error: (e, _) => Text(appErrorMessage(l10n, e)),
-                    loading: () => const SizedBox.shrink(),
+                    loading: () => const AppLoadingSkeleton(
+                      lineCount: 2,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Builder(
