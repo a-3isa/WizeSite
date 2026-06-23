@@ -13,6 +13,7 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -299,7 +300,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  workersAsync.when(
+                  workersAsync.whenStale(
                     data: (workers) {
                       final selectedWorkerId = _resolvedWorkerId(workers);
                       final fixedWorkerId = widget.workerId == 'new'
@@ -332,7 +333,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  projectsAsync.when(
+                  projectsAsync.whenStale(
                     data: (projects) => BelowDropdownField<String>(
                       label: l10n.t('project'),
                       value: _projectId,

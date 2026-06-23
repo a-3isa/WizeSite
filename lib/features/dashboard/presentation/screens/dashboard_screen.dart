@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -67,7 +68,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.t('home')),
+        title: const WorkspaceSwitcher(),
         actions: [
           Badge(
             isLabelVisible: unreadCount > 0,
@@ -122,15 +123,13 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               if (deadLetterCount > 0 || pendingSyncCount > 0)
                 const SizedBox(height: 16),
-              const WorkspaceSwitcher(),
-              const SizedBox(height: 20),
               SectionHeader(title: l10n.t('resources')),
               const SizedBox(height: 12),
               const _ResourceLinks(),
               const SizedBox(height: 24),
               SectionHeader(title: l10n.t('overview')),
               const SizedBox(height: 12),
-              snapshotAsync.when(
+              snapshotAsync.whenStale(
                 data: (snapshot) => DashboardFinancialSection(
                   snapshot: snapshot,
                   currency: currency,
@@ -149,7 +148,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              subscriptionAsync.when(
+              subscriptionAsync.whenStale(
                 data: (subscription) => subscription.tier == PlanTier.free
                     ? _UpgradeCard(
                         onTap: () => context.push(AppRoutes.subscriptionPlans),
@@ -169,98 +168,92 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class WorkspaceSwitcher extends ConsumerStatefulWidget {
+/// Compact workspace control rendered as the dashboard AppBar title.
+///
+/// Shows the active workspace name instantly from the cached summaries (no
+/// loading skeleton). When the user belongs to more than one workspace it
+/// becomes a dropdown with the current workspace shown first; otherwise it is
+/// plain title text. Switching is optimistic and rolls back on failure.
+class WorkspaceSwitcher extends ConsumerWidget {
   const WorkspaceSwitcher({super.key});
 
   @override
-  ConsumerState<WorkspaceSwitcher> createState() => _WorkspaceSwitcherState();
-}
-
-class _WorkspaceSwitcherState extends ConsumerState<WorkspaceSwitcher> {
-  bool _switching = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final activeWorkspaceId = ref.watch(activeWorkspaceIdProvider);
-    final workspacesAsync = ref.watch(userWorkspaceSummariesProvider);
+    final workspaces =
+        ref.watch(userWorkspaceSummariesProvider).valueOrNull ??
+        const <WorkspaceSummary>[];
 
-    return workspacesAsync.when(
-      data: (workspaces) {
-        if (workspaces.isEmpty) {
-          return const SizedBox.shrink();
+    WorkspaceSummary? current;
+    for (final workspace in workspaces) {
+      if (workspace.id == activeWorkspaceId) {
+        current = workspace;
+        break;
+      }
+    }
+    final title = current?.name ?? l10n.t('home');
+
+    if (workspaces.length < 2) {
+      return Text(
+        title,
+        key: const Key('qa_workspace_switcher'),
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return PopupMenuButton<String>(
+      key: const Key('qa_workspace_dropdown'),
+      tooltip: l10n.t('chooseWorkspace'),
+      position: PopupMenuPosition.under,
+      onSelected: (workspaceId) {
+        if (workspaceId == activeWorkspaceId) {
+          return;
         }
-        final selectedId =
-            workspaces.any((workspace) => workspace.id == activeWorkspaceId)
-            ? activeWorkspaceId
-            : null;
-        return Material(
-          key: const Key('qa_workspace_switcher'),
-          color: AppColors.constructionOrange.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        _switchWorkspace(context, ref, workspaceId);
+      },
+      itemBuilder: (context) => [
+        for (final workspace in workspaces)
+          PopupMenuItem<String>(
+            value: workspace.id,
             child: Row(
               children: [
-                const Icon(
-                  Icons.business_outlined,
+                Icon(
+                  workspace.id == activeWorkspaceId
+                      ? Icons.check
+                      : Icons.business_outlined,
+                  size: 18,
                   color: AppColors.constructionOrange,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      key: const Key('qa_workspace_dropdown'),
-                      value: selectedId,
-                      isExpanded: true,
-                      hint: Text(l10n.t('chooseWorkspace')),
-                      items: [
-                        for (final workspace in workspaces)
-                          DropdownMenuItem<String>(
-                            value: workspace.id,
-                            child: Text(
-                              workspace.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: _switching || workspaces.length < 2
-                          ? null
-                          : (workspaceId) {
-                              if (workspaceId == null ||
-                                  workspaceId == activeWorkspaceId) {
-                                return;
-                              }
-                              _switchWorkspace(workspaceId);
-                            },
-                    ),
+                  child: Text(
+                    workspace.name,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_switching) ...[
-                  const SizedBox(width: 12),
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
               ],
             ),
           ),
-        );
-      },
-      loading: () => const AppLoadingSkeleton(
-        lineCount: 2,
-        padding: EdgeInsets.symmetric(vertical: 8),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
+        ],
       ),
-      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
-  Future<void> _switchWorkspace(String workspaceId) async {
+  Future<void> _switchWorkspace(
+    BuildContext context,
+    WidgetRef ref,
+    String workspaceId,
+  ) async {
     final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     final previousWorkspaceId = ref.read(activeWorkspaceIdProvider);
-    setState(() => _switching = true);
     ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
     try {
       final persistedWorkspaceId = await ref
@@ -273,15 +266,9 @@ class _WorkspaceSwitcherState extends ConsumerState<WorkspaceSwitcher> {
       }
     } catch (error) {
       ref.read(activeWorkspaceIdProvider.notifier).state = previousWorkspaceId;
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _switching = false);
-      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(appErrorMessage(l10n, error))),
+      );
     }
   }
 }
@@ -395,27 +382,27 @@ class DashboardFinancialSection extends StatelessWidget {
             ),
           ],
         ),
-        if (snapshot.topCategory != null || snapshot.topEntity != null) ...[
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              if (snapshot.topCategory != null)
-                Chip(
-                  avatar: const Icon(Icons.category_outlined, size: 18),
-                  label: Text(
-                    '${l10n.t('topCategory')}: ${snapshot.topCategory}',
-                  ),
-                ),
-              if (snapshot.topEntity != null)
-                Chip(
-                  avatar: const Icon(Icons.business_outlined, size: 18),
-                  label: Text('${l10n.t('topEntity')}: ${snapshot.topEntity}'),
-                ),
-            ],
-          ),
-        ],
+        // if (snapshot.topCategory != null || snapshot.topEntity != null) ...[
+        //   const SizedBox(height: 20),
+        //   Wrap(
+        //     spacing: 12,
+        //     runSpacing: 12,
+        //     children: [
+        //       if (snapshot.topCategory != null)
+        //         Chip(
+        //           avatar: const Icon(Icons.category_outlined, size: 18),
+        //           label: Text(
+        //             '${l10n.t('topCategory')}: ${snapshot.topCategory}',
+        //           ),
+        //         ),
+        //       if (snapshot.topEntity != null)
+        //         Chip(
+        //           avatar: const Icon(Icons.business_outlined, size: 18),
+        //           label: Text('${l10n.t('topEntity')}: ${snapshot.topEntity}'),
+        //         ),
+        //     ],
+        //   ),
+        // ],
       ],
     );
   }

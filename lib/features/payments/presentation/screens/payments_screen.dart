@@ -14,6 +14,7 @@ import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/common/presentation/controllers/transaction_bulk_archive_controller.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -824,7 +825,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: projectsAsync.when(
+              child: projectsAsync.whenStale(
                 data: (projects) => BelowDropdownField<String>(
                   label: l10n.t('project'),
                   value: _selectedProjectId ?? '',

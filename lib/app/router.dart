@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/cache/workspace_cache.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/crashlytics_route_observer.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
@@ -55,11 +56,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final projectsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final refresh = _RouterRefreshNotifier(auth.authStateChanges());
   ref.onDispose(refresh.dispose);
-  ref.listen<String?>(
-    activeWorkspaceIdProvider,
-    (previous, next) => refresh.refresh(),
-  );
+  final workspaceCache = ref.watch(workspaceCacheProvider);
+  ref.listen<String?>(activeWorkspaceIdProvider, (previous, next) {
+    workspaceCache.setActiveWorkspaceId(next);
+    refresh.refresh();
+  });
   ref.listen<String?>(activeUserIdProvider, (previous, next) {
+    workspaceCache.setActiveUserId(next);
     refresh.refresh();
     FirebaseCrashlytics.instance.setUserIdentifier(next ?? '');
   });

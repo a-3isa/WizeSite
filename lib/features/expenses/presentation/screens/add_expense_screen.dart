@@ -16,6 +16,7 @@ import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
@@ -513,7 +514,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     Text(_error!, style: const TextStyle(color: Colors.red)),
                     const SizedBox(height: 12),
                   ],
-                  projectsAsync.when(
+                  projectsAsync.whenStale(
                     data: (projects) {
                       return BelowDropdownField<String>(
                         label: l10n.t('project'),
@@ -624,7 +625,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   if (_category == null) const SizedBox(height: 12),
                   if (_category == AccountingCategories.worker) ...[
                     const SizedBox(height: 12),
-                    workersAsync.when(
+                    workersAsync.whenStale(
                       data: (workers) => BelowDropdownField<String>(
                         label: l10n.t('workerName'),
                         value: _workerId,

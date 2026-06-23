@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/features/settings/data/profile_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
@@ -112,7 +113,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
           title: l10n.t('profile'),
           fallbackRoute: AppRoutes.settings,
         ),
-        body: settingsAsync.when(
+        body: settingsAsync.whenStale(
           data: (settings) {
             if (_nameController.text.isEmpty) {
               _nameController.text = settings.fullName.isEmpty

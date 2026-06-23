@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
@@ -750,7 +751,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     delegate: SliverChildListDelegate([
                       SectionHeader(title: l10n.t('currentSnapshot')),
                       const SizedBox(height: 12),
-                      summaryAsync.when(
+                      summaryAsync.whenStale(
                         data: (summary) => summary.isEmpty
                             ? AppEmptyState(
                                 message: l10n.t('noWorkspaceSelected'),
@@ -803,7 +804,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 24),
-                      categoryAsync.when(
+                      categoryAsync.whenStale(
                         data: (data) => _ShareableChart(
                           onShare: data.values.any((value) => value != 0)
                               ? () => _shareChart(
@@ -829,7 +830,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
-                      flowAsync.when(
+                      flowAsync.whenStale(
                         data: (data) => _ShareableChart(
                           onShare:
                               data.any(
@@ -859,7 +860,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
-                      flowAsync.when(
+                      flowAsync.whenStale(
                         data: (data) => _ShareableChart(
                           onShare:
                               data.any(
@@ -896,7 +897,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 24),
-                      expensesAsync.when(
+                      expensesAsync.whenStale(
                         data: (expenses) => RecentExpensesTable(
                           expenses: expenses,
                           locale: locale,
@@ -907,7 +908,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
-                      paymentsAsync.when(
+                      paymentsAsync.whenStale(
                         data: (payments) => RecentPaymentsTable(
                           payments: payments,
                           currency: currency,
@@ -919,7 +920,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
-                      workersAsync.when(
+                      workersAsync.whenStale(
                         data: (workers) => WorkerCostTable(
                           workers: workers,
                           currency: currency,
@@ -931,7 +932,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         loading: () => const AppLoadingSkeleton(),
                       ),
                       const SizedBox(height: 16),
-                      metricsAsync.when(
+                      metricsAsync.whenStale(
                         data: (metrics) => metrics == null
                             ? const SizedBox.shrink()
                             : Container(
@@ -958,7 +959,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      usageAsync.when(
+                      usageAsync.whenStale(
                         data: (usage) => Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,

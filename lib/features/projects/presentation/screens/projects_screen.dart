@@ -546,23 +546,23 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Icon(
-                                Icons.person_outline,
-                                size: 14,
-                                color: AppColors.textBody,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  project.clientName,
-                                  style: const TextStyle(
-                                    color: AppColors.textBody,
-                                    fontSize: 13,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
+                              // const Icon(
+                              //   Icons.person_outline,
+                              //   size: 14,
+                              //   color: AppColors.textBody,
+                              // ),
+                              // const SizedBox(width: 4),
+                              // Expanded(
+                              //   child: Text(
+                              //     project.clientName,
+                              //     style: const TextStyle(
+                              //       color: AppColors.textBody,
+                              //       fontSize: 13,
+                              //     ),
+                              //     overflow: TextOverflow.ellipsis,
+                              //   ),
+                              // ),
+                              // const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,

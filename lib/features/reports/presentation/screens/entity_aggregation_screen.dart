@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
@@ -205,7 +206,7 @@ class _EntityAggregationScreenState
                     ),
                     const SizedBox(height: 16),
                     Expanded(
-                      child: summariesAsync.when(
+                      child: summariesAsync.whenStale(
                         data: (summaries) {
                           final filtered = summaries
                               .where((item) {

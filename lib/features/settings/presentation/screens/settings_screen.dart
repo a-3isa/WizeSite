@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/core/widgets/usage_card.dart';
@@ -349,7 +350,7 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
             onManage: onManage,
           ),
           const SizedBox(height: 12),
-          usageAsync.when(
+          usageAsync.whenStale(
             data: (usage) => UsageCard(usage: usage),
             error: (_, _) => const SizedBox.shrink(),
             loading: () => const AppLoadingSkeleton(
@@ -365,7 +366,7 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
         ],
       );
     }
-    return subscriptionAsync.when(
+    return subscriptionAsync.whenStale(
       data: (sub) => Column(
         children: [
           _SubscriptionCard(
@@ -375,7 +376,7 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
             onManage: onManage,
           ),
           const SizedBox(height: 12),
-          usageAsync.when(
+          usageAsync.whenStale(
             data: (usage) => UsageCard(usage: usage),
             error: (_, _) => const SizedBox.shrink(),
             loading: () => const AppLoadingSkeleton(

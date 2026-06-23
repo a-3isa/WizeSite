@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,7 +32,7 @@ class SyncStatusScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('syncStatus'))),
-      body: actionsAsync.when(
+      body: actionsAsync.whenStale(
         data: (actions) => _SyncStatusContent(
           actions: actions,
           l10n: l10n,

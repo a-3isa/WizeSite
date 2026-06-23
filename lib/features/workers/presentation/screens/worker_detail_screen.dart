@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -55,7 +56,7 @@ class WorkerDetailScreen extends ConsumerWidget {
           title: l10n.t('workerDetails'),
           fallbackRoute: AppRoutes.workers,
         ),
-        body: workerAsync.when(
+        body: workerAsync.whenStale(
           data: (worker) {
             if (worker == null) {
               return Center(child: Text(l10n.t('workerNotFound')));
@@ -152,7 +153,7 @@ class WorkerDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                entriesAsync.when(
+                entriesAsync.whenStale(
                   data: (entries) {
                     if (entries.isEmpty) {
                       return Card(

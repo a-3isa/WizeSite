@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
@@ -78,7 +79,7 @@ class PaymentDetailScreen extends ConsumerWidget {
           title: l10n.t('paymentDetails'),
           fallbackRoute: _fallbackRoute(),
         ),
-        body: paymentAsync.when(
+        body: paymentAsync.whenStale(
           data: (payment) {
             if (payment == null) {
               return Center(child: Text(l10n.t('paymentNotFound')));

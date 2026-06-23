@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
@@ -42,7 +43,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           title: l10n.t('notificationsTitle'),
           fallbackRoute: AppRoutes.dashboard,
         ),
-        body: notificationsAsync.when(
+        body: notificationsAsync.whenStale(
           data: (items) {
             if (items.isEmpty) {
               return Center(

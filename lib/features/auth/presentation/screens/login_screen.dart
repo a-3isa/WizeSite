@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/app/theme/app_theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -370,7 +371,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       final supported = ref.watch(
                         googleSignInSupportedProvider,
                       );
-                      return supported.when(
+                      return supported.whenStale(
                         data: (isSupported) => isSupported
                             ? OutlinedButton.icon(
                                 onPressed: _loading ? null : _loginWithGoogle,

@@ -447,8 +447,19 @@ class FirebaseProjectRepository
         .take(request.pageSize)
         .toList(growable: false);
     final actions = await _queue.list(includeExpiredSynced: true);
+    final metricsByProjectId = await _fetchMetricsForProjectIds(
+      pageDocs.map((doc) => doc.id),
+    );
     final projects = pageDocs
-        .map((doc) => Project.fromMap(doc.id, doc.data()))
+        .map(
+          (doc) => Project.fromMap(
+            doc.id,
+            mergeProjectMetricsData(
+              projectData: doc.data(),
+              metricsData: metricsByProjectId[doc.id],
+            ),
+          ),
+        )
         .toList(growable: false);
     final items = _applyOptimisticProjectList(
       baseItems: projects,

@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -40,7 +41,7 @@ class ProjectDetailScreen extends ConsumerWidget {
           fallbackRoute: AppRoutes.projects,
           centerTitle: true,
         ),
-        body: projectAsync.when(
+        body: projectAsync.whenStale(
           data: (project) {
             if (project == null) {
               return Center(child: Text(l10n.t('projectNotFound')));

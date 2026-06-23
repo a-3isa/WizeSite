@@ -14,6 +14,7 @@ import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/active_filter_bar.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
@@ -953,7 +954,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
               ),
         body: Column(
           children: [
-            summaryAsync.when(
+            summaryAsync.whenStale(
               data: (summary) => _ExpenseSummaryCards(
                 summary: summary,
                 locale: locale,
