@@ -287,13 +287,13 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
               ),
             ),
             const SizedBox(height: 16),
-            _StatusFilters(
-              selectedStatus: _selectedStatus,
-              onSelected: (status) {
-                setState(() => _selectedStatus = status);
-                _refresh();
-              },
-            ),
+            // _StatusFilters(
+            //   selectedStatus: _selectedStatus,
+            //   onSelected: (status) {
+            //     setState(() => _selectedStatus = status);
+            //     _refresh();
+            //   },
+            // ),
             const SizedBox(height: 12),
             Expanded(
               child: RefreshIndicator(

@@ -720,30 +720,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     ),
                   ),
                 )
-              else if (currentProjectId == null)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.analytics_outlined,
-                          size: 64,
-                          color: AppColors.borderGrey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.t('selectProjectToViewReport'),
-                          style: const TextStyle(
-                            color: AppColors.textBody,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
               else
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1067,13 +1043,12 @@ class _ReportScopeControls extends StatelessWidget {
             label: l10n.t('selectProject'),
             value: projects.any((item) => item.id == scope.projectId)
                 ? scope.projectId
-                : null,
-            entries: projects
-                .map(
-                  (project) =>
-                      DropdownMenuEntry(value: project.id, label: project.name),
-                )
-                .toList(growable: false),
+                : '',
+            entries: [
+              DropdownMenuEntry(value: '', label: l10n.t('allProjectsOption')),
+              for (final project in projects)
+                DropdownMenuEntry(value: project.id, label: project.name),
+            ],
             onSelected: onProjectSelected,
           ),
         const SizedBox(height: 10),

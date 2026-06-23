@@ -188,12 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reports,
         name: 'reports',
-        redirect: (context, state) {
-          final projectId = state.uri.queryParameters['projectId'];
-          return projectId == null || projectId.isEmpty
-              ? AppRoutes.projects
-              : null;
-        },
+        // No projectId => all-projects (portfolio) report.
         pageBuilder: (context, state) => smoothAppPage<void>(
           key: state.pageKey,
           child: ReportsScreen(

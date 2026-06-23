@@ -1252,7 +1252,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                     itemBuilder: (context) => [
                       PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
                       PopupMenuItem(
-                        value: 'delete',
+                        value: 'archive',
                         child: Text(l10n.t('archive')),
                       ),
                     ],

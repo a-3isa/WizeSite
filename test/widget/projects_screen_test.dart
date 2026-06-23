@@ -138,7 +138,11 @@ Future<DocumentSnapshot<Map<String, dynamic>>> _cursor() async {
   return firestore.collection('cursors').doc('page_1').get();
 }
 
-Widget _app(ProjectRepository repository, AccountingAccessRoleType role) {
+Widget _app(
+  ProjectRepository repository,
+  AccountingAccessRoleType role, {
+  List<NavigatorObserver> navigatorObservers = const [],
+}) {
   return ProviderScope(
     overrides: [
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
@@ -148,15 +152,16 @@ Widget _app(ProjectRepository repository, AccountingAccessRoleType role) {
         (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
       ),
     ],
-    child: const MaterialApp(
-      localizationsDelegates: [
+    child: MaterialApp(
+      navigatorObservers: navigatorObservers,
+      localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: ProjectsScreen(),
+      home: const ProjectsScreen(),
     ),
   );
 }
@@ -326,6 +331,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.archivedIds, ['archive_me']);
   });
+
+  testWidgets('dismissing project overflow menu keeps loaded list visible', (
+    tester,
+  ) async {
+    final repository = _RefreshHoldProjectRepository(
+      firstPage: FirestorePage(
+        items: [_project('stable', 100)],
+        hasMore: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        AccountingAccessRoleType.owner,
+        navigatorObservers: [RouteObserver<ModalRoute<dynamic>>()],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.holdNextFetch();
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pump();
+
+    expect(find.text('Project stable'), findsOneWidget);
+    expect(find.byType(AppLoadingSkeleton), findsNothing);
+  });
 }
 
 class _PendingProjectRepository extends _FakeProjectRepository {
@@ -349,6 +384,31 @@ class _PendingProjectRepository extends _FakeProjectRepository {
 
   void completeFirstPage(FirestorePage<Project> page) {
     _firstPageCompleter.complete(page);
+  }
+}
+
+class _RefreshHoldProjectRepository extends _FakeProjectRepository {
+  _RefreshHoldProjectRepository({required super.firstPage});
+
+  var _holdNextFetch = false;
+  Completer<FirestorePage<Project>>? _heldFetch;
+
+  @override
+  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  }) {
+    queries.add(request);
+    if (_holdNextFetch && cursor == null) {
+      _holdNextFetch = false;
+      _heldFetch = Completer<FirestorePage<Project>>();
+      return _heldFetch!.future;
+    }
+    return Future.value(cursor == null ? firstPage : secondPage);
+  }
+
+  void holdNextFetch() {
+    _holdNextFetch = true;
   }
 }
 

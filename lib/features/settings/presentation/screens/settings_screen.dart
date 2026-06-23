@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -83,7 +84,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   delegate: SliverChildListDelegate([
                     _ProfileSection(l10n: l10n),
                     const SizedBox(height: 24),
-                    SectionHeader(title: l10n.t('settings')),
+                    SectionHeader(title: l10n.t('settingsPreferences')),
                     const SizedBox(height: 8),
                     _SettingsCard(
                       icon: Icons.language_rounded,
@@ -166,20 +167,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         activeTrackColor: AppColors.constructionOrange,
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    SectionHeader(title: l10n.t('settingsAccount')),
                     const SizedBox(height: 8),
-                    _SettingsCard(
-                      icon: Icons.person_outline_rounded,
-                      title: l10n.t('editProfile'),
-                      subtitle: l10n.t('profile'),
-                      color: AppColors.constructionOrange,
-                      child: IconButton(
-                        onPressed: () {
-                          prefetcher.warmSettings();
-                          context.push(AppRoutes.profileEdit);
-                        },
-                        icon: const Icon(Icons.chevron_right_rounded),
-                      ),
-                    ),
+                    // _SettingsCard(
+                    //   icon: Icons.person_outline_rounded,
+                    //   title: l10n.t('editProfile'),
+                    //   subtitle: l10n.t('profile'),
+                    //   color: AppColors.constructionOrange,
+                    //   child: IconButton(
+                    //     onPressed: () {
+                    //       prefetcher.warmSettings();
+                    //       context.push(AppRoutes.profileEdit);
+                    //     },
+                    //     icon: const Icon(Icons.chevron_right_rounded),
+                    //   ),
+                    // ),
+                    const SizedBox(height: 20),
+                    SectionHeader(title: l10n.t('manageTeam')),
                     const SizedBox(height: 8),
                     _SettingsCard(
                       icon: Icons.group_outlined,
@@ -194,6 +199,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         icon: const Icon(Icons.chevron_right_rounded),
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    SectionHeader(title: l10n.t('settingsWorkspace')),
+                    const SizedBox(height: 8),
+                    const _WorkspaceNameCard(),
                     const SizedBox(height: 8),
                     _SettingsCard(
                       icon: Icons.sync_rounded,
@@ -321,6 +330,105 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.t('settingsSaveFailed'))));
+  }
+}
+
+/// Shows the active workspace name and, for the owner, an inline rename action.
+/// Members are managed via the Team section. Rename writes straight to the
+/// `workspaces` doc (owner-gated by Firestore rules) and refreshes the cached
+/// summaries so the dashboard title updates immediately.
+class _WorkspaceNameCard extends ConsumerWidget {
+  const _WorkspaceNameCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final activeId = ref.watch(activeWorkspaceIdProvider);
+    final summaries =
+        ref.watch(userWorkspaceSummariesProvider).valueOrNull ??
+        const <WorkspaceSummary>[];
+    WorkspaceSummary? current;
+    for (final summary in summaries) {
+      if (summary.id == activeId) {
+        current = summary;
+        break;
+      }
+    }
+    final name = current?.name ?? '';
+    final isOwner = current?.isOwnedByCurrentUser ?? false;
+    final canRename = isOwner && activeId != null && activeId.isNotEmpty;
+
+    return _SettingsCard(
+      icon: Icons.business_outlined,
+      title: l10n.t('workspaceNameTitle'),
+      subtitle: name.isEmpty ? l10n.t('settingsWorkspace') : name,
+      color: AppColors.constructionOrange,
+      onTap: canRename ? () => _rename(context, ref, activeId, name) : null,
+      child: canRename
+          ? IconButton(
+              tooltip: l10n.t('renameWorkspace'),
+              onPressed: () => _rename(context, ref, activeId, name),
+              icon: const Icon(Icons.edit_outlined),
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _rename(
+    BuildContext context,
+    WidgetRef ref,
+    String workspaceId,
+    String currentName,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.t('renameWorkspace')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: l10n.t('workspaceNameTitle')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(l10n.t('save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newName == null) {
+      return;
+    }
+    if (newName.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.t('workspaceNameEmptyError'))),
+      );
+      return;
+    }
+    if (newName == currentName) {
+      return;
+    }
+    try {
+      await ref
+          .read(firestoreProvider)
+          .collection('workspaces')
+          .doc(workspaceId)
+          .update({'name': newName, 'updatedAt': FieldValue.serverTimestamp()});
+      ref.invalidate(userWorkspaceSummariesProvider);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(appErrorMessage(l10n, error))),
+      );
+    }
   }
 }
 

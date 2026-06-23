@@ -57,6 +57,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;
+  bool _isRefreshing = false;
   bool _hasMore = true;
   String? _workspaceId;
   String? _statusFilter;
@@ -129,7 +130,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool preserveVisibleProjects = true}) async {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     _workspaceId = workspaceId;
     if (workspaceId == null || workspaceId.isEmpty) {
@@ -143,22 +144,27 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _hasMore = false;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
       return;
     }
 
+    final showInitialLoading = !preserveVisibleProjects || _projects.isEmpty;
     if (mounted) {
       setState(() {
-        _projects.clear();
+        if (showInitialLoading) {
+          _projects.clear();
+        }
         _cursor = null;
         _error = null;
         _hasMore = true;
-        _isLoadingInitial = true;
+        _isLoadingInitial = showInitialLoading;
         _isLoadingMore = false;
+        _isRefreshing = !showInitialLoading;
       });
     }
 
-    await _loadMore(reset: true);
+    await _loadMore(reset: true, showInitialLoading: showInitialLoading);
   }
 
   Future<void> _refreshIfCurrentRoute() async {
@@ -172,12 +178,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     await _refresh();
   }
 
-  Future<void> _loadMore({bool reset = false}) async {
+  Future<void> _loadMore({
+    bool reset = false,
+    bool showInitialLoading = true,
+  }) async {
     final workspaceId = _workspaceId ?? ref.read(activeWorkspaceIdProvider);
     if (workspaceId == null || workspaceId.isEmpty) {
       return;
     }
-    if (!reset && (_isLoadingInitial || _isLoadingMore || !_hasMore)) {
+    if (!reset &&
+        (_isLoadingInitial || _isLoadingMore || _isRefreshing || !_hasMore)) {
       return;
     }
 
@@ -185,8 +195,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       setState(() {
         _error = null;
         if (reset) {
-          _isLoadingInitial = true;
+          _isLoadingInitial = showInitialLoading;
           _isLoadingMore = false;
+          _isRefreshing = !showInitialLoading;
         } else {
           _isLoadingMore = true;
         }
@@ -229,6 +240,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _error = null;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -238,6 +250,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _error = error;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
     }
   }
@@ -278,26 +291,53 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   }
 
   Future<void> _deleteProject(Project project, AppLocalizations l10n) async {
+    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.t('delete')),
-        content: Text(l10n.t('confirmDeleteProjectCascade')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.t('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              l10n.t('delete'),
-              style: const TextStyle(color: AppColors.danger),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final matches = controller.text.trim() == project.name.trim();
+          return AlertDialog(
+            title: Text(l10n.t('delete')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.t('confirmDeleteProjectCascade')),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.t('deleteProjectTypeNameToConfirm'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: InputDecoration(hintText: project.name),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+              ],
             ),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.t('cancel')),
+              ),
+              TextButton(
+                onPressed: matches ? () => Navigator.pop(context, true) : null,
+                child: Text(
+                  l10n.t('delete'),
+                  style: TextStyle(
+                    color: matches ? AppColors.danger : AppColors.textBody,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
+    controller.dispose();
     if (confirmed != true) {
       return;
     }
@@ -356,6 +396,12 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       appBar: AppBar(
         title: Text(l10n.t('projects')),
         actions: [
+          if (_canAccessFinancial)
+            IconButton(
+              tooltip: l10n.t('reports'),
+              onPressed: () => context.push(AppRoutes.reportsPath()),
+              icon: const Icon(Icons.assessment_outlined),
+            ),
           IconButton(
             onPressed: () => context.push(AppRoutes.archivedProjects),
             icon: const Icon(Icons.archive_outlined),
@@ -388,11 +434,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               l10n: l10n,
               onStatusChanged: (value) {
                 setState(() => _statusFilter = value);
-                unawaited(_refresh());
+                unawaited(_refresh(preserveVisibleProjects: false));
               },
               onSortChanged: (value) {
                 setState(() => _sort = value);
-                unawaited(_refresh());
+                unawaited(_refresh(preserveVisibleProjects: false));
               },
             ),
             if (_roleResolved && !_canAccessFinancial)
@@ -587,6 +633,18 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                               ),
                             ],
                           ),
+                          if (_canAccessFinancial &&
+                              project.budgetLimit != null &&
+                              project.budgetLimit! > 0) ...[
+                            const SizedBox(height: 8),
+                            _BudgetBar(
+                              spent: project.totalExpenses,
+                              budget: project.budgetLimit!,
+                              currency: currency,
+                              locale: locale,
+                              l10n: l10n,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -800,6 +858,72 @@ class _ProjectMenuButton<T> extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Thin budget-vs-spend indicator shown on project cards when a budget is set.
+class _BudgetBar extends StatelessWidget {
+  const _BudgetBar({
+    required this.spent,
+    required this.budget,
+    required this.currency,
+    required this.locale,
+    required this.l10n,
+  });
+
+  final double spent;
+  final double budget;
+  final String currency;
+  final String locale;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = budget <= 0 ? 0.0 : spent / budget;
+    final over = ratio > 1.0;
+    final color = over
+        ? AppColors.danger
+        : ratio >= 0.75
+        ? AppColors.warning
+        : AppColors.success;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: ratio.clamp(0.0, 1.0).toDouble(),
+            minHeight: 6,
+            backgroundColor: AppColors.surfaceGrey,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                '${Formatters.money(spent, currencyCode: currency, locale: locale)} / ${Formatters.money(budget, currencyCode: currency, locale: locale)}',
+                style: const TextStyle(fontSize: 11, color: AppColors.textBody),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              over
+                  ? l10n.t('overBudget')
+                  : '${(ratio * 100).round()}% ${l10n.t('budgetUsed')}',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

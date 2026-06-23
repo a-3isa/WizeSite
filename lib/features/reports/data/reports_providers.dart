@@ -919,8 +919,53 @@ final reportScopedRowsProvider = FutureProvider<ReportScopedRows?>((ref) async {
   }
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
   final scope = ref.watch(effectiveReportScopeProvider);
-  if (workspaceId == null || workspaceId.isEmpty || !scope.hasProject) {
+  if (workspaceId == null || workspaceId.isEmpty) {
     return null;
+  }
+
+  // Portfolio (all-projects) rollup: aggregate workspace-wide rows in range.
+  // Backed by the existing (workspaceId, isArchived, date) composite indexes.
+  if (!scope.hasProject) {
+    final firestore = ref.watch(firestoreProvider);
+    const limit = 1000;
+    final results = await Future.wait([
+      firestore
+          .collection('expenses')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('isArchived', isEqualTo: false)
+          .where('date', isGreaterThanOrEqualTo: scope.startDate)
+          .where('date', isLessThanOrEqualTo: scope.endDate)
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get(),
+      firestore
+          .collection('payments')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('isArchived', isEqualTo: false)
+          .where('date', isGreaterThanOrEqualTo: scope.startDate)
+          .where('date', isLessThanOrEqualTo: scope.endDate)
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get(),
+    ]);
+    final allExpenses =
+        results[0].docs
+            .map((doc) => Expense.fromMap(doc.id, doc.data()))
+            .where((item) => scope.contains(item.date))
+            .toList(growable: false)
+          ..sort((a, b) => b.date.compareTo(a.date));
+    final allPayments =
+        results[1].docs
+            .map((doc) => PaymentRecord.fromMap(doc.id, doc.data()))
+            .where((item) => scope.contains(item.date))
+            .toList(growable: false)
+          ..sort((a, b) => b.date.compareTo(a.date));
+    return ReportScopedRows(
+      expenses: allExpenses,
+      payments: allPayments,
+      hasMore:
+          results[0].docs.length >= limit || results[1].docs.length >= limit,
+    );
   }
 
   final expensePage = await ref
@@ -1017,7 +1062,7 @@ ReportMetrics _metricsFromScopedRows(
   final monthlyFlow = monthly.values.toList(growable: false)
     ..sort((a, b) => a.month.compareTo(b.month));
   return ReportMetrics(
-    projectId: scope.projectId!,
+    projectId: scope.projectId ?? '',
     projectName: base?.projectName ?? '',
     status: base?.status ?? 'active',
     isArchived: base?.isArchived ?? false,
@@ -1064,9 +1109,6 @@ final reportPendingActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
 
 final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
   final scope = ref.watch(effectiveReportScopeProvider);
-  if (!scope.hasProject) {
-    return const AsyncData(null);
-  }
 
   final baseAsync = ref.watch(reportBaseMetricsProvider);
   final pendingAsync = ref.watch(reportPendingActionsProvider);
@@ -1079,6 +1121,13 @@ final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
     data: (base) => pendingAsync.when(
       data: (actions) => scopedRowsAsync.when(
         data: (rows) {
+          // Portfolio (all-projects) rollup: derive purely from the
+          // workspace-wide rows; there is no single project to merge against.
+          if (!scope.hasProject) {
+            return AsyncData(
+              rows == null ? null : _metricsFromScopedRows(null, scope, rows),
+            );
+          }
           final merged = _mergePendingActionsIntoMetrics(
             base,
             actions,

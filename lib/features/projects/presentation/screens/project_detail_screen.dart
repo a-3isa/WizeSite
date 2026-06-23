@@ -113,26 +113,62 @@ class ProjectDetailScreen extends ConsumerWidget {
                     context.push(AppRoutes.reportsPath(projectId: project.id));
                   },
                   onDelete: () async {
+                    final controller = TextEditingController();
                     final confirmed = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(l10n.t('delete')),
-                        content: Text(l10n.t('confirmDeleteProjectCascade')),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(l10n.t('cancel')),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: Text(
-                              l10n.t('delete'),
-                              style: const TextStyle(color: AppColors.danger),
+                      builder: (context) => StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          final matches =
+                              controller.text.trim() == project.name.trim();
+                          return AlertDialog(
+                            title: Text(l10n.t('delete')),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(l10n.t('confirmDeleteProjectCascade')),
+                                const SizedBox(height: 16),
+                                Text(
+                                  l10n.t('deleteProjectTypeNameToConfirm'),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: controller,
+                                  autofocus: true,
+                                  decoration: InputDecoration(
+                                    hintText: project.name,
+                                  ),
+                                  onChanged: (_) => setDialogState(() {}),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text(l10n.t('cancel')),
+                              ),
+                              TextButton(
+                                onPressed: matches
+                                    ? () => Navigator.pop(context, true)
+                                    : null,
+                                child: Text(
+                                  l10n.t('delete'),
+                                  style: TextStyle(
+                                    color: matches
+                                        ? AppColors.danger
+                                        : AppColors.textBody,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     );
+                    controller.dispose();
                     if (confirmed == true) {
                       await ref
                           .read(projectRepositoryProvider)

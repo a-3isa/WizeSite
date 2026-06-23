@@ -28,6 +28,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _phoneController = TextEditingController();
 
   bool _loading = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
   String? _error;
 
   @override
@@ -182,15 +184,38 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(labelText: l10n.t('password')),
+                obscureText: !_showPassword,
+                decoration: InputDecoration(
+                  labelText: l10n.t('password'),
+                  suffixIcon: IconButton(
+                    key: const Key('signup_password_visibility_toggle'),
+                    onPressed: () =>
+                        setState(() => _showPassword = !_showPassword),
+                    icon: Icon(
+                      _showPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _confirmController,
-                obscureText: true,
+                obscureText: !_showConfirmPassword,
                 decoration: InputDecoration(
                   labelText: l10n.t('confirmPassword'),
+                  suffixIcon: IconButton(
+                    key: const Key('signup_confirm_visibility_toggle'),
+                    onPressed: () => setState(
+                      () => _showConfirmPassword = !_showConfirmPassword,
+                    ),
+                    icon: Icon(
+                      _showConfirmPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

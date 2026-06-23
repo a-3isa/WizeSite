@@ -1162,7 +1162,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     itemBuilder: (_) => [
                       PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
                       PopupMenuItem(
-                        value: 'delete',
+                        value: 'archive',
                         child: Text(l10n.t('archive')),
                       ),
                     ],

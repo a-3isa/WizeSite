@@ -1088,5 +1088,107 @@ void main() {
         ),
       );
     });
+
+    test(
+      'all-projects scope aggregates workspace rows across projects',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final start = DateTime.utc(2026, 6, 1);
+        final end = DateTime.utc(2026, 6, 30, 23, 59, 59, 999);
+
+        await firestore.collection('expenses').doc('e1').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_1',
+          'projectName': 'A',
+          'category': 'materials',
+          'amount': 100,
+          'currency': 'EGP',
+          'date': DateTime.utc(2026, 6, 5),
+          'isArchived': false,
+        });
+        await firestore.collection('expenses').doc('e2').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_2',
+          'projectName': 'B',
+          'category': 'labor',
+          'amount': 50,
+          'currency': 'EGP',
+          'date': DateTime.utc(2026, 6, 6),
+          'isArchived': false,
+        });
+        // Archived row must be excluded.
+        await firestore.collection('expenses').doc('e3').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_1',
+          'category': 'materials',
+          'amount': 999,
+          'currency': 'EGP',
+          'date': DateTime.utc(2026, 6, 7),
+          'isArchived': true,
+        });
+        // Other workspace must be excluded.
+        await firestore.collection('expenses').doc('e4').set({
+          'workspaceId': 'workspace_2',
+          'projectId': 'p',
+          'category': 'materials',
+          'amount': 777,
+          'currency': 'EGP',
+          'date': DateTime.utc(2026, 6, 8),
+          'isArchived': false,
+        });
+        await firestore.collection('payments').doc('p1').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_1',
+          'amount': 200,
+          'date': DateTime.utc(2026, 6, 9),
+          'paymentMethod': 'cash',
+          'isArchived': false,
+        });
+        await firestore.collection('payments').doc('p2').set({
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_2',
+          'amount': 80,
+          'date': DateTime.utc(2026, 6, 10),
+          'paymentMethod': 'cash',
+          'isArchived': false,
+        });
+
+        final container = ProviderContainer(
+          overrides: [
+            firestoreProvider.overrideWithValue(firestore),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            currentAccountingRoleProvider.overrideWith(
+              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            ),
+            reportScopeProvider.overrideWith(
+              (ref) => ReportScope(startDate: start, endDate: end),
+            ),
+            reportPendingActionsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final rows = await container.read(reportScopedRowsProvider.future);
+        expect(rows, isNotNull);
+        expect(rows!.expenses.map((item) => item.id).toSet(), {'e1', 'e2'});
+        expect(rows.payments.map((item) => item.id).toSet(), {'p1', 'p2'});
+
+        await container.read(reportBaseMetricsProvider.future);
+        await container.read(reportPendingActionsProvider.future);
+
+        final summary = container.read(reportSummaryProvider).requireValue;
+        expect(summary['totalExpenses'], 150);
+        expect(summary['totalIncome'], 280);
+        expect(summary['net'], 130);
+
+        final categories = container
+            .read(expensesByCategoryProvider)
+            .requireValue;
+        expect(categories['materials'], 100);
+        expect(categories['labor'], 50);
+      },
+    );
   });
 }

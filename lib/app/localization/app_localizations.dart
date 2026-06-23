@@ -100,6 +100,10 @@ class AppLocalizations {
     'confirmArchiveWorkerEntry': 'Archive this worker entry?',
     'confirmDeleteProjectCascade':
         'Delete this project and all linked expenses, payments, worker entries, metrics, and notifications?',
+    'deleteProjectTypeNameToConfirm':
+        'To confirm, type the project name below.',
+    'budgetUsed': 'Budget used',
+    'overBudget': 'Over budget',
     'archivedProjects': 'Archived Projects',
     'unarchive': 'Unarchive',
     'noArchivedProjects': 'No archived projects found.',
@@ -636,6 +640,13 @@ class AppLocalizations {
     'planFeatureAdvancedReports': 'Advanced reports',
     // Settings help and legal
     'aboutApp': 'About app',
+    'settingsAccount': 'Account',
+    'settingsPreferences': 'Preferences',
+    'settingsWorkspace': 'Workspace',
+    'workspaceNameTitle': 'Workspace name',
+    'renameWorkspace': 'Rename workspace',
+    'workspaceNameEmptyError': 'Enter a workspace name.',
+    'manageMembers': 'Manage members',
     'settingsSaveFailed':
         'Could not save settings. Your previous value was restored.',
     'appVersion': 'App version',
@@ -771,6 +782,9 @@ class AppLocalizations {
     'confirmArchiveWorkerEntry': 'هل تريد أرشفة سجل العامل هذا؟',
     'confirmDeleteProjectCascade':
         'هل تريد حذف هذا المشروع وكل المصروفات والدفعات وسجلات العمال والمقاييس والإشعارات المرتبطة به؟',
+    'deleteProjectTypeNameToConfirm': 'للتأكيد، اكتب اسم المشروع أدناه.',
+    'budgetUsed': 'الميزانية المستخدمة',
+    'overBudget': 'تجاوز الميزانية',
     'archivedProjects': 'المشاريع المؤرشفة',
     'unarchive': 'إلغاء الأرشفة',
     'noArchivedProjects': 'لا توجد مشاريع مؤرشفة.',
@@ -1279,6 +1293,13 @@ class AppLocalizations {
     'planFeatureAdvancedReports': 'تقارير متقدمة',
     // Settings help and legal
     'aboutApp': 'حول التطبيق',
+    'settingsAccount': 'الحساب',
+    'settingsPreferences': 'التفضيلات',
+    'settingsWorkspace': 'مساحة العمل',
+    'workspaceNameTitle': 'اسم مساحة العمل',
+    'renameWorkspace': 'إعادة تسمية مساحة العمل',
+    'workspaceNameEmptyError': 'أدخل اسم مساحة العمل.',
+    'manageMembers': 'إدارة الأعضاء',
     'settingsSaveFailed': 'تعذر حفظ الإعدادات. تمت استعادة القيمة السابقة.',
     'appVersion': 'إصدار التطبيق',
     'helpAndSupport': 'المساعدة والدعم',
