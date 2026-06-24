@@ -115,7 +115,7 @@ workflows:
       cocoapods: default
 
     integrations:
-      app_store_connect: Buildozer Tracker
+      app_store_connect: Buildozer
 
     cache:
       cache_paths:
@@ -195,7 +195,7 @@ workflows:
       cocoapods: default
 
     integrations:
-      app_store_connect: Buildozer Tracker
+      app_store_connect: Buildozer
 
     cache:
       cache_paths:
