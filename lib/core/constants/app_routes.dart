@@ -3,8 +3,7 @@ class AppRoutes {
   static const String features = '/features';
   static const String onboarding = '/onboarding';
   static const String login = '/login';
-  static const String signup = '/signup';
-  static const String forgotPassword = '/forgot-password';
+  static const String initialWorkspaceSetup = '/setup/workspace';
 
   static const String dashboard = '/dashboard';
   static const String projects = '/projects';
@@ -13,7 +12,7 @@ class AppRoutes {
   static const String entitySummary = '/entity-summary';
   static const String settings = '/settings';
   static const String profileEdit = '/settings/profile';
-  static const String teamManagement = '/settings/team';
+  static const String workspaceSettings = '/settings/workspace';
   static const String syncStatus = '/settings/sync';
 
   static const String createProject = '/create-project';

@@ -11,9 +11,16 @@ class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 class _MockUser extends Mock implements User {}
 
 class _FakeCallableClient implements CallableClient {
-  _FakeCallableClient({this.workspaceId, this.error});
+  _FakeCallableClient({
+    this.workspaceId,
+    this.created = false,
+    this.setupCompleted = true,
+    this.error,
+  });
 
   final String? workspaceId;
+  final bool created;
+  final bool setupCompleted;
   final Exception? error;
   int callCount = 0;
   String? lastFunctionName;
@@ -31,7 +38,11 @@ class _FakeCallableClient implements CallableClient {
     if (error != null) {
       throw error!;
     }
-    return workspaceId as T;
+    return parseResult({
+      'workspaceId': workspaceId,
+      'created': created,
+      'setupCompleted': setupCompleted,
+    });
   }
 }
 
@@ -104,6 +115,7 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.workspaceId, 'workspace_1');
+        expect(result.setupCompleted, true);
         expect(callable.callCount, 0);
         expect(telemetry.events, contains('session_restore.success'));
         expect(
@@ -116,7 +128,11 @@ void main() {
     test(
       'falls back to bootstrap when membership and user doc are empty',
       () async {
-        final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
+        final callable = _FakeCallableClient(
+          workspaceId: 'workspace_boot',
+          created: true,
+          setupCompleted: false,
+        );
 
         final service = SessionRestoreService(
           auth: auth,
@@ -129,6 +145,7 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.workspaceId, 'workspace_boot');
+        expect(result.setupCompleted, false);
         expect(callable.callCount, 1);
         expect(callable.lastFunctionName, 'ensureUserWorkspaceBootstrap');
         expect(telemetry.events, contains('session_restore.success'));

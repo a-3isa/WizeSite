@@ -8,10 +8,9 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
-import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/initial_workspace_setup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
-import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
 import 'package:buildtrack_app/features/contractors/presentation/screens/contractors_screen.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -34,7 +33,7 @@ import 'package:buildtrack_app/features/reports/presentation/screens/reports_scr
 import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/sync_status_screen.dart';
-import 'package:buildtrack_app/features/settings/presentation/screens/team_management_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/workspace_settings_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/limit_reached_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/manage_subscription_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/plans_screen.dart';
@@ -109,14 +108,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        path: AppRoutes.signup,
-        name: 'signup',
-        builder: (context, state) => const SignUpScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.forgotPassword,
-        name: 'forgotPassword',
-        builder: (context, state) => const ForgotPasswordScreen(),
+        path: AppRoutes.initialWorkspaceSetup,
+        name: 'initialWorkspaceSetup',
+        builder: (context, state) => const InitialWorkspaceSetupScreen(),
       ),
       GoRoute(
         path: AppRoutes.entitySummary,
@@ -143,11 +137,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
-        path: AppRoutes.teamManagement,
-        name: 'teamManagement',
+        path: AppRoutes.workspaceSettings,
+        name: 'workspaceSettings',
         pageBuilder: (context, state) => smoothAppPage<void>(
           key: state.pageKey,
-          child: const TeamManagementScreen(),
+          child: const WorkspaceSettingsScreen(),
         ),
       ),
       GoRoute(
@@ -571,10 +565,7 @@ String? resolveAppRedirect({
   required bool hasWorkspace,
 }) {
   final isSplash = location == AppRoutes.root;
-  final isAuthRoute =
-      location == AppRoutes.login ||
-      location == AppRoutes.signup ||
-      location == AppRoutes.forgotPassword;
+  final isAuthRoute = location == AppRoutes.login;
   final isPublicDiscovery =
       location == AppRoutes.features || location == AppRoutes.onboarding;
   final isPublicRoute = isSplash || isAuthRoute || isPublicDiscovery;

@@ -1,15 +1,21 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SessionRestoreResult {
-  const SessionRestoreResult({required this.userId, required this.workspaceId});
+  const SessionRestoreResult({
+    required this.userId,
+    required this.workspaceId,
+    required this.setupCompleted,
+  });
 
   final String userId;
   final String workspaceId;
+  final bool setupCompleted;
 }
 
 class SessionRestoreService {
@@ -35,8 +41,8 @@ class SessionRestoreService {
     }
 
     await _telemetry.log('session_restore.start', {'user_id': user.uid});
-    final workspaceId = await _resolveWorkspaceId(user);
-    if (workspaceId == null || workspaceId.isEmpty) {
+    final workspace = await _resolveWorkspaceId(user);
+    if (workspace == null || workspace.workspaceId.isEmpty) {
       await _telemetry.log('session_restore.no_workspace', {
         'user_id': user.uid,
       });
@@ -45,18 +51,26 @@ class SessionRestoreService {
 
     await _telemetry.log('session_restore.success', {
       'user_id': user.uid,
-      'workspace_id': workspaceId,
+      'workspace_id': workspace.workspaceId,
     });
-    return SessionRestoreResult(userId: user.uid, workspaceId: workspaceId);
+    return SessionRestoreResult(
+      userId: user.uid,
+      workspaceId: workspace.workspaceId,
+      setupCompleted: workspace.setupCompleted,
+    );
   }
 
-  Future<String?> _resolveWorkspaceId(User user) async {
+  Future<WorkspaceBootstrapResult?> _resolveWorkspaceId(User user) async {
     try {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final workspaceId = userDoc.data()?['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
         await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
-        return workspaceId;
+        return WorkspaceBootstrapResult(
+          workspaceId: workspaceId,
+          created: false,
+          setupCompleted: userDoc.data()?['setupCompleted'] as bool? ?? true,
+        );
       }
 
       final membershipSnap = await _firestore
@@ -72,7 +86,11 @@ class SessionRestoreService {
               .toList(growable: false)
             ..sort();
       if (workspaceIds.isNotEmpty) {
-        return workspaceIds.first;
+        return WorkspaceBootstrapResult(
+          workspaceId: workspaceIds.first,
+          created: false,
+          setupCompleted: true,
+        );
       }
     } catch (error, stackTrace) {
       await _telemetry.recordError(
@@ -115,15 +133,14 @@ class SessionRestoreService {
     }, SetOptions(merge: true));
   }
 
-  Future<String?> _bootstrapWorkspaceId() async {
+  Future<WorkspaceBootstrapResult?> _bootstrapWorkspaceId() async {
     try {
-      return await _callableClient.call<String>(
+      return await _callableClient.call<WorkspaceBootstrapResult>(
         functionName: 'ensureUserWorkspaceBootstrap',
         payload: const {},
         parseResult: (result) {
           final data = Map<String, dynamic>.from(result as Map);
-          final workspaceId = '${data['workspaceId'] ?? ''}'.trim();
-          return workspaceId;
+          return WorkspaceBootstrapResult.fromMap(data);
         },
         defaultErrorMessage: 'Failed to restore your workspace.',
       );

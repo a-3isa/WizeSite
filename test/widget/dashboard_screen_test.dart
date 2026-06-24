@@ -10,6 +10,8 @@ import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +113,33 @@ void main() {
     ).called(1);
   });
 
+  testWidgets(
+    'workspace switcher uses active workspace doc name before summaries load',
+    (tester) async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('workspaces').doc('workspace_1').set({
+        'name': 'Acme Sites',
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firestoreProvider.overrideWithValue(firestore),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const <WorkspaceSummary>[]),
+            ),
+          ],
+          child: _app(const WorkspaceSwitcher()),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Acme Sites'), findsOneWidget);
+      expect(find.text('Home'), findsNothing);
+    },
+  );
+
   testWidgets('workspace switcher rolls back when persistence fails', (
     tester,
   ) async {
@@ -168,12 +197,13 @@ void main() {
           dashboardSnapshotProvider.overrideWith(
             (ref, workspaceId) => Stream.value(DashboardSnapshot.restricted()),
           ),
-          notificationItemsProvider.overrideWith((ref) => Stream.value(const [])),
+          notificationItemsProvider.overrideWith(
+            (ref) => Stream.value(const []),
+          ),
           unreadNotificationCountProvider.overrideWith((ref) => 0),
           currentUsageProvider.overrideWith(
-            (ref) => Stream.value(
-              UsageSnapshot.empty(limits: PlanLimits.free()),
-            ),
+            (ref) =>
+                Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
           ),
           currentSubscriptionStreamProvider.overrideWith(
             (ref) => Stream.value(SubscriptionState.free()),

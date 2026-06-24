@@ -184,6 +184,8 @@ class WorkspaceSwitcher extends ConsumerWidget {
     final workspaces =
         ref.watch(userWorkspaceSummariesProvider).valueOrNull ??
         const <WorkspaceSummary>[];
+    final activeWorkspaceName =
+        ref.watch(activeWorkspaceNameProvider).valueOrNull?.trim() ?? '';
 
     WorkspaceSummary? current;
     for (final workspace in workspaces) {
@@ -192,7 +194,11 @@ class WorkspaceSwitcher extends ConsumerWidget {
         break;
       }
     }
-    final title = current?.name ?? l10n.t('home');
+    final title = (current?.name.trim().isNotEmpty ?? false)
+        ? current!.name.trim()
+        : activeWorkspaceName.isNotEmpty
+        ? activeWorkspaceName
+        : l10n.t('home');
 
     if (workspaces.length < 2) {
       return Text(
@@ -227,10 +233,7 @@ class WorkspaceSwitcher extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    workspace.name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(workspace.name, overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),

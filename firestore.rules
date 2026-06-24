@@ -297,7 +297,10 @@ service cloud.firestore {
 
     match /workspaces/{workspaceId} {
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow read: if inWorkspace(workspaceId);
+      allow read: if (
+        signedIn()
+        && resource.data.ownerId == request.auth.uid
+      ) || inWorkspace(workspaceId);
       allow update: if isWorkspaceOwner(workspaceId);
       allow delete: if false;
     }

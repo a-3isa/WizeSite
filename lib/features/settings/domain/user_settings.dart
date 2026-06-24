@@ -6,6 +6,7 @@ class UserSettings {
     required this.photoUrl,
     required this.defaultCurrency,
     required this.riskAlertsEnabled,
+    required this.setupCompleted,
   });
 
   final String userId;
@@ -14,6 +15,7 @@ class UserSettings {
   final String photoUrl;
   final String defaultCurrency;
   final bool riskAlertsEnabled;
+  final bool setupCompleted;
 
   factory UserSettings.defaults({required String userId, String email = ''}) {
     return UserSettings(
@@ -23,6 +25,7 @@ class UserSettings {
       photoUrl: '',
       defaultCurrency: 'EGP',
       riskAlertsEnabled: true,
+      setupCompleted: true,
     );
   }
 
@@ -34,6 +37,7 @@ class UserSettings {
       photoUrl: map['photoUrl'] as String? ?? '',
       defaultCurrency: map['defaultCurrency'] as String? ?? 'EGP',
       riskAlertsEnabled: map['riskAlertsEnabled'] as bool? ?? true,
+      setupCompleted: map['setupCompleted'] as bool? ?? true,
     );
   }
 
@@ -43,6 +47,7 @@ class UserSettings {
     'photoUrl': photoUrl,
     'defaultCurrency': defaultCurrency,
     'riskAlertsEnabled': riskAlertsEnabled,
+    'setupCompleted': setupCompleted,
   };
 
   UserSettings copyWith({
@@ -51,6 +56,7 @@ class UserSettings {
     String? photoUrl,
     String? defaultCurrency,
     bool? riskAlertsEnabled,
+    bool? setupCompleted,
   }) {
     return UserSettings(
       userId: userId,
@@ -59,6 +65,7 @@ class UserSettings {
       photoUrl: photoUrl ?? this.photoUrl,
       defaultCurrency: defaultCurrency ?? this.defaultCurrency,
       riskAlertsEnabled: riskAlertsEnabled ?? this.riskAlertsEnabled,
+      setupCompleted: setupCompleted ?? this.setupCompleted,
     );
   }
 }

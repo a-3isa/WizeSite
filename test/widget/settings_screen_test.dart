@@ -81,8 +81,9 @@ GoRouter _router() {
         builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
       ),
       GoRoute(
-        path: '/settings/team',
-        builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
+        path: '/settings/workspace',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Workspace Route'))),
       ),
       GoRoute(
         path: '/settings/sync',
@@ -135,6 +136,7 @@ void main() {
         photoUrl: '',
         defaultCurrency: 'USD',
         riskAlertsEnabled: false,
+        setupCompleted: true,
       );
 
       await tester.pumpWidget(
@@ -142,6 +144,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),
@@ -184,6 +196,10 @@ void main() {
       expect(find.text('Jane Builder'), findsOneWidget);
       expect(find.text('jane@example.com'), findsOneWidget);
       expect(find.text('USD'), findsWidgets);
+      expect(find.text('Workspace'), findsWidgets);
+      expect(find.text('Acme Sites'), findsOneWidget);
+      expect(find.text('Manage Team'), findsNothing);
+      expect(find.text('Team Members'), findsNothing);
 
       await tester.tap(find.byType(BelowDropdownField<String>));
       await tester.pumpAndSettle();
@@ -223,6 +239,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),
@@ -239,6 +265,7 @@ void main() {
                   photoUrl: '',
                   defaultCurrency: 'USD',
                   riskAlertsEnabled: true,
+                  setupCompleted: true,
                 ),
               ),
             ),
@@ -293,6 +320,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),
@@ -325,6 +362,16 @@ void main() {
       expect(find.text('Terms of Service'), findsOneWidget);
       expect(find.text('Run diagnostics'), findsOneWidget);
       expect(find.text('Sync status'), findsOneWidget);
+
+      await tester.tap(find.text('Acme Sites'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Workspace Route'), findsOneWidget);
+
+      GoRouter.of(tester.element(find.text('Workspace Route'))).go('/settings');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
       await tester.tap(find.text('Sync status'));
       await tester.pump();
@@ -373,6 +420,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),

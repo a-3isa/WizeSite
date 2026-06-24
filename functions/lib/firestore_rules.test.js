@@ -52,6 +52,10 @@ else {
     let bootstrapWorkspaceForUser;
     let setActiveWorkspaceForUser;
     let inviteMemberByEmailForUser;
+    let inviteMemberWithQuotaForUser;
+    let completeInitialWorkspaceSetupForUser;
+    let updateWorkspaceMemberRoleForUser;
+    let removeWorkspaceMemberForUser;
     async function seedBaseData() {
         await env.clearFirestore();
         await env.withSecurityRulesDisabled(async (context) => {
@@ -256,6 +260,12 @@ else {
         bootstrapWorkspaceForUser = indexModule.bootstrapWorkspaceForUser;
         setActiveWorkspaceForUser = indexModule.setActiveWorkspaceForUser;
         inviteMemberByEmailForUser = indexModule.inviteMemberByEmailForUser;
+        inviteMemberWithQuotaForUser = indexModule.inviteMemberWithQuotaForUser;
+        completeInitialWorkspaceSetupForUser =
+            indexModule.completeInitialWorkspaceSetupForUser;
+        updateWorkspaceMemberRoleForUser =
+            indexModule.updateWorkspaceMemberRoleForUser;
+        removeWorkspaceMemberForUser = indexModule.removeWorkspaceMemberForUser;
     });
     node_test_1.default.after(async () => {
         await env.cleanup();
@@ -290,6 +300,13 @@ else {
         await seedBaseData();
         const memberDb = env.authenticatedContext("member_1").firestore();
         await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(memberDb, "projects", "project_owner")));
+    });
+    (0, node_test_1.default)("workspace owner can query owned workspaces", async () => {
+        await seedBaseData();
+        const ownerDb = env.authenticatedContext("owner_1").firestore();
+        const attackerDb = env.authenticatedContext("attacker_1").firestore();
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDocs)((0, firestore_1.query)((0, firestore_1.collection)(ownerDb, "workspaces"), (0, firestore_1.where)("ownerId", "==", "owner_1"))));
+        await (0, rules_unit_testing_1.assertFails)((0, firestore_1.getDocs)((0, firestore_1.query)((0, firestore_1.collection)(attackerDb, "workspaces"), (0, firestore_1.where)("ownerId", "==", "owner_1"))));
     });
     (0, node_test_1.default)("ordinary members cannot read role-restricted accounting summaries or attachments", async () => {
         await seedBaseData();
@@ -523,6 +540,8 @@ else {
             strict_1.default.equal(result.created, true);
             strict_1.default.equal(workspaceSnap.exists(), true);
             strict_1.default.equal(userSnap.data()?.workspaceId, result.workspaceId);
+            strict_1.default.equal(userSnap.data()?.setupCompleted, false);
+            strict_1.default.equal(result.setupCompleted, false);
             strict_1.default.equal(membershipSnap.data()?.role, "owner");
         });
     });
@@ -558,6 +577,8 @@ else {
             strict_1.default.equal(result.workspaceId, "legacy_workspace");
             strict_1.default.equal(userSnap.data()?.defaultCurrency, "USD");
             strict_1.default.equal(userSnap.data()?.riskAlertsEnabled, false);
+            strict_1.default.equal(userSnap.data()?.setupCompleted, true);
+            strict_1.default.equal(result.setupCompleted, true);
             strict_1.default.equal(userSnap.data()?.fullName, "Saved Name");
             strict_1.default.equal(userSnap.data()?.photoUrl, "https://example.com/saved.png");
             strict_1.default.equal(userSnap.data()?.email, "saved@example.com");
@@ -608,9 +629,63 @@ else {
             strict_1.default.equal(result.workspaceId, "legacy_workspace");
             strict_1.default.equal(userSnap.data()?.riskAlertsEnabled, false);
             strict_1.default.equal("defaultCurrency" in (userSnap.data() ?? {}), false);
+            strict_1.default.equal(userSnap.data()?.setupCompleted, true);
+            strict_1.default.equal(result.setupCompleted, true);
             strict_1.default.equal("fullName" in (userSnap.data() ?? {}), false);
             strict_1.default.equal("photoUrl" in (userSnap.data() ?? {}), false);
             strict_1.default.equal(userSnap.data()?.email, "existing@example.com");
+        });
+    });
+    (0, node_test_1.default)("initial workspace setup saves workspace name currency and completion flag", async () => {
+        await env.clearFirestore();
+        const result = await bootstrapWorkspaceForUser({
+            uid: "setup_user",
+            email: "setup@example.com",
+            fullName: "Setup User",
+            photoUrl: null,
+        });
+        const setupResult = await completeInitialWorkspaceSetupForUser({
+            uid: "setup_user",
+            workspaceId: result.workspaceId,
+            workspaceName: "Acme Sites",
+            defaultCurrency: "SAR",
+        });
+        strict_1.default.equal(setupResult.workspaceId, result.workspaceId);
+        strict_1.default.equal(setupResult.setupCompleted, true);
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const workspaceSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "workspaces", result.workspaceId));
+            const userSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "users", "setup_user"));
+            strict_1.default.equal(workspaceSnap.data()?.name, "Acme Sites");
+            strict_1.default.equal(userSnap.data()?.defaultCurrency, "SAR");
+            strict_1.default.equal(userSnap.data()?.setupCompleted, true);
+        });
+    });
+    (0, node_test_1.default)("initial workspace setup rejects empty names and unsupported currency", async () => {
+        await env.clearFirestore();
+        const result = await bootstrapWorkspaceForUser({
+            uid: "setup_user",
+            email: "setup@example.com",
+            fullName: "Setup User",
+            photoUrl: null,
+        });
+        await strict_1.default.rejects(completeInitialWorkspaceSetupForUser({
+            uid: "setup_user",
+            workspaceId: result.workspaceId,
+            workspaceName: "   ",
+            defaultCurrency: "SAR",
+        }), (error) => {
+            strict_1.default.equal(error.code, "invalid-argument");
+            return true;
+        });
+        await strict_1.default.rejects(completeInitialWorkspaceSetupForUser({
+            uid: "setup_user",
+            workspaceId: result.workspaceId,
+            workspaceName: "Acme Sites",
+            defaultCurrency: "BTC",
+        }), (error) => {
+            strict_1.default.equal(error.code, "invalid-argument");
+            return true;
         });
     });
     (0, node_test_1.default)("bootstrap fails when legacy workspace belongs to someone else without membership", async () => {
@@ -742,6 +817,11 @@ else {
                 email: "invitee@example.com",
                 workspaceId: "personal_ws",
             });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "invitee_2"), {
+                id: "invitee_2",
+                email: "invitee2@example.com",
+                workspaceId: "personal_ws_2",
+            });
             await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "workspaces", "owner_ws"), {
                 id: "owner_ws",
                 ownerId: "owner_1",
@@ -769,6 +849,162 @@ else {
             strict_1.default.equal(membershipSnap.data()?.role, "member");
             strict_1.default.equal(notificationSnap.data()?.workspaceId, "owner_ws");
             strict_1.default.equal(notificationSnap.data()?.targetUserId, "invitee_1");
+        });
+    });
+    (0, node_test_1.default)("email invite bypasses team quota while testing but remains owner only", async () => {
+        await env.clearFirestore();
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "owner_1"), {
+                id: "owner_1",
+                email: "owner@example.com",
+                workspaceId: "owner_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "member_1"), {
+                id: "member_1",
+                email: "member@example.com",
+                workspaceId: "owner_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "invitee_1"), {
+                id: "invitee_1",
+                email: "invitee@example.com",
+                workspaceId: "personal_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "invitee_2"), {
+                id: "invitee_2",
+                email: "invitee2@example.com",
+                workspaceId: "personal_ws_2",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "workspaces", "owner_ws"), {
+                id: "owner_ws",
+                ownerId: "owner_1",
+                name: "Owner Workspace",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_owner_1"), {
+                workspaceId: "owner_ws",
+                userId: "owner_1",
+                role: "owner",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_member_1"), {
+                workspaceId: "owner_ws",
+                userId: "member_1",
+                role: "member",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "subscriptions", "owner_ws"), {
+                workspaceId: "owner_ws",
+                tier: "free",
+                status: "active",
+            });
+        });
+        const result = await inviteMemberByEmailForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            email: "invitee@example.com",
+            role: "member",
+        });
+        strict_1.default.equal(result.userId, "invitee_1");
+        await strict_1.default.rejects(inviteMemberByEmailForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            email: "invitee2@example.com",
+            role: "financeBoss",
+        }), (error) => {
+            strict_1.default.equal(error.code, "invalid-argument");
+            return true;
+        });
+        const legacyResult = await inviteMemberWithQuotaForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            userId: "invitee_2",
+            role: "entryOnly",
+        });
+        strict_1.default.equal(legacyResult.userId, "invitee_2");
+        await strict_1.default.rejects(inviteMemberByEmailForUser({
+            ownerUid: "member_1",
+            workspaceId: "owner_ws",
+            email: "invitee@example.com",
+            role: "member",
+        }), (error) => {
+            strict_1.default.equal(error.code, "permission-denied");
+            return true;
+        });
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const inviteeSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "users", "invitee_2"));
+            const membershipSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_invitee_2"));
+            const notificationSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "notifications", "team_invite_added_workspace_invitee_2"));
+            strict_1.default.equal(inviteeSnap.data()?.workspaceId, "personal_ws_2");
+            strict_1.default.equal(membershipSnap.data()?.role, "entryOnly");
+            strict_1.default.equal(notificationSnap.data()?.workspaceId, "owner_ws");
+            strict_1.default.equal(notificationSnap.data()?.targetUserId, "invitee_2");
+        });
+    });
+    (0, node_test_1.default)("workspace member role updates and removals protect the last owner", async () => {
+        await env.clearFirestore();
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "owner_1"), {
+                id: "owner_1",
+                email: "owner@example.com",
+                workspaceId: "owner_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "member_1"), {
+                id: "member_1",
+                email: "member@example.com",
+                workspaceId: "personal_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "workspaces", "owner_ws"), {
+                id: "owner_ws",
+                ownerId: "owner_1",
+                name: "Owner Workspace",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_owner_1"), {
+                workspaceId: "owner_ws",
+                userId: "owner_1",
+                role: "owner",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_member_1"), {
+                workspaceId: "owner_ws",
+                userId: "member_1",
+                role: "member",
+            });
+        });
+        const promoted = await updateWorkspaceMemberRoleForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            targetUserId: "member_1",
+            role: "accountingApproved",
+        });
+        strict_1.default.equal(promoted.role, "accountingApproved");
+        await strict_1.default.rejects(updateWorkspaceMemberRoleForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            targetUserId: "owner_1",
+            role: "member",
+        }), (error) => {
+            strict_1.default.equal(error.code, "failed-precondition");
+            return true;
+        });
+        await strict_1.default.rejects(removeWorkspaceMemberForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            targetUserId: "owner_1",
+        }), (error) => {
+            strict_1.default.equal(error.code, "failed-precondition");
+            return true;
+        });
+        const removed = await removeWorkspaceMemberForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            targetUserId: "member_1",
+        });
+        strict_1.default.equal(removed.removed, true);
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const memberSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_member_1"));
+            const inviteeSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "users", "member_1"));
+            strict_1.default.equal(memberSnap.exists(), false);
+            strict_1.default.equal(inviteeSnap.data()?.workspaceId, "personal_ws");
         });
     });
 }

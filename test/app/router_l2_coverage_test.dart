@@ -30,6 +30,8 @@ void main() {
     addTearDown(router.dispose);
 
     final routePaths = _routePaths(router.configuration.routes).toSet();
+    expect(routePaths, contains(AppRoutes.initialWorkspaceSetup));
+    expect(routePaths, contains(AppRoutes.workspaceSettings));
     expect(routePaths, contains(AppRoutes.entitySummary));
     expect(routePaths, contains(AppRoutes.syncStatus));
     expect(routePaths, contains(AppRoutes.paymentDetail));
@@ -38,6 +40,8 @@ void main() {
     expect(routePaths, contains(AppRoutes.contractorsDirectory));
     expect(routePaths, contains(AppRoutes.equipmentDirectory));
     expect(routePaths, contains(AppRoutes.transportProvidersDirectory));
+    expect(routePaths, isNot(contains('/signup')));
+    expect(routePaths, isNot(contains('/forgot-password')));
     expect(routePaths, isNot(contains('/add')));
     expect(routePaths, isNot(contains('/add-entry')));
   });

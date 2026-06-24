@@ -34,6 +34,11 @@ GoRouter _router() {
         builder: (context, state) =>
             const Scaffold(body: Center(child: Text('Dashboard Screen'))),
       ),
+      GoRoute(
+        path: AppRoutes.initialWorkspaceSetup,
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Workspace Setup'))),
+      ),
     ],
   );
 }
@@ -99,6 +104,7 @@ void main() {
         (_) async => const SessionRestoreResult(
           userId: 'user_1',
           workspaceId: 'workspace_1',
+          setupCompleted: true,
         ),
       );
 
@@ -128,6 +134,7 @@ void main() {
       (_) async => const SessionRestoreResult(
         userId: 'user_1',
         workspaceId: 'workspace_1',
+        setupCompleted: true,
       ),
     );
 
@@ -143,6 +150,28 @@ void main() {
     // Drain the old warmCritical timeout if this regresses, so the test
     // framework does not report leaked timers after the assertion.
     await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('SplashScreen routes incomplete first-time users to setup', (
+    tester,
+  ) async {
+    final sessionRestoreService = _MockSessionRestoreService();
+    when(() => sessionRestoreService.restore()).thenAnswer(
+      (_) async => const SessionRestoreResult(
+        userId: 'user_1',
+        workspaceId: 'workspace_1',
+        setupCompleted: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _testApp(sessionRestoreService, prefetcher: _instantPrefetcher()),
+    );
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workspace Setup'), findsOneWidget);
+    expect(find.text('Dashboard Screen'), findsNothing);
   });
 
   testWidgets(

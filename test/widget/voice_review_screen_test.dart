@@ -158,6 +158,7 @@ void main() {
         (_) async => const SessionRestoreResult(
           userId: 'user_1',
           workspaceId: 'workspace_1',
+          setupCompleted: true,
         ),
       );
       when(

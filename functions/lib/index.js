@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
+exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
 exports.writeIfChanged = writeIfChanged;
 exports.workerEntryTotalCost = workerEntryTotalCost;
@@ -52,7 +52,11 @@ exports.createPaymentWithQuotaForUser = createPaymentWithQuotaForUser;
 exports.createWorkerEntryWithQuotaForUser = createWorkerEntryWithQuotaForUser;
 exports.bootstrapWorkspaceForUser = bootstrapWorkspaceForUser;
 exports.setActiveWorkspaceForUser = setActiveWorkspaceForUser;
+exports.completeInitialWorkspaceSetupForUser = completeInitialWorkspaceSetupForUser;
+exports.updateWorkspaceMemberRoleForUser = updateWorkspaceMemberRoleForUser;
+exports.removeWorkspaceMemberForUser = removeWorkspaceMemberForUser;
 exports.inviteMemberByEmailForUser = inviteMemberByEmailForUser;
+exports.inviteMemberWithQuotaForUser = inviteMemberWithQuotaForUser;
 exports.handleExpenseWriteRecompute = handleExpenseWriteRecompute;
 exports.handlePaymentWriteRecompute = handlePaymentWriteRecompute;
 exports.handleWorkerEntryWriteRecompute = handleWorkerEntryWriteRecompute;
@@ -71,6 +75,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const revenuecatWebhookSecret = (0, params_1.defineSecret)("REVENUECAT_WEBHOOK_SECRET");
 const enforceHttpAppCheck = (0, params_1.defineBoolean)("ENFORCE_HTTP_APP_CHECK");
+const ENFORCE_TEAM_MEMBER_LIMITS = false;
 const FREE_LIMITS = {
     activeProjects: 1,
     expensesPerMonth: 30,
@@ -442,7 +447,27 @@ function normalizeEmail(input) {
 }
 function currencyCode(input) {
     const raw = `${input ?? "EGP"}`.trim().toUpperCase();
-    return ["EGP", "USD", "SAR", "AED"].includes(raw) ? raw : "EGP";
+    return supportedCurrencyCode(raw) ? raw : "EGP";
+}
+function supportedCurrencyCode(input) {
+    return [
+        "EGP",
+        "USD",
+        "SAR",
+        "AED",
+        "KWD",
+        "QAR",
+        "BHD",
+        "OMR",
+        "JOD",
+    ].includes(input);
+}
+function requireCurrencyCode(input) {
+    const raw = `${input ?? ""}`.trim().toUpperCase();
+    if (!supportedCurrencyCode(raw)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported currency");
+    }
+    return raw;
 }
 function asBooleanOrUndefined(input) {
     if (typeof input === "boolean") {
@@ -2614,6 +2639,7 @@ async function bootstrapWorkspaceForUser(input) {
     const existingPhotoUrl = nonEmptyStringOrUndefined(`${existingUser.photoUrl ?? ""}`);
     const existingDefaultCurrency = nonEmptyStringOrUndefined(`${existingUser.defaultCurrency ?? ""}`);
     const existingRiskAlertsEnabled = asBooleanOrUndefined(existingUser.riskAlertsEnabled);
+    const existingSetupCompleted = existingUser.setupCompleted === false ? false : true;
     function existingUserPayload(workspaceId) {
         const payload = {
             id: uid,
@@ -2625,6 +2651,7 @@ async function bootstrapWorkspaceForUser(input) {
         assignIfDefined(payload, "photoUrl", existingPhotoUrl ?? incomingPhotoUrl);
         assignIfDefined(payload, "defaultCurrency", existingDefaultCurrency);
         assignIfDefined(payload, "riskAlertsEnabled", existingRiskAlertsEnabled);
+        payload.setupCompleted = existingSetupCompleted;
         return payload;
     }
     function newUserPayload(workspaceId) {
@@ -2633,6 +2660,7 @@ async function bootstrapWorkspaceForUser(input) {
             workspaceId,
             defaultCurrency: "EGP",
             riskAlertsEnabled: true,
+            setupCompleted: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
@@ -2652,7 +2680,11 @@ async function bootstrapWorkspaceForUser(input) {
             await userRef.set(userSnap.exists
                 ? existingUserPayload(workspaceId)
                 : newUserPayload(workspaceId), { merge: true });
-            return { workspaceId, created: false };
+            return {
+                workspaceId,
+                created: false,
+                setupCompleted: userSnap.exists ? existingSetupCompleted : false,
+            };
         }
     }
     const legacyWorkspaceId = `${userSnap.data()?.workspaceId ?? ""}`.trim();
@@ -2689,7 +2721,11 @@ async function bootstrapWorkspaceForUser(input) {
         await userRef.set(userSnap.exists
             ? existingUserPayload(legacyWorkspaceId)
             : newUserPayload(legacyWorkspaceId), { merge: true });
-        return { workspaceId: legacyWorkspaceId, created: false };
+        return {
+            workspaceId: legacyWorkspaceId,
+            created: false,
+            setupCompleted: userSnap.exists ? existingSetupCompleted : false,
+        };
     }
     const workspaceRef = db.collection("workspaces").doc();
     const workspaceId = workspaceRef.id;
@@ -2712,7 +2748,7 @@ async function bootstrapWorkspaceForUser(input) {
         ...newUserPayload(workspaceId),
     }, { merge: true });
     await batch.commit();
-    return { workspaceId, created: true };
+    return { workspaceId, created: true, setupCompleted: false };
 }
 exports.ensureUserWorkspaceBootstrap = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
@@ -2762,6 +2798,150 @@ exports.setActiveWorkspace = (0, https_1.onCall)(async (request) => {
         workspaceId: requireString(data, "workspaceId"),
     });
 });
+async function completeInitialWorkspaceSetupForUser(input) {
+    const uid = input.uid.trim();
+    const workspaceId = input.workspaceId.trim();
+    const workspaceName = input.workspaceName.trim();
+    const defaultCurrency = requireCurrencyCode(input.defaultCurrency);
+    if (!uid || !workspaceId) {
+        throw new https_1.HttpsError("invalid-argument", "Missing workspace setup target");
+    }
+    if (!workspaceName) {
+        throw new https_1.HttpsError("invalid-argument", "Missing workspace name");
+    }
+    const workspaceRef = db.collection("workspaces").doc(workspaceId);
+    const workspaceSnap = await workspaceRef.get();
+    if (!workspaceSnap.exists) {
+        throw new https_1.HttpsError("not-found", "Workspace not found");
+    }
+    if (`${workspaceSnap.data()?.ownerId ?? ""}` !== uid) {
+        throw new https_1.HttpsError("permission-denied", "Only the workspace owner can complete setup");
+    }
+    await db.runTransaction(async (tx) => {
+        tx.set(workspaceRef, {
+            name: workspaceName,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        tx.set(db.collection("users").doc(uid), {
+            id: uid,
+            workspaceId,
+            defaultCurrency,
+            setupCompleted: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        tx.set(membershipRef(workspaceId, uid), {
+            workspaceId,
+            userId: uid,
+            role: "owner",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    });
+    return { workspaceId, setupCompleted: true };
+}
+exports.completeInitialWorkspaceSetup = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    return completeInitialWorkspaceSetupForUser({
+        uid: request.auth.uid,
+        workspaceId: requireString(data, "workspaceId"),
+        workspaceName: requireString(data, "workspaceName"),
+        defaultCurrency: requireString(data, "defaultCurrency"),
+    });
+});
+function validWorkspaceRole(role) {
+    return ["owner", "admin", "accountingApproved", "member", "entryOnly"]
+        .includes(role);
+}
+async function ownerCount(workspaceId) {
+    const snap = await db
+        .collection("memberships")
+        .where("workspaceId", "==", workspaceId)
+        .where("role", "==", "owner")
+        .get();
+    return snap.size;
+}
+async function assertWorkspaceOwner(workspaceId, userId) {
+    const role = await assertMember(workspaceId, userId);
+    if (role !== "owner") {
+        throw new https_1.HttpsError("permission-denied", "Only owner can manage members");
+    }
+}
+async function updateWorkspaceMemberRoleForUser(input) {
+    const ownerUid = input.ownerUid.trim();
+    const workspaceId = input.workspaceId.trim();
+    const targetUserId = input.targetUserId.trim();
+    const role = input.role.trim();
+    if (!workspaceId || !targetUserId || !role) {
+        throw new https_1.HttpsError("invalid-argument", "Missing member role update");
+    }
+    if (!validWorkspaceRole(role)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported workspace role");
+    }
+    await assertWorkspaceOwner(workspaceId, ownerUid);
+    const membership = await membershipRef(workspaceId, targetUserId).get();
+    if (!membership.exists) {
+        throw new https_1.HttpsError("not-found", "Workspace member not found");
+    }
+    const currentRole = `${membership.data()?.role ?? "member"}`;
+    if (currentRole === "owner" && role !== "owner") {
+        const count = await ownerCount(workspaceId);
+        if (count <= 1) {
+            throw new https_1.HttpsError("failed-precondition", "Workspace must keep at least one owner");
+        }
+    }
+    await membership.ref.set({
+        role,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { userId: targetUserId, workspaceId, role };
+}
+exports.updateWorkspaceMemberRole = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    return updateWorkspaceMemberRoleForUser({
+        ownerUid: request.auth.uid,
+        workspaceId: requireString(data, "workspaceId"),
+        targetUserId: requireString(data, "userId"),
+        role: requireString(data, "role"),
+    });
+});
+async function removeWorkspaceMemberForUser(input) {
+    const ownerUid = input.ownerUid.trim();
+    const workspaceId = input.workspaceId.trim();
+    const targetUserId = input.targetUserId.trim();
+    if (!workspaceId || !targetUserId) {
+        throw new https_1.HttpsError("invalid-argument", "Missing member removal target");
+    }
+    await assertWorkspaceOwner(workspaceId, ownerUid);
+    const membership = await membershipRef(workspaceId, targetUserId).get();
+    if (!membership.exists) {
+        throw new https_1.HttpsError("not-found", "Workspace member not found");
+    }
+    const currentRole = `${membership.data()?.role ?? "member"}`;
+    if (currentRole === "owner") {
+        const count = await ownerCount(workspaceId);
+        if (count <= 1) {
+            throw new https_1.HttpsError("failed-precondition", "Workspace must keep at least one owner");
+        }
+    }
+    await membership.ref.delete();
+    return { userId: targetUserId, workspaceId, removed: true };
+}
+exports.removeWorkspaceMember = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    return removeWorkspaceMemberForUser({
+        ownerUid: request.auth.uid,
+        workspaceId: requireString(data, "workspaceId"),
+        targetUserId: requireString(data, "userId"),
+    });
+});
 async function inviteMemberByEmailForUser(input) {
     const ownerUid = input.ownerUid.trim();
     const workspaceId = input.workspaceId.trim();
@@ -2774,6 +2954,9 @@ async function inviteMemberByEmailForUser(input) {
         throw new https_1.HttpsError("invalid-argument", "Missing required field: email");
     }
     const role = `${input.role ?? "member"}`.trim() || "member";
+    if (!validWorkspaceRole(role)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported workspace role");
+    }
     const userSnap = await db
         .collection("users")
         .where("email", "==", email)
@@ -2797,7 +2980,7 @@ async function inviteMemberByEmailForUser(input) {
         throw new https_1.HttpsError("already-exists", "User is already a member of this workspace");
     }
     const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
+    if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
         const current = await getCurrentUsage(workspaceId, "teamMembers");
         const max = limitForType("teamMembers");
         if (current + 1 > max) {
@@ -2833,18 +3016,21 @@ exports.inviteMemberByEmail = (0, https_1.onCall)(async (request) => {
         role: `${data.role ?? "member"}`,
     });
 });
-exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError("unauthenticated", "Authentication required");
-    }
-    const data = request.data;
-    const workspaceId = requireString(data, "workspaceId");
-    const role = await assertMember(workspaceId, request.auth.uid);
+async function inviteMemberWithQuotaForUser(input) {
+    const ownerUid = input.ownerUid.trim();
+    const workspaceId = input.workspaceId.trim();
+    const role = await assertMember(workspaceId, ownerUid);
     if (role !== "owner") {
         throw new https_1.HttpsError("permission-denied", "Only owner can invite members");
     }
-    const newUserId = requireString(data, "userId");
-    const memberRole = `${data.role ?? "member"}`;
+    const newUserId = input.userId.trim();
+    if (!newUserId) {
+        throw new https_1.HttpsError("invalid-argument", "Missing required field: userId");
+    }
+    const memberRole = `${input.role ?? "member"}`.trim() || "member";
+    if (!validWorkspaceRole(memberRole)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported workspace role");
+    }
     const deterministicMembership = await membershipRef(workspaceId, newUserId).get();
     if (deterministicMembership.exists) {
         throw new https_1.HttpsError("already-exists", "User is already a member of this workspace");
@@ -2859,7 +3045,7 @@ exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("already-exists", "User is already a member of this workspace");
     }
     const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
+    if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
         const current = await getCurrentUsage(workspaceId, "teamMembers");
         const max = limitForType("teamMembers");
         if (current + 1 > max) {
@@ -2870,15 +3056,30 @@ exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
         workspaceId,
         userId: newUserId,
         role: memberRole,
-        createdBy: request.auth.uid,
+        createdBy: ownerUid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await db.collection("users").doc(newUserId).set({
+    await upsertNotificationForUsers({
         workspaceId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { ok: true };
+        userIds: [newUserId],
+        type: "team_invite_added",
+        title: "Workspace Access Granted",
+        message: "You were added to a workspace team.",
+    });
+    return { userId: newUserId, workspaceId };
+}
+exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    return inviteMemberWithQuotaForUser({
+        ownerUid: request.auth.uid,
+        workspaceId: requireString(data, "workspaceId"),
+        userId: requireString(data, "userId"),
+        role: `${data.role ?? "member"}`,
+    });
 });
 exports.revenuecatWebhook = (0, https_1.onRequest)({ secrets: [revenuecatWebhookSecret] }, async (req, res) => {
     if (req.method !== "POST") {

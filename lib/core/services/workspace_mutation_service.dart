@@ -15,6 +15,26 @@ class MutationResult {
   final bool queued;
 }
 
+class WorkspaceBootstrapResult {
+  const WorkspaceBootstrapResult({
+    required this.workspaceId,
+    required this.created,
+    required this.setupCompleted,
+  });
+
+  factory WorkspaceBootstrapResult.fromMap(Map<String, dynamic> data) {
+    return WorkspaceBootstrapResult(
+      workspaceId: '${data['workspaceId'] ?? ''}'.trim(),
+      created: data['created'] == true,
+      setupCompleted: data['setupCompleted'] == true,
+    );
+  }
+
+  final String workspaceId;
+  final bool created;
+  final bool setupCompleted;
+}
+
 abstract final class OfflineActionTypes {
   static const createProject = 'create_project';
   static const updateProject = 'update_project';
@@ -580,15 +600,35 @@ class WorkspaceMutationService {
     );
   }
 
-  Future<String> ensureUserWorkspaceBootstrap() {
-    return _client.call<String>(
+  Future<WorkspaceBootstrapResult> ensureUserWorkspaceBootstrap() {
+    return _client.call<WorkspaceBootstrapResult>(
       functionName: 'ensureUserWorkspaceBootstrap',
       payload: const {},
       parseResult: (result) {
         final data = Map<String, dynamic>.from(result as Map);
-        return '${data['workspaceId'] ?? ''}';
+        return WorkspaceBootstrapResult.fromMap(data);
       },
       defaultErrorMessage: 'Failed to set up your workspace.',
+    );
+  }
+
+  Future<WorkspaceBootstrapResult> completeInitialWorkspaceSetup({
+    required String workspaceId,
+    required String workspaceName,
+    required String defaultCurrency,
+  }) {
+    return _client.call<WorkspaceBootstrapResult>(
+      functionName: 'completeInitialWorkspaceSetup',
+      payload: {
+        'workspaceId': workspaceId,
+        'workspaceName': workspaceName,
+        'defaultCurrency': defaultCurrency,
+      },
+      parseResult: (result) {
+        final data = Map<String, dynamic>.from(result as Map);
+        return WorkspaceBootstrapResult.fromMap({...data, 'created': false});
+      },
+      defaultErrorMessage: 'Failed to complete workspace setup.',
     );
   }
 
@@ -601,6 +641,31 @@ class WorkspaceMutationService {
         return '${data['workspaceId'] ?? ''}'.trim();
       },
       defaultErrorMessage: 'Failed to switch workspace.',
+    );
+  }
+
+  Future<void> updateWorkspaceMemberRole({
+    required String workspaceId,
+    required String userId,
+    required String role,
+  }) {
+    return _client.call<void>(
+      functionName: 'updateWorkspaceMemberRole',
+      payload: {'workspaceId': workspaceId, 'userId': userId, 'role': role},
+      parseResult: (_) {},
+      defaultErrorMessage: 'Failed to update workspace member.',
+    );
+  }
+
+  Future<void> removeWorkspaceMember({
+    required String workspaceId,
+    required String userId,
+  }) {
+    return _client.call<void>(
+      functionName: 'removeWorkspaceMember',
+      payload: {'workspaceId': workspaceId, 'userId': userId},
+      parseResult: (_) {},
+      defaultErrorMessage: 'Failed to remove workspace member.',
     );
   }
 

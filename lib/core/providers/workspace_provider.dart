@@ -71,7 +71,9 @@ List<WorkspaceSummary> _decodeWorkspaceSummaries(String? json, String userId) {
     }
     return items
         .whereType<Map>()
-        .map((item) => WorkspaceSummary.fromJson(Map<String, dynamic>.from(item)))
+        .map(
+          (item) => WorkspaceSummary.fromJson(Map<String, dynamic>.from(item)),
+        )
         .toList(growable: false);
   } catch (_) {
     return const <WorkspaceSummary>[];
@@ -108,8 +110,22 @@ final workspaceSelectionSyncProvider = Provider<void>((ref) {
   }, fireImmediately: true);
 });
 
-final userWorkspaceSummariesProvider =
-    StreamProvider<List<WorkspaceSummary>>((ref) async* {
+final activeWorkspaceNameProvider = StreamProvider<String>((ref) {
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  if (workspaceId == null || workspaceId.isEmpty) {
+    return Stream.value('');
+  }
+  return ref
+      .watch(firestoreProvider)
+      .collection('workspaces')
+      .doc(workspaceId)
+      .snapshots()
+      .map((snap) => '${snap.data()?['name'] ?? ''}'.trim());
+});
+
+final userWorkspaceSummariesProvider = StreamProvider<List<WorkspaceSummary>>((
+  ref,
+) async* {
   final userId = ref.watch(activeUserIdProvider);
   if (userId == null || userId.isEmpty) {
     yield const <WorkspaceSummary>[];
