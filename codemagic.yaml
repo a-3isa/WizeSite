@@ -9,95 +9,6 @@
 # 3. Set APP_ID below to the numeric App Store Connect app ID for Buildozer.
 
 workflows:
-  android_release_artifact:
-    name: Android Release Artifact
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      flutter: stable
-      xcode: 16.2
-      cocoapods: default
-      android_signing:
-        - buildozer_upload_keystore
-      vars:
-        PACKAGE_NAME: com.ahmed.buildozer
-        BUILD_NAME_PREFIX: 1.0
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-
-      - name: Flutter analyze
-        script: flutter analyze
-
-      - name: Build signed Android app bundle
-        script: |
-          flutter build appbundle --release \
-            --build-name="${BUILD_NAME_PREFIX}.${BUILD_NUMBER}" \
-            --build-number="${BUILD_NUMBER}"
-
-    artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
-
-  android_google_play_internal:
-    name: Android Google Play Internal
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      groups:
-        - google_play
-      flutter: stable
-      xcode: 16.2
-      cocoapods: default
-      android_signing:
-        - buildozer_upload_keystore
-      vars:
-        PACKAGE_NAME: com.ahmed.buildozer
-        GOOGLE_PLAY_TRACK: internal
-        BUILD_NAME_PREFIX: 1.0
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-
-      - name: Flutter analyze
-        script: flutter analyze
-
-      - name: Build signed Android app bundle
-        script: |
-          LATEST_GOOGLE_PLAY_BUILD_NUMBER=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" --tracks="$GOOGLE_PLAY_TRACK" || true)
-          if [ -z "$LATEST_GOOGLE_PLAY_BUILD_NUMBER" ]; then
-            PROJECT_BUILD_NUMBER="$BUILD_NUMBER"
-          else
-            PROJECT_BUILD_NUMBER=$((LATEST_GOOGLE_PLAY_BUILD_NUMBER + 1))
-          fi
-
-          flutter build appbundle --release \
-            --build-name="${BUILD_NAME_PREFIX}.${PROJECT_BUILD_NUMBER}" \
-            --build-number="${PROJECT_BUILD_NUMBER}"
-
-    artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
-
-    publishing:
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
   ios_release_artifact:
     name: iOS Release Artifact
     max_build_duration: 120
@@ -203,6 +114,11 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
+      - name: Select Xcode version
+        script: |
+          sudo xcode-select -s /Applications/Xcode-16.2.app/Contents/Developer
+          xcodebuild -version
+          
       - name: Set up code signing
         script: |
           echo "Setting up code signing for TestFlight build..."
