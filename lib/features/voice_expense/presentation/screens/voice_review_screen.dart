@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
@@ -43,7 +44,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
 
   static const _allowedCurrencies = <String>['EGP', 'USD', 'SAR', 'AED'];
   static const _allowedCategories = <String>[
-    'labor',
+    'worker',
     'materials',
     'equipment',
     'transport',
@@ -54,7 +55,11 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   void initState() {
     super.initState();
     final parsed = widget.response.parsed;
-    _amountController.text = parsed.amount?.toString() ?? '';
+    _amountController.text = parsed.amount == null
+        ? ''
+        : ThousandsSeparatorInputFormatter.formatInitial(
+            parsed.amount.toString(),
+          );
     _noteController.text = parsed.note ?? '';
     _currency = _allowedCurrencies.contains(parsed.currency)
         ? parsed.currency!
@@ -296,6 +301,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: const [ThousandsSeparatorInputFormatter()],
               decoration: InputDecoration(labelText: l10n.t('amount')),
             ),
             const SizedBox(height: 12),

@@ -275,10 +275,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                       entries: [
                         const DropdownMenuEntry(value: '', label: 'All'),
                         DropdownMenuEntry(
-                          value: 'labor',
-                          label: l10n.expenseCategoryLabel('labor'),
-                        ),
-                        DropdownMenuEntry(
                           value: 'materials',
                           label: l10n.expenseCategoryLabel('materials'),
                         ),

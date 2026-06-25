@@ -4,7 +4,7 @@
 /// thousands separator '٬'.
 abstract final class NumberParser {
   static String normalize(String text) {
-    return text
+    final normalized = text
         .trim()
         // Arabic-Indic digits U+0660–U+0669
         .replaceAll('٠', '0')
@@ -31,9 +31,34 @@ abstract final class NumberParser {
         // Arabic decimal separator → period
         .replaceAll('٫', '.')
         // Arabic thousands separator → remove
-        .replaceAll('٬', '')
-        // Regular comma used as decimal in some locales → period
-        .replaceAll(',', '.');
+        .replaceAll('٬', '');
+    return _resolveWesternComma(normalized);
+  }
+
+  /// Resolves the Western comma, which may be a grouping separator
+  /// (`1,000` -> `1000`) or a decimal separator in some locales
+  /// (`1,50` -> `1.50`).
+  static String _resolveWesternComma(String value) {
+    if (!value.contains(',')) {
+      return value;
+    }
+    // A period present means the period is the decimal point, so every comma
+    // is grouping (e.g. `1,234.56`).
+    if (value.contains('.')) {
+      return value.replaceAll(',', '');
+    }
+    final commaCount = ','.allMatches(value).length;
+    if (commaCount == 1) {
+      final index = value.indexOf(',');
+      final digitsAfter = value.length - index - 1;
+      // Exactly three trailing digits reads as grouping (`1,000`); one or two
+      // reads as a decimal (`1,5` / `1,50`).
+      return digitsAfter == 3
+          ? value.replaceAll(',', '')
+          : value.replaceFirst(',', '.');
+    }
+    // Multiple commas can only be grouping (`1,000,000`).
+    return value.replaceAll(',', '');
   }
 
   static double? parseDouble(String text) => double.tryParse(normalize(text));

@@ -13,6 +13,9 @@ import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
+import 'package:buildtrack_app/features/projects/domain/project.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -20,6 +23,10 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+/// Currently selected project for the dashboard. `null` means "All Projects"
+/// (workspace-wide aggregate).
+final selectedDashboardProjectIdProvider = StateProvider<String?>((ref) => null);
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -36,6 +43,20 @@ class DashboardScreen extends ConsumerWidget {
         ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
         'EGP';
     final locale = Localizations.localeOf(context).languageCode;
+
+    final projects = ref.watch(projectsProvider).valueOrNull ?? const <Project>[];
+    final rawSelectedProjectId = ref.watch(selectedDashboardProjectIdProvider);
+    // Honour the selection only while it still belongs to the active workspace.
+    Project? selectedProject;
+    if (rawSelectedProjectId != null) {
+      for (final project in projects) {
+        if (project.id == rawSelectedProjectId) {
+          selectedProject = project;
+          break;
+        }
+      }
+    }
+
     final snapshotAsync = workspaceId == null || workspaceId.isEmpty
         ? const AsyncValue<DashboardSnapshot>.data(
             DashboardSnapshot(
@@ -91,6 +112,16 @@ class DashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: _DashboardProjectSelector(
+              projects: projects,
+              selectedProject: selectedProject,
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -129,24 +160,31 @@ class DashboardScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               SectionHeader(title: l10n.t('overview')),
               const SizedBox(height: 12),
-              snapshotAsync.whenStale(
-                data: (snapshot) => DashboardFinancialSection(
-                  snapshot: snapshot,
+              if (selectedProject != null)
+                ProjectFinancialSection(
+                  project: selectedProject,
                   currency: currency,
-                  locale: locale,
+                  workspaceId: workspaceId ?? '',
+                )
+              else
+                snapshotAsync.whenStale(
+                  data: (snapshot) => DashboardFinancialSection(
+                    snapshot: snapshot,
+                    currency: currency,
+                    locale: locale,
+                  ),
+                  loading: () => AppLoadingSkeleton(
+                    semanticsLabel: l10n.t('loadingContent'),
+                  ),
+                  error: (error, _) => AppRecoverableError(
+                    message: appErrorMessage(l10n, error),
+                    onRetry: workspaceId == null
+                        ? null
+                        : () => ref.invalidate(
+                            dashboardSnapshotProvider(workspaceId),
+                          ),
+                  ),
                 ),
-                loading: () => AppLoadingSkeleton(
-                  semanticsLabel: l10n.t('loadingContent'),
-                ),
-                error: (error, _) => AppRecoverableError(
-                  message: appErrorMessage(l10n, error),
-                  onRetry: workspaceId == null
-                      ? null
-                      : () => ref.invalidate(
-                          dashboardSnapshotProvider(workspaceId),
-                        ),
-                ),
-              ),
               const SizedBox(height: 24),
               subscriptionAsync.whenStale(
                 data: (subscription) => subscription.tier == PlanTier.free
@@ -163,6 +201,334 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Project filter shown under the dashboard AppBar. Scopes all financial data
+/// to a single project, or to "All Projects" (workspace aggregate) when null.
+class _DashboardProjectSelector extends ConsumerWidget {
+  const _DashboardProjectSelector({
+    required this.projects,
+    required this.selectedProject,
+  });
+
+  final List<Project> projects;
+  final Project? selectedProject;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final label = selectedProject?.name.trim().isNotEmpty == true
+        ? selectedProject!.name.trim()
+        : l10n.t('allProjects');
+
+    return Material(
+      color: AppColors.constructionOrange.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(12),
+      child: PopupMenuButton<String?>(
+        key: const Key('qa_dashboard_project_selector'),
+        position: PopupMenuPosition.under,
+        tooltip: l10n.t('selectProject'),
+        onSelected: (value) =>
+            ref.read(selectedDashboardProjectIdProvider.notifier).state = value,
+        itemBuilder: (context) => [
+          PopupMenuItem<String?>(
+            value: null,
+            child: Row(
+              children: [
+                Icon(
+                  selectedProject == null ? Icons.check : Icons.public_outlined,
+                  size: 18,
+                  color: AppColors.constructionOrange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(l10n.t('allProjects'))),
+              ],
+            ),
+          ),
+          for (final project in projects)
+            PopupMenuItem<String?>(
+              value: project.id,
+              child: Row(
+                children: [
+                  Icon(
+                    project.id == selectedProject?.id
+                        ? Icons.check
+                        : Icons.work_outline,
+                    size: 18,
+                    color: AppColors.constructionOrange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      project.name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.work_outline,
+                size: 18,
+                color: AppColors.constructionOrange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.t('project').toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.constructionOrange,
+                      ),
+                    ),
+                    Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_drop_down,
+                color: AppColors.constructionOrange,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Financial overview scoped to a single project: reuses the project
+/// [FinancialGrid] and adds a budget-used bar.
+class ProjectFinancialSection extends ConsumerWidget {
+  const ProjectFinancialSection({
+    required this.project,
+    required this.currency,
+    required this.workspaceId,
+    super.key,
+  });
+
+  final Project project;
+  final String currency;
+  final String workspaceId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).languageCode;
+    final recentAsync = workspaceId.isEmpty
+        ? const AsyncValue<List<DashboardTransactionRef>>.data(
+            <DashboardTransactionRef>[],
+          )
+        : ref.watch(
+            projectRecentTransactionsProvider((
+              workspaceId: workspaceId,
+              projectId: project.id,
+            )),
+          );
+    final budgetBase = (project.budgetLimit != null && project.budgetLimit! > 0)
+        ? project.budgetLimit!
+        : project.contractValue;
+    final hasBudget = budgetBase > 0;
+    final ratio = hasBudget
+        ? (project.totalExpenses / budgetBase).clamp(0.0, 1.0)
+        : 0.0;
+    final overBudget = hasBudget && project.totalExpenses > budgetBase;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            l10n.t(
+              'showingDataForProject',
+              params: {'project': project.name},
+            ),
+            key: const Key('qa_dashboard_project_scope_caption'),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+          ),
+        ),
+        FinancialGrid(project: project, currency: currency),
+        if (hasBudget) ...[
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderGrey),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l10n.t('budgetUsed'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    Text(
+                      '${Formatters.money(project.totalExpenses, currencyCode: currency, locale: locale)} / ${Formatters.money(budgetBase, currencyCode: currency, locale: locale)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textBody,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 8,
+                    backgroundColor: AppColors.constructionOrange.withValues(
+                      alpha: 0.1,
+                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      overBudget ? AppColors.danger : AppColors.constructionOrange,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: overBudget
+                        ? AppColors.danger
+                        : AppColors.constructionOrange,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        SectionHeader(title: l10n.t('recent')),
+        const SizedBox(height: 12),
+        recentAsync.when(
+          data: (items) => items.isEmpty
+              ? AppEmptyState(
+                  key: const Key('qa_dashboard_project_recent_empty'),
+                  icon: Icons.receipt_long_outlined,
+                  message: l10n.t('noDataYet'),
+                )
+              : Container(
+                  key: const Key('qa_dashboard_project_recent'),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderGrey),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final item in items)
+                        _ProjectRecentRow(
+                          item: item,
+                          currency: currency,
+                          locale: locale,
+                          isLast: item == items.last,
+                        ),
+                    ],
+                  ),
+                ),
+          loading: () => AppLoadingSkeleton(
+            semanticsLabel: l10n.t('loadingContent'),
+          ),
+          error: (_, _) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+/// One row of the project-scoped recent transactions list. Payments (funds in)
+/// are shown green and positive; expenses (funds out) red and negative.
+class _ProjectRecentRow extends StatelessWidget {
+  const _ProjectRecentRow({
+    required this.item,
+    required this.currency,
+    required this.locale,
+    required this.isLast,
+  });
+
+  final DashboardTransactionRef item;
+  final String currency;
+  final String locale;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPayment = item.type == 'payment';
+    final color = isPayment ? AppColors.success : AppColors.danger;
+    final sign = isPayment ? '+' : '-';
+    final money = Formatters.money(
+      item.amount,
+      currencyCode: currency,
+      locale: locale,
+    );
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.surfaceGrey),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Row(
+        children: [
+          Icon(
+            isPayment ? Icons.south_west : Icons.north_east,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item.title.isNotEmpty ? item.title : '—',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          Text(
+            '$sign$money',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

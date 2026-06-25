@@ -7,6 +7,8 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_record_draft.dart';
@@ -228,7 +230,10 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
                     decoration: InputDecoration(labelText: l10n.t('amount')),
                   ),
                   const SizedBox(height: 12),
@@ -271,7 +276,12 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
                     TextField(
                       controller: paidAmountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: const [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       decoration: InputDecoration(
                         labelText: l10n.t('workerPaidAmountLabel'),
                       ),
@@ -313,14 +323,14 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                   FilledButton(
                     onPressed: () async {
                       final amount =
-                          double.tryParse(amountController.text.trim()) ?? 0;
+                          NumberParser.parseDouble(amountController.text) ?? 0;
                       if (amount <= 0) {
                         return;
                       }
                       final paidAmount =
                           paidAmountController.text.trim().isEmpty
                           ? null
-                          : double.tryParse(paidAmountController.text.trim());
+                          : NumberParser.parseDouble(paidAmountController.text);
                       try {
                         final draft = DomainAccountingRecordDraft(
                           workspaceId: workspaceId,

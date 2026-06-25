@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/accounting_entity_types.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -99,7 +100,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           _projectId = expense.projectId;
           _projectName = expense.projectName;
           _category = expense.category;
-          _amountController.text = expense.amount.toStringAsFixed(2);
+          _amountController.text = ThousandsSeparatorInputFormatter.formatInitial(
+            expense.amount.toStringAsFixed(2),
+          );
           _purposeController.text = expense.purpose;
           _descriptionController.text = expense.description;
           _notesController.text = expense.notes;
@@ -398,7 +401,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
     final quantity = NumberParser.parseDouble(_quantityController.text) ?? 1;
-    final nextAmount = (rate * quantity).toStringAsFixed(2);
+    final nextAmount = ThousandsSeparatorInputFormatter.formatInitial(
+      (rate * quantity).toStringAsFixed(2),
+    );
     if (force || _amountController.text.trim().isEmpty) {
       setState(() => _amountController.text = nextAmount);
     }
@@ -560,12 +565,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         ),
                       ),
                       DropdownMenuEntry(
-                        value: AccountingCategories.labor,
-                        label: l10n.expenseCategoryLabel(
-                          AccountingCategories.labor,
-                        ),
-                      ),
-                      DropdownMenuEntry(
                         value: AccountingCategories.materials,
                         label: l10n.expenseCategoryLabel(
                           AccountingCategories.materials,
@@ -593,12 +592,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         value: AccountingCategories.rentals,
                         label: l10n.expenseCategoryLabel(
                           AccountingCategories.rentals,
-                        ),
-                      ),
-                      DropdownMenuEntry(
-                        value: AccountingCategories.payments,
-                        label: l10n.expenseCategoryLabel(
-                          AccountingCategories.payments,
                         ),
                       ),
                       DropdownMenuEntry(
@@ -649,7 +642,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _daysController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: const [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         labelText: l10n.t('daysWorked'),
@@ -683,7 +681,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _amountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: const [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       decoration: InputDecoration(labelText: l10n.t('amount')),
                     ),
                     const SizedBox(height: 12),
@@ -770,7 +773,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _quantityController,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: const [
+                          ThousandsSeparatorInputFormatter(),
+                        ],
                         onChanged: (_) =>
                             _recalculateResourceAmount(force: true),
                         decoration: InputDecoration(

@@ -7,6 +7,10 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
+import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -101,6 +105,75 @@ Stream<DashboardSnapshot> _dashboardSnapshotStream({
     };
   });
 }
+
+/// Identifies a single project within a workspace.
+typedef ProjectScope = ({String workspaceId, String projectId});
+
+/// Recent transactions (expenses + payments) for one project, newest first.
+/// Powers the project-scoped dashboard's "Recent" list.
+final projectRecentTransactionsProvider =
+    StreamProvider.family<List<DashboardTransactionRef>, ProjectScope>((
+      ref,
+      scope,
+    ) {
+      final expenseRepo = ref.watch(expenseRepositoryProvider);
+      final paymentRepo = ref.watch(paymentRepositoryProvider);
+      final expensesStream = expenseRepo.watchExpenses(
+        scope.workspaceId,
+        scope.projectId,
+      );
+      final paymentsStream = paymentRepo.watchPayments(
+        scope.workspaceId,
+        projectId: scope.projectId,
+      );
+
+      return Stream.multi((controller) {
+        List<Expense>? expenses;
+        List<PaymentRecord>? payments;
+
+        void emit() {
+          if (expenses == null && payments == null) return;
+          final items = <DashboardTransactionRef>[
+            for (final e in expenses ?? const <Expense>[])
+              DashboardTransactionRef(
+                id: e.id,
+                type: 'expense',
+                title: e.entityName.isNotEmpty
+                    ? e.entityName
+                    : (e.supplierName.isNotEmpty
+                          ? e.supplierName
+                          : e.description),
+                amount: e.amount,
+                date: e.date,
+              ),
+            for (final p in payments ?? const <PaymentRecord>[])
+              DashboardTransactionRef(
+                id: p.id,
+                type: 'payment',
+                title: p.entityName.isNotEmpty ? p.entityName : p.description,
+                amount: p.amount,
+                date: p.date,
+              ),
+          ]..sort(
+            (a, b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)),
+          );
+          controller.add(items.take(6).toList(growable: false));
+        }
+
+        final expenseSub = expensesStream.listen((value) {
+          expenses = value;
+          emit();
+        }, onError: controller.addError);
+        final paymentSub = paymentsStream.listen((value) {
+          payments = value;
+          emit();
+        }, onError: controller.addError);
+        controller.onCancel = () async {
+          await expenseSub.cancel();
+          await paymentSub.cancel();
+        };
+      });
+    });
 
 final dashboardSummaryProvider =
     StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {

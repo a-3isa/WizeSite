@@ -5,6 +5,8 @@ import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart'
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
+import 'package:buildtrack_app/features/projects/domain/project.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
@@ -227,4 +229,135 @@ void main() {
     expect(find.byKey(const Key('qa_add_expense')), findsNothing);
     expect(find.text('Monthly Usage'), findsNothing);
   });
+
+  testWidgets(
+    'Approach B: project selector scopes dashboard to one project '
+    '(financials, 75% budget bar, recent list)',
+    (tester) async {
+      const project = Project(
+        id: 'project_1',
+        workspaceId: 'workspace_1',
+        name: 'Villa Project',
+        clientName: 'Owner',
+        contractValue: 180000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 135500,
+        totalPayments: 220000,
+        netProfit: 84500,
+        isArchived: false,
+        budgetLimit: 180000,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            selectedDashboardProjectIdProvider.overrideWith(
+              (ref) => 'project_1',
+            ),
+            // Workspace-wide ("All Projects") snapshot — distinct numbers.
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(
+                DashboardSnapshot.fromMap({
+                  'totalExpenses': 1000,
+                  'totalIncome': 2000,
+                  'activeProjects': 1,
+                }),
+              ),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[project]),
+            ),
+            projectRecentTransactionsProvider.overrideWith(
+              (ref, scope) => Stream.value(<DashboardTransactionRef>[
+                DashboardTransactionRef(
+                  id: 'p1',
+                  type: 'payment',
+                  title: 'Owner deposit',
+                  amount: 120000,
+                  date: DateTime(2026, 6, 20),
+                ),
+                DashboardTransactionRef(
+                  id: 'e1',
+                  type: 'expense',
+                  title: 'El-Nasr Supplies',
+                  amount: 45000,
+                  date: DateTime(2026, 6, 18),
+                ),
+              ]),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Selector is present in the app bar and shows the project context.
+      expect(
+        find.byKey(const Key('qa_dashboard_project_selector')),
+        findsOneWidget,
+      );
+      expect(find.text('Villa Project'), findsOneWidget);
+
+      // Financial section renders below the fold in the ListView, so include
+      // off-stage widgets in these finders.
+      // Scope caption appears for the selected project.
+      expect(
+        find.byKey(
+          const Key('qa_dashboard_project_scope_caption'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      // Project financials (contract value) + budget bar at 75%.
+      expect(
+        find.textContaining('180,000', skipOffstage: false),
+        findsWidgets,
+      );
+      expect(find.text('75%', skipOffstage: false), findsOneWidget);
+      // Project-scoped recent list with funds-in (+) and expense (-).
+      expect(
+        find.byKey(
+          const Key('qa_dashboard_project_recent'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Owner deposit', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('+120,000', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.text('El-Nasr Supplies', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('-45,000', skipOffstage: false),
+        findsOneWidget,
+      );
+    },
+  );
 }

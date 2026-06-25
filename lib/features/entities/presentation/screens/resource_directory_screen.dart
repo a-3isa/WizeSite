@@ -7,6 +7,8 @@ import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
@@ -54,7 +56,11 @@ extension _ResourceDirectoryActions on _ResourceDirectoryScreenState {
     }
     final nameController = TextEditingController(text: entity?.name ?? '');
     final rateController = TextEditingController(
-      text: entity?.defaultRate?.toString() ?? '',
+      text: entity?.defaultRate == null
+          ? ''
+          : ThousandsSeparatorInputFormatter.formatInitial(
+              entity!.defaultRate!.toString(),
+            ),
     );
     final unitController = TextEditingController(text: entity?.rateUnit ?? '');
     final phoneController = TextEditingController(
@@ -86,6 +92,7 @@ extension _ResourceDirectoryActions on _ResourceDirectoryScreenState {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  inputFormatters: const [ThousandsSeparatorInputFormatter()],
                   decoration: InputDecoration(labelText: l10n.t('defaultRate')),
                 ),
                 const SizedBox(height: 12),
@@ -120,7 +127,7 @@ extension _ResourceDirectoryActions on _ResourceDirectoryScreenState {
                 return;
               }
               final repository = ref.read(entityRepositoryProvider);
-              final rate = double.tryParse(rateController.text.trim());
+              final rate = NumberParser.parseDouble(rateController.text);
               if (entity == null) {
                 await repository.createEntity(
                   workspaceId: workspaceId,

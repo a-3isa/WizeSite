@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
@@ -71,7 +72,9 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
         setState(() {
           _nameController.text = worker.name;
           _phoneController.text = worker.phoneNumber;
-          _wageController.text = worker.dailyWage.toStringAsFixed(2);
+          _wageController.text = ThousandsSeparatorInputFormatter.formatInitial(
+            worker.dailyWage.toStringAsFixed(2),
+          );
           _billingType = worker.billingType == 'project' ? 'project' : 'daily';
           _workerType = _workerTypes.contains(worker.workerType)
               ? worker.workerType
@@ -269,7 +272,10 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _wageController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
                     enabled: _billingType == 'daily',
                     decoration: InputDecoration(
                       labelText: l10n.t('dailyWage'),

@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -83,8 +84,13 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
         setState(() {
           _workerId = entry.workerId;
           _projectId = entry.projectId;
-          _daysController.text = entry.daysWorked.toStringAsFixed(2);
-          _totalWageController.text = entry.totalCost.toStringAsFixed(2);
+          _daysController.text = ThousandsSeparatorInputFormatter.formatInitial(
+            entry.daysWorked.toStringAsFixed(2),
+          );
+          _totalWageController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                entry.totalCost.toStringAsFixed(2),
+              );
           _notesController.text = entry.notes;
           _date = entry.date;
           _attachments
@@ -363,7 +369,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       if (worker.billingType == 'project') {
                         return TextField(
                           controller: _totalWageController,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: const [
+                            ThousandsSeparatorInputFormatter(),
+                          ],
                           decoration: InputDecoration(
                             labelText: l10n.t('totalWage'),
                           ),
@@ -377,7 +388,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                         children: [
                           TextField(
                             controller: _daysController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: const [
+                              ThousandsSeparatorInputFormatter(),
+                            ],
                             onChanged: (_) => setState(() {}),
                             decoration: InputDecoration(
                               labelText: l10n.t('daysWorked'),
