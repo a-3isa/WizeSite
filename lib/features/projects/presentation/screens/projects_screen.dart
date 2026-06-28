@@ -370,8 +370,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final roleAsync = ref.watch(currentAccountingRoleProvider);
-    final canAccessFinancial =
-        roleAsync.valueOrNull?.canAccessAccounting == true;
+    final canAccessFinancial = roleAsync.value?.canAccessAccounting == true;
     if (roleAsync.hasValue &&
         (!_roleResolved || _canAccessFinancial != canAccessFinancial)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -389,8 +388,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     final filtered = _filteredProjects();
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return Scaffold(
       appBar: AppBar(

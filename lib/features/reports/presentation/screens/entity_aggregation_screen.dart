@@ -91,7 +91,7 @@ class _EntityAggregationScreenState
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final hasWorkspace = workspaceId != null;
     final roleAsync = ref.watch(currentAccountingRoleProvider);
-    final currentRole = roleAsync.valueOrNull;
+    final currentRole = roleAsync.value;
     final canAccessReports =
         roleAsync.hasValue &&
         ref.watch(canAccessAccountingProvider(currentRole));
@@ -121,7 +121,7 @@ class _EntityAggregationScreenState
                         final currency =
                             ref
                                 .watch(currentUserSettingsProvider)
-                                .valueOrNull
+                                .value
                                 ?.defaultCurrency ??
                             'EGP';
                         await _exportEntitySummary(

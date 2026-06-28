@@ -7,7 +7,6 @@ plugins {
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
     // END: FlutterFire Configuration
-    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -36,10 +35,6 @@ android {
         getByName("profile") {
             kotlin.srcDirs("src/debug/kotlin")
         }
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -83,6 +78,12 @@ android {
 
 flutter {
     source = "../.."
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }
 
 val devOnlyGeneratedPlugins = listOf(

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
@@ -212,15 +211,6 @@ class OfflineActionQueue {
       createdAt: now,
     );
     await _box.put(action.id, jsonEncode(action.toMap()));
-    if (kDebugMode && type == 'create_payment') {
-      debugPrint(
-        '[offline_queue.enqueue] type=$type id=${action.id} '
-        'projectId=${enrichedPayload['projectId']} '
-        'amount=${enrichedPayload['amount']} '
-        'before=${enrichedPayload['projectTotalPaymentsBefore']} '
-        'after=${enrichedPayload['projectTotalPaymentsAfter']}',
-      );
-    }
     return action;
   }
 
@@ -265,27 +255,6 @@ class OfflineActionQueue {
             })
             .toList()
           ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    if (kDebugMode) {
-      final paymentActions = actions
-          .where((action) => action.type == 'create_payment')
-          .map(
-            (action) =>
-                '${action.id}:${action.status}:project=${action.payload['projectId']}:'
-                'amount=${action.payload['amount']}:'
-                'before=${action.payload['projectTotalPaymentsBefore']}:'
-                'after=${action.payload['projectTotalPaymentsAfter']}:'
-                'syncedAt=${action.syncedAt?.toIso8601String()}:'
-                'errorCode=${action.lastErrorCode}:'
-                'error=${action.lastError}',
-          )
-          .toList();
-      if (paymentActions.isNotEmpty) {
-        debugPrint(
-          '[offline_queue.list] includeExpiredSynced=$includeExpiredSynced '
-          'payments=${paymentActions.join(' | ')}',
-        );
-      }
-    }
     return actions;
   }
 
@@ -307,18 +276,6 @@ class OfflineActionQueue {
 
   Future<void> save(OfflineAction action) async {
     await _box.put(action.id, jsonEncode(action.toMap()));
-    if (kDebugMode && action.type == 'create_payment') {
-      debugPrint(
-        '[offline_queue.save] type=${action.type} id=${action.id} '
-        'status=${action.status} projectId=${action.payload['projectId']} '
-        'amount=${action.payload['amount']} '
-        'before=${action.payload['projectTotalPaymentsBefore']} '
-        'after=${action.payload['projectTotalPaymentsAfter']} '
-        'syncedAt=${action.syncedAt?.toIso8601String()} '
-        'errorCode=${action.lastErrorCode} '
-        'error=${action.lastError}',
-      );
-    }
   }
 
   Future<OfflineAction> retryAction(String id) async {
@@ -370,26 +327,11 @@ class OfflineActionQueue {
           }
           processedAny = true;
           try {
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] processing id=${action.id} '
-                'type=${action.type} status=${action.status} '
-                'projectId=${action.payload['projectId']} '
-                'amount=${action.payload['amount']} '
-                'retryCount=${action.retryCount}',
-              );
-            }
             final rawOutcome = await handler(action);
             final outcome = rawOutcome is OfflineActionOutcome
                 ? rawOutcome
                 : const OfflineActionOutcome.applied();
             final resolvedAt = DateTime.now();
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] success id=${action.id} '
-                'type=${action.type}',
-              );
-            }
             await save(
               action.copyWith(
                 status: OfflineActionStatus.synced,
@@ -403,16 +345,6 @@ class OfflineActionQueue {
             );
           } catch (error) {
             final details = SyncErrorClassifier.detailsFrom(error);
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] failure id=${action.id} '
-                'type=${action.type} projectId=${action.payload['projectId']} '
-                'amount=${action.payload['amount']} '
-                'retryCount=${action.retryCount} '
-                'terminal=${SyncErrorClassifier.isTerminal(error)} '
-                'code=${details.code} message=${details.message}',
-              );
-            }
             final nextRetryCount = action.retryCount + 1;
             if (SyncErrorClassifier.isTerminal(error) ||
                 nextRetryCount >= maxRetries) {

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:buildtrack_app/core/services/attachment_file_types.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,40 +28,6 @@ String _contentTypeForAudioExtension(String extension) {
     case '.m4a':
     case '.mp4':
       return 'audio/mp4';
-    default:
-      return 'application/octet-stream';
-  }
-}
-
-String _contentTypeForAttachmentExtension(String extension) {
-  switch (extension) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.png':
-      return 'image/png';
-    case '.gif':
-      return 'image/gif';
-    case '.pdf':
-      return 'application/pdf';
-    case '.txt':
-      return 'text/plain';
-    case '.csv':
-      return 'text/csv';
-    case '.doc':
-      return 'application/msword';
-    case '.docx':
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    case '.xls':
-      return 'application/vnd.ms-excel';
-    case '.xlsx':
-      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    case '.ppt':
-      return 'application/vnd.ms-powerpoint';
-    case '.pptx':
-      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    case '.zip':
-      return 'application/zip';
     default:
       return 'application/octet-stream';
   }
@@ -98,7 +65,8 @@ class StorageUploadService {
   final FirebaseStorage _storage;
 
   static String contentTypeForAttachmentPath(String path) {
-    return _contentTypeForAttachmentExtension(_extensionOf(path));
+    return AttachmentFileTypes.contentTypeForPath(path) ??
+        'application/octet-stream';
   }
 
   Future<UploadedVoiceFile> uploadVoiceExpenseAudio({

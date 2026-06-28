@@ -15,6 +15,7 @@ import 'package:buildtrack_app/features/transport/domain/transport_provider_acco
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:buildtrack_app/features/reports/domain/report_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 final reportProjectIdProvider = StateProvider<String?>((ref) => null);
 final reportNowProvider = Provider<DateTime>((ref) => DateTime.now());
@@ -1082,13 +1083,14 @@ final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
   if (projectId == null || projectId.isEmpty) {
     return Stream.value(null);
   }
-  final roleFuture = ref.watch(currentAccountingRoleProvider.future);
   final firestore = ref.watch(firestoreProvider);
-  return Stream.fromFuture(roleFuture).asyncExpand((role) {
+  return (() async* {
+    final role = await ref.watch(currentAccountingRoleProvider.future);
     if (role?.canAccessAccounting != true) {
-      return Stream.value(null);
+      yield null;
+      return;
     }
-    return firestore
+    yield* firestore
         .collection('project_metrics')
         .doc(projectId)
         .snapshots()
@@ -1098,7 +1100,7 @@ final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
           }
           return ReportMetrics.fromMap(snap.id, snap.data() ?? const {});
         });
-  });
+  })();
 });
 
 final reportPendingActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
@@ -1190,13 +1192,14 @@ Stream<List<T>> _scopedAccountingRecordsStream<T>({
   if (workspaceId == null || workspaceId.isEmpty || !scope.hasProject) {
     return Stream.value(List<T>.empty(growable: false));
   }
-  final roleFuture = ref.watch(currentAccountingRoleProvider.future);
   final firestore = ref.watch(firestoreProvider);
-  return Stream.fromFuture(roleFuture).asyncExpand((role) {
+  return (() async* {
+    final role = await ref.watch(currentAccountingRoleProvider.future);
     if (role?.canAccessAccounting != true) {
-      return Stream.value(List<T>.empty(growable: false));
+      yield List<T>.empty(growable: false);
+      return;
     }
-    return firestore
+    yield* firestore
         .collection(collection)
         .where('workspaceId', isEqualTo: workspaceId)
         .where('projectId', isEqualTo: scope.projectId)
@@ -1220,7 +1223,7 @@ Stream<List<T>> _scopedAccountingRecordsStream<T>({
               })
               .toList(growable: false),
         );
-  });
+  })();
 }
 
 final reportWorkerAccountingRecordsProvider =

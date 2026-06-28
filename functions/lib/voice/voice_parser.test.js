@@ -11,6 +11,7 @@ const project_matcher_service_1 = require("./services/project_matcher.service");
 const expense_parser_service_1 = require("./services/expense_parser.service");
 const arabicNormalize_1 = require("./utils/arabicNormalize");
 const numbers_1 = require("./utils/numbers");
+const process_voice_expense_1 = require("./process_voice_expense");
 (0, node_test_1.default)("converts Arabic numerals to western numbers", () => {
     const text = (0, arabicNormalize_1.normalizeTranscript)("دفعت ١٬٥٠٠ جنيه");
     strict_1.default.equal((0, numbers_1.parseAmount)(text), 1500);
@@ -75,5 +76,19 @@ const numbers_1 = require("./utils/numbers");
     strict_1.default.equal(response.parsed.matchedProjectId, "p1");
     strict_1.default.equal(response.storagePath, "voice-expenses/u1/sample.m4a");
     strict_1.default.ok(response.source === "llm" || response.source === "hybrid");
+});
+(0, node_test_1.default)("rejects invalid App Check tokens on the voice HTTP fallback", async () => {
+    await strict_1.default.rejects(() => (0, process_voice_expense_1.verifyVoiceHttpAppCheck)(undefined, async () => {
+        throw new Error("should not verify missing tokens");
+    }), (error) => {
+        strict_1.default.equal(error.code, "failed-precondition");
+        return true;
+    });
+    await strict_1.default.rejects(() => (0, process_voice_expense_1.verifyVoiceHttpAppCheck)("invalid-token", async () => {
+        throw new Error("invalid app check token");
+    }), (error) => {
+        strict_1.default.equal(error.code, "failed-precondition");
+        return true;
+    });
 });
 //# sourceMappingURL=voice_parser.test.js.map

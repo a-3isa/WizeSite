@@ -21,9 +21,9 @@ else {
             .storage(bucketUrl)
             .ref(`attachments/${pathSuffix}`);
     }
-    function putRawString(uid, pathSuffix) {
+    function putRawString(uid, pathSuffix, contentType = "application/pdf", content = "receipt") {
         return attachmentRef(uid, pathSuffix)
-            .putString("receipt", "raw", { contentType: "application/pdf" })
+            .putString(content, "raw", { contentType })
             .then(() => undefined);
     }
     node_test_1.default.before(async () => {
@@ -45,6 +45,10 @@ else {
     (0, node_test_1.default)("authenticated users can upload only their own attachments", async () => {
         await (0, rules_unit_testing_1.assertSucceeds)(putRawString("owner_1", "owner_1/receipt.pdf"));
         await (0, rules_unit_testing_1.assertFails)(putRawString("attacker_1", "owner_1/receipt.pdf"));
+    });
+    (0, node_test_1.default)("attachment uploads reject unsupported content types and oversized files", async () => {
+        await (0, rules_unit_testing_1.assertFails)(putRawString("owner_1", "owner_1/receipt.exe", "application/x-msdownload"));
+        await (0, rules_unit_testing_1.assertFails)(putRawString("owner_1", "owner_1/huge.pdf", "application/pdf", "x".repeat(10 * 1024 * 1024 + 1)));
     });
 }
 //# sourceMappingURL=storage_rules.test.js.map

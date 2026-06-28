@@ -12,11 +12,11 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -40,7 +40,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
     final expenseAsync = ref.watch(expenseDetailsProvider(expenseId));
     final storageUploadService = ref.read(storageUploadServiceProvider);
     final locale = Localizations.localeOf(context).languageCode;
-    final fallbackProjectId = projectId ?? expenseAsync.valueOrNull?.projectId;
+    final fallbackProjectId = projectId ?? expenseAsync.value?.projectId;
 
     Future<void> openAttachment(Attachment attachment) async {
       try {
@@ -48,10 +48,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
         final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
             ? rawUrl
             : await storageUploadService.getDownloadUrl(attachment.storagePath);
-        final launched = await launchUrlString(
-          downloadUrl,
-          mode: LaunchMode.externalApplication,
-        );
+        final launched = await launchSafeExternalUrl(downloadUrl);
         if (!launched) {
           throw Exception('Could not open attachment.');
         }

@@ -108,7 +108,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
       return;
     }
 
-    final provisioned = ref.read(workersProvider).valueOrNull;
+    final provisioned = ref.read(workersProvider).value;
     if (provisioned != null && mounted) {
       setState(() {
         _workers
@@ -242,7 +242,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
   Widget build(BuildContext context) {
     ref.listen(workersProvider, (_, next) {
       if (!mounted) return;
-      final items = next.valueOrNull;
+      final items = next.value;
       if (items != null) {
         setState(() {
           _workers
@@ -257,8 +257,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
     final filtered = _filteredWorkers();
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,

@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
@@ -22,7 +23,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -41,10 +41,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final locale = ref.watch(localeControllerProvider);
     final settingsAsync = ref.watch(currentUserSettingsProvider);
     final userId = ref.watch(activeUserIdProvider);
-    final persistedCurrency =
-        settingsAsync.valueOrNull?.defaultCurrency ?? 'EGP';
+    final persistedCurrency = settingsAsync.value?.defaultCurrency ?? 'EGP';
     final persistedNotifications =
-        settingsAsync.valueOrNull?.riskAlertsEnabled ?? true;
+        settingsAsync.value?.riskAlertsEnabled ?? true;
     final currency = _currencyOverride ?? persistedCurrency;
     final notificationsEnabled = _riskAlertsOverride ?? persistedNotifications;
     final prefetcher = ref.read(appPrefetcherProvider);
@@ -310,7 +309,7 @@ class _WorkspaceSettingsCard extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final activeId = ref.watch(activeWorkspaceIdProvider);
     final summaries =
-        ref.watch(userWorkspaceSummariesProvider).valueOrNull ??
+        ref.watch(userWorkspaceSummariesProvider).value ??
         const <WorkspaceSummary>[];
     WorkspaceSummary? current;
     for (final summary in summaries) {
@@ -356,7 +355,7 @@ class _SubscriptionSettingsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final usageAsync = ref.watch(currentUsageProvider);
-    final cachedSub = subscriptionAsync.valueOrNull;
+    final cachedSub = subscriptionAsync.value;
     if (cachedSub != null) {
       return Column(
         children: [
@@ -768,7 +767,7 @@ class _SettingsLinkTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: canOpen ? () => launchUrlString(url!) : null,
+        onTap: canOpen ? () => launchSafeExternalUrl(url) : null,
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(16))
             : BorderRadius.zero,
@@ -869,7 +868,7 @@ class _ProfileSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(firebaseAuthProvider).currentUser;
-    final settings = ref.watch(currentUserSettingsProvider).valueOrNull;
+    final settings = ref.watch(currentUserSettingsProvider).value;
     final name = settings?.fullName.isNotEmpty == true
         ? settings!.fullName
         : user?.displayName ?? user?.email?.split('@').first ?? 'User';

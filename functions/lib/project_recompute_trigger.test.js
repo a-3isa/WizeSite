@@ -39,7 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const strict_1 = __importDefault(require("node:assert/strict"));
 const node_test_1 = __importDefault(require("node:test"));
 const rules_unit_testing_1 = require("@firebase/rules-unit-testing");
-const admin = __importStar(require("firebase-admin"));
+const app_1 = require("firebase-admin/app");
+const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 function snapshotOf(data) {
@@ -112,7 +113,7 @@ function workerAccountingWriteEvent(before, after, recordId = "worker_record_1")
                 entityType: "supplier",
                 category: "materials",
                 amount: 200,
-                date: admin.firestore.Timestamp.fromDate(now),
+                date: firestore_1.Timestamp.fromDate(now),
                 attachments: [{ id: "attachment_1" }],
             },
             {
@@ -123,7 +124,7 @@ function workerAccountingWriteEvent(before, after, recordId = "worker_record_1")
                 entityType: "equipment",
                 category: "equipment",
                 amount: 50,
-                date: admin.firestore.Timestamp.fromDate(previousWeek),
+                date: firestore_1.Timestamp.fromDate(previousWeek),
             },
         ],
         payments: [
@@ -136,7 +137,7 @@ function workerAccountingWriteEvent(before, after, recordId = "worker_record_1")
                 entityType: "client",
                 amount: 125,
                 paymentMethod: "cash",
-                date: admin.firestore.Timestamp.fromDate(monday),
+                date: firestore_1.Timestamp.fromDate(monday),
                 attachments: [{ id: "attachment_2" }],
             },
         ],
@@ -149,7 +150,7 @@ function workerAccountingWriteEvent(before, after, recordId = "worker_record_1")
                 workerName: "Worker One",
                 daysWorked: 2,
                 dailyWage: 75,
-                date: admin.firestore.Timestamp.fromDate(monday),
+                date: firestore_1.Timestamp.fromDate(monday),
             },
         ],
     });
@@ -292,7 +293,7 @@ else {
             projectId: "project_1",
             category: "materials",
             amount: 200,
-            date: admin.firestore.Timestamp.fromDate(previousMonthDate),
+            date: firestore_1.Timestamp.fromDate(previousMonthDate),
             isArchived: false,
         });
         await db
@@ -303,7 +304,7 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 300,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             isArchived: false,
         });
         await db.collection("workers").doc("worker_1").set({
@@ -323,7 +324,7 @@ else {
             daysWorked: 1,
             dailyWage: 100,
             totalCost: 100,
-            date: admin.firestore.Timestamp.fromDate(twoMonthsAgoDate),
+            date: firestore_1.Timestamp.fromDate(twoMonthsAgoDate),
             isArchived: false,
         });
         await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
@@ -357,13 +358,13 @@ else {
         createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
         createWorkerEntryWithQuotaForUser =
             indexModule.createWorkerEntryWithQuotaForUser;
-        db = admin.firestore();
+        db = (0, firestore_1.getFirestore)();
     });
     node_test_1.default.after(async () => {
         await env.cleanup();
-        await Promise.all(admin.apps
+        await Promise.all((0, app_1.getApps)()
             .filter((app) => app !== null)
-            .map((app) => app.delete().catch(() => undefined)));
+            .map((app) => (0, app_1.deleteApp)(app).catch(() => undefined)));
     });
     node_test_1.default.beforeEach(async () => {
         await env.clearFirestore();
@@ -385,7 +386,7 @@ else {
             projectId: "project_1",
             category: "materials",
             amount: 50,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             notes: "Attachment test",
             paymentMethod: "cash",
             attachments: [
@@ -394,7 +395,7 @@ else {
                     fileName: "receipt.pdf",
                     downloadUrl: "https://example.com/receipt.pdf",
                     storagePath: "attachments/receipt.pdf",
-                    uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "application/pdf",
                     size: 12345,
                 },
@@ -423,7 +424,7 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 75,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             paymentMethod: "credit_card",
             notes: "Payment attachment test",
             attachments: [
@@ -432,7 +433,7 @@ else {
                     fileName: "receipt.png",
                     downloadUrl: "https://example.com/receipt.png",
                     storagePath: "attachments/receipt.png",
-                    uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "image/png",
                     size: 54321,
                 },
@@ -453,7 +454,7 @@ else {
             projectId: "project_1",
             daysWorked: 1,
             dailyWage: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             notes: "Worker attachment test",
             attachments: [
                 {
@@ -461,7 +462,7 @@ else {
                     fileName: "signed-timesheet.pdf",
                     downloadUrl: "https://example.com/signed-timesheet.pdf",
                     storagePath: "attachments/signed-timesheet.pdf",
-                    uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "application/pdf",
                     size: 24680,
                 },
@@ -581,7 +582,7 @@ else {
             amount: 100,
             paymentMethod: "cash",
             paymentStatus: "paid",
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             notes: "",
         });
         await partialRecordRef.set({
@@ -594,7 +595,7 @@ else {
             paidAmount: 125,
             paymentMethod: "cash",
             paymentStatus: "partial",
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             notes: "",
         });
         const partialAfter = (await partialRecordRef.get()).data();
@@ -624,7 +625,7 @@ else {
         const workspaceMetricsBefore = await workspaceMetricsRef.get();
         const updatedExpense = {
             ...initialExpense,
-            updatedAt: admin.firestore.Timestamp.now(),
+            updatedAt: firestore_1.Timestamp.now(),
         };
         await expenseRef.set(updatedExpense, { merge: true });
         await handleExpenseWriteRecompute(expenseWriteEvent(initialExpense, updatedExpense));
@@ -684,7 +685,7 @@ else {
             ...beforeEntry,
             daysWorked: 2,
             dailyWage: 125,
-            totalCost: admin.firestore.FieldValue.delete(),
+            totalCost: firestore_1.FieldValue.delete(),
         };
         await workerEntryRef.update(afterEntry);
         const currentEntry = (await workerEntryRef.get()).data();
@@ -731,7 +732,7 @@ else {
             projectId: "project_1",
             category: "equipment",
             amount: 75,
-            date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+            date: firestore_1.Timestamp.fromDate(oldHistoryDate),
             isArchived: false,
         });
         await db
@@ -742,7 +743,7 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 125,
-            date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+            date: firestore_1.Timestamp.fromDate(oldHistoryDate),
             isArchived: false,
         });
         const projectData = (await db.collection("projects").doc("project_1").get()).data();
@@ -766,7 +767,7 @@ else {
         const targetDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 20));
         const afterPayment = {
             ...beforePayment,
-            date: admin.firestore.Timestamp.fromDate(targetDate),
+            date: firestore_1.Timestamp.fromDate(targetDate),
         };
         await paymentRef.set(afterPayment, { merge: true });
         const metricsBefore = await db
@@ -797,7 +798,7 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 300,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             paymentMethod: "cash",
         }), (error) => {
             const handled = error;
@@ -819,7 +820,7 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             paymentMethod: "cash",
             clientMutationId: "client_payment_1",
         });
@@ -843,7 +844,7 @@ else {
             projectId: "project_1",
             daysWorked: 2,
             dailyWage: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
         }), (error) => {
             const handled = error;
             return (handled instanceof https_1.HttpsError &&
@@ -860,7 +861,7 @@ else {
             projectId: "project_1",
             daysWorked: 2,
             dailyWage: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
         }), (error) => {
             const handled = error;
             return (handled instanceof https_1.HttpsError &&

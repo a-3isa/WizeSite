@@ -1,6 +1,6 @@
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 /// Remembers the last category / payment method / payment status the user
 /// chose when adding an expense, so the next new expense form pre-fills with

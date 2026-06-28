@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
@@ -62,19 +29,22 @@ exports.handlePaymentWriteRecompute = handlePaymentWriteRecompute;
 exports.handleWorkerEntryWriteRecompute = handleWorkerEntryWriteRecompute;
 exports.handleWorkerAccountingWriteRecompute = handleWorkerAccountingWriteRecompute;
 exports.handleProjectWriteRecompute = handleProjectWriteRecompute;
-const admin = __importStar(require("firebase-admin"));
+const app_1 = require("firebase-admin/app");
+const auth_1 = require("firebase-admin/auth");
+const firestore_1 = require("firebase-admin/firestore");
 const params_1 = require("firebase-functions/params");
 const v2_1 = require("firebase-functions/v2");
-const firestore_1 = require("firebase-functions/v2/firestore");
+const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
+const http_app_check_1 = require("./http_app_check");
+const http_cors_1 = require("./http_cors");
 var process_voice_expense_1 = require("./voice/process_voice_expense");
 Object.defineProperty(exports, "processVoiceExpense", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpense; } });
 Object.defineProperty(exports, "processVoiceExpenseHttp", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpenseHttp; } });
-admin.initializeApp();
+(0, app_1.initializeApp)();
 (0, v2_1.setGlobalOptions)({ region: "us-central1", maxInstances: 10 });
-const db = admin.firestore();
+const db = (0, firestore_1.getFirestore)();
 const revenuecatWebhookSecret = (0, params_1.defineSecret)("REVENUECAT_WEBHOOK_SECRET");
-const enforceHttpAppCheck = (0, params_1.defineBoolean)("ENFORCE_HTTP_APP_CHECK");
 const ENFORCE_TEAM_MEMBER_LIMITS = false;
 const FREE_LIMITS = {
     activeProjects: 1,
@@ -96,24 +66,24 @@ function parseTimestamp(input) {
     if (input == null) {
         return null;
     }
-    if (input instanceof admin.firestore.Timestamp) {
+    if (input instanceof firestore_1.Timestamp) {
         return input;
     }
     if (input instanceof Date) {
-        return admin.firestore.Timestamp.fromDate(input);
+        return firestore_1.Timestamp.fromDate(input);
     }
     if (typeof input === "object" && input !== null) {
         const candidate = input;
         if (typeof candidate.toDate === "function") {
             const converted = candidate.toDate();
             if (converted instanceof Date && !Number.isNaN(converted.getTime())) {
-                return admin.firestore.Timestamp.fromDate(converted);
+                return firestore_1.Timestamp.fromDate(converted);
             }
         }
         const seconds = Number(candidate.seconds ?? candidate._seconds);
         const nanoseconds = Number(candidate.nanoseconds ?? candidate._nanoseconds ?? 0);
         if (Number.isFinite(seconds) && Number.isFinite(nanoseconds)) {
-            return new admin.firestore.Timestamp(seconds, nanoseconds);
+            return new firestore_1.Timestamp(seconds, nanoseconds);
         }
     }
     if (typeof input === "string") {
@@ -121,10 +91,10 @@ function parseTimestamp(input) {
         if (Number.isNaN(parsed)) {
             return null;
         }
-        return admin.firestore.Timestamp.fromMillis(parsed);
+        return firestore_1.Timestamp.fromMillis(parsed);
     }
     if (typeof input === "number") {
-        return admin.firestore.Timestamp.fromMillis(input);
+        return firestore_1.Timestamp.fromMillis(input);
     }
     return null;
 }
@@ -235,8 +205,8 @@ async function roleForUser(workspaceId, userId) {
         workspaceId,
         userId,
         role: `${legacyData.role ?? "member"}`,
-        createdAt: legacyData.createdAt ?? admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: legacyData.createdAt ?? firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     return `${legacyData.role ?? "member"}`;
 }
@@ -383,24 +353,6 @@ function membershipDocId(workspaceId, userId) {
 function membershipRef(workspaceId, userId) {
     return db.collection("memberships").doc(membershipDocId(workspaceId, userId));
 }
-async function verifyHttpAppCheck(appCheckToken) {
-    const enforce = enforceHttpAppCheck.value();
-    if (!appCheckToken) {
-        if (enforce) {
-            throw new https_1.HttpsError("failed-precondition", "Missing App Check token");
-        }
-        return;
-    }
-    try {
-        await admin.appCheck().verifyToken(appCheckToken);
-    }
-    catch (error) {
-        if (enforce) {
-            throw new https_1.HttpsError("failed-precondition", "Invalid App Check token");
-        }
-        console.warn("HTTP callable endpoint received an invalid App Check token", error);
-    }
-}
 async function getCurrentUsage(workspaceId, type) {
     if (type === "activeProjects") {
         const snap = await db
@@ -494,19 +446,11 @@ function applyMetricsDeltaInTx(tx, projectId, workspaceId, expensesDelta, paymen
     const netDelta = paymentsDelta - expensesDelta;
     const updates = { workspaceId, projectId };
     if (expensesDelta !== 0)
-        updates.totalExpenses = admin.firestore.FieldValue.increment(expensesDelta);
+        updates.totalExpenses = firestore_1.FieldValue.increment(expensesDelta);
     if (paymentsDelta !== 0)
-        updates.totalPayments = admin.firestore.FieldValue.increment(paymentsDelta);
+        updates.totalPayments = firestore_1.FieldValue.increment(paymentsDelta);
     if (netDelta !== 0)
-        updates.netProfit = admin.firestore.FieldValue.increment(netDelta);
-    console.log("[metrics.applyDelta.tx]", {
-        workspaceId,
-        projectId,
-        expensesDelta,
-        paymentsDelta,
-        netDelta,
-        updateKeys: Object.keys(updates),
-    });
+        updates.netProfit = firestore_1.FieldValue.increment(netDelta);
     tx.set(metricsRef, updates, { merge: true });
 }
 function applyMetricsDeltaInBatch(batch, projectId, workspaceId, expensesDelta, paymentsDelta) {
@@ -516,18 +460,18 @@ function applyMetricsDeltaInBatch(batch, projectId, workspaceId, expensesDelta, 
     const netDelta = paymentsDelta - expensesDelta;
     const updates = { workspaceId, projectId };
     if (expensesDelta !== 0)
-        updates.totalExpenses = admin.firestore.FieldValue.increment(expensesDelta);
+        updates.totalExpenses = firestore_1.FieldValue.increment(expensesDelta);
     if (paymentsDelta !== 0)
-        updates.totalPayments = admin.firestore.FieldValue.increment(paymentsDelta);
+        updates.totalPayments = firestore_1.FieldValue.increment(paymentsDelta);
     if (netDelta !== 0)
-        updates.netProfit = admin.firestore.FieldValue.increment(netDelta);
+        updates.netProfit = firestore_1.FieldValue.increment(netDelta);
     batch.set(metricsRef, updates, { merge: true });
 }
 function isRecord(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function asComparable(value) {
-    if (value instanceof admin.firestore.Timestamp) {
+    if (value instanceof firestore_1.Timestamp) {
         return value.toMillis();
     }
     if (value instanceof Date) {
@@ -582,7 +526,7 @@ async function writeIfChanged(ref, nextData, merge = true) {
     }
     await ref.set({
         ...nextData,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge });
     return true;
 }
@@ -838,8 +782,8 @@ async function upsertNotificationForUsers({ workspaceId, userIds, type, title, m
             projectId: projectId ?? null,
             title,
             message,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     }));
 }
@@ -970,8 +914,8 @@ function buildAccountingSummaryPayloads(input) {
             id: summaryDocKey(input.workspaceId, input.projectId, key),
             workspaceId: input.workspaceId,
             projectId: input.projectId,
-            weekStart: admin.firestore.Timestamp.fromDate(start),
-            weekEnd: admin.firestore.Timestamp.fromDate(endOfUtcWeek(start)),
+            weekStart: firestore_1.Timestamp.fromDate(start),
+            weekEnd: firestore_1.Timestamp.fromDate(endOfUtcWeek(start)),
             totalExpenses: 0,
             totalPayments: 0,
             topEntity: {},
@@ -1005,7 +949,7 @@ function buildAccountingSummaryPayloads(input) {
             remainingBalance: 0,
             transactionCount: 0,
             attachmentCount: 0,
-            latestTransactionDate: admin.firestore.Timestamp.fromMillis(0),
+            latestTransactionDate: firestore_1.Timestamp.fromMillis(0),
             categoryBreakdown: {},
             paymentMethodBreakdown: {},
         };
@@ -1024,7 +968,7 @@ function buildAccountingSummaryPayloads(input) {
             category,
             totalAmount: 0,
             transactionCount: 0,
-            latestTransactionDate: admin.firestore.Timestamp.fromMillis(0),
+            latestTransactionDate: firestore_1.Timestamp.fromMillis(0),
         };
         categoryMap.set(key, summary);
         return summary;
@@ -1032,7 +976,7 @@ function buildAccountingSummaryPayloads(input) {
     const rememberLatest = (summary, date) => {
         const current = parseTimestamp(summary.latestTransactionDate)?.toMillis() ?? 0;
         if (date.getTime() > current) {
-            summary.latestTransactionDate = admin.firestore.Timestamp.fromDate(date);
+            summary.latestTransactionDate = firestore_1.Timestamp.fromDate(date);
         }
     };
     for (const expense of input.expenses) {
@@ -1343,7 +1287,7 @@ async function createProjectWithQuotaForUser(uid, data) {
     const name = requireString(data, "name");
     const clientName = `${data.clientName ?? ""}`.trim();
     const contractValue = requireNumber(data, "contractValue");
-    const startDate = parseTimestamp(data.startDate) ?? admin.firestore.Timestamp.now();
+    const startDate = parseTimestamp(data.startDate) ?? firestore_1.Timestamp.now();
     const expectedEndDate = parseTimestamp(data.expectedEndDate);
     const location = `${data.location ?? ""}`.trim();
     const description = `${data.description ?? ""}`.trim();
@@ -1375,8 +1319,8 @@ async function createProjectWithQuotaForUser(uid, data) {
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientCreatedAt: parseTimestamp(data.clientCreatedAt),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
         createdBy: uid,
         isArchived: false,
     });
@@ -1392,10 +1336,7 @@ exports.createProjectWithQuota = (0, https_1.onCall)(async (request) => {
     return createProjectWithQuotaForUser(request.auth.uid, request.data);
 });
 exports.createProjectWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -1409,12 +1350,12 @@ exports.createProjectWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -1460,7 +1401,7 @@ exports.updateProject = (0, https_1.onCall)(async (request) => {
         name: requireString(data, "name"),
         clientName: `${data.clientName ?? ""}`.trim(),
         contractValue: requireNumber(data, "contractValue"),
-        startDate: parseTimestamp(data.startDate) ?? admin.firestore.Timestamp.now(),
+        startDate: parseTimestamp(data.startDate) ?? firestore_1.Timestamp.now(),
         expectedEndDate: parseTimestamp(data.expectedEndDate),
         location: `${data.location ?? ""}`.trim(),
         description: `${data.description ?? ""}`.trim(),
@@ -1469,7 +1410,7 @@ exports.updateProject = (0, https_1.onCall)(async (request) => {
         status: `${data.status ?? "active"}`.trim() || "active",
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
 exports.archiveProject = (0, https_1.onCall)(async (request) => {
@@ -1493,7 +1434,7 @@ exports.archiveProject = (0, https_1.onCall)(async (request) => {
         isArchived: true,
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
 exports.unarchiveProject = (0, https_1.onCall)(async (request) => {
@@ -1517,7 +1458,7 @@ exports.unarchiveProject = (0, https_1.onCall)(async (request) => {
         isArchived: false,
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
 exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
@@ -1590,7 +1531,7 @@ async function createExpenseWithQuotaForUser(uid, data) {
             category,
             amount,
             currency,
-            date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
             notes: `${data.notes ?? ""}`.trim(),
             supplierName: `${data.supplierName ?? ""}`.trim(),
             paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
@@ -1603,15 +1544,15 @@ async function createExpenseWithQuotaForUser(uid, data) {
             clientCreatedAt: parseTimestamp(data.clientCreatedAt),
             clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
             createdBy: uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
             isArchived: false,
         });
         tx.set(counterRef, {
             workspaceId,
             periodKey: periodKey(),
-            expensesCount: admin.firestore.FieldValue.increment(1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            expensesCount: firestore_1.FieldValue.increment(1),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
     });
@@ -1621,10 +1562,7 @@ async function createExpenseWithQuotaForUser(uid, data) {
     };
 }
 exports.createExpenseWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -1638,12 +1576,12 @@ exports.createExpenseWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -1696,13 +1634,6 @@ async function createPaymentWithQuotaForUser(uid, data) {
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
-    console.log("[payment.create.start]", {
-        uid,
-        workspaceId,
-        projectId,
-        amount,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    });
     await db.runTransaction(async (tx) => {
         const attachments = ensureAttachmentItems(data, "attachments");
         tx.set(paymentRef, {
@@ -1710,7 +1641,7 @@ async function createPaymentWithQuotaForUser(uid, data) {
             workspaceId,
             projectId,
             amount,
-            date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
             paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
             notes: `${data.notes ?? ""}`.trim(),
             attachments,
@@ -1718,24 +1649,17 @@ async function createPaymentWithQuotaForUser(uid, data) {
             clientCreatedAt: parseTimestamp(data.clientCreatedAt),
             clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
             createdBy: uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
             isArchived: false,
         });
         tx.set(counterRef, {
             workspaceId,
             periodKey: periodKey(),
-            paymentsCount: admin.firestore.FieldValue.increment(1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            paymentsCount: firestore_1.FieldValue.increment(1),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, amount);
-    });
-    console.log("[payment.create.done]", {
-        workspaceId,
-        projectId,
-        paymentId: paymentRef.id,
-        amount,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     });
     return {
         id: paymentRef.id,
@@ -1749,10 +1673,7 @@ exports.createPaymentWithQuota = (0, https_1.onCall)(async (request) => {
     return createPaymentWithQuotaForUser(request.auth.uid, request.data);
 });
 exports.createPaymentWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -1766,12 +1687,12 @@ exports.createPaymentWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -1850,22 +1771,22 @@ async function createWorkerEntryWithQuotaForUser(uid, data) {
             daysWorked,
             dailyWage,
             totalCost,
-            date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
             notes: `${data.notes ?? ""}`.trim(),
             attachments,
             clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
             clientCreatedAt: parseTimestamp(data.clientCreatedAt),
             clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
             createdBy: uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
             isArchived: false,
         });
         tx.set(counterRef, {
             workspaceId,
             periodKey: periodKey(),
-            workerEntriesCount: admin.firestore.FieldValue.increment(1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            workerEntriesCount: firestore_1.FieldValue.increment(1),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
     });
@@ -1881,10 +1802,7 @@ exports.createWorkerEntryWithQuota = (0, https_1.onCall)(async (request) => {
     return createWorkerEntryWithQuotaForUser(request.auth.uid, request.data);
 });
 exports.createWorkerEntryWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -1898,12 +1816,12 @@ exports.createWorkerEntryWithQuotaHttp = (0, https_1.onRequest)(async (request, 
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -1949,8 +1867,8 @@ async function archiveExpenseWithQuotaRefundForUser(uid, data) {
         const archivedProjectId = `${expense.projectId ?? ""}`;
         tx.update(expenseRef, {
             isArchived: true,
-            archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            archivedAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         const counterSnap = await tx.get(counterRef);
         const current = Number(counterSnap.data()?.expensesCount ?? 0);
@@ -1958,7 +1876,7 @@ async function archiveExpenseWithQuotaRefundForUser(uid, data) {
             workspaceId,
             periodKey: periodKey(),
             expensesCount: Math.max(0, current - 1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         if (archivedProjectId) {
             applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, -archivedAmount, 0);
@@ -1972,10 +1890,7 @@ exports.archiveExpenseWithQuotaRefund = (0, https_1.onCall)(async (request) => {
     await archiveExpenseWithQuotaRefundForUser(request.auth.uid, request.data);
 });
 exports.archiveExpenseWithQuotaRefundHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -1989,12 +1904,12 @@ exports.archiveExpenseWithQuotaRefundHttp = (0, https_1.onRequest)(async (reques
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -2040,8 +1955,8 @@ async function archivePaymentWithQuotaRefundForUser(uid, data) {
         const archivedProjectId = `${payment.projectId ?? ""}`;
         tx.update(paymentRef, {
             isArchived: true,
-            archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            archivedAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         const counterSnap = await tx.get(counterRef);
         const current = Number(counterSnap.data()?.paymentsCount ?? 0);
@@ -2049,7 +1964,7 @@ async function archivePaymentWithQuotaRefundForUser(uid, data) {
             workspaceId,
             periodKey: periodKey(),
             paymentsCount: Math.max(0, current - 1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         if (archivedProjectId) {
             applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, 0, -archivedAmount);
@@ -2063,10 +1978,7 @@ exports.archivePaymentWithQuotaRefund = (0, https_1.onCall)(async (request) => {
     await archivePaymentWithQuotaRefundForUser(request.auth.uid, request.data);
 });
 exports.archivePaymentWithQuotaRefundHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -2080,12 +1992,12 @@ exports.archivePaymentWithQuotaRefundHttp = (0, https_1.onRequest)(async (reques
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -2131,8 +2043,8 @@ async function archiveWorkerEntryWithQuotaRefundForUser(uid, data) {
         const archivedProjectId = `${entry.projectId ?? ""}`;
         tx.update(entryRef, {
             isArchived: true,
-            archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            archivedAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         const counterSnap = await tx.get(counterRef);
         const current = Number(counterSnap.data()?.workerEntriesCount ?? 0);
@@ -2140,7 +2052,7 @@ async function archiveWorkerEntryWithQuotaRefundForUser(uid, data) {
             workspaceId,
             periodKey: periodKey(),
             workerEntriesCount: Math.max(0, current - 1),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         if (archivedProjectId) {
             applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, -archivedCost, 0);
@@ -2154,10 +2066,7 @@ exports.archiveWorkerEntryWithQuotaRefund = (0, https_1.onCall)(async (request) 
     await archiveWorkerEntryWithQuotaRefundForUser(request.auth.uid, request.data);
 });
 exports.archiveWorkerEntryWithQuotaRefundHttp = (0, https_1.onRequest)(async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -2171,12 +2080,12 @@ exports.archiveWorkerEntryWithQuotaRefundHttp = (0, https_1.onRequest)(async (re
         return;
     }
     try {
-        await verifyHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await (0, http_app_check_1.verifyHttpAppCheck)(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const data = Object.keys(payloadFrom(body.data)).length > 0
             ? payloadFrom(body.data)
@@ -2241,13 +2150,13 @@ exports.updateExpense = (0, https_1.onCall)(async (request) => {
         projectId,
         category,
         amount,
-        date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+        date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
         notes: `${data.notes ?? ""}`.trim(),
         supplierName: `${data.supplierName ?? ""}`.trim(),
         paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     };
     if (data.attachments != null) {
         updateData.attachments = ensureAttachmentItems(data, "attachments");
@@ -2304,12 +2213,12 @@ exports.updatePayment = (0, https_1.onCall)(async (request) => {
     const updateData = {
         projectId,
         amount,
-        date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+        date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
         paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
         notes: `${data.notes ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     };
     if (data.attachments != null) {
         updateData.attachments = ensureAttachmentItems(data, "attachments");
@@ -2355,8 +2264,8 @@ exports.createWorker = (0, https_1.onCall)(async (request) => {
         clientCreatedAt: parseTimestamp(data.clientCreatedAt),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
         createdBy: request.auth.uid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
         isArchived: false,
     });
     return {
@@ -2402,7 +2311,7 @@ exports.updateWorker = (0, https_1.onCall)(async (request) => {
         status,
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
 exports.archiveWorker = (0, https_1.onCall)(async (request) => {
@@ -2426,7 +2335,7 @@ exports.archiveWorker = (0, https_1.onCall)(async (request) => {
         isArchived: true,
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
 exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
@@ -2476,11 +2385,11 @@ exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
         daysWorked,
         dailyWage,
         totalCost: newTotalCost,
-        date: parseTimestamp(data.date) ?? admin.firestore.Timestamp.now(),
+        date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
         notes: `${data.notes ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     };
     if (data.attachments != null) {
         updateData.attachments = ensureAttachmentItems(data, "attachments");
@@ -2564,7 +2473,7 @@ exports.deleteProjectCascade = (0, https_1.onCall)(async (request) => {
         expensesCount: Math.max(0, Number(currentData.expensesCount ?? 0) - expenseRefund),
         paymentsCount: Math.max(0, Number(currentData.paymentsCount ?? 0) - paymentRefund),
         workerEntriesCount: Math.max(0, Number(currentData.workerEntriesCount ?? 0) - entryRefund),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     await batch.commit();
     await recomputeWorkspaceMetrics(workspaceId);
@@ -2578,7 +2487,7 @@ exports.updateUserProfile = (0, https_1.onCall)(async (request) => {
     const photoUrl = `${data.photoUrl ?? ""}`.trim();
     const defaultCurrency = currencyCode(data.defaultCurrency);
     const riskAlertsEnabled = asBooleanOrUndefined(data.riskAlertsEnabled);
-    await admin.auth().updateUser(request.auth.uid, {
+    await (0, auth_1.getAuth)().updateUser(request.auth.uid, {
         displayName: fullName,
         photoURL: photoUrl || undefined,
     });
@@ -2590,7 +2499,7 @@ exports.updateUserProfile = (0, https_1.onCall)(async (request) => {
         photoUrl,
         defaultCurrency,
         ...(riskAlertsEnabled == null ? {} : { riskAlertsEnabled }),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
 });
 exports.updateUserSettings = (0, https_1.onCall)(async (request) => {
@@ -2605,7 +2514,7 @@ exports.updateUserSettings = (0, https_1.onCall)(async (request) => {
     const updates = {
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     };
     const defaultCurrency = currencyCode(data.defaultCurrency);
     if (defaultCurrency) {
@@ -2644,7 +2553,7 @@ async function bootstrapWorkspaceForUser(input) {
         const payload = {
             id: uid,
             workspaceId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         };
         assignIfDefined(payload, "email", existingEmail ?? incomingEmail);
         assignIfDefined(payload, "fullName", existingFullName ?? incomingFullName);
@@ -2661,8 +2570,8 @@ async function bootstrapWorkspaceForUser(input) {
             defaultCurrency: "EGP",
             riskAlertsEnabled: true,
             setupCompleted: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         };
         assignIfDefined(payload, "email", incomingEmail);
         assignIfDefined(payload, "fullName", incomingFullName);
@@ -2699,8 +2608,8 @@ async function bootstrapWorkspaceForUser(input) {
                 id: legacyWorkspaceId,
                 name: userWorkspaceName(fullName),
                 ownerId: uid,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             }, { merge: true });
         }
         if (legacyWorkspaceSnap.exists && legacyOwnerId !== uid) {
@@ -2714,8 +2623,8 @@ async function bootstrapWorkspaceForUser(input) {
                 workspaceId: legacyWorkspaceId,
                 userId: uid,
                 role: "owner",
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             }, { merge: true });
         }
         await userRef.set(userSnap.exists
@@ -2734,15 +2643,15 @@ async function bootstrapWorkspaceForUser(input) {
         id: workspaceId,
         name: userWorkspaceName(fullName),
         ownerId: uid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     batch.set(membershipRef(workspaceId, uid), {
         workspaceId,
         userId: uid,
         role: "owner",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     batch.set(userRef, {
         ...newUserPayload(workspaceId),
@@ -2777,14 +2686,14 @@ async function setActiveWorkspaceForUser(input) {
             workspaceId,
             userId: uid,
             role: "owner",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     }
     await db.collection("users").doc(uid).set({
         id: uid,
         workspaceId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     return { workspaceId };
 }
@@ -2820,20 +2729,20 @@ async function completeInitialWorkspaceSetupForUser(input) {
     await db.runTransaction(async (tx) => {
         tx.set(workspaceRef, {
             name: workspaceName,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         tx.set(db.collection("users").doc(uid), {
             id: uid,
             workspaceId,
             defaultCurrency,
             setupCompleted: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         tx.set(membershipRef(workspaceId, uid), {
             workspaceId,
             userId: uid,
             role: "owner",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     });
     return { workspaceId, setupCompleted: true };
@@ -2893,7 +2802,7 @@ async function updateWorkspaceMemberRoleForUser(input) {
     }
     await membership.ref.set({
         role,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     return { userId: targetUserId, workspaceId, role };
 }
@@ -2992,8 +2901,8 @@ async function inviteMemberByEmailForUser(input) {
         userId,
         role,
         createdBy: ownerUid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     await upsertNotificationForUsers({
         workspaceId,
@@ -3057,8 +2966,8 @@ async function inviteMemberWithQuotaForUser(input) {
         userId: newUserId,
         role: memberRole,
         createdBy: ownerUid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
     await upsertNotificationForUsers({
         workspaceId,
@@ -3119,7 +3028,7 @@ exports.revenuecatWebhook = (0, https_1.onRequest)({ secrets: [revenuecatWebhook
         isAutoRenewing,
         trialEndsAt,
         periodEndsAt,
-        lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSyncedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
     const recipients = await notificationRecipients(workspaceId, false);
     await upsertNotificationForUsers({
@@ -3468,10 +3377,10 @@ async function handleWorkerAccountingWriteRecompute(event) {
     }
     await Promise.all(targets.map(({ workspaceId, workerId }) => recomputeWorkerAccountingSummary(workspaceId, workerId)));
 }
-exports.onExpenseWriteRecompute = (0, firestore_1.onDocumentWritten)("expenses/{expenseId}", handleExpenseWriteRecompute);
-exports.onPaymentWriteRecompute = (0, firestore_1.onDocumentWritten)("payments/{paymentId}", handlePaymentWriteRecompute);
-exports.onWorkerEntryWriteRecompute = (0, firestore_1.onDocumentWritten)("worker_entries/{entryId}", handleWorkerEntryWriteRecompute);
-exports.onWorkerAccountingWriteRecompute = (0, firestore_1.onDocumentWritten)("worker_accounting_records/{recordId}", handleWorkerAccountingWriteRecompute);
+exports.onExpenseWriteRecompute = (0, firestore_2.onDocumentWritten)("expenses/{expenseId}", handleExpenseWriteRecompute);
+exports.onPaymentWriteRecompute = (0, firestore_2.onDocumentWritten)("payments/{paymentId}", handlePaymentWriteRecompute);
+exports.onWorkerEntryWriteRecompute = (0, firestore_2.onDocumentWritten)("worker_entries/{entryId}", handleWorkerEntryWriteRecompute);
+exports.onWorkerAccountingWriteRecompute = (0, firestore_2.onDocumentWritten)("worker_accounting_records/{recordId}", handleWorkerAccountingWriteRecompute);
 async function handleProjectWriteRecompute(event) {
     const after = event.data?.after?.data();
     const before = event.data?.before?.data();
@@ -3494,5 +3403,5 @@ async function handleProjectWriteRecompute(event) {
     }
     await recomputeProjectSummary(workspaceId, projectId);
 }
-exports.onProjectWriteRecompute = (0, firestore_1.onDocumentWritten)("projects/{projectId}", handleProjectWriteRecompute);
+exports.onProjectWriteRecompute = (0, firestore_2.onDocumentWritten)("projects/{projectId}", handleProjectWriteRecompute);
 //# sourceMappingURL=index.js.map

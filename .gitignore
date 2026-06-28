@@ -63,6 +63,9 @@ functions/firestore-debug.log
 *.env
 google-services.json
 GoogleService-Info.plist
+*-firebase-adminsdk-*.json
+*service-account*.json
+*service_account*.json
 
 # ============================================================
 # Node
@@ -112,6 +115,7 @@ _error
 .svn/
 .swiftpm/
 migrate_working_dir/
+.superpowers/
 
 
 

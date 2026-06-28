@@ -25,7 +25,7 @@ final notificationItemsProvider = StreamProvider<List<NotificationItem>>((ref) {
 final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref
           .watch(notificationItemsProvider)
-          .valueOrNull
+          .value
           ?.where((item) => item.isUnread)
           .length ??
       0;

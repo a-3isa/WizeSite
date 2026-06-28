@@ -25,7 +25,7 @@ extension AsyncContentX<T> on AsyncValue<T> {
       data: data,
       loading: loading,
       error: (err, stackTrace) {
-        final cached = valueOrNull;
+        final cached = value;
         if (cached != null) {
           return data(cached);
         }

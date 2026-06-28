@@ -92,10 +92,7 @@ class ThousandsSeparatorInputFormatter extends TextInputFormatter {
   /// `1,000.00`).
   static String formatInitial(String value, {int decimalDigits = 2}) {
     return ThousandsSeparatorInputFormatter(decimalDigits: decimalDigits)
-        .formatEditUpdate(
-          TextEditingValue.empty,
-          TextEditingValue(text: value),
-        )
+        .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: value))
         .text;
   }
 }

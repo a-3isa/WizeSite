@@ -46,8 +46,7 @@ class EntityAggregationDetailScreen extends ConsumerWidget {
   Future<void> _buildAndPrintPdf(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final currency =
-        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.read(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final bytes = await const ReportPdfExporter().buildEntitySummaryReportPdf(
       l10n: l10n,
       summaries: [summary],

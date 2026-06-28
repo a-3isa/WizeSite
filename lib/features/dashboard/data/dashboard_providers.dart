@@ -133,30 +133,34 @@ final projectRecentTransactionsProvider =
 
         void emit() {
           if (expenses == null && payments == null) return;
-          final items = <DashboardTransactionRef>[
-            for (final e in expenses ?? const <Expense>[])
-              DashboardTransactionRef(
-                id: e.id,
-                type: 'expense',
-                title: e.entityName.isNotEmpty
-                    ? e.entityName
-                    : (e.supplierName.isNotEmpty
-                          ? e.supplierName
-                          : e.description),
-                amount: e.amount,
-                date: e.date,
-              ),
-            for (final p in payments ?? const <PaymentRecord>[])
-              DashboardTransactionRef(
-                id: p.id,
-                type: 'payment',
-                title: p.entityName.isNotEmpty ? p.entityName : p.description,
-                amount: p.amount,
-                date: p.date,
-              ),
-          ]..sort(
-            (a, b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)),
-          );
+          final items =
+              <DashboardTransactionRef>[
+                for (final e in expenses ?? const <Expense>[])
+                  DashboardTransactionRef(
+                    id: e.id,
+                    type: 'expense',
+                    title: e.entityName.isNotEmpty
+                        ? e.entityName
+                        : (e.supplierName.isNotEmpty
+                              ? e.supplierName
+                              : e.description),
+                    amount: e.amount,
+                    date: e.date,
+                  ),
+                for (final p in payments ?? const <PaymentRecord>[])
+                  DashboardTransactionRef(
+                    id: p.id,
+                    type: 'payment',
+                    title: p.entityName.isNotEmpty
+                        ? p.entityName
+                        : p.description,
+                    amount: p.amount,
+                    date: p.date,
+                  ),
+              ]..sort(
+                (a, b) =>
+                    (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)),
+              );
           controller.add(items.take(6).toList(growable: false));
         }
 

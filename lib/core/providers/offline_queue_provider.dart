@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 
 final offlineActionQueueProvider = Provider<OfflineActionQueue>((ref) {

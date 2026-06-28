@@ -343,11 +343,11 @@ class _ResourceDirectoryScreenState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final role = ref.watch(currentAccountingRoleProvider).valueOrNull;
+    final role = ref.watch(currentAccountingRoleProvider).value;
     final canAccessFinancial = role?.canAccessAccounting == true;
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final summaries = canAccessFinancial && workspaceId != null
-        ? ref.watch(entityAggregationsProvider(workspaceId)).valueOrNull
+        ? ref.watch(entityAggregationsProvider(workspaceId)).value
         : null;
     final summariesById = {
       for (final summary in summaries ?? const <EntitySummary>[])

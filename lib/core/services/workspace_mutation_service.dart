@@ -313,14 +313,6 @@ class WorkspaceMutationService {
     if (attachments != null) {
       payload['attachments'] = attachments;
     }
-    if (kDebugMode) {
-      debugPrint(
-        '[mutation.createPayment] workspaceId=$workspaceId '
-        'projectId=$projectId amount=$amount '
-        'before=$projectTotalPaymentsBefore after=$projectTotalPaymentsAfter',
-      );
-    }
-
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createPayment,
       payload: payload,

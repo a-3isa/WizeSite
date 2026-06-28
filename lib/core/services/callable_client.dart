@@ -52,8 +52,7 @@ class CallableClient {
       if (kDebugMode) {
         debugPrint(
           '[callable.error] function=$functionName '
-          'code=${error.code} message=${error.message} '
-          'details=${error.details}',
+          'code=${error.code} message=${error.message}',
         );
       }
       await _telemetry.log('callable.error', {
@@ -91,8 +90,7 @@ class CallableClient {
           if (kDebugMode) {
             debugPrint(
               '[callable.retry_error] function=$functionName '
-              'code=${retryError.code} message=${retryError.message} '
-              'details=${retryError.details}',
+              'code=${retryError.code} message=${retryError.message}',
             );
           }
           await _telemetry.log('callable.retry_error', {
@@ -226,7 +224,7 @@ class CallableClient {
     if (kDebugMode) {
       debugPrint(
         '[callable.http] function=$functionName '
-        'status=${response.statusCode} body=${response.body}',
+        'status=${response.statusCode}',
       );
     }
 

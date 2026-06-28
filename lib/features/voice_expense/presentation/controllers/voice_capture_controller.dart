@@ -5,7 +5,7 @@ import 'package:buildtrack_app/core/services/voice_recorder_service.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_capture_state.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 /// Recording seam the controller depends on, so tests can drive the state
 /// machine without touching platform channels.
@@ -221,7 +221,7 @@ final voiceCaptureControllerProvider =
     >((ref) {
       final currency = ref
           .watch(currentUserSettingsProvider)
-          .valueOrNull
+          .value
           ?.defaultCurrency;
       final player = AudioPlayerPlaybackHandle();
       final controller = VoiceCaptureController(

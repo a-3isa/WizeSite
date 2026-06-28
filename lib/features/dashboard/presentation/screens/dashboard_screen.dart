@@ -22,11 +22,14 @@ import 'package:buildtrack_app/features/subscription/presentation/providers/subs
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 
 /// Currently selected project for the dashboard. `null` means "All Projects"
 /// (workspace-wide aggregate).
-final selectedDashboardProjectIdProvider = StateProvider<String?>((ref) => null);
+final selectedDashboardProjectIdProvider = StateProvider<String?>(
+  (ref) => null,
+);
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -40,11 +43,10 @@ class DashboardScreen extends ConsumerWidget {
     final unreadCount = ref.watch(unreadNotificationCountProvider);
     final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final locale = Localizations.localeOf(context).languageCode;
 
-    final projects = ref.watch(projectsProvider).valueOrNull ?? const <Project>[];
+    final projects = ref.watch(projectsProvider).value ?? const <Project>[];
     final rawSelectedProjectId = ref.watch(selectedDashboardProjectIdProvider);
     // Honour the selection only while it still belongs to the active workspace.
     Project? selectedProject;
@@ -154,10 +156,6 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               if (deadLetterCount > 0 || pendingSyncCount > 0)
                 const SizedBox(height: 16),
-              SectionHeader(title: l10n.t('resources')),
-              const SizedBox(height: 12),
-              const _ResourceLinks(),
-              const SizedBox(height: 24),
               SectionHeader(title: l10n.t('overview')),
               const SizedBox(height: 12),
               if (selectedProject != null)
@@ -185,6 +183,10 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                   ),
                 ),
+              const SizedBox(height: 24),
+              SectionHeader(title: l10n.t('resources')),
+              const SizedBox(height: 12),
+              const _ResourceLinks(),
               const SizedBox(height: 24),
               subscriptionAsync.whenStale(
                 data: (subscription) => subscription.tier == PlanTier.free
@@ -227,15 +229,19 @@ class _DashboardProjectSelector extends ConsumerWidget {
     return Material(
       color: AppColors.constructionOrange.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(12),
-      child: PopupMenuButton<String?>(
+      child: PopupMenuButton<String>(
         key: const Key('qa_dashboard_project_selector'),
         position: PopupMenuPosition.under,
         tooltip: l10n.t('selectProject'),
+        // Empty string is the "All Projects" sentinel. A null value would be
+        // swallowed by PopupMenuButton as a cancel, making it impossible to
+        // switch back to the workspace-wide view.
         onSelected: (value) =>
-            ref.read(selectedDashboardProjectIdProvider.notifier).state = value,
+            ref.read(selectedDashboardProjectIdProvider.notifier).state =
+                value.isEmpty ? null : value,
         itemBuilder: (context) => [
-          PopupMenuItem<String?>(
-            value: null,
+          PopupMenuItem<String>(
+            value: '',
             child: Row(
               children: [
                 Icon(
@@ -249,7 +255,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
             ),
           ),
           for (final project in projects)
-            PopupMenuItem<String?>(
+            PopupMenuItem<String>(
               value: project.id,
               child: Row(
                 children: [
@@ -262,10 +268,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      project.name,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(project.name, overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -361,10 +364,7 @@ class ProjectFinancialSection extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
-            l10n.t(
-              'showingDataForProject',
-              params: {'project': project.name},
-            ),
+            l10n.t('showingDataForProject', params: {'project': project.name}),
             key: const Key('qa_dashboard_project_scope_caption'),
             style: Theme.of(
               context,
@@ -413,7 +413,9 @@ class ProjectFinancialSection extends ConsumerWidget {
                       alpha: 0.1,
                     ),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      overBudget ? AppColors.danger : AppColors.constructionOrange,
+                      overBudget
+                          ? AppColors.danger
+                          : AppColors.constructionOrange,
                     ),
                   ),
                 ),
@@ -461,9 +463,8 @@ class ProjectFinancialSection extends ConsumerWidget {
                     ],
                   ),
                 ),
-          loading: () => AppLoadingSkeleton(
-            semanticsLabel: l10n.t('loadingContent'),
-          ),
+          loading: () =>
+              AppLoadingSkeleton(semanticsLabel: l10n.t('loadingContent')),
           error: (_, _) => const SizedBox.shrink(),
         ),
       ],
@@ -548,10 +549,10 @@ class WorkspaceSwitcher extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final activeWorkspaceId = ref.watch(activeWorkspaceIdProvider);
     final workspaces =
-        ref.watch(userWorkspaceSummariesProvider).valueOrNull ??
+        ref.watch(userWorkspaceSummariesProvider).value ??
         const <WorkspaceSummary>[];
     final activeWorkspaceName =
-        ref.watch(activeWorkspaceNameProvider).valueOrNull?.trim() ?? '';
+        ref.watch(activeWorkspaceNameProvider).value?.trim() ?? '';
 
     WorkspaceSummary? current;
     for (final workspace in workspaces) {
@@ -785,11 +786,11 @@ class _ResourceLinks extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return GridView.count(
       crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.8,
+      childAspectRatio: 3.4,
       children: [
         _ResourceCard(
           qaKey: const Key('qa_resource_workers'),
@@ -852,15 +853,20 @@ class _ResourceCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
-                Icon(icon, color: color),
-                const SizedBox(width: 10),
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     label,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],

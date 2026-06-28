@@ -27,8 +27,7 @@ class WorkspaceCache {
 
   void setActiveUserId(String? value) => _put(activeUserIdKey, value);
 
-  void setActiveWorkspaceId(String? value) =>
-      _put(activeWorkspaceIdKey, value);
+  void setActiveWorkspaceId(String? value) => _put(activeWorkspaceIdKey, value);
 
   void setWorkspaceSummariesJson(String? value) =>
       _put(workspaceSummariesKey, value);

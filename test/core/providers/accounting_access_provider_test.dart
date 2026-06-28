@@ -25,6 +25,13 @@ void main() {
       );
       addTearDown(container.dispose);
 
+      final subscription = container.listen(
+        currentAccountingRoleProvider,
+        (_, _) {},
+        fireImmediately: true,
+      );
+      addTearDown(subscription.close);
+
       final role = await container.read(currentAccountingRoleProvider.future);
 
       expect(role, AccountingAccessRoleType.accountingApproved);
@@ -40,6 +47,13 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
+
+      final subscription = container.listen(
+        currentAccountingRoleProvider,
+        (_, _) {},
+        fireImmediately: true,
+      );
+      addTearDown(subscription.close);
 
       final role = await container.read(currentAccountingRoleProvider.future);
 

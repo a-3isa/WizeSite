@@ -1,5 +1,5 @@
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 /// Archives one record (expense, payment, …) by id, returning the existing
 /// [MutationResult] so the orchestration can detect offline-queued writes.

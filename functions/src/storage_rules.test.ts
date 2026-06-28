@@ -28,9 +28,14 @@ if (!emulatorHost) {
       .ref(`attachments/${pathSuffix}`);
   }
 
-  function putRawString(uid: string, pathSuffix: string) {
+  function putRawString(
+    uid: string,
+    pathSuffix: string,
+    contentType = "application/pdf",
+    content = "receipt",
+  ) {
     return attachmentRef(uid, pathSuffix)
-      .putString("receipt", "raw", {contentType: "application/pdf"})
+      .putString(content, "raw", {contentType})
       .then(() => undefined);
   }
 
@@ -63,6 +68,21 @@ if (!emulatorHost) {
 
     await assertFails(
       putRawString("attacker_1", "owner_1/receipt.pdf"),
+    );
+  });
+
+  test("attachment uploads reject unsupported content types and oversized files", async () => {
+    await assertFails(
+      putRawString("owner_1", "owner_1/receipt.exe", "application/x-msdownload"),
+    );
+
+    await assertFails(
+      putRawString(
+        "owner_1",
+        "owner_1/huge.pdf",
+        "application/pdf",
+        "x".repeat(10 * 1024 * 1024 + 1),
+      ),
     );
   });
 }

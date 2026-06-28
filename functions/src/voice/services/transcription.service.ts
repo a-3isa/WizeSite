@@ -1,4 +1,4 @@
-import * as admin from "firebase-admin";
+import {getStorage} from "firebase-admin/storage";
 import {HttpsError} from "firebase-functions/v2/https";
 
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -182,7 +182,7 @@ export async function transcribeAudioFromStorage(params: {
   }
   assertSupportedAudioPath(storagePath);
 
-  const bucket = admin.storage().bucket();
+  const bucket = getStorage().bucket();
   const file = bucket.file(storagePath);
   const [exists] = await file.exists();
   if (!exists) {
@@ -241,7 +241,7 @@ export async function transcribeAudioFromStorage(params: {
 
   if (!response.ok) {
     const bodyText = await response.text();
-    console.error(`[transcription] HTTP ${response.status} from OpenRouter. model=${params.model} body=${bodyText.slice(0, 500)}`);
+    console.error(`[transcription] HTTP ${response.status} from OpenRouter. model=${params.model}`);
     let providerMessage = "";
     try {
       providerMessage = readProviderErrorMessage(JSON.parse(bodyText));
@@ -259,4 +259,3 @@ export async function transcribeAudioFromStorage(params: {
   }
   return transcript;
 }
-

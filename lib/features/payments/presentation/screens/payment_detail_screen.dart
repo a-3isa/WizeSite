@@ -10,12 +10,12 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,8 +46,7 @@ class PaymentDetailScreen extends ConsumerWidget {
     final paymentAsync = ref.watch(paymentDetailsProvider(paymentId));
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     Future<void> openAttachment(Attachment attachment) async {
       try {
@@ -56,10 +55,7 @@ class PaymentDetailScreen extends ConsumerWidget {
         final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
             ? rawUrl
             : await storageUploadService.getDownloadUrl(attachment.storagePath);
-        final launched = await launchUrlString(
-          downloadUrl,
-          mode: LaunchMode.externalApplication,
-        );
+        final launched = await launchSafeExternalUrl(downloadUrl);
         if (!launched) {
           throw Exception('Could not open attachment.');
         }

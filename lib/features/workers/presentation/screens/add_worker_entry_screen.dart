@@ -120,8 +120,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   }
 
   Future<void> _pickAttachments() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
     );
@@ -166,7 +165,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       return;
     }
     final selectedWorker = _selectedWorker(
-      ref.read(workersProvider).valueOrNull ?? const [],
+      ref.read(workersProvider).value ?? const [],
     );
     if (_workerId == null || _projectId == null || selectedWorker == null) {
       return;
@@ -219,7 +218,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       attachments.addAll(_attachments);
       var queued = false;
       if (widget.entryId == null) {
-        final projects = ref.read(projectsProvider).valueOrNull ?? [];
+        final projects = ref.read(projectsProvider).value ?? [];
         final matches = projects.where((project) => project.id == _projectId);
         final selectedProject = matches.isEmpty ? null : matches.first;
         final result = await ref
@@ -361,7 +360,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   Builder(
                     builder: (context) {
                       final worker = _selectedWorker(
-                        workersAsync.valueOrNull ?? const [],
+                        workersAsync.value ?? const [],
                       );
                       if (worker == null) {
                         return const SizedBox.shrink();

@@ -13,6 +13,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -66,8 +79,9 @@ void main() {
       ).add(const Duration(days: 14)),
     });
 
-    final summary = await container.read(
-      dashboardWeeklySummaryProvider('workspace_1').future,
+    final summary = await _readStreamProvider(
+      container,
+      dashboardWeeklySummaryProvider('workspace_1'),
     );
 
     expect(summary['weeklyExpenses'], 100);
@@ -100,8 +114,9 @@ void main() {
         ),
       );
 
-      final summary = await container.read(
-        dashboardWeeklySummaryProvider('workspace_1').future,
+      final summary = await _readStreamProvider(
+        container,
+        dashboardWeeklySummaryProvider('workspace_1'),
       );
 
       expect(summary['weeklyExpenses'], 100);
@@ -123,8 +138,9 @@ void main() {
         'date': date,
       });
 
-      final insights = await container.read(
-        dashboardWeeklyInsightsProvider('workspace_1').future,
+      final insights = await _readStreamProvider(
+        container,
+        dashboardWeeklyInsightsProvider('workspace_1'),
       );
 
       expect(insights.topEntity, 'unassigned');
@@ -168,15 +184,16 @@ void main() {
         overrides: [
           firestoreProvider.overrideWithValue(firestore),
           offlineActionQueueProvider.overrideWithValue(queue),
-          currentAccountingRoleProvider.overrideWith(
-            (ref) => Stream.value(AccountingAccessRoleType.member),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.member),
           ),
         ],
       );
       addTearDown(deniedContainer.dispose);
 
-      final snapshot = await deniedContainer.read(
-        dashboardSnapshotProvider('workspace_1').future,
+      final snapshot = await _readStreamProvider(
+        deniedContainer,
+        dashboardSnapshotProvider('workspace_1'),
       );
 
       expect(snapshot.hasFinancialAccess, isFalse);
@@ -198,15 +215,16 @@ void main() {
       overrides: [
         firestoreProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
-        currentAccountingRoleProvider.overrideWith(
-          (ref) => Stream.value(AccountingAccessRoleType.accountingApproved),
+        currentAccountingRoleProvider.overrideWithValue(
+          const AsyncData(AccountingAccessRoleType.accountingApproved),
         ),
       ],
     );
     addTearDown(allowedContainer.dispose);
 
-    final snapshot = await allowedContainer.read(
-      dashboardSnapshotProvider('workspace_1').future,
+    final snapshot = await _readStreamProvider(
+      allowedContainer,
+      dashboardSnapshotProvider('workspace_1'),
     );
 
     expect(snapshot.hasFinancialAccess, isTrue);

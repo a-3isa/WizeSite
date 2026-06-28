@@ -8,7 +8,6 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum ProjectBrowseSort {
@@ -242,32 +241,6 @@ class FirebaseProjectRepository
             metricsData: currentMetrics,
           ),
         );
-        if (kDebugMode) {
-          final paymentActions = currentActions
-              .where(
-                (action) =>
-                    action.type == OfflineActionTypes.createPayment &&
-                    '${action.payload['projectId'] ?? ''}' == projectId,
-              )
-              .map(
-                (action) =>
-                    '${action.id}:${action.status}:amount=${action.payload['amount']}:'
-                    'before=${action.payload['projectTotalPaymentsBefore']}:'
-                    'after=${action.payload['projectTotalPaymentsAfter']}:'
-                    'syncedAt=${action.syncedAt?.toIso8601String()}',
-              )
-              .toList();
-          debugPrint(
-            '[project_repo.watchProject.emit] projectId=$projectId '
-            'projectSnapExists=${projectSnap.exists} '
-            'rawProjectTotalPayments=${projectSnap.data()?['totalPayments']} '
-            'metrics=$currentMetrics '
-            'basePayments=${baseProject.totalPayments} '
-            'baseExpenses=${baseProject.totalExpenses} '
-            'baseNet=${baseProject.netProfit} '
-            'paymentActions=${paymentActions.join(' | ')}',
-          );
-        }
         controller.add(_applyPendingDeltas(baseProject, currentActions));
       }
 
@@ -1011,17 +984,6 @@ class FirebaseProjectRepository
             currentTotal: totalPayments,
             delta: delta,
           );
-          if (kDebugMode) {
-            debugPrint(
-              '[project_repo.applyDelta] projectId=${project.id} '
-              'action=${action.id} status=${action.status} '
-              'type=${action.type} amount=$delta '
-              'currentPayments=$totalPayments '
-              'before=${action.payload['projectTotalPaymentsBefore']} '
-              'after=${action.payload['projectTotalPaymentsAfter']} '
-              'reflected=$reflected',
-            );
-          }
           if (!reflected) {
             totalPayments += delta;
           }
@@ -1047,26 +1009,9 @@ class FirebaseProjectRepository
 
     if (totalExpenses == project.totalExpenses &&
         totalPayments == project.totalPayments) {
-      if (kDebugMode) {
-        debugPrint(
-          '[project_repo.applyDelta.result] projectId=${project.id} '
-          'unchanged payments=${project.totalPayments} '
-          'expenses=${project.totalExpenses} net=${project.netProfit}',
-        );
-      }
       return project;
     }
 
-    if (kDebugMode) {
-      debugPrint(
-        '[project_repo.applyDelta.result] projectId=${project.id} '
-        'basePayments=${project.totalPayments} '
-        'displayPayments=$totalPayments '
-        'baseExpenses=${project.totalExpenses} '
-        'displayExpenses=$totalExpenses '
-        'displayNet=${totalPayments - totalExpenses}',
-      );
-    }
     return Project(
       id: project.id,
       workspaceId: project.workspaceId,
@@ -1105,17 +1050,6 @@ class FirebaseProjectRepository
     final reflected = delta > 0
         ? currentTotal >= expected
         : currentTotal <= expected;
-    if (kDebugMode &&
-        (action.type == OfflineActionTypes.createPayment ||
-            action.type == OfflineActionTypes.updatePayment)) {
-      debugPrint(
-        '[project_repo.reflectionCheck] action=${action.id} '
-        'type=${action.type} status=${action.status} '
-        'baselineField=$baselineField baseline=$baseline '
-        'delta=$delta expected=$expected currentTotal=$currentTotal '
-        'reflected=$reflected',
-      );
-    }
     return reflected;
   }
 

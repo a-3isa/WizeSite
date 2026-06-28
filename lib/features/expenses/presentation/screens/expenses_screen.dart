@@ -795,8 +795,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       return;
     }
     final currency =
-        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.read(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final filterParts = <String>[];
     if (_categoryFilter != null) {
       filterParts.add(l10n.expenseCategoryLabel(_categoryFilter!));
@@ -858,8 +857,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     );
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final today = DateTime.now();
     final summaryScope = workspaceId == null || workspaceId.isEmpty

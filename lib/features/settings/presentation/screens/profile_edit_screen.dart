@@ -47,7 +47,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final userId = ref.read(activeUserIdProvider);
-    final settings = ref.read(currentUserSettingsProvider).valueOrNull;
+    final settings = ref.read(currentUserSettingsProvider).value;
     if (userId == null || userId.isEmpty || settings == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;

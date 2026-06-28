@@ -457,13 +457,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final selectorProjects = selectorState.projects;
     final availableProjects = selectorProjects.isNotEmpty
         ? selectorProjects
-        : projectsAsync.valueOrNull ?? const <Project>[];
+        : projectsAsync.value ?? const <Project>[];
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final hasWorkspace = workspaceId != null;
     final roleAsync = ref.watch(currentAccountingRoleProvider);
-    final currentRole = roleAsync.valueOrNull;
+    final currentRole = roleAsync.value;
     final canAccessReports =
         roleAsync.hasValue &&
         ref.watch(canAccessAccountingProvider(currentRole));
@@ -478,9 +477,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   paymentSummary: {},
                   recentTransactions: [],
                 )
-              : ref
-                    .watch(dashboardWeeklyInsightsProvider(workspaceId))
-                    .valueOrNull)
+              : ref.watch(dashboardWeeklyInsightsProvider(workspaceId)).value)
         : null;
 
     final summaryAsync = canAccessReports
@@ -531,7 +528,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 HapticFeedback.lightImpact();
                                 final metrics = ref
                                     .read(reportMetricsProvider)
-                                    .valueOrNull;
+                                    .value;
                                 final selectedProject = availableProjects
                                     .where(
                                       (project) =>
@@ -564,7 +561,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 HapticFeedback.lightImpact();
                                 final metrics = ref
                                     .read(reportMetricsProvider)
-                                    .valueOrNull;
+                                    .value;
                                 final selectedProject = availableProjects
                                     .where(
                                       (project) =>

@@ -93,6 +93,12 @@ void main() {
   testWidgets('dashboard resources expose button semantics', (tester) async {
     await tester.pumpWidget(_dashboardApp());
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('qa_resource_workers')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
 
     for (final label in [
       'Workers',

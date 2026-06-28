@@ -1,6 +1,8 @@
-import * as admin from "firebase-admin";
+import {getAppCheck} from "firebase-admin/app-check";
+import {getAuth} from "firebase-admin/auth";
 import {defineSecret} from "firebase-functions/params";
 import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
+import {applyCorsHeaders} from "../http_cors";
 import {CurrencyCode, ProcessVoiceExpenseResponse, VoiceProjectInput} from "./types/expense";
 import {transcribeAudioFromStorage} from "./services/transcription.service";
 import {parseExpenseFromTranscript} from "./services/expense_parser.service";
@@ -122,15 +124,19 @@ function canonicalCode(code: string): string {
   return code.replace(/-/g, "_").toUpperCase();
 }
 
-async function maybeVerifyAppCheck(appCheckToken: string | undefined): Promise<void> {
+export async function verifyVoiceHttpAppCheck(
+  appCheckToken: string | undefined,
+  verifyToken: (token: string) => Promise<unknown> = (token) =>
+    getAppCheck().verifyToken(token),
+): Promise<void> {
   if (!appCheckToken) {
-    return;
+    throw new HttpsError("failed-precondition", "Missing App Check token");
   }
 
   try {
-    await admin.appCheck().verifyToken(appCheckToken);
+    await verifyToken(appCheckToken);
   } catch (error) {
-    console.warn("Voice HTTP endpoint received an invalid App Check token", error);
+    throw new HttpsError("failed-precondition", "Invalid App Check token");
   }
 }
 
@@ -222,14 +228,7 @@ export const processVoiceExpenseHttp = onRequest(
     ],
   },
   async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Firebase-AppCheck",
-    );
-
-    if (request.method === "OPTIONS") {
-      response.status(204).send("");
+    if (applyCorsHeaders(request, response)) {
       return;
     }
 
@@ -245,14 +244,14 @@ export const processVoiceExpenseHttp = onRequest(
     }
 
     try {
-      await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+      await verifyVoiceHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
 
       const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
       if (!bearerToken) {
         throw new HttpsError("unauthenticated", "Authentication required");
       }
 
-      const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+      const decodedToken = await getAuth().verifyIdToken(bearerToken);
       const body = payloadFrom(request.body);
       const payload = Object.keys(payloadFrom(body.data)).length > 0 ?
         payloadFrom(body.data) :

@@ -5,6 +5,19 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   test(
     'workspace list includes memberships and owned personal workspace',
@@ -34,8 +47,9 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final workspaces = await container.read(
-        userWorkspaceSummariesProvider.future,
+      final workspaces = await _readStreamProvider(
+        container,
+        userWorkspaceSummariesProvider,
       );
 
       expect(workspaces.map((workspace) => workspace.id), [
@@ -64,10 +78,16 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      container.read(workspaceSelectionSyncProvider);
+      final subscription = container.listen(
+        workspaceSelectionSyncProvider,
+        (_, _) {},
+        fireImmediately: true,
+      );
+      addTearDown(subscription.close);
       await firestore.collection('users').doc('user_1').set({
         'workspaceId': 'invited_ws',
       }, SetOptions(merge: true));
+      await container.pump();
       await Future<void>.delayed(Duration.zero);
 
       expect(container.read(activeWorkspaceIdProvider), 'invited_ws');

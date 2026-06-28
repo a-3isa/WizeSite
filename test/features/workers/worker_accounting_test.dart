@@ -117,18 +117,27 @@ void main() {
       // >= amount and <= 0 are invalid → treated as unresolved, matching the
       // backend recompute (never fabricated by clamping).
       expect(
-        record(amount: 250, paymentStatus: 'partial', paidAmount: 250)
-            .confirmedPaidAmount,
+        record(
+          amount: 250,
+          paymentStatus: 'partial',
+          paidAmount: 250,
+        ).confirmedPaidAmount,
         isNull,
       );
       expect(
-        record(amount: 250, paymentStatus: 'partial', paidAmount: 300)
-            .isLegacyPartialUnresolved,
+        record(
+          amount: 250,
+          paymentStatus: 'partial',
+          paidAmount: 300,
+        ).isLegacyPartialUnresolved,
         isTrue,
       );
       expect(
-        record(amount: 250, paymentStatus: 'partial', paidAmount: 0)
-            .confirmedPaidAmount,
+        record(
+          amount: 250,
+          paymentStatus: 'partial',
+          paidAmount: 0,
+        ).confirmedPaidAmount,
         isNull,
       );
     });

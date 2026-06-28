@@ -10,6 +10,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   late Directory tempDir;
   late Box<String> box;
@@ -70,14 +83,15 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final summary = await container.read(
+    final summary = await _readStreamProvider(
+      container,
       expenseQuickSummaryProvider(
         ExpenseSummaryScope(
           workspaceId: 'workspace_1',
           projectId: 'project_1',
           now: DateTime.utc(2026, 5, 27),
         ),
-      ).future,
+      ),
     );
 
     expect(summary.todayExpenses, 125);
@@ -121,14 +135,15 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final summary = await container.read(
+    final summary = await _readStreamProvider(
+      container,
       expenseQuickSummaryProvider(
         ExpenseSummaryScope(
           workspaceId: 'workspace_1',
           projectId: 'project_1',
           now: DateTime.utc(2026, 5, 27),
         ),
-      ).future,
+      ),
     );
 
     expect(summary.todayExpenses, 100);

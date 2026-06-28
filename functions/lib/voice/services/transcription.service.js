@@ -1,40 +1,7 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.transcribeAudioFromStorage = transcribeAudioFromStorage;
-const admin = __importStar(require("firebase-admin"));
+const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".m4a", ".mp3", ".wav", ".webm", ".aac", ".mp4"]);
@@ -171,7 +138,7 @@ async function transcribeAudioFromStorage(params) {
         throw new https_1.HttpsError("invalid-argument", "storagePath is required");
     }
     assertSupportedAudioPath(storagePath);
-    const bucket = admin.storage().bucket();
+    const bucket = (0, storage_1.getStorage)().bucket();
     const file = bucket.file(storagePath);
     const [exists] = await file.exists();
     if (!exists) {
@@ -227,7 +194,7 @@ async function transcribeAudioFromStorage(params) {
     }
     if (!response.ok) {
         const bodyText = await response.text();
-        console.error(`[transcription] HTTP ${response.status} from OpenRouter. model=${params.model} body=${bodyText.slice(0, 500)}`);
+        console.error(`[transcription] HTTP ${response.status} from OpenRouter. model=${params.model}`);
         let providerMessage = "";
         try {
             providerMessage = readProviderErrorMessage(JSON.parse(bodyText));

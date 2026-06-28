@@ -236,8 +236,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final parsed = widget.response.parsed;
     final confidence = widget.response.confidence;
     final defaultCurrency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     if (_currency == 'EGP' &&
         (parsed.currency == null || parsed.currency!.isEmpty) &&
         defaultCurrency != 'EGP') {

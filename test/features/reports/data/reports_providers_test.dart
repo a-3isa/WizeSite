@@ -22,6 +22,19 @@ class _MockExpenseRepository extends Mock implements ExpenseRepository {}
 
 class _MockPaymentRepository extends Mock implements PaymentRepository {}
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   group('report providers', () {
     test('report scope defaults to month-to-date', () {
@@ -157,8 +170,8 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container.read(reportBaseMetricsProvider.future);
-      await container.read(reportPendingActionsProvider.future);
+      await _readStreamProvider(container, reportBaseMetricsProvider);
+      await _readStreamProvider(container, reportPendingActionsProvider);
 
       final summary = container.read(reportSummaryProvider).requireValue;
       final metrics = container.read(reportMetricsProvider).requireValue;
@@ -271,8 +284,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final flow = container.read(monthlyFlowProvider).requireValue;
 
@@ -326,8 +339,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
         final flow = container.read(monthlyFlowProvider).requireValue;
@@ -465,8 +478,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
         final flow = container.read(monthlyFlowProvider).requireValue;
@@ -575,8 +588,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
 
@@ -656,8 +669,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
 
@@ -721,8 +734,8 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
         final flow = container.read(monthlyFlowProvider).requireValue;
@@ -826,24 +839,28 @@ void main() {
             firestoreProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             reportProjectIdProvider.overrideWith((ref) => 'project_1'),
-            currentAccountingRoleProvider.overrideWith(
-              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            currentAccountingRoleProvider.overrideWithValue(
+              const AsyncData(AccountingAccessRoleType.owner),
             ),
           ],
         );
         addTearDown(container.dispose);
 
-        final workers = await container.read(
-          reportWorkerAccountingRecordsProvider.future,
+        final workers = await _readStreamProvider(
+          container,
+          reportWorkerAccountingRecordsProvider,
         );
-        final contractors = await container.read(
-          reportContractorAccountingRecordsProvider.future,
+        final contractors = await _readStreamProvider(
+          container,
+          reportContractorAccountingRecordsProvider,
         );
-        final equipment = await container.read(
-          reportEquipmentAccountingRecordsProvider.future,
+        final equipment = await _readStreamProvider(
+          container,
+          reportEquipmentAccountingRecordsProvider,
         );
-        final transport = await container.read(
-          reportTransportAccountingRecordsProvider.future,
+        final transport = await _readStreamProvider(
+          container,
+          reportTransportAccountingRecordsProvider,
         );
         final topWorkers = container.read(topWorkersProvider).requireValue;
 
@@ -976,8 +993,8 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-            currentAccountingRoleProvider.overrideWith(
-              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            currentAccountingRoleProvider.overrideWithValue(
+              const AsyncData(AccountingAccessRoleType.owner),
             ),
             reportScopeProvider.overrideWith(
               (ref) => ReportScope(
@@ -1014,8 +1031,8 @@ void main() {
         addTearDown(container.dispose);
 
         await container.read(reportScopedRowsProvider.future);
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final metrics = container.read(reportMetricsProvider).requireValue!;
         expect(metrics.totalExpenses, 120);
@@ -1046,8 +1063,8 @@ void main() {
         overrides: [
           firestoreProvider.overrideWithValue(firestore),
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-          currentAccountingRoleProvider.overrideWith(
-            (ref) => Stream.value(AccountingAccessRoleType.member),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.member),
           ),
           reportScopeProvider.overrideWith(
             (ref) => ReportScope.monthToDate(
@@ -1062,9 +1079,15 @@ void main() {
       addTearDown(container.dispose);
 
       expect(await container.read(reportScopedRowsProvider.future), isNull);
-      expect(await container.read(reportBaseMetricsProvider.future), isNull);
       expect(
-        await container.read(reportWorkerAccountingRecordsProvider.future),
+        await _readStreamProvider(container, reportBaseMetricsProvider),
+        isNull,
+      );
+      expect(
+        await _readStreamProvider(
+          container,
+          reportWorkerAccountingRecordsProvider,
+        ),
         isEmpty,
       );
       verifyNever(
@@ -1157,8 +1180,8 @@ void main() {
           overrides: [
             firestoreProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-            currentAccountingRoleProvider.overrideWith(
-              (ref) => Stream.value(AccountingAccessRoleType.owner),
+            currentAccountingRoleProvider.overrideWithValue(
+              const AsyncData(AccountingAccessRoleType.owner),
             ),
             reportScopeProvider.overrideWith(
               (ref) => ReportScope(startDate: start, endDate: end),
@@ -1175,8 +1198,8 @@ void main() {
         expect(rows!.expenses.map((item) => item.id).toSet(), {'e1', 'e2'});
         expect(rows.payments.map((item) => item.id).toSet(), {'p1', 'p2'});
 
-        await container.read(reportBaseMetricsProvider.future);
-        await container.read(reportPendingActionsProvider.future);
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
 
         final summary = container.read(reportSummaryProvider).requireValue;
         expect(summary['totalExpenses'], 150);

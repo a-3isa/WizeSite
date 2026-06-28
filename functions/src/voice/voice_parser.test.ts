@@ -6,6 +6,7 @@ import {matchProjectFromTranscript} from "./services/project_matcher.service";
 import {parseExpenseFromTranscript} from "./services/expense_parser.service";
 import {normalizeTranscript} from "./utils/arabicNormalize";
 import {parseAmount} from "./utils/numbers";
+import {verifyVoiceHttpAppCheck} from "./process_voice_expense";
 
 test("converts Arabic numerals to western numbers", () => {
   const text = normalizeTranscript("دفعت ١٬٥٠٠ جنيه");
@@ -85,3 +86,26 @@ test("returns confirmation-ready response shape after fallback", async () => {
   assert.ok(response.source === "llm" || response.source === "hybrid");
 });
 
+test("rejects invalid App Check tokens on the voice HTTP fallback", async () => {
+  await assert.rejects(
+    () =>
+      verifyVoiceHttpAppCheck(undefined, async () => {
+        throw new Error("should not verify missing tokens");
+      }),
+    (error: unknown) => {
+      assert.equal((error as {code?: string}).code, "failed-precondition");
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      verifyVoiceHttpAppCheck("invalid-token", async () => {
+        throw new Error("invalid app check token");
+      }),
+    (error: unknown) => {
+      assert.equal((error as {code?: string}).code, "failed-precondition");
+      return true;
+    },
+  );
+});

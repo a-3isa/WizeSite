@@ -10,6 +10,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -69,8 +82,9 @@ void main() {
         'date': DateTime.utc(2026, 5, 28),
       });
 
-      final summaries = await container.read(
-        entityAggregationsProvider('workspace_1').future,
+      final summaries = await _readStreamProvider(
+        container,
+        entityAggregationsProvider('workspace_1'),
       );
 
       expect(summaries, hasLength(1));
@@ -95,8 +109,9 @@ void main() {
       },
     );
 
-    final summaries = await container.read(
-      entityAggregationsProvider('workspace_1').future,
+    final summaries = await _readStreamProvider(
+      container,
+      entityAggregationsProvider('workspace_1'),
     );
 
     expect(summaries, hasLength(1));
@@ -136,8 +151,9 @@ void main() {
             'paymentMethod': 'bank',
           });
 
-      final summaries = await container.read(
-        entityAggregationsProvider('workspace_1').future,
+      final summaries = await _readStreamProvider(
+        container,
+        entityAggregationsProvider('workspace_1'),
       );
 
       final worker = summaries.singleWhere(

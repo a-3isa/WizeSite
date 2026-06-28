@@ -28,8 +28,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     final projectAsync = ref.watch(projectDetailsProvider(projectId));
     final prefetcher = ref.read(appPrefetcherProvider);
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,

@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
@@ -16,7 +17,6 @@ import 'package:buildtrack_app/features/common/presentation/controllers/domain_a
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 typedef DomainAccountingSave =
     Future<void> Function(DomainAccountingRecordDraft draft);
@@ -55,7 +55,7 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
     final roleAsync = ref.watch(currentAccountingRoleProvider);
-    final role = roleAsync.valueOrNull;
+    final role = roleAsync.value;
     final canAccessAccounting =
         roleAsync.hasValue && ref.watch(canAccessAccountingProvider(role));
     final roleIsLoading = workspaceId != null && roleAsync.isLoading;
@@ -159,17 +159,9 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                               (attachment) => AttachmentTile(
                                 attachment: attachment,
                                 onOpen: () {
-                                  final url =
-                                      attachment.downloadUrl ??
-                                      attachment.localPath ??
-                                      '';
+                                  final url = attachment.downloadUrl ?? '';
                                   if (url.isNotEmpty) {
-                                    unawaited(
-                                      launchUrlString(
-                                        url,
-                                        mode: LaunchMode.externalApplication,
-                                      ),
-                                    );
+                                    unawaited(launchSafeExternalUrl(url));
                                   }
                                 },
                               ),

@@ -3,14 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('VoiceCaptureState value semantics', () {
-    test('initial factory falls back to default currency and clamps remaining',
-        () {
-      final s = VoiceCaptureState.initial();
-      expect(s.currencyCode, VoiceCaptureState.fallbackCurrency);
-      expect(s.status, VoiceCaptureStatus.idle);
-      expect(s.isIdle, isTrue);
-      expect(s.remaining, VoiceCaptureState.defaultMaxDuration);
-    });
+    test(
+      'initial factory falls back to default currency and clamps remaining',
+      () {
+        final s = VoiceCaptureState.initial();
+        expect(s.currencyCode, VoiceCaptureState.fallbackCurrency);
+        expect(s.status, VoiceCaptureStatus.idle);
+        expect(s.isIdle, isTrue);
+        expect(s.remaining, VoiceCaptureState.defaultMaxDuration);
+      },
+    );
 
     test('remaining never goes negative past the max duration', () {
       const s = VoiceCaptureState(
@@ -22,8 +24,11 @@ void main() {
     });
 
     test('status getters reflect the current status', () {
-      VoiceCaptureState withStatus(VoiceCaptureStatus s) =>
-          VoiceCaptureState(currencyCode: 'USD', status: s, recordingPath: '/p');
+      VoiceCaptureState withStatus(VoiceCaptureStatus s) => VoiceCaptureState(
+        currencyCode: 'USD',
+        status: s,
+        recordingPath: '/p',
+      );
       expect(withStatus(VoiceCaptureStatus.recording).isRecording, isTrue);
       expect(withStatus(VoiceCaptureStatus.playing).isPlaying, isTrue);
       expect(withStatus(VoiceCaptureStatus.processing).isProcessing, isTrue);
@@ -50,8 +55,7 @@ void main() {
       expect(updated.recordingPath, '/old');
       expect(updated.errorKey, 'errorRecording');
 
-      final cleared =
-          base.copyWith(clearError: true, clearRecordingPath: true);
+      final cleared = base.copyWith(clearError: true, clearRecordingPath: true);
       expect(cleared.errorKey, isNull);
       expect(cleared.recordingPath, isNull);
       expect(cleared.currencyCode, 'USD');

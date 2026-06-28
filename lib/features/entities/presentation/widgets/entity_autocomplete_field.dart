@@ -144,20 +144,23 @@ class _EntityAutocompleteFieldState
         if (_suggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 6),
-            decoration: BoxDecoration(
+            child: Material(
               color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: _suggestions.map((entity) {
-                return ListTile(
-                  title: Text(entity.name),
-                  subtitle: entity.type.isNotEmpty ? Text(entity.type) : null,
-                  onTap: () => _selectSuggestion(entity),
-                );
-              }).toList(),
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _suggestions.map((entity) {
+                  return ListTile(
+                    title: Text(entity.name),
+                    subtitle: entity.type.isNotEmpty ? Text(entity.type) : null,
+                    onTap: () => _selectSuggestion(entity),
+                  );
+                }).toList(),
+              ),
             ),
           ),
       ],

@@ -200,8 +200,8 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
     _connectivitySubscription = ref.listenManual<AsyncValue<bool>>(
       connectivityProvider,
       (previous, next) {
-        final wasOnline = previous?.valueOrNull ?? false;
-        final isOnline = next.valueOrNull ?? false;
+        final wasOnline = previous?.value ?? false;
+        final isOnline = next.value ?? false;
         if (!wasOnline && isOnline) {
           unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
         }

@@ -80,9 +80,10 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
       if (payment != null && mounted) {
         setState(() {
           _projectId = payment.projectId;
-          _amountController.text = ThousandsSeparatorInputFormatter.formatInitial(
-            payment.amount.toStringAsFixed(2),
-          );
+          _amountController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                payment.amount.toStringAsFixed(2),
+              );
           _method = payment.paymentMethod;
           _paymentStatus = payment.paymentStatus;
           _descriptionController.text = payment.description;
@@ -116,8 +117,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   }
 
   Future<void> _pickAttachments() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
     );
@@ -361,9 +361,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    inputFormatters: const [
-                      ThousandsSeparatorInputFormatter(),
-                    ],
+                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
                     decoration: InputDecoration(labelText: l10n.t('amount')),
                   ),
                   const SizedBox(height: 12),

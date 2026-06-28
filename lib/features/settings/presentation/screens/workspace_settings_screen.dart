@@ -72,7 +72,7 @@ final teamMembersProvider = StreamProvider<List<TeamMemberView>>((ref) {
 
 final currentUserRoleProvider = Provider<String?>((ref) {
   final userId = ref.watch(activeUserIdProvider);
-  final members = ref.watch(teamMembersProvider).valueOrNull ?? const [];
+  final members = ref.watch(teamMembersProvider).value ?? const [];
   final match = members.where((member) => member.userId == userId);
   return match.isEmpty ? null : match.first.role;
 });
@@ -248,7 +248,7 @@ class _WorkspaceSettingsScreenState
     final l10n = AppLocalizations.of(context);
     final membersAsync = ref.watch(teamMembersProvider);
     final currentUserRole = ref.watch(currentUserRoleProvider);
-    final workspaceName = ref.watch(workspaceNameProvider).valueOrNull ?? '';
+    final workspaceName = ref.watch(workspaceNameProvider).value ?? '';
     final canManage = currentUserRole == 'owner';
 
     return AppBackScope(

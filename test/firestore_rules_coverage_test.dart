@@ -10,8 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Scans every string-literal `.collection('name')` in `lib/` and asserts each
 /// has a corresponding `match /name/{…}` block in `firestore.rules`.
 void main() {
-  test('every client-accessed collection has a firestore.rules match block',
-      () {
+  test('every client-accessed collection has a firestore.rules match block', () {
     final libDir = Directory('lib');
     expect(libDir.existsSync(), isTrue, reason: 'run from repo root');
 
@@ -22,12 +21,17 @@ void main() {
     final clientCollections = <String>{};
     for (final entity in libDir.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      for (final match in collectionLiteral.allMatches(entity.readAsStringSync())) {
+      for (final match in collectionLiteral.allMatches(
+        entity.readAsStringSync(),
+      )) {
         clientCollections.add(match.group(1)!);
       }
     }
-    expect(clientCollections, isNotEmpty,
-        reason: 'expected to find .collection() usages in lib/');
+    expect(
+      clientCollections,
+      isNotEmpty,
+      reason: 'expected to find .collection() usages in lib/',
+    );
 
     final rules = File('firestore.rules').readAsStringSync();
     final ruleMatch = RegExp(r'match\s+/([a-zA-Z_][a-zA-Z0-9_]*)/');

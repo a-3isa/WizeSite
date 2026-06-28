@@ -1,4 +1,5 @@
-import * as admin from "firebase-admin";
+import { getApps, initializeApp } from "firebase-admin/app";
+import { FieldPath, Firestore, Query, getFirestore } from "firebase-admin/firestore";
 
 type EntityData = Record<string, unknown>;
 
@@ -63,13 +64,13 @@ export async function runEntityLastUsedAtBackfill({
   batchSize = 200,
   startAfterId,
 }: {
-  db: admin.firestore.Firestore;
+  db: Firestore;
   batchSize?: number;
   startAfterId?: string;
 }): Promise<EntityLastUsedBackfillResult> {
-  let query: admin.firestore.Query = db
+  let query: Query = db
     .collection("entities")
-    .orderBy(admin.firestore.FieldPath.documentId())
+    .orderBy(FieldPath.documentId())
     .limit(batchSize);
   if (startAfterId && startAfterId.length > 0) {
     query = query.startAfter(startAfterId);
@@ -98,13 +99,13 @@ export async function runEntityLastUsedAtBackfill({
 }
 
 if (require.main === module) {
-  if (admin.apps.length === 0) {
-    admin.initializeApp();
+  if (getApps().length === 0) {
+    initializeApp();
   }
   const batchSize = Number(process.env.ENTITY_BACKFILL_BATCH_SIZE ?? 200);
   const startAfterId = process.env.ENTITY_BACKFILL_START_AFTER_ID;
   runEntityLastUsedAtBackfill({
-    db: admin.firestore(),
+    db: getFirestore(),
     batchSize: Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 200,
     startAfterId,
   })

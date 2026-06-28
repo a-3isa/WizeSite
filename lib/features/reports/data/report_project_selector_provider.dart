@@ -5,7 +5,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 typedef ReportProjectPageLoader =
     Future<FirestorePage<Project>> Function({

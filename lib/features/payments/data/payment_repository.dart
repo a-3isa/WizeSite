@@ -6,7 +6,6 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract interface class PaymentRepository {
@@ -241,14 +240,6 @@ class FirebasePaymentRepository implements PaymentRepository {
           projectId: projectId,
         ) ??
         projectTotalPaymentsBefore;
-    if (kDebugMode) {
-      debugPrint(
-        '[payment_repo.createPayment] workspaceId=$workspaceId '
-        'projectId=$projectId amount=$amount '
-        'inputBefore=$projectTotalPaymentsBefore '
-        'resolvedBefore=$resolvedProjectTotalPaymentsBefore',
-      );
-    }
     return _mutationService.createPayment(
       workspaceId: workspaceId,
       projectId: projectId,
@@ -288,14 +279,6 @@ class FirebasePaymentRepository implements PaymentRepository {
           .doc(projectId)
           .get();
       final metricsValue = valueFrom(metricsSnap.data());
-      if (kDebugMode) {
-        debugPrint(
-          '[payment_repo.baseline] projectId=$projectId '
-          'metricsExists=${metricsSnap.exists} '
-          'metricsData=${metricsSnap.data()} '
-          'metricsValue=$metricsValue',
-        );
-      }
       if (metricsValue != null) {
         return metricsValue;
       }
@@ -305,22 +288,8 @@ class FirebasePaymentRepository implements PaymentRepository {
           .doc(projectId)
           .get();
       final projectValue = valueFrom(projectSnap.data());
-      if (kDebugMode) {
-        debugPrint(
-          '[payment_repo.baseline] projectId=$projectId '
-          'projectExists=${projectSnap.exists} '
-          'projectData=${projectSnap.data()} '
-          'projectValue=$projectValue',
-        );
-      }
       return projectValue;
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint(
-          '[payment_repo.baseline] projectId=$projectId error=$error\n'
-          '$stackTrace',
-        );
-      }
+    } catch (_) {
       return null;
     }
   }

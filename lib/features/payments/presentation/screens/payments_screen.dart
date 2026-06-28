@@ -648,8 +648,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
       return;
     }
     final currency =
-        ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.read(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final filterParts = <String>[];
     if (_paymentMethodFilter != null) {
       filterParts.add(l10n.paymentMethodLabel(_paymentMethodFilter!));
@@ -747,8 +746,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
     final filtered = _filteredPayments();
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final bulkState = ref.watch(transactionBulkArchiveControllerProvider);
     final bulkController = ref.read(
       transactionBulkArchiveControllerProvider.notifier,

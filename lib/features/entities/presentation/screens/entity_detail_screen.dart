@@ -32,8 +32,7 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
     );

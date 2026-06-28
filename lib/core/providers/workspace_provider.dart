@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:buildtrack_app/core/cache/workspace_cache.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 final activeWorkspaceIdProvider = StateProvider<String?>((ref) {
   // Seed from the local cache so a returning user lands on their last
@@ -99,7 +100,7 @@ final workspaceSelectionSyncProvider = Provider<void>((ref) {
     previous,
     next,
   ) {
-    final preferredWorkspaceId = next.valueOrNull;
+    final preferredWorkspaceId = next.value;
     if (preferredWorkspaceId == null || preferredWorkspaceId.isEmpty) {
       return;
     }

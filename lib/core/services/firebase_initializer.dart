@@ -15,8 +15,6 @@ enum AppCheckActivationMode {
 class FirebaseInitializer {
   static bool _initialized = false;
   static bool _appCheckActivated = false;
-  static const String _androidDebugAppCheckToken =
-      '4977E101-6CA1-4EAF-B50D-6B32AD6A1B3B';
 
   static Future<void> ensureInitialized() async {
     if (_initialized) {
@@ -65,9 +63,7 @@ class FirebaseInitializer {
     try {
       if (mode == AppCheckActivationMode.androidDebug) {
         await FirebaseAppCheck.instance.activate(
-          providerAndroid: const AndroidDebugProvider(
-            debugToken: _androidDebugAppCheckToken,
-          ),
+          providerAndroid: const AndroidDebugProvider(),
         );
       } else if (mode == AppCheckActivationMode.androidRelease) {
         await FirebaseAppCheck.instance.activate(

@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -16,7 +17,6 @@ import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 final workerDetailsProvider = FutureProvider.family((ref, String workerId) {
   return ref.watch(workerRepositoryProvider).getWorker(workerId);
@@ -45,8 +45,7 @@ class WorkerDetailScreen extends ConsumerWidget {
     final entriesAsync = ref.watch(workerEntriesProvider(workerId));
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.workers,
@@ -311,16 +310,10 @@ class WorkerDetailScreen extends ConsumerWidget {
                                         attachment: attachment,
                                         onOpen: () {
                                           final url =
-                                              attachment.downloadUrl ??
-                                              attachment.localPath ??
-                                              '';
+                                              attachment.downloadUrl ?? '';
                                           if (url.isNotEmpty) {
                                             unawaited(
-                                              launchUrlString(
-                                                url,
-                                                mode: LaunchMode
-                                                    .externalApplication,
-                                              ),
+                                              launchSafeExternalUrl(url),
                                             );
                                           }
                                         },

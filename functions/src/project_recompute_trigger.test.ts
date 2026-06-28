@@ -4,7 +4,8 @@ import {
   RulesTestEnvironment,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import * as admin from "firebase-admin";
+import { App, deleteApp, getApps } from "firebase-admin/app";
+import { FieldValue, Firestore, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
@@ -117,7 +118,7 @@ test("summary builder maintains project, weekly, entity, and category payloads",
         entityType: "supplier",
         category: "materials",
         amount: 200,
-        date: admin.firestore.Timestamp.fromDate(now),
+        date: Timestamp.fromDate(now),
         attachments: [{ id: "attachment_1" }],
       },
       {
@@ -128,7 +129,7 @@ test("summary builder maintains project, weekly, entity, and category payloads",
         entityType: "equipment",
         category: "equipment",
         amount: 50,
-        date: admin.firestore.Timestamp.fromDate(previousWeek),
+        date: Timestamp.fromDate(previousWeek),
       },
     ],
     payments: [
@@ -141,7 +142,7 @@ test("summary builder maintains project, weekly, entity, and category payloads",
         entityType: "client",
         amount: 125,
         paymentMethod: "cash",
-        date: admin.firestore.Timestamp.fromDate(monday),
+        date: Timestamp.fromDate(monday),
         attachments: [{ id: "attachment_2" }],
       },
     ],
@@ -154,7 +155,7 @@ test("summary builder maintains project, weekly, entity, and category payloads",
         workerName: "Worker One",
         daysWorked: 2,
         dailyWage: 75,
-        date: admin.firestore.Timestamp.fromDate(monday),
+        date: Timestamp.fromDate(monday),
       },
     ],
   });
@@ -276,7 +277,7 @@ if (!emulatorHost) {
   process.env.FIREBASE_CONFIG = JSON.stringify({ projectId });
 
   let env: RulesTestEnvironment;
-  let db: admin.firestore.Firestore;
+  let db: Firestore;
   let handleProjectWriteRecompute: RecomputeHandler<{ projectId?: string }>;
   let handleExpenseWriteRecompute: RecomputeHandler<{ expenseId?: string }>;
   let handlePaymentWriteRecompute: RecomputeHandler<{ paymentId?: string }>;
@@ -338,7 +339,7 @@ if (!emulatorHost) {
         projectId: "project_1",
         category: "materials",
         amount: 200,
-        date: admin.firestore.Timestamp.fromDate(previousMonthDate),
+        date: Timestamp.fromDate(previousMonthDate),
         isArchived: false,
       });
     await db
@@ -349,7 +350,7 @@ if (!emulatorHost) {
         workspaceId,
         projectId: "project_1",
         amount: 300,
-        date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+        date: Timestamp.fromDate(currentMonthDate),
         isArchived: false,
       });
     await db.collection("workers").doc("worker_1").set({
@@ -369,7 +370,7 @@ if (!emulatorHost) {
         daysWorked: 1,
         dailyWage: 100,
         totalCost: 100,
-        date: admin.firestore.Timestamp.fromDate(twoMonthsAgoDate),
+        date: Timestamp.fromDate(twoMonthsAgoDate),
         isArchived: false,
       });
     await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
@@ -405,15 +406,15 @@ if (!emulatorHost) {
     createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
     createWorkerEntryWithQuotaForUser =
       indexModule.createWorkerEntryWithQuotaForUser;
-    db = admin.firestore();
+    db = getFirestore();
   });
 
   test.after(async () => {
     await env.cleanup();
     await Promise.all(
-      admin.apps
-        .filter((app): app is admin.app.App => app !== null)
-        .map((app) => app.delete().catch(() => undefined)),
+      getApps()
+        .filter((app): app is App => app !== null)
+        .map((app) => deleteApp(app).catch(() => undefined)),
     );
   });
 
@@ -439,7 +440,7 @@ if (!emulatorHost) {
       projectId: "project_1",
       category: "materials",
       amount: 50,
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       notes: "Attachment test",
       paymentMethod: "cash",
       attachments: [
@@ -448,7 +449,7 @@ if (!emulatorHost) {
           fileName: "receipt.pdf",
           downloadUrl: "https://example.com/receipt.pdf",
           storagePath: "attachments/receipt.pdf",
-          uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "application/pdf",
           size: 12345,
         },
@@ -485,7 +486,7 @@ if (!emulatorHost) {
       workspaceId,
       projectId: "project_1",
       amount: 75,
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       paymentMethod: "credit_card",
       notes: "Payment attachment test",
       attachments: [
@@ -494,7 +495,7 @@ if (!emulatorHost) {
           fileName: "receipt.png",
           downloadUrl: "https://example.com/receipt.png",
           storagePath: "attachments/receipt.png",
-          uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "image/png",
           size: 54321,
         },
@@ -523,7 +524,7 @@ if (!emulatorHost) {
       projectId: "project_1",
       daysWorked: 1,
       dailyWage: 125,
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       notes: "Worker attachment test",
       attachments: [
         {
@@ -531,7 +532,7 @@ if (!emulatorHost) {
           fileName: "signed-timesheet.pdf",
           downloadUrl: "https://example.com/signed-timesheet.pdf",
           storagePath: "attachments/signed-timesheet.pdf",
-          uploadedAt: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "application/pdf",
           size: 24680,
         },
@@ -723,7 +724,7 @@ if (!emulatorHost) {
       amount: 100,
       paymentMethod: "cash",
       paymentStatus: "paid",
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       notes: "",
     });
     await partialRecordRef.set({
@@ -736,7 +737,7 @@ if (!emulatorHost) {
       paidAmount: 125,
       paymentMethod: "cash",
       paymentStatus: "partial",
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       notes: "",
     });
 
@@ -781,7 +782,7 @@ if (!emulatorHost) {
 
     const updatedExpense = {
       ...initialExpense,
-      updatedAt: admin.firestore.Timestamp.now(),
+      updatedAt: Timestamp.now(),
     };
     await expenseRef.set(updatedExpense, { merge: true });
 
@@ -898,7 +899,7 @@ if (!emulatorHost) {
       ...beforeEntry,
       daysWorked: 2,
       dailyWage: 125,
-      totalCost: admin.firestore.FieldValue.delete(),
+      totalCost: FieldValue.delete(),
     };
     await workerEntryRef.update(afterEntry);
 
@@ -965,7 +966,7 @@ if (!emulatorHost) {
         projectId: "project_1",
         category: "equipment",
         amount: 75,
-        date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+        date: Timestamp.fromDate(oldHistoryDate),
         isArchived: false,
       });
     await db
@@ -976,7 +977,7 @@ if (!emulatorHost) {
         workspaceId,
         projectId: "project_1",
         amount: 125,
-        date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+        date: Timestamp.fromDate(oldHistoryDate),
         isArchived: false,
       });
 
@@ -1021,7 +1022,7 @@ if (!emulatorHost) {
     );
     const afterPayment = {
       ...beforePayment,
-      date: admin.firestore.Timestamp.fromDate(targetDate),
+      date: Timestamp.fromDate(targetDate),
     };
     await paymentRef.set(afterPayment, { merge: true });
 
@@ -1069,7 +1070,7 @@ if (!emulatorHost) {
           workspaceId,
           projectId: "project_1",
           amount: 300,
-          date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          date: Timestamp.fromDate(currentMonthDate),
           paymentMethod: "cash",
         }),
       (error: unknown) => {
@@ -1097,7 +1098,7 @@ if (!emulatorHost) {
       workspaceId,
       projectId: "project_1",
       amount: 125,
-      date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+      date: Timestamp.fromDate(currentMonthDate),
       paymentMethod: "cash",
       clientMutationId: "client_payment_1",
     });
@@ -1126,7 +1127,7 @@ if (!emulatorHost) {
           projectId: "project_1",
           daysWorked: 2,
           dailyWage: 125,
-          date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          date: Timestamp.fromDate(currentMonthDate),
         }),
       (error: unknown) => {
         const handled = error as HttpsError;
@@ -1151,7 +1152,7 @@ if (!emulatorHost) {
           projectId: "project_1",
           daysWorked: 2,
           dailyWage: 125,
-          date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+          date: Timestamp.fromDate(currentMonthDate),
         }),
       (error: unknown) => {
         const handled = error as HttpsError;

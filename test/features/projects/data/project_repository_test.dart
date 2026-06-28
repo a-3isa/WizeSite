@@ -418,50 +418,53 @@ void main() {
     expect(completed.items.map((item) => item.id), ['project_c']);
   });
 
-  test('recent browse net profit reflects project_metrics not stale doc', () async {
-    final firestore = FakeFirebaseFirestore();
-    await firestore.collection('projects').doc('project_1').set({
-      'id': 'project_1',
-      'workspaceId': 'workspace_1',
-      'name': 'Tower A',
-      'clientName': 'Client',
-      'contractValue': 250000,
-      'status': 'active',
-      'completionPercentage': 0,
-      // Stale denormalized values on the project doc.
-      'totalExpenses': 16570,
-      'totalPayments': 22820,
-      'netProfit': 6250,
-      'isArchived': false,
-      'createdAt': DateTime.utc(2026, 6, 1),
-    });
-    // Authoritative recomputed metrics differ from the stale doc.
-    await firestore.collection('project_metrics').doc('project_1').set({
-      'workspaceId': 'workspace_1',
-      'projectId': 'project_1',
-      'totalExpenses': 20000,
-      'totalPayments': 30000,
-      'netProfit': 10000,
-    });
+  test(
+    'recent browse net profit reflects project_metrics not stale doc',
+    () async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('projects').doc('project_1').set({
+        'id': 'project_1',
+        'workspaceId': 'workspace_1',
+        'name': 'Tower A',
+        'clientName': 'Client',
+        'contractValue': 250000,
+        'status': 'active',
+        'completionPercentage': 0,
+        // Stale denormalized values on the project doc.
+        'totalExpenses': 16570,
+        'totalPayments': 22820,
+        'netProfit': 6250,
+        'isArchived': false,
+        'createdAt': DateTime.utc(2026, 6, 1),
+      });
+      // Authoritative recomputed metrics differ from the stale doc.
+      await firestore.collection('project_metrics').doc('project_1').set({
+        'workspaceId': 'workspace_1',
+        'projectId': 'project_1',
+        'totalExpenses': 20000,
+        'totalPayments': 30000,
+        'netProfit': 10000,
+      });
 
-    final repository = FirebaseProjectRepository(
-      firestore,
-      _MockWorkspaceMutationService(),
-      queue,
-    );
+      final repository = FirebaseProjectRepository(
+        firestore,
+        _MockWorkspaceMutationService(),
+        queue,
+      );
 
-    final page = await repository.fetchProjectBrowsePage(
-      const ProjectBrowseQuery(
-        workspaceId: 'workspace_1',
-        sort: ProjectBrowseSort.recent,
-      ),
-    );
+      final page = await repository.fetchProjectBrowsePage(
+        const ProjectBrowseQuery(
+          workspaceId: 'workspace_1',
+          sort: ProjectBrowseSort.recent,
+        ),
+      );
 
-    expect(page.items, hasLength(1));
-    expect(page.items.single.totalExpenses, 20000);
-    expect(page.items.single.totalPayments, 30000);
-    expect(page.items.single.netProfit, 10000);
-  });
+      expect(page.items, hasLength(1));
+      expect(page.items.single.totalExpenses, 20000);
+      expect(page.items.single.totalPayments, 30000);
+      expect(page.items.single.netProfit, 10000);
+    },
+  );
 
   test('archived project page excludes active projects', () async {
     final firestore = FakeFirebaseFirestore();

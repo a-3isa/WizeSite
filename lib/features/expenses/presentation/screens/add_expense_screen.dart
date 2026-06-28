@@ -100,9 +100,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           _projectId = expense.projectId;
           _projectName = expense.projectName;
           _category = expense.category;
-          _amountController.text = ThousandsSeparatorInputFormatter.formatInitial(
-            expense.amount.toStringAsFixed(2),
-          );
+          _amountController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                expense.amount.toStringAsFixed(2),
+              );
           _purposeController.text = expense.purpose;
           _descriptionController.text = expense.description;
           _notesController.text = expense.notes;
@@ -132,8 +133,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _pickAttachments() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
     );
@@ -252,12 +252,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         type: entityType,
       );
       final currency =
-          ref.read(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-          'EGP';
+          ref.read(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
       if (widget.expenseId == null) {
         String finalProjectName = _projectName;
-        final projects = ref.read(projectsProvider).valueOrNull ?? [];
+        final projects = ref.read(projectsProvider).value ?? [];
         final matches = projects.where((project) => project.id == _projectId);
         final selectedProject = matches.isEmpty ? null : matches.first;
         if (finalProjectName.isEmpty && _projectId != null) {
@@ -415,7 +414,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     required String userId,
   }) async {
     final days = NumberParser.parseDouble(_daysController.text);
-    final worker = _selectedWorker(ref.read(workersProvider).valueOrNull ?? []);
+    final worker = _selectedWorker(ref.read(workersProvider).value ?? []);
     if (_projectId == null || worker == null || days == null || days <= 0) {
       setState(() => _error = l10n.t('fillWorkerProjectDaysWage'));
       return;
@@ -426,7 +425,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     });
     try {
       final attachments = await _uploadAttachments(userId);
-      final projects = ref.read(projectsProvider).valueOrNull ?? [];
+      final projects = ref.read(projectsProvider).value ?? [];
       final matches = projects.where((project) => project.id == _projectId);
       final selectedProject = matches.isEmpty ? null : matches.first;
       final result = await ref
@@ -657,7 +656,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     Builder(
                       builder: (context) {
                         final worker = _selectedWorker(
-                          workersAsync.valueOrNull ?? const [],
+                          workersAsync.value ?? const [],
                         );
                         if (worker == null) {
                           return const SizedBox.shrink();

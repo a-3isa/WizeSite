@@ -3,6 +3,19 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
 void main() {
   test(
     'offline sync providers split actions by status and resolution',
@@ -51,7 +64,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container.read(offlineSyncActionsProvider.future);
+      await _readStreamProvider(container, offlineSyncActionsProvider);
 
       expect(container.read(offlinePendingActionsProvider).requireValue, [
         pending,

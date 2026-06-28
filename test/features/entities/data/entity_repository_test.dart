@@ -148,7 +148,10 @@ void main() {
       expect(updated.phoneNumber, '0111');
 
       await repository.deleteEntity(created.id);
-      final deleted = await firestore.collection('entities').doc(created.id).get();
+      final deleted = await firestore
+          .collection('entities')
+          .doc(created.id)
+          .get();
       expect(deleted.exists, isFalse);
     });
   });
