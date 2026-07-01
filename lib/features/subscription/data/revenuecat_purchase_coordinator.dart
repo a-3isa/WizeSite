@@ -89,18 +89,7 @@ class RevenueCatPurchaseCoordinator implements PurchaseCoordinator {
       ..clear()
       ..addEntries(ordered.map((pkg) => MapEntry(pkg.identifier, pkg)));
 
-    return ordered
-        .map(
-          (pkg) => OfferingPackage(
-            id: pkg.identifier,
-            title: pkg.storeProduct.title,
-            priceString: pkg.storeProduct.priceString,
-            periodLabel: _periodLabel(pkg.packageType),
-            productCode: _productCode(pkg.packageType),
-            offeringId: pkg.presentedOfferingContext.offeringIdentifier,
-          ),
-        )
-        .toList();
+    return mapRevenueCatPackagesForTesting(ordered);
   }
 
   @override
@@ -289,50 +278,7 @@ class RevenueCatPurchaseCoordinator implements PurchaseCoordinator {
   }
 
   int _packageRank(PackageType type) {
-    switch (type) {
-      case PackageType.monthly:
-        return 0;
-      case PackageType.annual:
-        return 1;
-      case PackageType.lifetime:
-        return 2;
-      default:
-        return 3;
-    }
-  }
-
-  String _periodLabel(PackageType type) {
-    switch (type) {
-      case PackageType.monthly:
-        return 'monthly';
-      case PackageType.annual:
-        return 'yearly';
-      case PackageType.lifetime:
-        return 'lifetime';
-      case PackageType.weekly:
-        return 'weekly';
-      case PackageType.sixMonth:
-        return '6 months';
-      case PackageType.threeMonth:
-        return '3 months';
-      case PackageType.twoMonth:
-        return '2 months';
-      default:
-        return 'custom';
-    }
-  }
-
-  String _productCode(PackageType type) {
-    switch (type) {
-      case PackageType.monthly:
-        return 'monthly';
-      case PackageType.annual:
-        return 'yearly';
-      case PackageType.lifetime:
-        return 'lifetime';
-      default:
-        return 'custom';
-    }
+    return revenueCatPackageRank(type);
   }
 
   PaywallPresentationResult _mapPaywallResult(PaywallResult result) {
@@ -353,4 +299,134 @@ class RevenueCatPurchaseCoordinator implements PurchaseCoordinator {
   String _normalize(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
+}
+
+@visibleForTesting
+List<OfferingPackage> mapRevenueCatPackagesForTesting(List<Package> packages) {
+  return packages.map(_mapRevenueCatPackage).toList(growable: false);
+}
+
+OfferingPackage _mapRevenueCatPackage(Package package) {
+  final introPrice = package.storeProduct.introductoryPrice;
+  final hasFreeTrial = introPrice != null && introPrice.price == 0;
+  return OfferingPackage(
+    id: package.identifier,
+    title: package.storeProduct.title,
+    priceString: package.storeProduct.priceString,
+    periodLabel: revenueCatPeriodLabel(package.packageType),
+    productCode: revenueCatProductCode(package.packageType),
+    offeringId: package.presentedOfferingContext.offeringIdentifier,
+    packageType: revenueCatPackageTypeLabel(package.packageType),
+    trialPeriodLabel: hasFreeTrial ? revenueCatTrialLabel(introPrice) : null,
+    hasFreeTrial: hasFreeTrial,
+    isRecommended: package.packageType == PackageType.annual,
+    featureKeys: revenueCatFeatureKeys(package.packageType),
+    savingsLabel: package.packageType == PackageType.annual
+        ? 'Best value'
+        : null,
+  );
+}
+
+@visibleForTesting
+int revenueCatPackageRank(PackageType type) {
+  switch (type) {
+    case PackageType.monthly:
+      return 0;
+    case PackageType.annual:
+      return 1;
+    case PackageType.lifetime:
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+@visibleForTesting
+String revenueCatPeriodLabel(PackageType type) {
+  switch (type) {
+    case PackageType.monthly:
+      return 'monthly';
+    case PackageType.annual:
+      return 'yearly';
+    case PackageType.lifetime:
+      return 'lifetime';
+    case PackageType.weekly:
+      return 'weekly';
+    case PackageType.sixMonth:
+      return '6 months';
+    case PackageType.threeMonth:
+      return '3 months';
+    case PackageType.twoMonth:
+      return '2 months';
+    default:
+      return 'custom';
+  }
+}
+
+@visibleForTesting
+String revenueCatProductCode(PackageType type) {
+  switch (type) {
+    case PackageType.monthly:
+      return 'monthly';
+    case PackageType.annual:
+      return 'yearly';
+    case PackageType.lifetime:
+      return 'lifetime';
+    default:
+      return 'custom';
+  }
+}
+
+@visibleForTesting
+String revenueCatPackageTypeLabel(PackageType type) {
+  switch (type) {
+    case PackageType.monthly:
+      return 'monthly';
+    case PackageType.annual:
+      return 'annual';
+    case PackageType.lifetime:
+      return 'lifetime';
+    case PackageType.weekly:
+      return 'weekly';
+    case PackageType.sixMonth:
+      return 'sixMonth';
+    case PackageType.threeMonth:
+      return 'threeMonth';
+    case PackageType.twoMonth:
+      return 'twoMonth';
+    case PackageType.custom:
+      return 'custom';
+    case PackageType.unknown:
+      return 'unknown';
+  }
+}
+
+@visibleForTesting
+List<String> revenueCatFeatureKeys(PackageType type) {
+  switch (type) {
+    case PackageType.annual:
+    case PackageType.lifetime:
+      return const [
+        'unlimited_projects',
+        'advanced_reports',
+        'priority_support',
+      ];
+    case PackageType.monthly:
+      return const ['unlimited_projects', 'advanced_reports'];
+    default:
+      return const ['unlimited_projects'];
+  }
+}
+
+@visibleForTesting
+String revenueCatTrialLabel(IntroductoryPrice introPrice) {
+  final units = introPrice.periodNumberOfUnits;
+  final unit = switch (introPrice.periodUnit) {
+    PeriodUnit.day => 'day',
+    PeriodUnit.week => 'week',
+    PeriodUnit.month => 'month',
+    PeriodUnit.year => 'year',
+    PeriodUnit.unknown => 'period',
+  };
+  return '$units-$unit free trial';
 }

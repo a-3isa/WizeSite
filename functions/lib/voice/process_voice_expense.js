@@ -1,42 +1,12 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processVoiceExpenseHttp = exports.processVoiceExpense = exports.openRouterTranscriptionModelSecret = exports.openRouterModelSecret = exports.openRouterApiKeySecret = void 0;
-const admin = __importStar(require("firebase-admin"));
+exports.verifyVoiceHttpAppCheck = verifyVoiceHttpAppCheck;
+const app_check_1 = require("firebase-admin/app-check");
+const auth_1 = require("firebase-admin/auth");
 const params_1 = require("firebase-functions/params");
 const https_1 = require("firebase-functions/v2/https");
+const http_cors_1 = require("../http_cors");
 const transcription_service_1 = require("./services/transcription.service");
 const expense_parser_service_1 = require("./services/expense_parser.service");
 exports.openRouterApiKeySecret = (0, params_1.defineSecret)("OPENROUTER_API_KEY");
@@ -143,15 +113,15 @@ function httpStatusFor(code) {
 function canonicalCode(code) {
     return code.replace(/-/g, "_").toUpperCase();
 }
-async function maybeVerifyAppCheck(appCheckToken) {
+async function verifyVoiceHttpAppCheck(appCheckToken, verifyToken = (token) => (0, app_check_1.getAppCheck)().verifyToken(token)) {
     if (!appCheckToken) {
-        return;
+        throw new https_1.HttpsError("failed-precondition", "Missing App Check token");
     }
     try {
-        await admin.appCheck().verifyToken(appCheckToken);
+        await verifyToken(appCheckToken);
     }
     catch (error) {
-        console.warn("Voice HTTP endpoint received an invalid App Check token", error);
+        throw new https_1.HttpsError("failed-precondition", "Invalid App Check token");
     }
 }
 async function processVoiceExpenseForUser(uid, payload) {
@@ -223,10 +193,7 @@ exports.processVoiceExpenseHttp = (0, https_1.onRequest)({
         exports.openRouterTranscriptionModelSecret,
     ],
 }, async (request, response) => {
-    response.set("Access-Control-Allow-Origin", "*");
-    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
-    if (request.method === "OPTIONS") {
-        response.status(204).send("");
+    if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
         return;
     }
     if (request.method !== "POST") {
@@ -240,12 +207,12 @@ exports.processVoiceExpenseHttp = (0, https_1.onRequest)({
         return;
     }
     try {
-        await maybeVerifyAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
+        await verifyVoiceHttpAppCheck(request.header("X-Firebase-AppCheck") ?? undefined);
         const bearerToken = bearerTokenFrom(request.header("Authorization") ?? undefined);
         if (!bearerToken) {
             throw new https_1.HttpsError("unauthenticated", "Authentication required");
         }
-        const decodedToken = await admin.auth().verifyIdToken(bearerToken);
+        const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(bearerToken);
         const body = payloadFrom(request.body);
         const payload = Object.keys(payloadFrom(body.data)).length > 0 ?
             payloadFrom(body.data) :

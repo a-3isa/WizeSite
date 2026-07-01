@@ -8,7 +8,7 @@ class VoiceRecorderService {
   VoiceRecorderService({AudioRecorder? recorder})
     : _recorder = recorder ?? AudioRecorder();
 
-  static const recordingFileExtension = '.wav';
+  static const recordingFileExtension = '.m4a';
 
   final AudioRecorder _recorder;
 
@@ -28,7 +28,7 @@ class VoiceRecorderService {
 
     await _recorder.start(
       const RecordConfig(
-        encoder: AudioEncoder.wav,
+        encoder: AudioEncoder.aacLc,
         sampleRate: 16000,
         numChannels: 1,
         bitRate: 128000,
@@ -43,6 +43,18 @@ class VoiceRecorderService {
     final trimmed = directoryPath.replaceAll(RegExp(r'[\\/]$'), '');
     final separator = trimmed.contains('/') ? '/' : Platform.pathSeparator;
     return '$trimmed${separator}voice_$timestamp$recordingFileExtension';
+  }
+
+  /// Emits the live microphone level normalized to the 0.0–1.0 range, derived
+  /// from the recorder's dBFS amplitude readings.
+  Stream<double> amplitudeStream({
+    Duration interval = const Duration(milliseconds: 200),
+  }) {
+    return _recorder.onAmplitudeChanged(interval).map((amplitude) {
+      const minDb = -45.0;
+      final current = amplitude.current.clamp(minDb, 0.0);
+      return (current - minDb) / (0.0 - minDb);
+    });
   }
 
   Future<String?> stop() {

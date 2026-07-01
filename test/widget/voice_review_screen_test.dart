@@ -158,6 +158,7 @@ void main() {
         (_) async => const SessionRestoreResult(
           userId: 'user_1',
           workspaceId: 'workspace_1',
+          setupCompleted: true,
         ),
       );
       when(
@@ -185,7 +186,9 @@ void main() {
               sessionRestoreService,
             ),
             voiceExpenseRepositoryProvider.overrideWithValue(voiceRepository),
-            projectRepositoryProvider.overrideWithValue(_FakeProjectRepository()),
+            projectRepositoryProvider.overrideWithValue(
+              _FakeProjectRepository(),
+            ),
             currentUserSettingsProvider.overrideWith(
               (ref) => Stream.value(
                 UserSettings.defaults(userId: 'user_1', email: 'u@test.com'),

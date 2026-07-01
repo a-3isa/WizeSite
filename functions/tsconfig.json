@@ -6,6 +6,8 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
+    "rootDir": "src",
+    "ignoreDeprecations": "6.0",
     "sourceMap": true,
     "strict": true,
     "target": "es2022"

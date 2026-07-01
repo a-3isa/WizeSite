@@ -27,6 +27,10 @@ class AppLocalizations {
     'projects': 'Projects',
     'add': 'Add',
     'reports': 'Reports',
+    'reportAccessDenied':
+        'You do not have permission to view financial reports, balances, or attachments.',
+    'reportExportFailed':
+        'Could not create the PDF. Check your connection and try again.',
     'settings': 'Settings',
     'subscription': 'Subscription',
     'upgradeToPro': 'Upgrade to Pro',
@@ -53,8 +57,24 @@ class AppLocalizations {
     'role': 'Role',
     'memberRole': 'Member',
     'ownerRole': 'Owner',
+    'adminRole': 'Admin',
+    'accountingApprovedRole': 'Accounting approved',
+    'entryOnlyRole': 'Entry only',
+    'workspaceCrewTitle': 'Workspace Crew',
     'allProjectsOption': 'All Projects',
+    'all': 'All',
+    'allStatuses': 'All statuses',
+    'projectSortRecent': 'Recent',
+    'projectSortName': 'Name',
+    'projectSortHighestExpense': 'Highest expense',
+    'projectSortHighestIncome': 'Highest income',
+    'projectSortHighestNet': 'Highest net',
+    'projectFinancialAccessRestricted':
+        'Financial project details are restricted for your role.',
+    'confirmArchiveProject': 'Archive this project?',
     'selectProject': 'Select a Project',
+    'allProjects': 'All Projects',
+    'showingDataForProject': 'Showing data for {project} only',
     'selectProjectToViewReport': 'Please select a project to view its report.',
     'projectReport': 'Project Report',
     'generatedByBuildozer': 'Generated securely by Buildozer',
@@ -86,6 +106,10 @@ class AppLocalizations {
     'confirmArchiveWorkerEntry': 'Archive this worker entry?',
     'confirmDeleteProjectCascade':
         'Delete this project and all linked expenses, payments, worker entries, metrics, and notifications?',
+    'deleteProjectTypeNameToConfirm':
+        'To confirm, type the project name below.',
+    'budgetUsed': 'Budget used',
+    'overBudget': 'Over budget',
     'archivedProjects': 'Archived Projects',
     'unarchive': 'Unarchive',
     'noArchivedProjects': 'No archived projects found.',
@@ -96,6 +120,16 @@ class AppLocalizations {
     'openSettings': 'Open Settings',
     'save': 'Save',
     'cancel': 'Cancel',
+    'delete': 'Delete',
+    'workerAccounting': 'Worker accounting',
+    'contractorAccounting': 'Contractor accounting',
+    'equipmentAccounting': 'Equipment accounting',
+    'transportAccounting': 'Transport accounting',
+    'accessibilityAttachmentControl': 'Attachment control',
+    'accessibilityFilterControl': 'Filter control',
+    'accessibilityGroupControl': 'Group control',
+    'accessibilitySummaryCard': 'Summary card',
+    'accessibilityExportControl': 'Export control',
     'freeTrial': '7-day free trial',
     'startTrial': 'Start Trial',
     'language': 'Language',
@@ -116,6 +150,8 @@ class AppLocalizations {
     'forgotPassword': 'Forgot Password',
     'email': 'Email',
     'password': 'Password',
+    'loginEmailRequired': 'Enter your email.',
+    'loginPasswordRequired': 'Enter your password.',
     'skip': 'Skip',
     'next': 'Next',
     'loading': 'Loading...',
@@ -154,6 +190,9 @@ class AppLocalizations {
     'welcomeBack': 'Welcome Back',
     'signInToContinue': 'Sign in to your account to continue',
     'continueWithGoogle': 'Continue with Google',
+    'setupWorkspaceTitle': 'Set up your workspace',
+    'setupWorkspaceSubtitle':
+        'Choose the workspace name and currency you will use for projects.',
     'dontHaveAccount': "Don't have an account?",
     'alreadyHaveAccount': 'Already have an account?',
     'fullName': 'Full Name',
@@ -197,6 +236,7 @@ class AppLocalizations {
     'pleaseLoginFirst': 'Please login first.',
     'overview': 'Overview',
     'quickActions': 'Quick Actions',
+    'chooseWorkspace': 'Choose workspace',
     'totalExpenses': 'Total Expenses',
     'totalIncome': 'Total Income',
     'netProfit': 'Net Profit',
@@ -226,7 +266,28 @@ class AppLocalizations {
     'contractValue': 'Contract Value',
     'location': 'Location',
     'description': 'Description',
+    'purpose': 'Purpose',
+    'paymentStatus': 'Payment status',
+    'paymentStatusUnpaid': 'Unpaid',
+    'paymentStatusPartial': 'Partial',
+    'paymentStatusPaid': 'Paid',
+    'paymentStatusRefunded': 'Refunded',
+    'paymentStatusCancelled': 'Cancelled',
+    'attachmentOpenDenied':
+        'You do not have permission to open this attachment.',
+    'attachmentMissing': 'Attachment file is missing.',
+    'attachmentPending': 'Attachment upload is pending.',
+    'attachmentCannotOpen': 'Attachment cannot be opened.',
+    'previewAttachment': 'Preview attachment',
+    'openAttachment': 'Open attachment',
+    'downloadAttachment': 'Download attachment',
+    'closePreview': 'Close preview',
     'budgetLimit': 'Budget Limit',
+    'filters': 'Filters',
+    'clearFilters': 'Clear filters',
+    'supplierName': 'Supplier name',
+    'entityName': 'Entity name',
+    'entityNameOptional': 'Entity name (optional)',
     'startDate': 'Start Date',
     'expectedEndDate': 'Expected End Date',
     'expectedEndDateOptional': 'Expected End Date: Optional',
@@ -262,7 +323,7 @@ class AppLocalizations {
     'noPaymentsYet': 'No payments yet.',
     'paymentDetails': 'Payment Details',
     'paymentNotFound': 'Payment not found.',
-    'paymentMethod': 'Payment Method',
+    'paymentMethod': 'Payment method',
     'savePayment': 'Save Payment',
     'updatePayment': 'Update Payment',
     'addPaymentTitle': 'Add Payment',
@@ -288,6 +349,27 @@ class AppLocalizations {
     'editWorkerTitle': 'Edit Worker',
     'workerList': 'Workers List',
     'workerListSubtitle': 'View and manage your workers.',
+    'resources': 'Resources',
+    'workerDirectory': 'Worker directory',
+    'workerDirectorySubtitle': 'Open worker profiles and accounting.',
+    'contractorsDirectory': 'Contractors',
+    'contractorsDirectorySubtitle': 'Browse contractor profiles and records.',
+    'equipmentDirectory': 'Equipment providers',
+    'equipmentDirectorySubtitle': 'Browse equipment providers and records.',
+    'transportDirectory': 'Transport providers',
+    'transportDirectorySubtitle': 'Browse transport providers and records.',
+    'noContractorsYet': 'No contractors yet.',
+    'noEquipmentProvidersYet': 'No equipment providers yet.',
+    'noTransportProvidersYet': 'No transport providers yet.',
+    'searchResources': 'Search resources',
+    'lastUsedAtLabel': 'Last used: {value}',
+    'defaultRate': 'Default rate',
+    'rateUnit': 'Rate unit',
+    'manualInput': 'Manual input',
+    'chooseSavedResource': 'Choose saved',
+    'quantity': 'Quantity',
+    'deleteResourceConfirm':
+        'Delete {name}? Historical expenses keep their saved names.',
     'addWorkerSubtitle': 'Add a new worker profile to your workspace.',
     'addWorkerEntryTitle': 'Add Worker Entry',
     'editWorkerEntryTitle': 'Edit Worker Entry',
@@ -303,7 +385,6 @@ class AppLocalizations {
     'noEntriesYet': 'No entries yet.',
     'totalLaborCost': 'Total Labor Cost',
     'editWorker': 'Edit Worker',
-    'addEntry': 'Add Entry',
     'buildozerFinancialReport': 'Buildozer Financial Report',
     'workspace': 'Workspace',
     'generated': 'Generated',
@@ -321,12 +402,58 @@ class AppLocalizations {
     'recentExpenses': 'Recent Expenses',
     'recentPayments': 'Recent Payments',
     'topWorkers': 'Top Workers',
-    'noDataYet': 'No data yet.',
+    'topEntities': 'Top Entities',
+    'groupBy': 'Group by',
+    'groupByDate': 'Group by date',
+    'groupByCategory': 'Group by category',
+    'groupByPaymentMethod': 'Group by payment method',
+    'groupByEntity': 'Group by entity',
+    'ungroup': 'Ungroup',
+    'unassigned': 'Unassigned',
+    'saveAndAddAnother': 'Save & add another',
+    'weeklyInsights': 'Weekly insights',
+    'weeklySummary': 'Weekly summary',
+    'topEntity': 'Top entity',
+    'topCategory': 'Top category',
+    'laborExpenses': 'Labor expenses',
+    'equipmentExpenses': 'Equipment expenses',
+    'laborSummary': 'Labor',
+    'equipmentSummary': 'Equipment',
+    'paymentBreakdown': 'Payment breakdown',
+    'recentTransactions': 'Recent transactions',
+    'combinedReport': 'Combined report',
+    'paymentSummary': 'Payment summary',
+    'recentWeeklyTransactions': 'Recent weekly transactions',
+    'entityType': 'Entity type',
+    'allTypes': 'All types',
+    'entitySummary': 'Entity summary',
+    'exportExpenses': 'Export expenses',
+    'exportPayments': 'Export payments',
+    'exportEntitySummary': 'Export entity summary',
+    'exportWeeklyReport': 'Export weekly report',
+    'exportCombinedReport': 'Export combined report',
     'exportPdf': 'Export PDF',
+    'dateRange': 'Date range',
+    'filtersApplied': 'Filters applied',
+    'duplicate': 'Duplicate',
+    'buildCustomReport': 'Build custom report',
+    'dailyBreakdown': 'Daily breakdown',
+    'operationsCount': '{count} operations',
     'usagePeriod': 'Usage period: {period} | expenses {count}/{limit}',
     'totalProjects': 'Total Projects: {value}',
     'activeProjectsCount': 'Active Projects: {value}',
     'netProfitLoss': 'Net Profit/Loss: {value}',
+    'totalPayments': 'Total Payments',
+    'transactions': 'Transactions',
+    'todayExpenses': 'Today expenses',
+    'weeklyExpenses': 'Weekly expenses',
+    'monthlyExpenses': 'Monthly expenses',
+    'transactionCount': 'Transactions',
+    'groupByRelativeDate': 'Group by relative date',
+    'noFilterResults': 'No matching results.',
+    'attachments': 'Attachments',
+    'attachment': 'Attachment',
+    'selectAttachments': 'Select attachments',
     'notificationsTitle': 'Notifications',
     'noNotificationsYet': 'No notifications yet.',
     'recordShortNote':
@@ -377,6 +504,20 @@ class AppLocalizations {
     'usageLimitReached': 'Usage Limit Reached',
     'freePlanLimitsMessage':
         'You are on the Free plan with strict usage limits. Upgrade to Pro to continue this action.',
+    'limitUsageMessage':
+        'You have used {current} of {max} {limitLabel} on the Free plan. Upgrade to Pro to {upgradeAction}.',
+    'limitUsageActiveProjects': 'active projects',
+    'limitUsageExpenses': 'monthly expense entries',
+    'limitUsagePayments': 'monthly payment entries',
+    'limitUsageWorkerEntries': 'monthly worker entries',
+    'limitUsageTeamMembers': 'team members',
+    'limitUsageGeneric': 'available actions',
+    'limitUpgradeActionActiveProjects': 'create more active projects',
+    'limitUpgradeActionExpenses': 'keep adding expenses',
+    'limitUpgradeActionPayments': 'keep adding payments',
+    'limitUpgradeActionWorkerEntries': 'keep adding worker entries',
+    'limitUpgradeActionTeamMembers': 'invite more team members',
+    'limitUpgradeActionGeneric': 'continue',
     'maybeLater': 'Maybe later',
     'purchaseCancelled': 'Purchase was cancelled.',
     'nativePaywallNotSupported':
@@ -408,9 +549,14 @@ class AppLocalizations {
     'paymentMethodBank': 'Bank Transfer',
     'paymentMethodCheck': 'Check',
     'expenseCategoryLabor': 'Labor',
+    'expenseCategoryWorker': 'Worker',
+    'expenseCategoryContractor': 'Contractor',
     'expenseCategoryMaterials': 'Materials',
     'expenseCategoryEquipment': 'Equipment',
     'expenseCategoryTransport': 'Transport',
+    'expenseCategoryStorage': 'Storage',
+    'expenseCategoryRentals': 'Rentals',
+    'expenseCategoryPayments': 'Payments',
     'expenseCategoryOther': 'Other',
     'projectStatusActive': 'Active',
     'projectStatusPaused': 'Paused',
@@ -441,6 +587,137 @@ class AppLocalizations {
     'wageWithValue': 'Wage: {value}',
     'totalWageWithValue': 'Total Wage: {value}',
     'workerEntryLine': '{days} d × {wage} = {total}',
+    // --- Review improvement pack (Phase 1 localization inventory) ---
+    // Navigation
+    'navigationHomeTab': 'Home tab',
+    'navigationAddTab': 'Add tab',
+    'navigationProjectsTab': 'Projects tab',
+    // Unread notifications
+    'unreadNotificationsCount': '{count} unread notifications',
+    'markAllRead': 'Mark all as read',
+    'viewAllNotifications': 'View all notifications',
+    // Loading and recovery states
+    'loadingContent': 'Loading content',
+    'somethingWentWrong': 'Something went wrong',
+    'tryAgain': 'Try again',
+    'recoverableErrorTitle': 'We hit a snag',
+    // Voice countdown and playback
+    'voiceCountdownRemaining': '{seconds}s remaining',
+    'voiceRecordingInProgress': 'Recording…',
+    'voicePlayRecording': 'Play recording',
+    'voiceRerecord': 'Re-record',
+    'voiceProcessing': 'Processing…',
+    // Filter removal
+    'removeFilter': 'Remove filter',
+    'clearAllFilters': 'Clear all filters',
+    'activeFilters': 'Active filters',
+    // Bulk archive
+    'selectionMode': 'Select items',
+    'archiveSelected': 'Archive selected',
+    'bulkArchiveConfirm': 'Archive {count} selected items?',
+    'bulkArchivePartialFailure':
+        'Some items could not be archived. Tap retry to try again.',
+    // Report scope and export
+    'reportScope': 'Report scope',
+    'reportDateRange': 'Date range',
+    'reportExports': 'Exports',
+    'reportStartDate': 'From: {value}',
+    'reportEndDate': 'To: {value}',
+    'showArchivedProjects': 'Show archived projects',
+    'loadMore': 'Load more',
+    'reportExportProgress': 'Loaded {count} records',
+    'cancelExport': 'Cancel export',
+    'noDataYet': 'No data yet',
+    'printReport': 'Print',
+    'shareReport': 'Share',
+    'shareChart': 'Share chart',
+    // Worker status
+    'workerStatusActive': 'Active',
+    'workerStatusInactive': 'Inactive',
+    'workerStatusTerminated': 'Terminated',
+    // Plan comparison
+    'comparePlans': 'Compare plans',
+    'planRecommended': 'Recommended',
+    'planFeatureIncluded': 'Included',
+    'planFeatureNotIncluded': 'Not included',
+    'plansUnavailableTitle': 'Plans unavailable',
+    'plansUnavailableMessage':
+        'Store offers are unavailable right now. Try again shortly.',
+    'plansRecoveredAfterRetry': 'Plans loaded after retry.',
+    'planFeatureUnlimitedProjects': 'Unlimited projects',
+    'planFeaturePrioritySupport': 'Priority support',
+    'planFeatureAdvancedReports': 'Advanced reports',
+    // Settings help and legal
+    'aboutApp': 'About app',
+    'settingsAccount': 'Account',
+    'settingsPreferences': 'Preferences',
+    'settingsWorkspace': 'Workspace',
+    'workspaceNameTitle': 'Workspace name',
+    'renameWorkspace': 'Rename workspace',
+    'workspaceNameEmptyError': 'Enter a workspace name.',
+    'manageMembers': 'Manage members',
+    'settingsSaveFailed':
+        'Could not save settings. Your previous value was restored.',
+    'appVersion': 'App version',
+    'helpAndSupport': 'Help & Support',
+    'privacyPolicy': 'Privacy Policy',
+    'termsOfService': 'Terms of Service',
+    'runDiagnostics': 'Run diagnostics',
+    'crashlyticsDiagnostics': 'Crashlytics diagnostics',
+    'sendTestNonFatalError': 'Send test non-fatal error',
+    'crashlyticsNonFatalSent': 'Non-fatal sent',
+    'runDiagnosticsConfirmTitle': 'Run diagnostics?',
+    'runDiagnosticsConfirmMessage':
+        'This can send a diagnostic report or terminate the app.',
+    'forceCrash': 'Force crash',
+    'forceCrashKillsApp': 'Force crash (kills app)',
+    'forceCrashConfirmTitle': 'Force crash?',
+    'forceCrashConfirmMessage':
+        'This will terminate the app immediately. Continue only during diagnostics.',
+    // Sync outcomes
+    'syncStatus': 'Sync status',
+    'syncStatusSubtitle':
+        'Review pending, failed, and recently resolved sync items.',
+    'syncPending': 'Pending sync',
+    'syncFailed': 'Sync failed',
+    'syncNeedsAttention': 'Needs attention',
+    'syncRecentlyResolved': 'Recently resolved',
+    'syncStatusEmpty': 'No pending or recent sync activity.',
+    'syncNoPending': 'Nothing is waiting to sync.',
+    'syncNoFailed': 'No failed sync items.',
+    'syncNoNeedsAttention': 'No sync items need attention.',
+    'syncNoResolved': 'No recently resolved sync items.',
+    'offlineSyncStatusUnavailable':
+        'Sync status is unavailable right now. Try again shortly.',
+    'syncResolvedNewerKept':
+        'A newer version was kept. Your older change was not applied.',
+    'syncResolvedApplied': 'Your change was applied successfully.',
+    'retrySync': 'Retry sync',
+    // Sanitized failure messages (see core/utils/app_error_messages.dart)
+    'errorNetwork': 'No connection. Check your network and try again.',
+    'errorPermissionDenied': 'You do not have permission to do this.',
+    'errorUnauthenticated': 'Please sign in again to continue.',
+    'errorNotFound': 'That item is no longer available.',
+    'errorQuota': 'Your plan limit has been reached.',
+    'errorStorage':
+        'File transfer failed. Check your connection and try again.',
+    'errorAuth': 'Sign-in failed. Please try again.',
+    'errorAuthInvalidCredentials':
+        'Incorrect email or password. Please try again.',
+    'errorRecording':
+        'Recording failed. Check microphone access and try again.',
+    'errorUnknown': 'Something went wrong. Please try again.',
+    // Worker accounting partial payments (see worker_accounting_record.dart)
+    'workerPaidAmountRequired':
+        'Enter the amount paid for this partial record.',
+    'workerPaidAmountTooLow': 'The paid amount must be greater than zero.',
+    'workerPaidAmountTooHigh':
+        'The paid amount must be less than the total amount.',
+    'workerPaidAmountLabel': 'Amount paid',
+    'workerLegacyPartialUnresolved':
+        'This older partial record has no recorded paid amount, so it is excluded from confirmed totals.',
+    'workerConfirmedPaid': 'Confirmed paid',
+    'workerConfirmedOutstanding': 'Outstanding',
   };
 
   static final _ar = <String, String>{
@@ -451,6 +728,9 @@ class AppLocalizations {
     'projects': 'المشاريع',
     'add': 'إضافة',
     'reports': 'التقارير',
+    'reportAccessDenied':
+        'ليس لديك صلاحية لعرض التقارير المالية أو الأرصدة أو المرفقات.',
+    'reportExportFailed': 'تعذر إنشاء ملف PDF. تحقق من الاتصال وحاول مرة أخرى.',
     'settings': 'الإعدادات',
     'subscription': 'الاشتراك',
     'upgradeToPro': 'الترقية إلى برو',
@@ -477,8 +757,24 @@ class AppLocalizations {
     'role': 'الدور',
     'memberRole': 'عضو',
     'ownerRole': 'مالك',
+    'adminRole': 'مدير',
+    'accountingApprovedRole': 'محاسب معتمد',
+    'entryOnlyRole': 'إدخال فقط',
+    'workspaceCrewTitle': 'فريق مساحة العمل',
     'allProjectsOption': 'كل المشاريع',
+    'all': 'الكل',
+    'allStatuses': 'كل الحالات',
+    'projectSortRecent': 'الأحدث',
+    'projectSortName': 'الاسم',
+    'projectSortHighestExpense': 'الأعلى مصروفات',
+    'projectSortHighestIncome': 'الأعلى دخلًا',
+    'projectSortHighestNet': 'الأعلى صافيًا',
+    'projectFinancialAccessRestricted':
+        'التفاصيل المالية للمشاريع غير متاحة لدورك.',
+    'confirmArchiveProject': 'هل تريد أرشفة هذا المشروع؟',
     'selectProject': 'اختر مشروعاً',
+    'allProjects': 'كل المشاريع',
+    'showingDataForProject': 'عرض بيانات {project} فقط',
     'selectProjectToViewReport': 'يرجى اختيار مشروع لعرض التقرير.',
     'projectReport': 'تقرير المشروع',
     'generatedByBuildozer': 'تم إنشاء هذا التقرير بأمان بواسطة Buildozer',
@@ -501,6 +797,9 @@ class AppLocalizations {
     'confirmArchiveWorkerEntry': 'هل تريد أرشفة سجل العامل هذا؟',
     'confirmDeleteProjectCascade':
         'هل تريد حذف هذا المشروع وكل المصروفات والدفعات وسجلات العمال والمقاييس والإشعارات المرتبطة به؟',
+    'deleteProjectTypeNameToConfirm': 'للتأكيد، اكتب اسم المشروع أدناه.',
+    'budgetUsed': 'الميزانية المستخدمة',
+    'overBudget': 'تجاوز الميزانية',
     'archivedProjects': 'المشاريع المؤرشفة',
     'unarchive': 'إلغاء الأرشفة',
     'noArchivedProjects': 'لا توجد مشاريع مؤرشفة.',
@@ -509,6 +808,16 @@ class AppLocalizations {
     'confirm': 'تأكيد',
     'save': 'حفظ',
     'cancel': 'إلغاء',
+    'delete': 'Delete',
+    'workerAccounting': 'محاسبة العامل',
+    'contractorAccounting': 'محاسبة المقاول',
+    'equipmentAccounting': 'محاسبة المعدات',
+    'transportAccounting': 'محاسبة النقل',
+    'accessibilityAttachmentControl': 'زر المرفقات',
+    'accessibilityFilterControl': 'زر التصفية',
+    'accessibilityGroupControl': 'زر التجميع',
+    'accessibilitySummaryCard': 'بطاقة الملخص',
+    'accessibilityExportControl': 'زر التصدير',
     'freeTrial': 'تجربة مجانية 7 أيام',
     'startTrial': 'ابدأ التجربة',
     'language': 'اللغة',
@@ -529,6 +838,8 @@ class AppLocalizations {
     'forgotPassword': 'نسيت كلمة المرور',
     'email': 'البريد الإلكتروني',
     'password': 'كلمة المرور',
+    'loginEmailRequired': 'أدخل بريدك الإلكتروني.',
+    'loginPasswordRequired': 'أدخل كلمة المرور.',
     'skip': 'تخطي',
     'next': 'التالي',
     'loading': 'جاري التحميل...',
@@ -565,6 +876,9 @@ class AppLocalizations {
     'welcomeBack': 'مرحباً بعودتك',
     'signInToContinue': 'سجّل الدخول للمتابعة',
     'continueWithGoogle': 'المتابعة باستخدام Google',
+    'setupWorkspaceTitle': 'إعداد مساحة العمل',
+    'setupWorkspaceSubtitle':
+        'اختر اسم مساحة العمل والعملة التي ستستخدمها للمشاريع.',
     'dontHaveAccount': 'ليس لديك حساب؟',
     'alreadyHaveAccount': 'لديك حساب بالفعل؟',
     'fullName': 'الاسم الكامل',
@@ -595,6 +909,7 @@ class AppLocalizations {
     'pleaseLoginFirst': 'يرجى تسجيل الدخول أولاً.',
     'overview': 'نظرة عامة',
     'quickActions': 'إجراءات سريعة',
+    'chooseWorkspace': 'اختر مساحة العمل',
     'totalExpenses': 'إجمالي المصروفات',
     'totalIncome': 'إجمالي الإيرادات',
     'netProfit': 'صافي الربح',
@@ -623,7 +938,27 @@ class AppLocalizations {
     'contractValue': 'قيمة العقد',
     'location': 'الموقع',
     'description': 'الوصف',
+    'purpose': 'الغرض',
+    'paymentStatus': 'حالة الدفع',
+    'paymentStatusUnpaid': 'غير مدفوع',
+    'paymentStatusPartial': 'مدفوع جزئياً',
+    'paymentStatusPaid': 'مدفوع',
+    'paymentStatusRefunded': 'مستردة',
+    'paymentStatusCancelled': 'ملغاة',
+    'attachmentOpenDenied': 'ليس لديك صلاحية لفتح هذا المرفق.',
+    'attachmentMissing': 'ملف المرفق غير موجود.',
+    'attachmentPending': 'رفع المرفق قيد الانتظار.',
+    'attachmentCannotOpen': 'لا يمكن فتح المرفق.',
+    'previewAttachment': 'معاينة المرفق',
+    'openAttachment': 'فتح المرفق',
+    'downloadAttachment': 'تحميل المرفق',
+    'closePreview': 'إغلاق المعاينة',
     'budgetLimit': 'حد الميزانية',
+    'filters': 'عوامل التصفية',
+    'clearFilters': 'Clear filters',
+    'supplierName': 'اسم المورد',
+    'entityName': 'اسم الكيان',
+    'entityNameOptional': 'اسم الكيان (اختياري)',
     'startDate': 'تاريخ البداية',
     'expectedEndDate': 'تاريخ النهاية المتوقع',
     'expectedEndDateOptional': 'تاريخ النهاية المتوقع: اختياري',
@@ -685,6 +1020,27 @@ class AppLocalizations {
     'editWorkerTitle': 'تعديل عامل',
     'workerList': 'قائمة العمال',
     'workerListSubtitle': 'عرض وإدارة العمال.',
+    'resources': 'Resources',
+    'workerDirectory': 'Worker directory',
+    'workerDirectorySubtitle': 'Open worker profiles and accounting.',
+    'contractorsDirectory': 'Contractors',
+    'contractorsDirectorySubtitle': 'Browse contractor profiles and records.',
+    'equipmentDirectory': 'Equipment providers',
+    'equipmentDirectorySubtitle': 'Browse equipment providers and records.',
+    'transportDirectory': 'Transport providers',
+    'transportDirectorySubtitle': 'Browse transport providers and records.',
+    'noContractorsYet': 'No contractors yet.',
+    'noEquipmentProvidersYet': 'No equipment providers yet.',
+    'noTransportProvidersYet': 'No transport providers yet.',
+    'searchResources': 'Search resources',
+    'lastUsedAtLabel': 'Last used: {value}',
+    'defaultRate': 'Default rate',
+    'rateUnit': 'Rate unit',
+    'manualInput': 'Manual input',
+    'chooseSavedResource': 'Choose saved',
+    'quantity': 'Quantity',
+    'deleteResourceConfirm':
+        'Delete {name}? Historical expenses keep their saved names.',
     'addWorkerSubtitle': 'إضافة ملف عامل جديد إلى مساحة العمل.',
     'addWorkerEntryTitle': 'إإضافة سجل عامل',
     'editWorkerEntryTitle': 'تعديل سجل عامل',
@@ -700,7 +1056,6 @@ class AppLocalizations {
     'noEntriesYet': 'لا توجد سجلات بعد.',
     'totalLaborCost': 'إجمالي تكلفة العمالة',
     'editWorker': 'تعديل العامل',
-    'addEntry': 'إضافة سجل',
     'buildozerFinancialReport': 'تقرير بيلدوزر المالي',
     'workspace': 'مساحة العمل',
     'generated': 'تم الإنشاء',
@@ -718,12 +1073,58 @@ class AppLocalizations {
     'recentExpenses': 'أحدث المصروفات',
     'recentPayments': 'أحدث الدفعات',
     'topWorkers': 'أعلى العمال',
-    'noDataYet': 'لا توجد بيانات بعد.',
+    'topEntities': 'أعلى الكيانات',
+    'groupBy': 'تجميع حسب',
+    'groupByDate': 'تجميع حسب التاريخ',
+    'groupByCategory': 'تجميع حسب الفئة',
+    'groupByPaymentMethod': 'تجميع حسب طريقة الدفع',
+    'groupByEntity': 'تجميع حسب الكيان',
+    'ungroup': 'إلغاء التجميع',
+    'unassigned': 'غير مخصص',
+    'saveAndAddAnother': 'حفظ وإضافة آخر',
+    'weeklyInsights': 'رؤى أسبوعية',
+    'weeklySummary': 'ملخص أسبوعي',
+    'topEntity': 'أفضل كيان',
+    'topCategory': 'أفضل فئة',
+    'laborExpenses': 'مصروفات العمالة',
+    'equipmentExpenses': 'مصروفات المعدات',
+    'laborSummary': 'العمالة',
+    'equipmentSummary': 'المعدات',
+    'paymentBreakdown': 'تفصيل الدفع',
+    'recentTransactions': 'المعاملات الأخيرة',
+    'combinedReport': 'تقرير مدمج',
+    'paymentSummary': 'ملخص الدفع',
+    'recentWeeklyTransactions': 'المعاملات الأسبوعية الأخيرة',
+    'entityType': 'نوع الكيان',
+    'allTypes': 'كل الأنواع',
+    'entitySummary': 'ملخص الكيان',
+    'exportExpenses': 'تصدير المصروفات',
+    'exportPayments': 'تصدير الدفعات',
+    'exportEntitySummary': 'تصدير ملخص الكيان',
+    'exportWeeklyReport': 'تصدير التقرير الأسبوعي',
+    'exportCombinedReport': 'تصدير التقرير المدمج',
     'exportPdf': 'تصدير PDF',
+    'dateRange': 'النطاق الزمني',
+    'filtersApplied': 'عوامل التصفية المطبقة',
+    'duplicate': 'تكرار',
+    'buildCustomReport': 'إنشاء تقرير مخصص',
+    'dailyBreakdown': 'التوزيع اليومي',
+    'operationsCount': '{count} عملية',
     'usagePeriod': 'فترة الاستخدام: {period} | المصروفات {count}/{limit}',
     'totalProjects': 'إجمالي المشاريع: {value}',
     'activeProjectsCount': 'المشاريع النشطة: {value}',
     'netProfitLoss': 'صافي الربح/الخسارة: {value}',
+    'totalPayments': 'إجمالي الدفعات',
+    'transactions': 'المعاملات',
+    'todayExpenses': 'Today expenses',
+    'weeklyExpenses': 'Weekly expenses',
+    'monthlyExpenses': 'Monthly expenses',
+    'transactionCount': 'Transactions',
+    'groupByRelativeDate': 'Group by relative date',
+    'noFilterResults': 'No matching results.',
+    'attachments': 'المرفقات',
+    'attachment': 'مرفق',
+    'selectAttachments': 'اختيار المرفقات',
     'notificationsTitle': 'الإشعارات',
     'noNotificationsYet': 'لا توجد إشعارات بعد.',
     'recordShortNote':
@@ -765,6 +1166,20 @@ class AppLocalizations {
     'usageLimitReached': 'تم الوصول لحد الاستخدام',
     'freePlanLimitsMessage':
         'أنت على الخطة المجانية بحدود استخدام صارمة. قم بالترقية إلى برو لمتابعة هذا الإجراء.',
+    'limitUsageMessage':
+        'استخدمت {current} من {max} {limitLabel} في الخطة المجانية. قم بالترقية إلى برو من أجل {upgradeAction}.',
+    'limitUsageActiveProjects': 'مشاريع نشطة',
+    'limitUsageExpenses': 'إدخالات مصروفات شهرية',
+    'limitUsagePayments': 'إدخالات مدفوعات شهرية',
+    'limitUsageWorkerEntries': 'إدخالات عمال شهرية',
+    'limitUsageTeamMembers': 'أعضاء فريق',
+    'limitUsageGeneric': 'إجراءات متاحة',
+    'limitUpgradeActionActiveProjects': 'إنشاء المزيد من المشاريع النشطة',
+    'limitUpgradeActionExpenses': 'متابعة إضافة المصروفات',
+    'limitUpgradeActionPayments': 'متابعة إضافة المدفوعات',
+    'limitUpgradeActionWorkerEntries': 'متابعة إضافة إدخالات العمال',
+    'limitUpgradeActionTeamMembers': 'دعوة المزيد من أعضاء الفريق',
+    'limitUpgradeActionGeneric': 'المتابعة',
     'maybeLater': 'لاحقاً',
     'purchaseCancelled': 'تم إلغاء عملية الشراء.',
     'nativePaywallNotSupported':
@@ -796,9 +1211,14 @@ class AppLocalizations {
     'paymentMethodBank': 'تحويل بنكي',
     'paymentMethodCheck': 'شيك',
     'expenseCategoryLabor': 'عمالة',
+    'expenseCategoryWorker': 'Worker',
+    'expenseCategoryContractor': 'Contractor',
     'expenseCategoryMaterials': 'مواد',
     'expenseCategoryEquipment': 'معدات',
     'expenseCategoryTransport': 'نقل',
+    'expenseCategoryStorage': 'تخزين',
+    'expenseCategoryRentals': 'إيجارات',
+    'expenseCategoryPayments': 'دفعات',
     'expenseCategoryOther': 'أخرى',
     'projectStatusActive': 'نشط',
     'projectStatusPaused': 'متوقف',
@@ -829,6 +1249,132 @@ class AppLocalizations {
     'wageWithValue': 'الأجر: {value}',
     'totalWageWithValue': 'إجمالي الأجر: {value}',
     'workerEntryLine': '{days} يوم × {wage} = {total}',
+    // --- Review improvement pack (Phase 1 localization inventory) ---
+    // Navigation
+    'navigationHomeTab': 'تبويب الرئيسية',
+    'navigationAddTab': 'تبويب الإضافة',
+    'navigationProjectsTab': 'تبويب المشاريع',
+    // Unread notifications
+    'unreadNotificationsCount': '{count} إشعارات غير مقروءة',
+    'markAllRead': 'تعليم الكل كمقروء',
+    'viewAllNotifications': 'عرض جميع الإشعارات',
+    // Loading and recovery states
+    'loadingContent': 'جارٍ تحميل المحتوى',
+    'somethingWentWrong': 'حدث خطأ ما',
+    'tryAgain': 'حاول مرة أخرى',
+    'recoverableErrorTitle': 'واجهتنا مشكلة',
+    // Voice countdown and playback
+    'voiceCountdownRemaining': 'يتبقى {seconds} ثانية',
+    'voiceRecordingInProgress': 'جارٍ التسجيل…',
+    'voicePlayRecording': 'تشغيل التسجيل',
+    'voiceRerecord': 'إعادة التسجيل',
+    'voiceProcessing': 'جارٍ المعالجة…',
+    // Filter removal
+    'removeFilter': 'إزالة عامل التصفية',
+    'clearAllFilters': 'مسح جميع عوامل التصفية',
+    'activeFilters': 'عوامل التصفية النشطة',
+    // Bulk archive
+    'selectionMode': 'تحديد العناصر',
+    'archiveSelected': 'أرشفة المحدد',
+    'bulkArchiveConfirm': 'أرشفة {count} عناصر محددة؟',
+    'bulkArchivePartialFailure':
+        'تعذّرت أرشفة بعض العناصر. اضغط إعادة المحاولة.',
+    // Report scope and export
+    'reportScope': 'نطاق التقرير',
+    'reportDateRange': 'النطاق الزمني',
+    'reportExports': 'التصدير',
+    'reportStartDate': 'من: {value}',
+    'reportEndDate': 'إلى: {value}',
+    'showArchivedProjects': 'عرض المشاريع المؤرشفة',
+    'loadMore': 'تحميل المزيد',
+    'reportExportProgress': 'تم تحميل {count} سجلات',
+    'cancelExport': 'إلغاء التصدير',
+    'noDataYet': 'لا توجد بيانات بعد',
+    'printReport': 'طباعة',
+    'shareReport': 'مشاركة',
+    'shareChart': 'مشاركة الرسم البياني',
+    // Worker status
+    'workerStatusActive': 'نشط',
+    'workerStatusInactive': 'غير نشط',
+    'workerStatusTerminated': 'منتهٍ',
+    // Plan comparison
+    'comparePlans': 'قارن الخطط',
+    'planRecommended': 'موصى به',
+    'planFeatureIncluded': 'مضمّن',
+    'planFeatureNotIncluded': 'غير مضمّن',
+    'plansUnavailableTitle': 'الخطط غير متاحة',
+    'plansUnavailableMessage':
+        'عروض المتجر غير متاحة الآن. حاول مرة أخرى بعد قليل.',
+    'plansRecoveredAfterRetry': 'تم تحميل الخطط بعد إعادة المحاولة.',
+    'planFeatureUnlimitedProjects': 'مشاريع غير محدودة',
+    'planFeaturePrioritySupport': 'دعم ذو أولوية',
+    'planFeatureAdvancedReports': 'تقارير متقدمة',
+    // Settings help and legal
+    'aboutApp': 'حول التطبيق',
+    'settingsAccount': 'الحساب',
+    'settingsPreferences': 'التفضيلات',
+    'settingsWorkspace': 'مساحة العمل',
+    'workspaceNameTitle': 'اسم مساحة العمل',
+    'renameWorkspace': 'إعادة تسمية مساحة العمل',
+    'workspaceNameEmptyError': 'أدخل اسم مساحة العمل.',
+    'manageMembers': 'إدارة الأعضاء',
+    'settingsSaveFailed': 'تعذر حفظ الإعدادات. تمت استعادة القيمة السابقة.',
+    'appVersion': 'إصدار التطبيق',
+    'helpAndSupport': 'المساعدة والدعم',
+    'privacyPolicy': 'سياسة الخصوصية',
+    'termsOfService': 'شروط الخدمة',
+    'runDiagnostics': 'تشغيل التشخيص',
+    'crashlyticsDiagnostics': 'تشخيص Crashlytics',
+    'sendTestNonFatalError': 'إرسال خطأ اختباري غير قاتل',
+    'crashlyticsNonFatalSent': 'تم إرسال الخطأ غير القاتل',
+    'runDiagnosticsConfirmTitle': 'تشغيل التشخيص؟',
+    'runDiagnosticsConfirmMessage': 'قد يرسل هذا تقرير تشخيص أو يغلق التطبيق.',
+    'forceCrash': 'إغلاق اختباري',
+    'forceCrashKillsApp': 'إغلاق اختباري (يغلق التطبيق)',
+    'forceCrashConfirmTitle': 'إغلاق التطبيق؟',
+    'forceCrashConfirmMessage':
+        'سيؤدي هذا إلى إغلاق التطبيق فوراً. تابع فقط أثناء التشخيص.',
+    // Sync outcomes
+    'syncStatus': 'حالة المزامنة',
+    'syncStatusSubtitle':
+        'راجع عناصر المزامنة المعلقة والفاشلة والتي تم حلها مؤخراً.',
+    'syncPending': 'بانتظار المزامنة',
+    'syncFailed': 'فشلت المزامنة',
+    'syncNeedsAttention': 'تحتاج إلى مراجعة',
+    'syncRecentlyResolved': 'تم حلها مؤخراً',
+    'syncStatusEmpty': 'لا توجد أنشطة مزامنة معلقة أو حديثة.',
+    'syncNoPending': 'لا يوجد شيء بانتظار المزامنة.',
+    'syncNoFailed': 'لا توجد عناصر مزامنة فاشلة.',
+    'syncNoNeedsAttention': 'لا توجد عناصر مزامنة تحتاج إلى مراجعة.',
+    'syncNoResolved': 'لا توجد عناصر مزامنة محلولة مؤخراً.',
+    'offlineSyncStatusUnavailable':
+        'حالة المزامنة غير متاحة الآن. حاول مرة أخرى بعد قليل.',
+    'syncResolvedNewerKept':
+        'تم الاحتفاظ بنسخة أحدث. لم يتم تطبيق تغييرك الأقدم.',
+    'syncResolvedApplied': 'تم تطبيق تغييرك بنجاح.',
+    'retrySync': 'إعادة المزامنة',
+    // Sanitized failure messages (see core/utils/app_error_messages.dart)
+    'errorNetwork': 'لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.',
+    'errorPermissionDenied': 'ليس لديك صلاحية للقيام بذلك.',
+    'errorUnauthenticated': 'يرجى تسجيل الدخول مرة أخرى للمتابعة.',
+    'errorNotFound': 'هذا العنصر لم يعد متاحًا.',
+    'errorQuota': 'لقد وصلت إلى حد خطتك.',
+    'errorStorage': 'فشل نقل الملف. تحقق من اتصالك وحاول مرة أخرى.',
+    'errorAuth': 'فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.',
+    'errorAuthInvalidCredentials':
+        'البريد الإلكتروني أو كلمة المرور غير صحيحة. حاول مرة أخرى.',
+    'errorRecording': 'فشل التسجيل. تحقق من إذن الميكروفون وحاول مرة أخرى.',
+    'errorUnknown': 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
+    // Worker accounting partial payments
+    'workerPaidAmountRequired': 'أدخل المبلغ المدفوع لهذا السجل الجزئي.',
+    'workerPaidAmountTooLow': 'يجب أن يكون المبلغ المدفوع أكبر من صفر.',
+    'workerPaidAmountTooHigh':
+        'يجب أن يكون المبلغ المدفوع أقل من المبلغ الإجمالي.',
+    'workerPaidAmountLabel': 'المبلغ المدفوع',
+    'workerLegacyPartialUnresolved':
+        'هذا السجل الجزئي القديم لا يحتوي على مبلغ مدفوع مسجّل، لذا يُستبعد من الإجماليات المؤكدة.',
+    'workerConfirmedPaid': 'المدفوع المؤكد',
+    'workerConfirmedOutstanding': 'المتبقي',
   };
 
   static final _localized = <String, Map<String, String>>{'en': _en, 'ar': _ar};
@@ -871,12 +1417,22 @@ class AppLocalizations {
     switch (category) {
       case 'labor':
         return t('expenseCategoryLabor');
+      case 'worker':
+        return t('expenseCategoryWorker');
+      case 'contractor':
+        return t('expenseCategoryContractor');
       case 'materials':
         return t('expenseCategoryMaterials');
       case 'equipment':
         return t('expenseCategoryEquipment');
       case 'transport':
         return t('expenseCategoryTransport');
+      case 'storage':
+        return t('expenseCategoryStorage');
+      case 'rentals':
+        return t('expenseCategoryRentals');
+      case 'payments':
+        return t('expenseCategoryPayments');
       case 'other':
         return t('expenseCategoryOther');
       default:
@@ -894,6 +1450,23 @@ class AppLocalizations {
         return t('paymentMethodCheck');
       default:
         return method;
+    }
+  }
+
+  String paymentStatusLabel(String status) {
+    switch (status) {
+      case 'unpaid':
+        return t('paymentStatusUnpaid');
+      case 'partial':
+        return t('paymentStatusPartial');
+      case 'paid':
+        return t('paymentStatusPaid');
+      case 'refunded':
+        return t('paymentStatusRefunded');
+      case 'cancelled':
+        return t('paymentStatusCancelled');
+      default:
+        return status;
     }
   }
 
@@ -951,6 +1524,55 @@ class AppLocalizations {
         return t('teamMemberLimitReached');
       default:
         return t('usageLimitReached');
+    }
+  }
+
+  String limitMessage(String limitType, {int? current, int? max}) {
+    if (current == null || max == null) {
+      return t('freePlanLimitsMessage');
+    }
+    return t(
+      'limitUsageMessage',
+      params: {
+        'current': '$current',
+        'max': '$max',
+        'limitLabel': limitUsageLabel(limitType),
+        'upgradeAction': limitUpgradeAction(limitType),
+      },
+    );
+  }
+
+  String limitUsageLabel(String limitType) {
+    switch (limitType) {
+      case 'activeProjects':
+        return t('limitUsageActiveProjects');
+      case 'expensesPerMonth':
+        return t('limitUsageExpenses');
+      case 'paymentsPerMonth':
+        return t('limitUsagePayments');
+      case 'workerEntriesPerMonth':
+        return t('limitUsageWorkerEntries');
+      case 'teamMembers':
+        return t('limitUsageTeamMembers');
+      default:
+        return t('limitUsageGeneric');
+    }
+  }
+
+  String limitUpgradeAction(String limitType) {
+    switch (limitType) {
+      case 'activeProjects':
+        return t('limitUpgradeActionActiveProjects');
+      case 'expensesPerMonth':
+        return t('limitUpgradeActionExpenses');
+      case 'paymentsPerMonth':
+        return t('limitUpgradeActionPayments');
+      case 'workerEntriesPerMonth':
+        return t('limitUpgradeActionWorkerEntries');
+      case 'teamMembers':
+        return t('limitUpgradeActionTeamMembers');
+      default:
+        return t('limitUpgradeActionGeneric');
     }
   }
 }

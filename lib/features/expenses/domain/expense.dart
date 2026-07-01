@@ -1,3 +1,6 @@
+import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/constants/payment_statuses.dart';
+
 class Expense {
   const Expense({
     required this.id,
@@ -9,13 +12,20 @@ class Expense {
     required this.currency,
     required this.date,
     required this.notes,
+    this.purpose = '',
+    this.description = '',
     required this.supplierName,
     required this.paymentMethod,
+    this.paymentStatus = PaymentStatuses.unpaid,
+    this.entityId,
+    this.entityName = '',
+    this.entityType = '',
     required this.inputMethod,
     required this.transcript,
     required this.source,
     required this.storagePath,
     required this.isArchived,
+    required this.attachments,
     this.clientMutationId = '',
   });
 
@@ -28,12 +38,19 @@ class Expense {
   final String currency;
   final DateTime date;
   final String notes;
+  final String purpose;
+  final String description;
   final String supplierName;
   final String paymentMethod;
+  final String paymentStatus;
+  final String? entityId;
+  final String entityName;
+  final String entityType;
   final String inputMethod;
   final String transcript;
   final String source;
   final String storagePath;
+  final List<Attachment> attachments;
   final bool isArchived;
   final String clientMutationId;
 
@@ -72,12 +89,21 @@ class Expense {
       currency: map['currency'] as String? ?? 'EGP',
       date: parseDate(map['date']),
       notes: map['notes'] as String? ?? '',
+      purpose: map['purpose'] as String? ?? '',
+      description:
+          map['description'] as String? ?? map['notes'] as String? ?? '',
       supplierName: map['supplierName'] as String? ?? '',
+      entityId: map['entityId'] as String?,
+      entityName:
+          map['entityName'] as String? ?? map['supplierName'] as String? ?? '',
+      entityType: map['entityType'] as String? ?? 'supplier',
       paymentMethod: map['paymentMethod'] as String? ?? '',
+      paymentStatus: map['paymentStatus'] as String? ?? PaymentStatuses.unpaid,
       inputMethod: map['inputMethod'] as String? ?? 'manual',
       transcript: map['transcript'] as String? ?? '',
       source: map['source'] as String? ?? '',
       storagePath: map['storagePath'] as String? ?? '',
+      attachments: Attachment.listFromDynamic(map['attachments']),
       isArchived: map['isArchived'] as bool? ?? false,
       clientMutationId: map['clientMutationId'] as String? ?? '',
     );

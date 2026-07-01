@@ -64,48 +64,49 @@ void main() {
   testWidgets(
     'AppBootstrapScope surfaces localized dead-letter sync failures to users',
     (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          offlineQueueCoordinatorProvider.overrideWith(
-            (ref) => _NoopOfflineQueueCoordinator(ref),
-          ),
-          connectivityProvider.overrideWith((ref) => Stream.value(false)),
-        ],
-        child: const MaterialApp(
-          locale: Locale('en'),
-          localizationsDelegates: [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            offlineQueueCoordinatorProvider.overrideWith(
+              (ref) => _NoopOfflineQueueCoordinator(ref),
+            ),
+            connectivityProvider.overrideWith((ref) => Stream.value(false)),
           ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: AppBootstrapScope(child: Scaffold(body: Text('bootstrap'))),
+          child: const MaterialApp(
+            locale: Locale('en'),
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: AppBootstrapScope(child: Scaffold(body: Text('bootstrap'))),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.text('bootstrap')),
-      listen: false,
-    );
+      final container = ProviderScope.containerOf(
+        tester.element(find.text('bootstrap')),
+        listen: false,
+      );
 
-    container
-        .read(offlineSyncNoticeProvider.notifier)
-        .state = const OfflineSyncNotice(
-      actionId: 'dead_1',
-      type: OfflineSyncFailureType.invalidTarget,
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      container
+          .read(offlineSyncNoticeProvider.notifier)
+          .state = const OfflineSyncNotice(
+        actionId: 'dead_1',
+        type: OfflineSyncFailureType.invalidTarget,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.text(
-        'Queued action is no longer valid because the target item was archived, removed, or is no longer available.',
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.text(
+          'Queued action is no longer valid because the target item was archived, removed, or is no longer available.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

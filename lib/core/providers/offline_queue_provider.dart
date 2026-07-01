@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 
 final offlineActionQueueProvider = Provider<OfflineActionQueue>((ref) {
@@ -10,6 +11,64 @@ final offlineActionQueueProvider = Provider<OfflineActionQueue>((ref) {
 final offlinePendingCountProvider = StateProvider<int>((ref) => 0);
 
 final offlineDeadLetterCountProvider = StateProvider<int>((ref) => 0);
+
+final offlineSyncActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
+  return ref
+      .watch(offlineActionQueueProvider)
+      .watch(includeDeadLetters: true, includeExpiredSynced: false);
+});
+
+final offlinePendingActionsProvider = Provider<AsyncValue<List<OfflineAction>>>(
+  (ref) {
+    return ref
+        .watch(offlineSyncActionsProvider)
+        .whenData(
+          (actions) => actions
+              .where((action) => action.status == OfflineActionStatus.pending)
+              .toList(),
+        );
+  },
+);
+
+final offlineFailedActionsProvider = Provider<AsyncValue<List<OfflineAction>>>((
+  ref,
+) {
+  return ref
+      .watch(offlineSyncActionsProvider)
+      .whenData(
+        (actions) => actions
+            .where((action) => action.status == OfflineActionStatus.failed)
+            .toList(),
+      );
+});
+
+final offlineDeadLetterActionsProvider =
+    Provider<AsyncValue<List<OfflineAction>>>((ref) {
+      return ref
+          .watch(offlineSyncActionsProvider)
+          .whenData(
+            (actions) => actions
+                .where(
+                  (action) => action.status == OfflineActionStatus.deadLetter,
+                )
+                .toList(),
+          );
+    });
+
+final offlineResolvedActionsProvider =
+    Provider<AsyncValue<List<OfflineAction>>>((ref) {
+      return ref
+          .watch(offlineSyncActionsProvider)
+          .whenData(
+            (actions) => actions
+                .where(
+                  (action) =>
+                      action.status == OfflineActionStatus.synced &&
+                      action.resolutionType != null,
+                )
+                .toList(),
+          );
+    });
 
 enum OfflineSyncFailureType {
   quota,

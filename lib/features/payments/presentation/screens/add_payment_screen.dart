@@ -1,21 +1,34 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
+import 'package:buildtrack_app/core/constants/payment_statuses.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
+import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 class AddPaymentScreen extends ConsumerStatefulWidget {
   const AddPaymentScreen({this.paymentId, this.projectId, super.key});
@@ -29,13 +42,19 @@ class AddPaymentScreen extends ConsumerStatefulWidget {
 
 class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   final _amountController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _notesController = TextEditingController();
   String _method = 'cash';
+  String _paymentStatus = PaymentStatuses.paid;
   String? _projectId;
+  String? _entityId;
+  String _entityName = '';
   DateTime _date = DateTime.now();
   bool _loading = false;
   bool _prefilling = false;
   String? _error;
+  final _pickedFiles = <PlatformFile>[];
+  final _attachments = <Attachment>[];
 
   @override
   void initState() {
@@ -61,10 +80,19 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
       if (payment != null && mounted) {
         setState(() {
           _projectId = payment.projectId;
-          _amountController.text = payment.amount.toStringAsFixed(2);
+          _amountController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                payment.amount.toStringAsFixed(2),
+              );
           _method = payment.paymentMethod;
+          _paymentStatus = payment.paymentStatus;
+          _descriptionController.text = payment.description;
           _notesController.text = payment.notes;
+          _entityId = payment.entityId;
+          _entityName = payment.entityName;
           _date = payment.date;
+          _attachments.clear();
+          _attachments.addAll(payment.attachments);
         });
       }
     } catch (_) {
@@ -83,14 +111,34 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   @override
   void dispose() {
     _amountController.dispose();
+    _descriptionController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachments() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
+    );
+    if (result == null) {
+      return;
+    }
+    final validation = AttachmentValidationService.validatePickedFiles(
+      result.files,
+    );
+    setState(() {
+      _pickedFiles.addAll(validation.validFiles);
+      if (validation.invalidMessages.isNotEmpty) {
+        _error = validation.invalidMessages.join('\n');
+      }
+    });
   }
 
   String _fallbackRoute() {
     final projectId = _projectId ?? widget.projectId;
     if (projectId != null && projectId.isNotEmpty) {
-      return AppRoutes.projectDetailPath(projectId);
+      return AppRoutes.paymentsPath(projectId: projectId);
     }
     return AppRoutes.payments;
   }
@@ -99,12 +147,12 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final amount = double.tryParse(_amountController.text.trim());
+    final amount = NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
-    if (_projectId == null || amount == null || amount <= 0) {
+    if (_projectId == null || amount == null || amount < 0) {
       setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
     }
@@ -116,6 +164,38 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
 
     try {
       var queued = false;
+      final attachmentsToSend = <Attachment>[..._attachments];
+      if (_pickedFiles.isNotEmpty) {
+        for (final file in _pickedFiles) {
+          if (file.path == null) {
+            continue;
+          }
+          final uploaded = await ref
+              .read(storageUploadServiceProvider)
+              .uploadAttachment(
+                userId: userId,
+                localFilePath: file.path!,
+                fileName: file.name,
+              );
+          attachmentsToSend.add(
+            Attachment(
+              id: const Uuid().v4(),
+              fileName: uploaded.fileName,
+              storagePath: uploaded.storagePath,
+              contentType: uploaded.contentType,
+              uploadedAt: DateTime.now(),
+              downloadUrl: uploaded.downloadUrl,
+              size: uploaded.size,
+            ),
+          );
+        }
+      }
+      final resolvedEntity = await _resolveEntity(
+        workspaceId: workspaceId,
+        fallbackName: _entityName,
+        type: 'other',
+      );
+
       if (widget.paymentId == null) {
         try {
           await ref
@@ -146,7 +226,15 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               amount: amount,
               date: _date,
               paymentMethod: _method,
+              paymentStatus: _paymentStatus,
+              description: _descriptionController.text.trim(),
               notes: _notesController.text.trim(),
+              entityId: resolvedEntity.id,
+              entityName: resolvedEntity.name,
+              entityType: 'other',
+              attachments: attachmentsToSend.isNotEmpty
+                  ? attachmentsToSend
+                  : null,
             );
         queued = result.queued;
         if (kDebugMode) {
@@ -163,7 +251,13 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
               amount: amount,
               date: _date,
               paymentMethod: _method,
+              paymentStatus: _paymentStatus,
+              description: _descriptionController.text.trim(),
               notes: _notesController.text.trim(),
+              entityId: resolvedEntity.id,
+              entityName: resolvedEntity.name,
+              entityType: 'other',
+              attachments: attachmentsToSend,
             );
       }
       if (mounted) {
@@ -196,9 +290,28 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     }
   }
 
+  Future<({String? id, String? name})> _resolveEntity({
+    required String workspaceId,
+    required String fallbackName,
+    required String type,
+  }) async {
+    final name = (_entityName.isNotEmpty ? _entityName : fallbackName).trim();
+    if (name.isEmpty) {
+      return (id: _entityId, name: null);
+    }
+    if (_entityId != null && _entityId!.isNotEmpty) {
+      return (id: _entityId, name: name);
+    }
+    final entity = await ref
+        .read(entityRepositoryProvider)
+        .ensureEntity(workspaceId: workspaceId, name: name, type: type);
+    return (id: entity?.id ?? _entityId, name: entity?.name ?? name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
     return AppBackScope(
       fallbackRoute: _fallbackRoute(),
@@ -211,11 +324,11 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
           fallbackRoute: _fallbackRoute(),
         ),
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  projectsAsync.when(
+                  projectsAsync.whenStale(
                     data: (projects) => BelowDropdownField<String>(
                       label: l10n.t('project'),
                       value: _projectId,
@@ -227,13 +340,19 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                           .toList(),
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
-                    error: (e, _) => Text(e.toString()),
-                    loading: () => const SizedBox.shrink(),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
+                    loading: () => const AppLoadingSkeleton(
+                      lineCount: 2,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
                     decoration: InputDecoration(labelText: l10n.t('amount')),
                   ),
                   const SizedBox(height: 12),
@@ -282,10 +401,132 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                         setState(() => _method = value ?? 'cash'),
                   ),
                   const SizedBox(height: 12),
+                  EntityAutocompleteField(
+                    workspaceId: workspaceId ?? '',
+                    label: l10n.t('entityNameOptional'),
+                    initialEntityId: _entityId,
+                    initialEntityName: _entityName.isNotEmpty
+                        ? _entityName
+                        : null,
+                    onChanged: (entityId, entityName) {
+                      setState(() {
+                        _entityId = entityId;
+                        _entityName = entityName ?? '';
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  BelowDropdownField<String>(
+                    label: l10n.t('paymentStatus'),
+                    value: _paymentStatus,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.unpaid,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.unpaid),
+                      ),
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.partial,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.partial),
+                      ),
+                      DropdownMenuEntry(
+                        value: PaymentStatuses.paid,
+                        label: l10n.paymentStatusLabel(PaymentStatuses.paid),
+                      ),
+                    ],
+                    onSelected: (value) => setState(
+                      () => _paymentStatus = value ?? _paymentStatus,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(
+                      labelText: l10n.t('description'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _notesController,
                     maxLines: 3,
                     decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.t('attachments'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_attachments.isNotEmpty)
+                    Column(
+                      children: _attachments
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(entry.value.id),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _attachments.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.attach_file),
+                                title: Text(entry.value.fileName),
+                                subtitle: Text(entry.value.storagePath),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (_pickedFiles.isNotEmpty)
+                    Column(
+                      children: _pickedFiles
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(
+                                entry.value.path ?? entry.value.name,
+                              ),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _pickedFiles.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.description),
+                                title: Text(entry.value.name),
+                                subtitle: Text(entry.value.path ?? ''),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  FilledButton.tonal(
+                    onPressed: _loading ? null : _pickAttachments,
+                    child: Text(l10n.t('selectAttachments')),
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)

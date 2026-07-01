@@ -1,6 +1,9 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:flutter/material.dart';
@@ -78,7 +81,7 @@ class _ManageSubscriptionScreenState
           title: l10n.t('manageSubscription'),
           fallbackRoute: AppRoutes.settings,
         ),
-        body: subAsync.when(
+        body: subAsync.whenStale(
           data: (sub) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -112,7 +115,7 @@ class _ManageSubscriptionScreenState
                   subtitle: Text(sub.store),
                 ),
               ),
-              customerInfoAsync.when(
+              customerInfoAsync.whenStale(
                 data: (info) => Column(
                   children: [
                     Card(
@@ -153,7 +156,7 @@ class _ManageSubscriptionScreenState
                     ),
                   ],
                 ),
-                error: (error, _) => Text(error.toString()),
+                error: (error, _) => Text(appErrorMessage(l10n, error)),
                 loading: () => const Padding(
                   padding: EdgeInsets.all(16),
                   child: CircularProgressIndicator(),
@@ -183,8 +186,9 @@ class _ManageSubscriptionScreenState
               ],
             ],
           ),
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

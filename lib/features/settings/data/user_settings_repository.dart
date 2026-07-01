@@ -43,7 +43,10 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
   }
 
   Future<void> _cache(UserSettings settings) async {
-    await _prefsBox.put(_cacheKey(settings.userId), jsonEncode(settings.toMap()));
+    await _prefsBox.put(
+      _cacheKey(settings.userId),
+      jsonEncode(settings.toMap()),
+    );
   }
 
   @override
@@ -119,12 +122,7 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
     String? photoUrl,
   }) async {
     final current = await getSettings(userId);
-    await _cache(
-      current.copyWith(
-        fullName: fullName,
-        photoUrl: photoUrl,
-      ),
-    );
+    await _cache(current.copyWith(fullName: fullName, photoUrl: photoUrl));
   }
 }
 
@@ -147,8 +145,7 @@ final currentUserSettingsProvider = StreamProvider<UserSettings>((ref) {
       ),
     );
   }
-  return ref.watch(userSettingsRepositoryProvider).watchSettings(
-        userId,
-        fallbackEmail: authUser?.email ?? '',
-      );
+  return ref
+      .watch(userSettingsRepositoryProvider)
+      .watchSettings(userId, fallbackEmail: authUser?.email ?? '');
 });

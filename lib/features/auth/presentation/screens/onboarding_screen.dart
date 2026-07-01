@@ -133,7 +133,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     }
                   },
                   child: Text(
-                    _index < totalPages - 1 ? l10n.t('next') : l10n.t('continue'),
+                    _index < totalPages - 1
+                        ? l10n.t('next')
+                        : l10n.t('continue'),
                   ),
                 ),
               ),

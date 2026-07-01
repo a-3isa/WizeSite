@@ -4,8 +4,11 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
+import 'package:buildtrack_app/core/services/pending_attachment_service.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
@@ -38,17 +41,75 @@ class OfflineQueueCoordinator {
 
     _draining = true;
     try {
-      await _ref.read(appTelemetryProvider).trace(
-        'offline_sync.drain',
-        () => _ref
-            .read(offlineActionQueueProvider)
-            .drain(
-              _ref.read(workspaceMutationServiceProvider).processQueuedAction,
-            ),
-      );
+      await _ref
+          .read(appTelemetryProvider)
+          .trace(
+            'offline_sync.drain',
+            () => _ref
+                .read(offlineActionQueueProvider)
+                .drain(
+                  _ref
+                      .read(workspaceMutationServiceProvider)
+                      .processQueuedAction,
+                ),
+          );
+      await retryPendingAttachments();
     } finally {
       _draining = false;
       await refreshCounts();
+    }
+  }
+
+  Future<void> retryPendingAttachments() async {
+    final user = _ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) {
+      return;
+    }
+
+    final pendingService = await _ref.read(
+      pendingAttachmentServiceProvider.future,
+    );
+    final uploadService = _ref.read(storageUploadServiceProvider);
+    final pending = await pendingService.listPending();
+    for (final record in pending) {
+      await pendingService.markUploading(id: record.id);
+      try {
+        final uploaded = await uploadService.uploadAttachment(
+          userId: user.uid,
+          localFilePath: record.attachment.localPath ?? '',
+          fileName: record.attachment.fileName,
+        );
+        await pendingService.markUploadedAndRemove(
+          id: record.id,
+          storagePath: uploaded.storagePath,
+          downloadUrl: uploaded.downloadUrl,
+        );
+      } on StorageUploadException catch (error) {
+        if (error.code == 'missing-local-file') {
+          await pendingService.markMissingLocalFile(id: record.id);
+        } else {
+          await pendingService.markFailed(
+            id: record.id,
+            message: error.message,
+          );
+          await _ref
+              .read(appTelemetryProvider)
+              .recordError(
+                error,
+                StackTrace.current,
+                reason: 'attachment_upload.storage_error code=${error.code}',
+              );
+        }
+      } catch (error, stackTrace) {
+        await pendingService.markFailed(id: record.id, message: '$error');
+        await _ref
+            .read(appTelemetryProvider)
+            .recordError(
+              error,
+              stackTrace,
+              reason: 'attachment_upload.unexpected_error',
+            );
+      }
     }
   }
 
@@ -64,6 +125,20 @@ class OfflineQueueCoordinator {
       return;
     }
 
+    _ref
+        .read(appTelemetryProvider)
+        .recordError(
+          Exception(
+            'offline_sync.dead_letter '
+            'type=${latest.type} '
+            'code=${latest.lastErrorCode} '
+            'retries=${latest.retryCount} '
+            'error=${latest.lastError}',
+          ),
+          StackTrace.empty,
+          reason: 'offline_sync.dead_letter type=${latest.type}',
+        );
+
     final type = _failureTypeFor(
       code: latest.lastErrorCode,
       message: latest.lastError,
@@ -76,10 +151,7 @@ class OfflineQueueCoordinator {
         latest.id;
   }
 
-  OfflineSyncFailureType _failureTypeFor({
-    String? code,
-    String? message,
-  }) {
+  OfflineSyncFailureType _failureTypeFor({String? code, String? message}) {
     switch (SyncErrorClassifier.categoryFrom(code: code, message: message)) {
       case SyncFailureCategory.quota:
         return OfflineSyncFailureType.quota;
@@ -120,6 +192,7 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(workspaceSelectionSyncProvider);
     Future.microtask(() async {
       await ref.read(offlineQueueCoordinatorProvider).refreshCounts();
       await ref.read(offlineQueueCoordinatorProvider).drainNow();
@@ -127,8 +200,8 @@ class _AppBootstrapScopeState extends ConsumerState<AppBootstrapScope>
     _connectivitySubscription = ref.listenManual<AsyncValue<bool>>(
       connectivityProvider,
       (previous, next) {
-        final wasOnline = previous?.valueOrNull ?? false;
-        final isOnline = next.valueOrNull ?? false;
+        final wasOnline = previous?.value ?? false;
+        final isOnline = next.value ?? false;
         if (!wasOnline && isOnline) {
           unawaited(ref.read(offlineQueueCoordinatorProvider).drainNow());
         }

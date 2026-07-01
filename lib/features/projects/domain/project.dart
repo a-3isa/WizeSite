@@ -12,6 +12,11 @@ class Project {
     required this.netProfit,
     required this.isArchived,
     this.clientMutationId = '',
+    this.location = '',
+    this.description = '',
+    this.budgetLimit,
+    this.startDate,
+    this.expectedEndDate,
   });
 
   final String id;
@@ -26,6 +31,21 @@ class Project {
   final double netProfit;
   final bool isArchived;
   final String clientMutationId;
+  final String location;
+  final String description;
+  final double? budgetLimit;
+  final DateTime? startDate;
+  final DateTime? expectedEndDate;
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return DateTime.tryParse(value);
+    try {
+      return (value as dynamic).toDate() as DateTime;
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory Project.fromMap(String id, Map<String, dynamic> map) {
     final totalExpenses = (map['totalExpenses'] as num?)?.toDouble() ?? 0;
@@ -52,6 +72,11 @@ class Project {
       netProfit: netProfit,
       isArchived: map['isArchived'] as bool? ?? false,
       clientMutationId: map['clientMutationId'] as String? ?? '',
+      location: map['location'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      budgetLimit: (map['budgetLimit'] as num?)?.toDouble(),
+      startDate: _parseDate(map['startDate']),
+      expectedEndDate: _parseDate(map['expectedEndDate']),
     );
   }
 }

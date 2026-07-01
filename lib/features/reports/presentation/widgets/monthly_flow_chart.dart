@@ -55,10 +55,11 @@ class MonthlyFlowChart extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
             children: [
               _DotLabel(color: AppColors.success, label: l10n.t('totalIncome')),
-              const SizedBox(width: 16),
               _DotLabel(
                 color: AppColors.danger,
                 label: l10n.t('totalExpenses'),

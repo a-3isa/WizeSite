@@ -15,6 +15,26 @@ class MutationResult {
   final bool queued;
 }
 
+class WorkspaceBootstrapResult {
+  const WorkspaceBootstrapResult({
+    required this.workspaceId,
+    required this.created,
+    required this.setupCompleted,
+  });
+
+  factory WorkspaceBootstrapResult.fromMap(Map<String, dynamic> data) {
+    return WorkspaceBootstrapResult(
+      workspaceId: '${data['workspaceId'] ?? ''}'.trim(),
+      created: data['created'] == true,
+      setupCompleted: data['setupCompleted'] == true,
+    );
+  }
+
+  final String workspaceId;
+  final bool created;
+  final bool setupCompleted;
+}
+
 abstract final class OfflineActionTypes {
   static const createProject = 'create_project';
   static const updateProject = 'update_project';
@@ -116,13 +136,20 @@ class WorkspaceMutationService {
     required String currency,
     required DateTime date,
     String? notes,
+    String? purpose,
+    String? description,
     String? supplierName,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     String? paymentMethod,
+    String? paymentStatus,
     String inputMethod = 'manual',
     String? transcript,
     String? source,
     String? storagePath,
     double? projectTotalExpensesBefore,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     final payload = {
       'workspaceId': workspaceId,
@@ -133,14 +160,23 @@ class WorkspaceMutationService {
       'currency': currency,
       'date': date.toIso8601String(),
       'notes': notes ?? '',
+      'purpose': purpose ?? '',
+      'description': description ?? notes ?? '',
       'supplierName': supplierName ?? '',
+      'entityId': entityId ?? '',
+      'entityName': entityName ?? '',
+      'entityType': entityType ?? 'supplier',
       'paymentMethod': paymentMethod ?? '',
+      'paymentStatus': paymentStatus ?? 'unpaid',
       'inputMethod': inputMethod,
       'transcript': transcript ?? '',
       'source': source ?? '',
       'storagePath': storagePath ?? '',
       'projectTotalExpensesBefore': projectTotalExpensesBefore,
     };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
 
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createExpense,
@@ -198,28 +234,46 @@ class WorkspaceMutationService {
     required double amount,
     required DateTime date,
     String? notes,
+    String? purpose,
+    String? description,
     String? supplierName,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     String? paymentMethod,
+    String? paymentStatus,
+    List<Map<String, dynamic>>? attachments,
     double? previousAmount,
     DateTime? previousDate,
     String? previousCategory,
   }) {
+    final payload = {
+      'workspaceId': workspaceId,
+      'expenseId': expenseId,
+      'projectId': projectId,
+      'category': category,
+      'amount': amount,
+      'date': date.toIso8601String(),
+      'notes': notes ?? '',
+      'purpose': purpose ?? '',
+      'description': description ?? notes ?? '',
+      'supplierName': supplierName ?? '',
+      'entityId': entityId ?? '',
+      'entityName': entityName ?? '',
+      'entityType': entityType ?? 'supplier',
+      'paymentMethod': paymentMethod ?? '',
+      'paymentStatus': paymentStatus ?? 'unpaid',
+      'previousAmount': previousAmount,
+      'previousDate': previousDate?.toIso8601String(),
+      'previousCategory': previousCategory,
+    };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
+
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateExpense,
-      payload: {
-        'workspaceId': workspaceId,
-        'expenseId': expenseId,
-        'projectId': projectId,
-        'category': category,
-        'amount': amount,
-        'date': date.toIso8601String(),
-        'notes': notes ?? '',
-        'supplierName': supplierName ?? '',
-        'paymentMethod': paymentMethod ?? '',
-        'previousAmount': previousAmount,
-        'previousDate': previousDate?.toIso8601String(),
-        'previousCategory': previousCategory,
-      },
+      payload: payload,
     );
   }
 
@@ -229,8 +283,14 @@ class WorkspaceMutationService {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? projectTotalPaymentsBefore,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     final projectTotalPaymentsAfter = projectTotalPaymentsBefore == null
         ? null
@@ -241,18 +301,18 @@ class WorkspaceMutationService {
       'amount': amount,
       'date': date.toIso8601String(),
       'paymentMethod': paymentMethod,
+      'paymentStatus': paymentStatus ?? 'paid',
+      'description': description ?? notes ?? '',
       'notes': notes ?? '',
+      'entityId': entityId ?? '',
+      'entityName': entityName ?? '',
+      'entityType': entityType ?? 'other',
       'projectTotalPaymentsBefore': projectTotalPaymentsBefore,
       'projectTotalPaymentsAfter': projectTotalPaymentsAfter,
     };
-    if (kDebugMode) {
-      debugPrint(
-        '[mutation.createPayment] workspaceId=$workspaceId '
-        'projectId=$projectId amount=$amount '
-        'before=$projectTotalPaymentsBefore after=$projectTotalPaymentsAfter',
-      );
+    if (attachments != null) {
+      payload['attachments'] = attachments;
     }
-
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createPayment,
       payload: payload,
@@ -286,23 +346,38 @@ class WorkspaceMutationService {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? previousAmount,
     DateTime? previousDate,
+    List<Map<String, dynamic>>? attachments,
   }) {
+    final payload = {
+      'workspaceId': workspaceId,
+      'paymentId': paymentId,
+      'projectId': projectId,
+      'amount': amount,
+      'date': date.toIso8601String(),
+      'paymentMethod': paymentMethod,
+      'paymentStatus': paymentStatus ?? 'paid',
+      'description': description ?? notes ?? '',
+      'notes': notes ?? '',
+      'entityId': entityId ?? '',
+      'entityName': entityName ?? '',
+      'entityType': entityType ?? 'other',
+      'previousAmount': previousAmount,
+      'previousDate': previousDate?.toIso8601String(),
+    };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.updatePayment,
-      payload: {
-        'workspaceId': workspaceId,
-        'paymentId': paymentId,
-        'projectId': projectId,
-        'amount': amount,
-        'date': date.toIso8601String(),
-        'paymentMethod': paymentMethod,
-        'notes': notes ?? '',
-        'previousAmount': previousAmount,
-        'previousDate': previousDate?.toIso8601String(),
-      },
+      payload: payload,
     );
   }
 
@@ -314,6 +389,7 @@ class WorkspaceMutationService {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Map<String, dynamic>>? attachments,
     double? projectTotalExpensesBefore,
   }) async {
     final payload = {
@@ -326,6 +402,9 @@ class WorkspaceMutationService {
       'notes': notes ?? '',
       'projectTotalExpensesBefore': projectTotalExpensesBefore,
     };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
 
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createWorkerEntry,
@@ -380,23 +459,29 @@ class WorkspaceMutationService {
     double? previousDailyWage,
     double? previousTotalCost,
     DateTime? previousDate,
+    List<Map<String, dynamic>>? attachments,
   }) async {
+    final payload = <String, dynamic>{
+      'workspaceId': workspaceId,
+      'entryId': entryId,
+      'projectId': projectId,
+      'daysWorked': daysWorked,
+      'dailyWage': dailyWage,
+      'date': date.toIso8601String(),
+      'notes': notes ?? '',
+      'previousProjectId': previousProjectId,
+      'previousDaysWorked': previousDaysWorked,
+      'previousDailyWage': previousDailyWage,
+      'previousTotalCost': previousTotalCost,
+      'previousDate': previousDate?.toIso8601String(),
+    };
+    if (attachments != null) {
+      payload['attachments'] = attachments;
+    }
+
     await _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateWorkerEntry,
-      payload: {
-        'workspaceId': workspaceId,
-        'entryId': entryId,
-        'projectId': projectId,
-        'daysWorked': daysWorked,
-        'dailyWage': dailyWage,
-        'date': date.toIso8601String(),
-        'notes': notes ?? '',
-        'previousProjectId': previousProjectId,
-        'previousDaysWorked': previousDaysWorked,
-        'previousDailyWage': previousDailyWage,
-        'previousTotalCost': previousTotalCost,
-        'previousDate': previousDate?.toIso8601String(),
-      },
+      payload: payload,
     );
   }
 
@@ -408,6 +493,7 @@ class WorkspaceMutationService {
     required String billingType,
     String? workerType,
     String? notes,
+    String? status,
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.createWorker,
@@ -419,6 +505,7 @@ class WorkspaceMutationService {
         'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
+        'status': status ?? 'active',
       },
     );
   }
@@ -432,6 +519,7 @@ class WorkspaceMutationService {
     required String billingType,
     String? workerType,
     String? notes,
+    String? status,
   }) {
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.updateWorker,
@@ -444,6 +532,7 @@ class WorkspaceMutationService {
         'billingType': billingType,
         'workerType': workerType ?? '',
         'notes': notes ?? '',
+        'status': status,
       },
     );
   }
@@ -503,23 +592,93 @@ class WorkspaceMutationService {
     );
   }
 
-  Future<String> ensureUserWorkspaceBootstrap() {
-    return _client.call<String>(
+  Future<WorkspaceBootstrapResult> ensureUserWorkspaceBootstrap() {
+    return _client.call<WorkspaceBootstrapResult>(
       functionName: 'ensureUserWorkspaceBootstrap',
       payload: const {},
       parseResult: (result) {
         final data = Map<String, dynamic>.from(result as Map);
-        return '${data['workspaceId'] ?? ''}';
+        return WorkspaceBootstrapResult.fromMap(data);
       },
       defaultErrorMessage: 'Failed to set up your workspace.',
     );
   }
 
-  Future<void> processQueuedAction(OfflineAction action) async {
+  Future<WorkspaceBootstrapResult> completeInitialWorkspaceSetup({
+    required String workspaceId,
+    required String workspaceName,
+    required String defaultCurrency,
+  }) {
+    return _client.call<WorkspaceBootstrapResult>(
+      functionName: 'completeInitialWorkspaceSetup',
+      payload: {
+        'workspaceId': workspaceId,
+        'workspaceName': workspaceName,
+        'defaultCurrency': defaultCurrency,
+      },
+      parseResult: (result) {
+        final data = Map<String, dynamic>.from(result as Map);
+        return WorkspaceBootstrapResult.fromMap({...data, 'created': false});
+      },
+      defaultErrorMessage: 'Failed to complete workspace setup.',
+    );
+  }
+
+  Future<String> setActiveWorkspace({required String workspaceId}) {
+    return _client.call<String>(
+      functionName: 'setActiveWorkspace',
+      payload: {'workspaceId': workspaceId},
+      parseResult: (result) {
+        final data = Map<String, dynamic>.from(result as Map);
+        return '${data['workspaceId'] ?? ''}'.trim();
+      },
+      defaultErrorMessage: 'Failed to switch workspace.',
+    );
+  }
+
+  Future<void> updateWorkspaceMemberRole({
+    required String workspaceId,
+    required String userId,
+    required String role,
+  }) {
+    return _client.call<void>(
+      functionName: 'updateWorkspaceMemberRole',
+      payload: {'workspaceId': workspaceId, 'userId': userId, 'role': role},
+      parseResult: (_) {},
+      defaultErrorMessage: 'Failed to update workspace member.',
+    );
+  }
+
+  Future<void> removeWorkspaceMember({
+    required String workspaceId,
+    required String userId,
+  }) {
+    return _client.call<void>(
+      functionName: 'removeWorkspaceMember',
+      payload: {'workspaceId': workspaceId, 'userId': userId},
+      parseResult: (_) {},
+      defaultErrorMessage: 'Failed to remove workspace member.',
+    );
+  }
+
+  Future<OfflineActionOutcome> processQueuedAction(OfflineAction action) async {
     await _telemetry.log('offline_sync.process', {
       'type': action.type,
       'retry_count': action.retryCount,
     });
+    if (await _isStaleLastSavedUpdate(action)) {
+      final targetId = _conflictTargetId(action);
+      await _telemetry.log('offline_sync.skipped_stale_update', {
+        'type': action.type,
+        'target': targetId,
+      });
+      return OfflineActionOutcome.skippedNewerVersion(targetId: targetId);
+    }
+    await _applyQueuedAction(action);
+    return OfflineActionOutcome.applied(targetId: _conflictTargetId(action));
+  }
+
+  Future<void> _applyQueuedAction(OfflineAction action) async {
     switch (action.type) {
       case OfflineActionTypes.createProject:
         await _client.call<Map<String, dynamic>>(
@@ -680,6 +839,11 @@ class WorkspaceMutationService {
           defaultErrorMessage: 'Failed to update settings.',
         );
         return;
+      case OfflineActionQueueTypes.attachmentUpload:
+        throw const CallableClientException(
+          'Attachment upload is waiting for local retry.',
+          code: 'unavailable',
+        );
       default:
         throw UnsupportedError('Unsupported offline action: ${action.type}');
     }
@@ -690,21 +854,185 @@ class WorkspaceMutationService {
     required Map<String, dynamic> payload,
   }) async {
     final action = await _queue.enqueue(type: type, payload: payload);
+    await _enqueuePendingAttachmentUploads(
+      actionType: type,
+      sourceAction: action,
+      payload: payload,
+    );
     await _telemetry.log('offline_sync.enqueued', {'type': type});
     unawaited(_tryDrainInBackground());
     return MutationResult(id: action.id, queued: true);
   }
 
-  Future<void> _tryDrainInBackground() async {
-    if (await _shouldQueueOffline()) {
+  Future<void> _enqueuePendingAttachmentUploads({
+    required String actionType,
+    required OfflineAction sourceAction,
+    required Map<String, dynamic> payload,
+  }) async {
+    final ownerType = _attachmentOwnerTypeFor(actionType);
+    if (ownerType == null) {
       return;
     }
-    await _queue.drain(processQueuedAction);
+
+    final attachments = payload['attachments'];
+    if (attachments is! Iterable) {
+      return;
+    }
+
+    final workspaceId = payload['workspaceId'] as String?;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return;
+    }
+
+    final ownerId = _attachmentOwnerIdFor(
+      actionType: actionType,
+      sourceActionId: sourceAction.id,
+      payload: payload,
+    );
+    for (final rawAttachment in attachments) {
+      if (rawAttachment is! Map) {
+        continue;
+      }
+      final attachment = Map<String, dynamic>.from(rawAttachment);
+      final localPath = (attachment['localPath'] as String?)?.trim() ?? '';
+      final uploadStatus =
+          (attachment['uploadStatus'] as String?)?.trim().toLowerCase() ?? '';
+      if (localPath.isEmpty || uploadStatus == 'uploaded') {
+        continue;
+      }
+
+      await _queue.enqueue(
+        type: OfflineActionQueueTypes.attachmentUpload,
+        payload: {
+          OfflineActionPayloadKeys.workspaceId: workspaceId,
+          OfflineActionPayloadKeys.ownerType: ownerType,
+          OfflineActionPayloadKeys.ownerId: ownerId,
+          OfflineActionPayloadKeys.attachment: attachment,
+          'sourceActionId': sourceAction.id,
+          'sourceActionType': actionType,
+        },
+      );
+    }
+  }
+
+  String? _attachmentOwnerTypeFor(String actionType) {
+    switch (actionType) {
+      case OfflineActionTypes.createExpense:
+      case OfflineActionTypes.updateExpense:
+        return 'expense';
+      case OfflineActionTypes.createPayment:
+      case OfflineActionTypes.updatePayment:
+        return 'payment';
+      case OfflineActionTypes.createWorkerEntry:
+      case OfflineActionTypes.updateWorkerEntry:
+        return 'worker_entry';
+      default:
+        return null;
+    }
+  }
+
+  String _attachmentOwnerIdFor({
+    required String actionType,
+    required String sourceActionId,
+    required Map<String, dynamic> payload,
+  }) {
+    switch (actionType) {
+      case OfflineActionTypes.updateExpense:
+        return (payload['expenseId'] as String?) ?? sourceActionId;
+      case OfflineActionTypes.updatePayment:
+        return (payload['paymentId'] as String?) ?? sourceActionId;
+      case OfflineActionTypes.updateWorkerEntry:
+        return (payload['entryId'] as String?) ?? sourceActionId;
+      default:
+        return sourceActionId;
+    }
+  }
+
+  Future<void> _tryDrainInBackground() async {
+    try {
+      if (await _shouldQueueOffline()) {
+        return;
+      }
+      await _queue.drain(processQueuedAction);
+    } catch (error, stackTrace) {
+      await _telemetry.log('offline_sync.drain_deferred', {
+        'error': error.toString(),
+      });
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'workspace mutation service',
+          context: ErrorDescription('while draining queued mutations'),
+        ),
+      );
+    }
   }
 
   Future<bool> _shouldQueueOffline() async {
     final status = await Connectivity().checkConnectivity();
     return status.any((result) => result == ConnectivityResult.none);
+  }
+
+  Future<bool> _isStaleLastSavedUpdate(OfflineAction action) async {
+    final targetId = _conflictTargetId(action);
+    if (targetId == null || targetId.isEmpty) {
+      return false;
+    }
+    final savedAt = _clientSavedAt(action);
+    if (savedAt == null) {
+      return false;
+    }
+
+    final actions = await _queue.list(
+      includeDeadLetters: true,
+      includeExpiredSynced: true,
+    );
+    return actions.any((candidate) {
+      if (candidate.id == action.id ||
+          candidate.type != action.type ||
+          candidate.status == OfflineActionStatus.deadLetter ||
+          _conflictTargetId(candidate) != targetId) {
+        return false;
+      }
+      final candidateSavedAt = _clientSavedAt(candidate);
+      return candidateSavedAt != null && candidateSavedAt.isAfter(savedAt);
+    });
+  }
+
+  DateTime? _clientSavedAt(OfflineAction action) {
+    final raw = action.payload[OfflineActionPayloadKeys.clientSavedAt];
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    return null;
+  }
+
+  String? _conflictTargetId(OfflineAction action) {
+    switch (action.type) {
+      case OfflineActionTypes.updateProject:
+      case OfflineActionTypes.archiveProject:
+      case OfflineActionTypes.unarchiveProject:
+      case OfflineActionTypes.deleteProject:
+        return action.payload['projectId'] as String?;
+      case OfflineActionTypes.updateExpense:
+      case OfflineActionTypes.archiveExpense:
+        return action.payload['expenseId'] as String?;
+      case OfflineActionTypes.updatePayment:
+      case OfflineActionTypes.archivePayment:
+        return action.payload['paymentId'] as String?;
+      case OfflineActionTypes.updateWorker:
+      case OfflineActionTypes.archiveWorker:
+        return action.payload['workerId'] as String?;
+      case OfflineActionTypes.updateWorkerEntry:
+      case OfflineActionTypes.archiveWorkerEntry:
+        return action.payload['entryId'] as String?;
+      case OfflineActionTypes.updateUserProfile:
+      case OfflineActionTypes.updateUserSettings:
+        return action.payload['userId'] as String?;
+      default:
+        return null;
+    }
   }
 }
 

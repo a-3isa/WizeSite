@@ -8,8 +8,43 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum ProjectBrowseSort {
+  recent,
+  name,
+  highestExpense,
+  highestIncome,
+  highestNet;
+
+  bool get isFinancial => switch (this) {
+    highestExpense || highestIncome || highestNet => true,
+    recent || name => false,
+  };
+}
+
+class ProjectBrowseQuery {
+  const ProjectBrowseQuery({
+    required this.workspaceId,
+    this.status,
+    this.includeArchived = false,
+    this.sort = ProjectBrowseSort.recent,
+    this.pageSize = 20,
+  });
+
+  final String workspaceId;
+  final String? status;
+  final bool includeArchived;
+  final ProjectBrowseSort sort;
+  final int pageSize;
+}
+
+abstract interface class ProjectBrowseRepository {
+  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  });
+}
 
 abstract interface class ProjectRepository {
   Stream<List<Project>> watchProjects(String workspaceId);
@@ -61,7 +96,8 @@ abstract interface class ProjectRepository {
   Future<void> deleteProject(String projectId);
 }
 
-class FirebaseProjectRepository implements ProjectRepository {
+class FirebaseProjectRepository
+    implements ProjectRepository, ProjectBrowseRepository {
   FirebaseProjectRepository(
     this._firestore,
     this._mutationService,
@@ -77,12 +113,57 @@ class FirebaseProjectRepository implements ProjectRepository {
     final query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false);
-    return _watchProjectQueryWithMetrics(
+        .where('isArchived', isEqualTo: false)
+        .orderBy('createdAt', descending: true)
+        .limit(50);
+    return _watchProjectQuery(
       query: query,
       workspaceId: workspaceId,
       includePendingCreates: true,
     );
+  }
+
+  Stream<List<Project>> _watchProjectQuery({
+    required Query<Map<String, dynamic>> query,
+    required String workspaceId,
+    required bool includePendingCreates,
+  }) {
+    final projectsStream = query.snapshots();
+    final queueStream = _queue.watch(includeExpiredSynced: true);
+    return Stream.multi((controller) {
+      QuerySnapshot<Map<String, dynamic>>? currentProjects;
+      List<OfflineAction> currentActions = const [];
+
+      void emit() {
+        final snapshot = currentProjects;
+        if (snapshot == null) return;
+        final projects = snapshot.docs
+            .map((doc) => Project.fromMap(doc.id, doc.data()))
+            .toList(growable: false);
+        controller.add(
+          _applyOptimisticProjectList(
+            baseItems: projects,
+            actions: currentActions,
+            workspaceId: workspaceId,
+            includePendingCreates: includePendingCreates,
+          ),
+        );
+      }
+
+      final projectSub = projectsStream.listen((snapshot) {
+        currentProjects = snapshot;
+        emit();
+      }, onError: controller.addError);
+      final queueSub = queueStream.listen((actions) {
+        currentActions = actions;
+        emit();
+      }, onError: controller.addError);
+
+      controller.onCancel = () {
+        unawaited(projectSub.cancel());
+        unawaited(queueSub.cancel());
+      };
+    });
   }
 
   @override
@@ -160,32 +241,6 @@ class FirebaseProjectRepository implements ProjectRepository {
             metricsData: currentMetrics,
           ),
         );
-        if (kDebugMode) {
-          final paymentActions = currentActions
-              .where(
-                (action) =>
-                    action.type == OfflineActionTypes.createPayment &&
-                    '${action.payload['projectId'] ?? ''}' == projectId,
-              )
-              .map(
-                (action) =>
-                    '${action.id}:${action.status}:amount=${action.payload['amount']}:'
-                    'before=${action.payload['projectTotalPaymentsBefore']}:'
-                    'after=${action.payload['projectTotalPaymentsAfter']}:'
-                    'syncedAt=${action.syncedAt?.toIso8601String()}',
-              )
-              .toList();
-          debugPrint(
-            '[project_repo.watchProject.emit] projectId=$projectId '
-            'projectSnapExists=${projectSnap.exists} '
-            'rawProjectTotalPayments=${projectSnap.data()?['totalPayments']} '
-            'metrics=$currentMetrics '
-            'basePayments=${baseProject.totalPayments} '
-            'baseExpenses=${baseProject.totalExpenses} '
-            'baseNet=${baseProject.netProfit} '
-            'paymentActions=${paymentActions.join(' | ')}',
-          );
-        }
         controller.add(_applyPendingDeltas(baseProject, currentActions));
       }
 
@@ -311,6 +366,228 @@ class FirebaseProjectRepository implements ProjectRepository {
       hasMore: snap.docs.length == pageSize,
       nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
     );
+  }
+
+  @override
+  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  }) {
+    if (request.sort.isFinancial) {
+      return _fetchFinancialProjectPage(request, cursor: cursor);
+    }
+    return _fetchProjectFieldPage(request, cursor: cursor);
+  }
+
+  Future<FirestorePage<Project>> _fetchProjectFieldPage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  }) async {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('projects')
+        .where('workspaceId', isEqualTo: request.workspaceId);
+    if (!request.includeArchived) {
+      query = query.where('isArchived', isEqualTo: false);
+    }
+    if (request.status != null && request.status!.isNotEmpty) {
+      query = query.where('status', isEqualTo: request.status);
+    }
+    query = switch (request.sort) {
+      ProjectBrowseSort.name => query.orderBy('name').orderBy('id'),
+      _ => query.orderBy('createdAt', descending: true).orderBy('id'),
+    };
+    if (cursor != null) {
+      query = switch (request.sort) {
+        ProjectBrowseSort.name => query.startAt([
+          cursor.data()?['name'],
+          cursor.data()?['id'] ?? cursor.id,
+        ]),
+        _ => query.startAt([
+          cursor.data()?['createdAt'],
+          cursor.data()?['id'] ?? cursor.id,
+        ]),
+      };
+    }
+    query = query.limit(request.pageSize + (cursor == null ? 0 : 1));
+
+    final snapshot = await query.get();
+    final pageDocs = snapshot.docs
+        .where(
+          (doc) =>
+              cursor == null ||
+              _isProjectDocAfterCursor(doc, cursor, request.sort),
+        )
+        .take(request.pageSize)
+        .toList(growable: false);
+    final actions = await _queue.list(includeExpiredSynced: true);
+    final metricsByProjectId = await _fetchMetricsForProjectIds(
+      pageDocs.map((doc) => doc.id),
+    );
+    final projects = pageDocs
+        .map(
+          (doc) => Project.fromMap(
+            doc.id,
+            mergeProjectMetricsData(
+              projectData: doc.data(),
+              metricsData: metricsByProjectId[doc.id],
+            ),
+          ),
+        )
+        .toList(growable: false);
+    final items = _applyOptimisticProjectList(
+      baseItems: projects,
+      actions: actions,
+      workspaceId: request.workspaceId,
+      includePendingCreates: cursor == null && !request.includeArchived,
+    );
+
+    return FirestorePage<Project>(
+      items: items,
+      hasMore: cursor == null
+          ? snapshot.docs.length == request.pageSize
+          : snapshot.docs.length > request.pageSize,
+      nextCursor: pageDocs.isEmpty ? cursor : pageDocs.last,
+    );
+  }
+
+  Future<FirestorePage<Project>> _fetchFinancialProjectPage(
+    ProjectBrowseQuery request, {
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+  }) async {
+    final metricField = switch (request.sort) {
+      ProjectBrowseSort.highestExpense => 'totalExpenses',
+      ProjectBrowseSort.highestIncome => 'totalIncome',
+      ProjectBrowseSort.highestNet => 'net',
+      _ => throw ArgumentError.value(request.sort, 'sort'),
+    };
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('project_metrics')
+        .where('workspaceId', isEqualTo: request.workspaceId);
+    if (!request.includeArchived) {
+      query = query.where('isArchived', isEqualTo: false);
+    }
+    if (request.status != null && request.status!.isNotEmpty) {
+      query = query.where('status', isEqualTo: request.status);
+    }
+    query = query
+        .orderBy(metricField, descending: true)
+        .orderBy('projectName')
+        .orderBy('projectId');
+    if (cursor != null) {
+      query = query.startAt([
+        cursor.data()?[metricField],
+        cursor.data()?['projectName'],
+        cursor.data()?['projectId'],
+      ]);
+    }
+    query = query.limit(request.pageSize + (cursor == null ? 0 : 1));
+
+    final metricSnapshot = await query.get();
+    final metricDocs = metricSnapshot.docs
+        .where(
+          (doc) =>
+              cursor == null ||
+              _isMetricDocAfterCursor(doc, cursor, metricField),
+        )
+        .take(request.pageSize)
+        .toList(growable: false);
+    final projectSnapshots = await Future.wait(
+      metricDocs.map(
+        (metric) => _firestore.collection('projects').doc(metric.id).get(),
+      ),
+    );
+    final projectsById = {
+      for (final snapshot in projectSnapshots)
+        if (snapshot.exists) snapshot.id: snapshot,
+    };
+    final orderedProjects = <Project>[];
+    for (final metric in metricDocs) {
+      final project = projectsById[metric.id];
+      if (project == null) continue;
+      orderedProjects.add(
+        Project.fromMap(
+          project.id,
+          mergeProjectMetricsData(
+            projectData: project.data() ?? const {},
+            metricsData: metric.data(),
+          ),
+        ),
+      );
+    }
+    final actions = await _queue.list(includeExpiredSynced: true);
+    final items = _applyOptimisticProjectList(
+      baseItems: orderedProjects,
+      actions: actions,
+      workspaceId: request.workspaceId,
+      includePendingCreates: false,
+    );
+
+    return FirestorePage<Project>(
+      items: items,
+      hasMore: cursor == null
+          ? metricSnapshot.docs.length == request.pageSize
+          : metricSnapshot.docs.length > request.pageSize,
+      nextCursor: metricDocs.isEmpty ? cursor : metricDocs.last,
+    );
+  }
+
+  bool _isProjectDocAfterCursor(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    DocumentSnapshot<Map<String, dynamic>> cursor,
+    ProjectBrowseSort sort,
+  ) {
+    final docData = doc.data();
+    final cursorData = cursor.data() ?? const {};
+    if (sort == ProjectBrowseSort.name) {
+      final nameCompare = '${docData['name'] ?? ''}'.compareTo(
+        '${cursorData['name'] ?? ''}',
+      );
+      if (nameCompare != 0) return nameCompare > 0;
+    } else {
+      final dateCompare = _compareOrderedValues(
+        docData['createdAt'],
+        cursorData['createdAt'],
+      );
+      if (dateCompare != 0) return dateCompare < 0;
+    }
+    final docId = '${docData['id'] ?? doc.id}';
+    final cursorId = '${cursorData['id'] ?? cursor.id}';
+    return docId.compareTo(cursorId) > 0;
+  }
+
+  bool _isMetricDocAfterCursor(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    DocumentSnapshot<Map<String, dynamic>> cursor,
+    String metricField,
+  ) {
+    final docData = doc.data();
+    final cursorData = cursor.data() ?? const {};
+    final metricCompare = _compareOrderedValues(
+      docData[metricField],
+      cursorData[metricField],
+    );
+    if (metricCompare != 0) return metricCompare < 0;
+    final nameCompare = '${docData['projectName'] ?? ''}'.compareTo(
+      '${cursorData['projectName'] ?? ''}',
+    );
+    if (nameCompare != 0) return nameCompare > 0;
+    return '${docData['projectId'] ?? doc.id}'.compareTo(
+          '${cursorData['projectId'] ?? cursor.id}',
+        ) >
+        0;
+  }
+
+  int _compareOrderedValues(Object? left, Object? right) {
+    if (left is Timestamp && right is Timestamp) {
+      return left.compareTo(right);
+    }
+    if (left is DateTime && right is DateTime) {
+      return left.compareTo(right);
+    }
+    if (left is num && right is num) {
+      return left.compareTo(right);
+    }
+    return '$left'.compareTo('$right');
   }
 
   @override
@@ -584,6 +861,13 @@ class FirebaseProjectRepository implements ProjectRepository {
         netProfit: current.netProfit,
         isArchived: current.isArchived,
         clientMutationId: current.clientMutationId,
+        location: '${action.payload['location'] ?? current.location}',
+        description: '${action.payload['description'] ?? current.description}',
+        budgetLimit:
+            (action.payload['budgetLimit'] as num?)?.toDouble() ??
+            current.budgetLimit,
+        startDate: current.startDate,
+        expectedEndDate: current.expectedEndDate,
       );
     }
 
@@ -700,17 +984,6 @@ class FirebaseProjectRepository implements ProjectRepository {
             currentTotal: totalPayments,
             delta: delta,
           );
-          if (kDebugMode) {
-            debugPrint(
-              '[project_repo.applyDelta] projectId=${project.id} '
-              'action=${action.id} status=${action.status} '
-              'type=${action.type} amount=$delta '
-              'currentPayments=$totalPayments '
-              'before=${action.payload['projectTotalPaymentsBefore']} '
-              'after=${action.payload['projectTotalPaymentsAfter']} '
-              'reflected=$reflected',
-            );
-          }
           if (!reflected) {
             totalPayments += delta;
           }
@@ -736,26 +1009,9 @@ class FirebaseProjectRepository implements ProjectRepository {
 
     if (totalExpenses == project.totalExpenses &&
         totalPayments == project.totalPayments) {
-      if (kDebugMode) {
-        debugPrint(
-          '[project_repo.applyDelta.result] projectId=${project.id} '
-          'unchanged payments=${project.totalPayments} '
-          'expenses=${project.totalExpenses} net=${project.netProfit}',
-        );
-      }
       return project;
     }
 
-    if (kDebugMode) {
-      debugPrint(
-        '[project_repo.applyDelta.result] projectId=${project.id} '
-        'basePayments=${project.totalPayments} '
-        'displayPayments=$totalPayments '
-        'baseExpenses=${project.totalExpenses} '
-        'displayExpenses=$totalExpenses '
-        'displayNet=${totalPayments - totalExpenses}',
-      );
-    }
     return Project(
       id: project.id,
       workspaceId: project.workspaceId,
@@ -769,6 +1025,11 @@ class FirebaseProjectRepository implements ProjectRepository {
       netProfit: totalPayments - totalExpenses,
       isArchived: project.isArchived,
       clientMutationId: project.clientMutationId,
+      location: project.location,
+      description: project.description,
+      budgetLimit: project.budgetLimit,
+      startDate: project.startDate,
+      expectedEndDate: project.expectedEndDate,
     );
   }
 
@@ -789,17 +1050,6 @@ class FirebaseProjectRepository implements ProjectRepository {
     final reflected = delta > 0
         ? currentTotal >= expected
         : currentTotal <= expected;
-    if (kDebugMode &&
-        (action.type == OfflineActionTypes.createPayment ||
-            action.type == OfflineActionTypes.updatePayment)) {
-      debugPrint(
-        '[project_repo.reflectionCheck] action=${action.id} '
-        'type=${action.type} status=${action.status} '
-        'baselineField=$baselineField baseline=$baseline '
-        'delta=$delta expected=$expected currentTotal=$currentTotal '
-        'reflected=$reflected',
-      );
-    }
     return reflected;
   }
 
@@ -818,6 +1068,13 @@ class FirebaseProjectRepository implements ProjectRepository {
       netProfit: 0,
       isArchived: false,
       clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
+      location: '${action.payload['location'] ?? ''}',
+      description: '${action.payload['description'] ?? ''}',
+      budgetLimit: (action.payload['budgetLimit'] as num?)?.toDouble(),
+      startDate: DateTime.tryParse('${action.payload['startDate'] ?? ''}'),
+      expectedEndDate: DateTime.tryParse(
+        '${action.payload['expectedEndDate'] ?? ''}',
+      ),
     );
   }
 }

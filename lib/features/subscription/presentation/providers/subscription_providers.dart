@@ -48,7 +48,9 @@ final subscriptionStreamProvider =
       return repo.watchSubscription(workspaceId);
     });
 
-final currentSubscriptionStreamProvider = StreamProvider<SubscriptionState>((ref) {
+final currentSubscriptionStreamProvider = StreamProvider<SubscriptionState>((
+  ref,
+) {
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
   if (workspaceId == null || workspaceId.isEmpty) {
     return Stream.value(SubscriptionState.free());

@@ -5,8 +5,8 @@ plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // END: FlutterFire Configuration
-    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -35,10 +35,6 @@ android {
         getByName("profile") {
             kotlin.srcDirs("src/debug/kotlin")
         }
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -82,6 +78,58 @@ android {
 
 flutter {
     source = "../.."
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+val devOnlyGeneratedPlugins = listOf(
+    "flutter_native_splash",
+    "integration_test",
+)
+
+fun sanitizeReleaseGeneratedPluginRegistrant() {
+    val registrant = layout.projectDirectory.file(
+        "src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java",
+    )
+    val file = registrant.asFile
+    if (!file.exists()) {
+        return
+    }
+
+    var content = file.readText()
+    devOnlyGeneratedPlugins.forEach { pluginName ->
+        val pattern = Regex(
+            """(?s)\n    try \{\R      flutterEngine\.getPlugins\(\)\.add\(new [^;]+;\R    \} catch \(Exception e\) \{\R      Log\.e\(TAG, "Error registering plugin $pluginName, [^"]+", e\);\R    \}""",
+        )
+        content = content.replace(pattern, "")
+    }
+    file.writeText(content)
+}
+
+tasks.register("sanitizeReleaseGeneratedPluginRegistrant") {
+    doLast {
+        sanitizeReleaseGeneratedPluginRegistrant()
+    }
+}
+
+tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
+    dependsOn("sanitizeReleaseGeneratedPluginRegistrant")
+    doFirst {
+        sanitizeReleaseGeneratedPluginRegistrant()
+    }
+}
+
+tasks.matching { it.name == "uploadCrashlyticsMappingFileRelease" }.configureEach {
+    onlyIf {
+        providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING")
+            .map { it.equals("true", ignoreCase = true) }
+            .orElse(false)
+            .get()
+    }
 }
 
 dependencies {

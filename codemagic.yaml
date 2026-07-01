@@ -9,95 +9,6 @@
 # 3. Set APP_ID below to the numeric App Store Connect app ID for Buildozer.
 
 workflows:
-  android_release_artifact:
-    name: Android Release Artifact
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-      android_signing:
-        - buildozer_upload_keystore
-      vars:
-        PACKAGE_NAME: com.ahmed.buildozer
-        BUILD_NAME_PREFIX: 1.0
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-
-      - name: Flutter analyze
-        script: flutter analyze
-
-      - name: Build signed Android app bundle
-        script: |
-          flutter build appbundle --release \
-            --build-name="${BUILD_NAME_PREFIX}.${BUILD_NUMBER}" \
-            --build-number="${BUILD_NUMBER}"
-
-    artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
-
-  android_google_play_internal:
-    name: Android Google Play Internal
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      groups:
-        - google_play
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-      android_signing:
-        - buildozer_upload_keystore
-      vars:
-        PACKAGE_NAME: com.ahmed.buildozer
-        GOOGLE_PLAY_TRACK: internal
-        BUILD_NAME_PREFIX: 1.0
-
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-
-      - name: Flutter analyze
-        script: flutter analyze
-
-      - name: Build signed Android app bundle
-        script: |
-          LATEST_GOOGLE_PLAY_BUILD_NUMBER=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" --tracks="$GOOGLE_PLAY_TRACK" || true)
-          if [ -z "$LATEST_GOOGLE_PLAY_BUILD_NUMBER" ]; then
-            PROJECT_BUILD_NUMBER="$BUILD_NUMBER"
-          else
-            PROJECT_BUILD_NUMBER=$((LATEST_GOOGLE_PLAY_BUILD_NUMBER + 1))
-          fi
-
-          flutter build appbundle --release \
-            --build-name="${BUILD_NAME_PREFIX}.${PROJECT_BUILD_NUMBER}" \
-            --build-number="${PROJECT_BUILD_NUMBER}"
-
-    artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
-
-    publishing:
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
   ios_release_artifact:
     name: iOS Release Artifact
     max_build_duration: 120
@@ -109,12 +20,13 @@ workflows:
         bundle_identifier: com.ahmed.buildozer
       vars:
         APP_ID: "6760477814"
+        FIREBASE_IOS_APP_ID: "1:549941684400:ios:33da1c501d6650638e7375"
       flutter: stable
-      xcode: latest
+      xcode: 26.4
       cocoapods: default
 
     integrations:
-      app_store_connect: Buildozer Tracker
+      app_store_connect: Buildozer
 
     cache:
       cache_paths:
@@ -126,6 +38,11 @@ workflows:
         script: |
           echo "Setting up code signing for iOS release artifact..."
           xcode-project use-profiles
+
+      - name: Verify Xcode SDK
+        script: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E "iphoneos|iphonesimulator"
 
       - name: Get Flutter packages
         script: flutter pub get
@@ -156,8 +73,24 @@ workflows:
             --build-number=$NEXT_BUILD \
             --export-options-plist=/Users/builder/export_options.plist
 
+      - name: Upload dSYMs to Firebase Crashlytics
+        script: |
+          echo "Uploading dSYMs to Firebase Crashlytics..."
+          DSYM_DIR="build/ios/archive/Runner.xcarchive/dSYMs"
+          if [ -d "$DSYM_DIR" ]; then
+            find "$DSYM_DIR" -name "*.dSYM" | while read dsym; do
+              echo "Uploading: $dsym"
+              ios/Pods/FirebaseCrashlytics/upload-symbols \
+                -gsp ios/Runner/GoogleService-Info.plist \
+                -p ios "$dsym"
+            done
+          else
+            echo "dSYM directory not found at $DSYM_DIR — skipping upload"
+          fi
+
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM.zip
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 
@@ -172,12 +105,13 @@ workflows:
         bundle_identifier: com.ahmed.buildozer
       vars:
         APP_ID: "6760477814"
+        FIREBASE_IOS_APP_ID: "1:549941684400:ios:33da1c501d6650638e7375"
       flutter: stable
-      xcode: latest
+      xcode: 26.4
       cocoapods: default
 
     integrations:
-      app_store_connect: Buildozer Tracker
+      app_store_connect: Buildozer
 
     cache:
       cache_paths:
@@ -185,6 +119,11 @@ workflows:
         - $HOME/Library/Caches/CocoaPods
 
     scripts:
+      - name: Verify Xcode SDK
+        script: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E "iphoneos|iphonesimulator"
+          
       - name: Set up code signing
         script: |
           echo "Setting up code signing for TestFlight build..."
@@ -217,10 +156,27 @@ workflows:
           flutter build ipa --release \
             --build-name=1.0.0 \
             --build-number=$NEXT_BUILD \
+            --dart-define=SHOW_CRASHLYTICS_TEST=true \
             --export-options-plist=/Users/builder/export_options.plist
+
+      - name: Upload dSYMs to Firebase Crashlytics
+        script: |
+          echo "Uploading dSYMs to Firebase Crashlytics..."
+          DSYM_DIR="build/ios/archive/Runner.xcarchive/dSYMs"
+          if [ -d "$DSYM_DIR" ]; then
+            find "$DSYM_DIR" -name "*.dSYM" | while read dsym; do
+              echo "Uploading: $dsym"
+              ios/Pods/FirebaseCrashlytics/upload-symbols \
+                -gsp ios/Runner/GoogleService-Info.plist \
+                -p ios "$dsym"
+            done
+          else
+            echo "dSYM directory not found at $DSYM_DIR — skipping upload"
+          fi
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM.zip
       - /tmp/xcodebuild_logs/*.log
       - flutter_drive.log
 

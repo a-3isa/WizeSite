@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +19,9 @@ class ExpenseSaveService {
     required String transcript,
     required String source,
     required String storagePath,
+    String? entityId,
+    String? entityName,
+    List<Attachment>? attachments,
   }) async {
     final result = await _mutationService.createManualExpense(
       workspaceId: workspaceId,
@@ -29,11 +33,16 @@ class ExpenseSaveService {
       date: date,
       notes: notes,
       supplierName: '',
+      entityId: entityId,
+      entityName: entityName,
       paymentMethod: '',
       inputMethod: 'voice',
       transcript: transcript,
       source: source,
       storagePath: storagePath,
+      attachments: attachments
+          ?.map((attachment) => attachment.toMap())
+          .toList(),
     );
     return result.id;
   }

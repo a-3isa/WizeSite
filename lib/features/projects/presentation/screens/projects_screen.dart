@@ -4,9 +4,13 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -53,8 +57,13 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;
+  bool _isRefreshing = false;
   bool _hasMore = true;
   String? _workspaceId;
+  String? _statusFilter;
+  ProjectBrowseSort _sort = ProjectBrowseSort.recent;
+  bool _canAccessFinancial = false;
+  bool _roleResolved = false;
 
   @override
   void initState() {
@@ -79,6 +88,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         unawaited(_refreshIfCurrentRoute());
       },
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
@@ -120,7 +130,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool preserveVisibleProjects = true}) async {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     _workspaceId = workspaceId;
     if (workspaceId == null || workspaceId.isEmpty) {
@@ -134,37 +144,27 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _hasMore = false;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
       return;
     }
 
-    final provisioned = ref.read(projectsProvider).valueOrNull;
-    if (provisioned != null && mounted) {
-      setState(() {
-        _projects
-          ..clear()
-          ..addAll(provisioned);
-        _cursor = null;
-        _error = null;
-        _hasMore = false;
-        _isLoadingInitial = false;
-        _isLoadingMore = false;
-      });
-      return;
-    }
-
+    final showInitialLoading = !preserveVisibleProjects || _projects.isEmpty;
     if (mounted) {
       setState(() {
-        _projects.clear();
+        if (showInitialLoading) {
+          _projects.clear();
+        }
         _cursor = null;
         _error = null;
         _hasMore = true;
-        _isLoadingInitial = true;
+        _isLoadingInitial = showInitialLoading;
         _isLoadingMore = false;
+        _isRefreshing = !showInitialLoading;
       });
     }
 
-    await _loadMore(reset: true);
+    await _loadMore(reset: true, showInitialLoading: showInitialLoading);
   }
 
   Future<void> _refreshIfCurrentRoute() async {
@@ -178,12 +178,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     await _refresh();
   }
 
-  Future<void> _loadMore({bool reset = false}) async {
+  Future<void> _loadMore({
+    bool reset = false,
+    bool showInitialLoading = true,
+  }) async {
     final workspaceId = _workspaceId ?? ref.read(activeWorkspaceIdProvider);
     if (workspaceId == null || workspaceId.isEmpty) {
       return;
     }
-    if (!reset && (_isLoadingInitial || _isLoadingMore || !_hasMore)) {
+    if (!reset &&
+        (_isLoadingInitial || _isLoadingMore || _isRefreshing || !_hasMore)) {
       return;
     }
 
@@ -191,8 +195,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       setState(() {
         _error = null;
         if (reset) {
-          _isLoadingInitial = true;
+          _isLoadingInitial = showInitialLoading;
           _isLoadingMore = false;
+          _isRefreshing = !showInitialLoading;
         } else {
           _isLoadingMore = true;
         }
@@ -200,13 +205,25 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
 
     try {
-      final page = await ref
-          .read(projectRepositoryProvider)
-          .fetchProjectsPage(
-            workspaceId,
-            cursor: reset ? null : _cursor,
-            pageSize: _pageSize,
-          );
+      final repository = ref.read(projectRepositoryProvider);
+      final page = repository is ProjectBrowseRepository
+          ? await (repository as ProjectBrowseRepository)
+                .fetchProjectBrowsePage(
+                  ProjectBrowseQuery(
+                    workspaceId: workspaceId,
+                    status: _statusFilter,
+                    sort: _canAccessFinancial || !_sort.isFinancial
+                        ? _sort
+                        : ProjectBrowseSort.recent,
+                    pageSize: _pageSize,
+                  ),
+                  cursor: reset ? null : _cursor,
+                )
+          : await repository.fetchProjectsPage(
+              workspaceId,
+              cursor: reset ? null : _cursor,
+              pageSize: _pageSize,
+            );
       if (!mounted) {
         return;
       }
@@ -223,6 +240,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _error = null;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -232,6 +250,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         _error = error;
         _isLoadingInitial = false;
         _isLoadingMore = false;
+        _isRefreshing = false;
       });
     }
   }
@@ -243,7 +262,25 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     }
   }
 
-  Future<void> _archiveProject(Project project) async {
+  Future<void> _archiveProject(Project project, AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.t('archive')),
+        content: Text(l10n.t('confirmArchiveProject')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.t('archive')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     await ref.read(projectRepositoryProvider).archiveProject(project.id);
     if (!mounted) {
       return;
@@ -254,26 +291,53 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   }
 
   Future<void> _deleteProject(Project project, AppLocalizations l10n) async {
+    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.t('delete')),
-        content: Text(l10n.t('confirmDeleteProjectCascade')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.t('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              l10n.t('delete'),
-              style: const TextStyle(color: AppColors.danger),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final matches = controller.text.trim() == project.name.trim();
+          return AlertDialog(
+            title: Text(l10n.t('delete')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.t('confirmDeleteProjectCascade')),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.t('deleteProjectTypeNameToConfirm'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: InputDecoration(hintText: project.name),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+              ],
             ),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.t('cancel')),
+              ),
+              TextButton(
+                onPressed: matches ? () => Navigator.pop(context, true) : null,
+                child: Text(
+                  l10n.t('delete'),
+                  style: TextStyle(
+                    color: matches ? AppColors.danger : AppColors.textBody,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
+    controller.dispose();
     if (confirmed != true) {
       return;
     }
@@ -304,30 +368,38 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(projectsProvider, (_, next) {
-      if (!mounted) return;
-      final items = next.valueOrNull;
-      if (items != null) {
-        setState(() {
-          _projects
-            ..clear()
-            ..addAll(items);
-          _isLoadingInitial = false;
-          _hasMore = false;
-        });
-      }
-    });
     final l10n = AppLocalizations.of(context);
+    final roleAsync = ref.watch(currentAccountingRoleProvider);
+    final canAccessFinancial = roleAsync.value?.canAccessAccounting == true;
+    if (roleAsync.hasValue &&
+        (!_roleResolved || _canAccessFinancial != canAccessFinancial)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _roleResolved = true;
+          _canAccessFinancial = canAccessFinancial;
+          if (!canAccessFinancial && _sort.isFinancial) {
+            _sort = ProjectBrowseSort.recent;
+          }
+        });
+        unawaited(_refresh());
+      });
+    }
     final filtered = _filteredProjects();
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.t('projects')),
         actions: [
+          if (_canAccessFinancial)
+            IconButton(
+              tooltip: l10n.t('reports'),
+              onPressed: () => context.push(AppRoutes.reportsPath()),
+              icon: const Icon(Icons.assessment_outlined),
+            ),
           IconButton(
             onPressed: () => context.push(AppRoutes.archivedProjects),
             icon: const Icon(Icons.archive_outlined),
@@ -347,15 +419,39 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: TextField(
+              child: AppSearchField(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: l10n.t('search'),
-                  prefixIcon: const Icon(Icons.search),
-                ),
+                labelText: l10n.t('search'),
               ),
             ),
             const SizedBox(height: 12),
+            _ProjectBrowseControls(
+              status: _statusFilter,
+              sort: _sort,
+              canAccessFinancial: _canAccessFinancial,
+              l10n: l10n,
+              onStatusChanged: (value) {
+                setState(() => _statusFilter = value);
+                unawaited(_refresh(preserveVisibleProjects: false));
+              },
+              onSortChanged: (value) {
+                setState(() => _sort = value);
+                unawaited(_refresh(preserveVisibleProjects: false));
+              },
+            ),
+            if (_roleResolved && !_canAccessFinancial)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(l10n.t('projectFinancialAccessRestricted')),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
@@ -376,7 +472,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     String locale,
   ) {
     if (_isLoadingInitial && _projects.isEmpty) {
-      return const SizedBox.shrink();
+      return ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 24),
+          AppLoadingSkeleton(lineCount: 6),
+        ],
+      );
     }
 
     if (_error != null && _projects.isEmpty) {
@@ -387,19 +490,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(
-                    _error.toString(),
-                    style: const TextStyle(color: AppColors.danger),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('retry')),
-                  ),
-                ],
+              child: AppRecoverableError(
+                message: appErrorMessage(l10n, _error),
+                onRetry: _refresh,
               ),
             ),
           ),
@@ -497,23 +590,23 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Icon(
-                                Icons.person_outline,
-                                size: 14,
-                                color: AppColors.textBody,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  project.clientName,
-                                  style: const TextStyle(
-                                    color: AppColors.textBody,
-                                    fontSize: 13,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
+                              // const Icon(
+                              //   Icons.person_outline,
+                              //   size: 14,
+                              //   color: AppColors.textBody,
+                              // ),
+                              // const SizedBox(width: 4),
+                              // Expanded(
+                              //   child: Text(
+                              //     project.clientName,
+                              //     style: const TextStyle(
+                              //       color: AppColors.textBody,
+                              //       fontSize: 13,
+                              //     ),
+                              //     overflow: TextOverflow.ellipsis,
+                              //   ),
+                              // ),
+                              // const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
@@ -538,42 +631,69 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                               ),
                             ],
                           ),
+                          if (_canAccessFinancial &&
+                              project.budgetLimit != null &&
+                              project.budgetLimit! > 0) ...[
+                            const SizedBox(height: 8),
+                            _BudgetBar(
+                              spent: project.totalExpenses,
+                              budget: project.budgetLimit!,
+                              currency: currency,
+                              locale: locale,
+                              l10n: l10n,
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          Formatters.money(
-                            project.netProfit,
-                            currencyCode: currency,
-                            locale: locale,
+                    if (_canAccessFinancial) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                positiveProfit
+                                    ? Icons.trending_up
+                                    : Icons.trending_down,
+                                size: 18,
+                                color: profitColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                Formatters.money(
+                                  project.netProfit,
+                                  currencyCode: currency,
+                                  locale: locale,
+                                ),
+                                style: TextStyle(
+                                  color: profitColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
-                          style: TextStyle(
-                            color: profitColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          const SizedBox(height: 4),
+                          Text(
+                            positiveProfit ? l10n.t('profit') : l10n.t('loss'),
+                            style: const TextStyle(
+                              color: AppColors.textBody,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          positiveProfit ? l10n.t('profit') : l10n.t('loss'),
-                          style: const TextStyle(
-                            color: AppColors.textBody,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     PopupMenuButton<String>(
                       onSelected: (value) async {
                         if (value == 'delete') {
                           await _deleteProject(project, l10n);
                           return;
                         }
-                        await _archiveProject(project);
+                        await _archiveProject(project, l10n);
                       },
                       itemBuilder: (context) => [
                         PopupMenuItem(
@@ -612,6 +732,196 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _ProjectBrowseControls extends StatelessWidget {
+  const _ProjectBrowseControls({
+    required this.status,
+    required this.sort,
+    required this.canAccessFinancial,
+    required this.l10n,
+    required this.onStatusChanged,
+    required this.onSortChanged,
+  });
+
+  final String? status;
+  final ProjectBrowseSort sort;
+  final bool canAccessFinancial;
+  final AppLocalizations l10n;
+  final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<ProjectBrowseSort> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final statuses = <(String?, String)>[
+      (null, l10n.t('allStatuses')),
+      ('active', l10n.projectStatusLabel('active')),
+      ('completed', l10n.projectStatusLabel('completed')),
+      ('paused', l10n.projectStatusLabel('paused')),
+    ];
+    final sorts = <(ProjectBrowseSort, String)>[
+      (ProjectBrowseSort.recent, l10n.t('projectSortRecent')),
+      (ProjectBrowseSort.name, l10n.t('projectSortName')),
+      if (canAccessFinancial) ...[
+        (ProjectBrowseSort.highestExpense, l10n.t('projectSortHighestExpense')),
+        (ProjectBrowseSort.highestIncome, l10n.t('projectSortHighestIncome')),
+        (ProjectBrowseSort.highestNet, l10n.t('projectSortHighestNet')),
+      ],
+    ];
+
+    final selectedStatus = statuses.firstWhere((item) => item.$1 == status).$2;
+    final selectedSort = sorts.firstWhere((item) => item.$1 == sort).$2;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ProjectMenuButton<String?>(
+              key: const Key('qa_projects_filter'),
+              icon: Icons.filter_list,
+              label: selectedStatus,
+              items: statuses,
+              value: status,
+              onSelected: onStatusChanged,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ProjectMenuButton<ProjectBrowseSort>(
+              key: const Key('qa_projects_sort'),
+              icon: Icons.sort,
+              label: selectedSort,
+              items: sorts,
+              value: sort,
+              onSelected: onSortChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectMenuButton<T> extends StatelessWidget {
+  const _ProjectMenuButton({
+    required super.key,
+    required this.icon,
+    required this.label,
+    required this.items,
+    required this.value,
+    required this.onSelected,
+  });
+
+  final IconData icon;
+  final String label;
+  final List<(T, String)> items;
+  final T value;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<T>(
+      initialValue: value,
+      onSelected: onSelected,
+      itemBuilder: (context) => items
+          .map(
+            (item) => PopupMenuItem<T>(
+              value: item.$1,
+              child: Row(
+                children: [
+                  if (item.$1 == value) const Icon(Icons.check, size: 18),
+                  if (item.$1 == value) const SizedBox(width: 8),
+                  Text(item.$2),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.borderGrey),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Thin budget-vs-spend indicator shown on project cards when a budget is set.
+class _BudgetBar extends StatelessWidget {
+  const _BudgetBar({
+    required this.spent,
+    required this.budget,
+    required this.currency,
+    required this.locale,
+    required this.l10n,
+  });
+
+  final double spent;
+  final double budget;
+  final String currency;
+  final String locale;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = budget <= 0 ? 0.0 : spent / budget;
+    final over = ratio > 1.0;
+    final color = over
+        ? AppColors.danger
+        : ratio >= 0.75
+        ? AppColors.warning
+        : AppColors.success;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: ratio.clamp(0.0, 1.0).toDouble(),
+            minHeight: 6,
+            backgroundColor: AppColors.surfaceGrey,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                '${Formatters.money(spent, currencyCode: currency, locale: locale)} / ${Formatters.money(budget, currencyCode: currency, locale: locale)}',
+                style: const TextStyle(fontSize: 11, color: AppColors.textBody),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              over
+                  ? l10n.t('overBudget')
+                  : '${(ratio * 100).round()}% ${l10n.t('budgetUsed')}',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

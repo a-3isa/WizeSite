@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
 
 class GoogleAuthService {
@@ -69,7 +70,23 @@ class GoogleAuthService {
     );
     final serverClientId = kIsWeb ? null : (rawId.isEmpty ? null : rawId);
 
+    // Apple platforms need the iOS OAuth client ID. The plugin would normally
+    // read it from a bundled GoogleService-Info.plist, but that file is not in
+    // the app bundle (Firebase initializes from firebase_options.dart instead),
+    // so authenticate() fails immediately on iOS unless we pass it explicitly.
+    final rawClientId = const String.fromEnvironment(
+      'GOOGLE_IOS_CLIENT_ID',
+      defaultValue:
+          '549941684400-hjq57nnh3rrmavc1fgsfrjdebdqd271h.apps.googleusercontent.com',
+    );
+    final isApple =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS);
+    final clientId = (isApple && rawClientId.isNotEmpty) ? rawClientId : null;
+
     await _googleSignIn.initialize(
+      clientId: clientId,
       serverClientId: serverClientId,
     );
     _initialized = true;

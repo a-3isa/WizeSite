@@ -1,10 +1,7 @@
 import 'package:buildtrack_app/core/services/callable_client.dart';
 
 class SyncErrorDetails {
-  const SyncErrorDetails({
-    required this.message,
-    this.code,
-  });
+  const SyncErrorDetails({required this.message, this.code});
 
   final String message;
   final String? code;
@@ -30,15 +27,13 @@ class SyncErrorClassifier {
     }
 
     final raw = error.toString().trim();
-    return SyncErrorDetails(
-      message: raw,
-      code: _extractCodeFromText(raw),
-    );
+    return SyncErrorDetails(message: raw, code: _extractCodeFromText(raw));
   }
 
   static bool isTerminal(Object error) {
     final details = detailsFrom(error);
-    return isTerminalCode(details.code) || _messageImpliesTerminal(details.message);
+    return isTerminalCode(details.code) ||
+        _messageImpliesTerminal(details.message);
   }
 
   static bool isTerminalCode(String? code) {
@@ -55,10 +50,7 @@ class SyncErrorClassifier {
     }
   }
 
-  static SyncFailureCategory categoryFrom({
-    String? code,
-    String? message,
-  }) {
+  static SyncFailureCategory categoryFrom({String? code, String? message}) {
     final normalizedCode = _normalizeCode(code);
     final normalizedMessage = (message ?? '').toLowerCase();
 
@@ -83,8 +75,7 @@ class SyncErrorClassifier {
       }
       return SyncFailureCategory.permission;
     }
-    if (normalizedCode == 'invalid-argument' ||
-        normalizedCode == 'not-found') {
+    if (normalizedCode == 'invalid-argument' || normalizedCode == 'not-found') {
       return SyncFailureCategory.invalidTarget;
     }
     return SyncFailureCategory.generic;
@@ -99,7 +90,10 @@ class SyncErrorClassifier {
   }
 
   static String? _extractCodeFromText(String text) {
-    final match = RegExp(r'\[([a-z0-9_-]+)\]', caseSensitive: false).firstMatch(text);
+    final match = RegExp(
+      r'\[([a-z0-9_-]+)\]',
+      caseSensitive: false,
+    ).firstMatch(text);
     return _normalizeCode(match?.group(1));
   }
 

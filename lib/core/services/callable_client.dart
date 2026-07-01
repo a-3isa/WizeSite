@@ -52,14 +52,20 @@ class CallableClient {
       if (kDebugMode) {
         debugPrint(
           '[callable.error] function=$functionName '
-          'code=${error.code} message=${error.message} '
-          'details=${error.details}',
+          'code=${error.code}',
         );
       }
       await _telemetry.log('callable.error', {
         'function': functionName,
         'code': error.code,
       });
+      if (error.code != 'unauthenticated') {
+        await _telemetry.recordError(
+          error,
+          StackTrace.current,
+          reason: 'callable.$functionName',
+        );
+      }
       if (error.code == 'unauthenticated') {
         final refreshedUser = await _authenticatedUser();
         if (refreshedUser == null) {
@@ -84,14 +90,18 @@ class CallableClient {
           if (kDebugMode) {
             debugPrint(
               '[callable.retry_error] function=$functionName '
-              'code=${retryError.code} message=${retryError.message} '
-              'details=${retryError.details}',
+              'code=${retryError.code}',
             );
           }
           await _telemetry.log('callable.retry_error', {
             'function': functionName,
             'code': retryError.code,
           });
+          await _telemetry.recordError(
+            retryError,
+            StackTrace.current,
+            reason: 'callable.$functionName.retry',
+          );
           if (retryError.code == 'unauthenticated' &&
               httpFunctionName != null &&
               httpFunctionName.isNotEmpty) {
@@ -146,14 +156,13 @@ class CallableClient {
       appCheckToken = await _appCheck.getToken(true);
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('$functionName App Check refresh failed: $error');
+        debugPrint('$functionName App Check refresh failed');
       }
     }
 
     if (kDebugMode) {
       debugPrint(
         '$functionName session refresh: '
-        'user=${user.uid}, '
         'appCheckReady=${appCheckToken != null && appCheckToken.isNotEmpty}',
       );
     }
@@ -198,7 +207,7 @@ class CallableClient {
       }
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('$functionName HTTP App Check fetch failed: $error');
+        debugPrint('$functionName HTTP App Check fetch failed');
       }
     }
 
@@ -214,7 +223,7 @@ class CallableClient {
     if (kDebugMode) {
       debugPrint(
         '[callable.http] function=$functionName '
-        'status=${response.statusCode} body=${response.body}',
+        'status=${response.statusCode}',
       );
     }
 

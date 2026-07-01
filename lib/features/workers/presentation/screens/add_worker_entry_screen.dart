@@ -1,20 +1,30 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 class AddWorkerEntryScreen extends ConsumerStatefulWidget {
   const AddWorkerEntryScreen({
@@ -40,6 +50,8 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
   String? _workerId;
   String? _projectId;
   DateTime _date = DateTime.now();
+  final _pickedFiles = <PlatformFile>[];
+  final _attachments = <Attachment>[];
   bool _loading = false;
   bool _prefilling = false;
   String? _error;
@@ -72,10 +84,18 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
         setState(() {
           _workerId = entry.workerId;
           _projectId = entry.projectId;
-          _daysController.text = entry.daysWorked.toStringAsFixed(2);
-          _totalWageController.text = entry.totalCost.toStringAsFixed(2);
+          _daysController.text = ThousandsSeparatorInputFormatter.formatInitial(
+            entry.daysWorked.toStringAsFixed(2),
+          );
+          _totalWageController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                entry.totalCost.toStringAsFixed(2),
+              );
           _notesController.text = entry.notes;
           _date = entry.date;
+          _attachments
+            ..clear()
+            ..addAll(entry.attachments);
         });
       }
     } catch (_) {
@@ -99,6 +119,25 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAttachments() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: AttachmentValidationService.allowedExtensionsForPicker,
+    );
+    if (result == null) {
+      return;
+    }
+    final validation = AttachmentValidationService.validatePickedFiles(
+      result.files,
+    );
+    setState(() {
+      _pickedFiles.addAll(validation.validFiles);
+      if (validation.invalidMessages.isNotEmpty) {
+        _error = validation.invalidMessages.join('\n');
+      }
+    });
+  }
+
   String _fallbackRoute() {
     if (_workerId != null && _workerId!.isNotEmpty && _workerId != 'new') {
       return AppRoutes.workerDetailPath(_workerId!);
@@ -110,14 +149,14 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
-    final days = double.tryParse(_daysController.text.trim());
-    final totalWage = double.tryParse(_totalWageController.text.trim());
+    final days = NumberParser.parseDouble(_daysController.text);
+    final totalWage = NumberParser.parseDouble(_totalWageController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
     }
     final selectedWorker = _selectedWorker(
-      ref.read(workersProvider).valueOrNull ?? const [],
+      ref.read(workersProvider).value ?? const [],
     );
     if (_workerId == null || _projectId == null || selectedWorker == null) {
       return;
@@ -125,9 +164,9 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
     final billedByProject = selectedWorker.billingType == 'project';
     final invalidDaily =
         !billedByProject &&
-        (days == null || days <= 0 || selectedWorker.dailyWage <= 0);
+        (days == null || days <= 0 || selectedWorker.dailyWage < 0);
     final invalidProject =
-        billedByProject && (totalWage == null || totalWage <= 0);
+        billedByProject && (totalWage == null || totalWage < 0);
     if (invalidDaily || invalidProject) {
       setState(
         () => _error = billedByProject
@@ -142,9 +181,35 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
       _error = null;
     });
     try {
+      final attachments = <Attachment>[];
+      for (final file in _pickedFiles) {
+        final path = file.path;
+        if (path == null) {
+          continue;
+        }
+        final uploaded = await ref
+            .read(storageUploadServiceProvider)
+            .uploadAttachment(
+              userId: userId,
+              localFilePath: path,
+              fileName: file.name,
+            );
+        attachments.add(
+          Attachment(
+            id: const Uuid().v4(),
+            fileName: uploaded.fileName,
+            storagePath: uploaded.storagePath,
+            contentType: uploaded.contentType,
+            uploadedAt: DateTime.now(),
+            downloadUrl: uploaded.downloadUrl,
+            size: uploaded.size,
+          ),
+        );
+      }
+      attachments.addAll(_attachments);
       var queued = false;
       if (widget.entryId == null) {
-        final projects = ref.read(projectsProvider).valueOrNull ?? [];
+        final projects = ref.read(projectsProvider).value ?? [];
         final matches = projects.where((project) => project.id == _projectId);
         final selectedProject = matches.isEmpty ? null : matches.first;
         final result = await ref
@@ -160,6 +225,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
+              attachments: attachments,
               projectTotalExpensesBefore: selectedProject?.totalExpenses,
             );
         queued = result.queued;
@@ -175,6 +241,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   : selectedWorker.dailyWage,
               date: _date,
               notes: _notesController.text.trim(),
+              attachments: attachments,
             );
       }
       if (mounted) {
@@ -225,11 +292,11 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
           fallbackRoute: _fallbackRoute(),
         ),
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  workersAsync.when(
+                  workersAsync.whenStale(
                     data: (workers) {
                       final selectedWorkerId = _resolvedWorkerId(workers);
                       final fixedWorkerId = widget.workerId == 'new'
@@ -255,11 +322,14 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                             setState(() => _workerId = value),
                       );
                     },
-                    error: (e, _) => Text(e.toString()),
-                    loading: () => const SizedBox.shrink(),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
+                    loading: () => const AppLoadingSkeleton(
+                      lineCount: 2,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  projectsAsync.when(
+                  projectsAsync.whenStale(
                     data: (projects) => BelowDropdownField<String>(
                       label: l10n.t('project'),
                       value: _projectId,
@@ -271,14 +341,17 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                           .toList(),
                       onSelected: (value) => setState(() => _projectId = value),
                     ),
-                    error: (e, _) => Text(e.toString()),
-                    loading: () => const SizedBox.shrink(),
+                    error: (e, _) => Text(appErrorMessage(l10n, e)),
+                    loading: () => const AppLoadingSkeleton(
+                      lineCount: 2,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Builder(
                     builder: (context) {
                       final worker = _selectedWorker(
-                        workersAsync.valueOrNull ?? const [],
+                        workersAsync.value ?? const [],
                       );
                       if (worker == null) {
                         return const SizedBox.shrink();
@@ -286,21 +359,31 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                       if (worker.billingType == 'project') {
                         return TextField(
                           controller: _totalWageController,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: const [
+                            ThousandsSeparatorInputFormatter(),
+                          ],
                           decoration: InputDecoration(
                             labelText: l10n.t('totalWage'),
                           ),
                         );
                       }
                       final days =
-                          double.tryParse(_daysController.text.trim()) ?? 0;
+                          NumberParser.parseDouble(_daysController.text) ?? 0;
                       final total = days * worker.dailyWage;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           TextField(
                             controller: _daysController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: const [
+                              ThousandsSeparatorInputFormatter(),
+                            ],
                             onChanged: (_) => setState(() {}),
                             decoration: InputDecoration(
                               labelText: l10n.t('daysWorked'),
@@ -355,6 +438,84 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                     controller: _notesController,
                     maxLines: 3,
                     decoration: InputDecoration(labelText: l10n.t('notes')),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.t('attachments'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_attachments.isNotEmpty)
+                    Column(
+                      children: _attachments
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(entry.value.id),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _attachments.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.attach_file),
+                                title: Text(entry.value.fileName),
+                                subtitle: Text(entry.value.storagePath),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (_pickedFiles.isNotEmpty)
+                    Column(
+                      children: _pickedFiles
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => Dismissible(
+                              key: ValueKey(
+                                entry.value.path ?? entry.value.name,
+                              ),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) {
+                                setState(
+                                  () => _pickedFiles.removeAt(entry.key),
+                                );
+                              },
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                child: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.description),
+                                title: Text(entry.value.name),
+                                subtitle: Text(entry.value.path ?? ''),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  FilledButton.tonal(
+                    onPressed: _loading ? null : _pickAttachments,
+                    child: Text(l10n.t('selectAttachments')),
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)

@@ -6,13 +6,16 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
+import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -20,6 +23,9 @@ class _MockUser extends Mock implements User {}
 
 class _FakeUserSettingsRepository extends Fake
     implements UserSettingsRepository {
+  _FakeUserSettingsRepository({this.failCurrencyUpdates = false});
+
+  final bool failCurrencyUpdates;
   final List<String> currencyUpdates = [];
   final List<bool> riskAlertUpdates = [];
 
@@ -34,6 +40,9 @@ class _FakeUserSettingsRepository extends Fake
   @override
   Future<void> updateCurrency(String userId, String currency) async {
     currencyUpdates.add(currency);
+    if (failCurrencyUpdates) {
+      throw Exception('network exploded');
+    }
   }
 
   @override
@@ -73,8 +82,14 @@ GoRouter _router() {
         builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
       ),
       GoRoute(
-        path: '/settings/team',
-        builder: (context, state) => const Scaffold(body: SizedBox.shrink()),
+        path: '/settings/workspace',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Workspace Route'))),
+      ),
+      GoRoute(
+        path: '/settings/sync',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Sync Status Route'))),
       ),
       GoRoute(
         path: '/subscription/plans',
@@ -93,6 +108,16 @@ GoRouter _router() {
 }
 
 void main() {
+  setUp(() {
+    PackageInfo.setMockInitialValues(
+      appName: 'Buildozer',
+      packageName: 'com.example.buildozer',
+      version: '1.2.3',
+      buildNumber: '45',
+      buildSignature: '',
+    );
+  });
+
   testWidgets(
     'SettingsScreen shows persisted settings and saves currency and risk alerts',
     (tester) async {
@@ -112,6 +137,7 @@ void main() {
         photoUrl: '',
         defaultCurrency: 'USD',
         riskAlertsEnabled: false,
+        setupCompleted: true,
       );
 
       await tester.pumpWidget(
@@ -119,6 +145,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),
@@ -132,6 +168,25 @@ void main() {
             currentSubscriptionStreamProvider.overrideWith(
               (ref) => Stream.value(SubscriptionState.free()),
             ),
+            currentUsageProvider.overrideWith(
+              (ref) => Stream.value(
+                const UsageSnapshot(
+                  periodKey: '202606',
+                  activeProjects: 1,
+                  expensesCount: 7,
+                  paymentsCount: 3,
+                  workerEntriesCount: 2,
+                  memberCount: 1,
+                  limits: PlanLimits(
+                    activeProjects: 1,
+                    expensesPerMonth: 30,
+                    paymentsPerMonth: 30,
+                    workerEntriesPerMonth: 30,
+                    teamMembers: 1,
+                  ),
+                ),
+              ),
+            ),
           ],
           child: MaterialApp.router(routerConfig: _router()),
         ),
@@ -142,6 +197,10 @@ void main() {
       expect(find.text('Jane Builder'), findsOneWidget);
       expect(find.text('jane@example.com'), findsOneWidget);
       expect(find.text('USD'), findsWidgets);
+      expect(find.text('Workspace'), findsWidgets);
+      expect(find.text('Acme Sites'), findsOneWidget);
+      expect(find.text('Manage Team'), findsNothing);
+      expect(find.text('Team Members'), findsNothing);
 
       await tester.tap(find.byType(BelowDropdownField<String>));
       await tester.pumpAndSettle();
@@ -154,6 +213,188 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fakeSettingsRepository.riskAlertUpdates, [true]);
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen exposes expanded currencies and rolls back failed saves',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeSettingsRepository = _FakeUserSettingsRepository(
+        failCurrencyUpdates: true,
+      );
+      final mockAuth = _MockFirebaseAuth();
+      final mockUser = _MockUser();
+
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockUser.displayName).thenReturn('Jane Builder');
+      when(() => mockUser.email).thenReturn('jane@example.com');
+      when(() => mockUser.photoURL).thenReturn(null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            localeControllerProvider.overrideWith(
+              (ref) => LocaleController(deviceLocale: const Locale('en')),
+            ),
+            userSettingsRepositoryProvider.overrideWithValue(
+              fakeSettingsRepository,
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(
+                const UserSettings(
+                  userId: 'user_1',
+                  fullName: 'Jane Builder',
+                  email: 'jane@example.com',
+                  photoUrl: '',
+                  defaultCurrency: 'USD',
+                  riskAlertsEnabled: true,
+                  setupCompleted: true,
+                ),
+              ),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BelowDropdownField<String>));
+      await tester.pumpAndSettle();
+
+      for (final currency in ['KWD', 'QAR', 'BHD', 'OMR', 'JOD']) {
+        expect(find.text(currency), findsOneWidget);
+      }
+
+      await tester.tap(find.text('KWD'));
+      await tester.pumpAndSettle();
+
+      expect(fakeSettingsRepository.currencyUpdates, ['KWD']);
+      expect(find.text('USD'), findsWidgets);
+      expect(
+        find.text('Could not save settings. Your previous value was restored.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'SettingsScreen shows version, help/legal links, and confirms diagnostics',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final fakeSettingsRepository = _FakeUserSettingsRepository();
+      final mockAuth = _MockFirebaseAuth();
+      final mockUser = _MockUser();
+
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockUser.displayName).thenReturn('Jane Builder');
+      when(() => mockUser.email).thenReturn('jane@example.com');
+      when(() => mockUser.photoURL).thenReturn(null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            localeControllerProvider.overrideWith(
+              (ref) => LocaleController(deviceLocale: const Locale('en')),
+            ),
+            userSettingsRepositoryProvider.overrideWithValue(
+              fakeSettingsRepository,
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(
+                UserSettings.defaults(
+                  userId: 'user_1',
+                  email: 'jane@example.com',
+                ),
+              ),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('App version'), findsOneWidget);
+      expect(find.text('1.2.3 (45)'), findsOneWidget);
+      expect(find.text('Help & Support'), findsOneWidget);
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(find.text('Terms of Service'), findsOneWidget);
+      expect(find.text('Run diagnostics'), findsOneWidget);
+      expect(find.text('Sync status'), findsOneWidget);
+
+      await tester.tap(find.text('Acme Sites'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Workspace Route'), findsOneWidget);
+
+      GoRouter.of(tester.element(find.text('Workspace Route'))).go('/settings');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.tap(find.text('Sync status'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Sync Status Route'), findsOneWidget);
+
+      GoRouter.of(
+        tester.element(find.text('Sync Status Route')),
+      ).go('/settings');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.tap(find.text('Run diagnostics'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run diagnostics?'), findsOneWidget);
+      expect(
+        find.text('This can send a diagnostic report or terminate the app.'),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel'), findsOneWidget);
     },
   );
 
@@ -180,6 +421,16 @@ void main() {
           overrides: [
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            userWorkspaceSummariesProvider.overrideWith(
+              (ref) => Stream.value(const [
+                WorkspaceSummary(
+                  id: 'workspace_1',
+                  name: 'Acme Sites',
+                  role: 'owner',
+                  isOwnedByCurrentUser: true,
+                ),
+              ]),
+            ),
             firebaseAuthProvider.overrideWithValue(mockAuth),
             localeControllerProvider.overrideWith(
               (ref) => LocaleController(deviceLocale: const Locale('en')),
@@ -192,6 +443,25 @@ void main() {
                 UserSettings.defaults(
                   userId: 'user_1',
                   email: 'jane@example.com',
+                ),
+              ),
+            ),
+            currentUsageProvider.overrideWith(
+              (ref) => Stream.value(
+                const UsageSnapshot(
+                  periodKey: '202606',
+                  activeProjects: 1,
+                  expensesCount: 7,
+                  paymentsCount: 2,
+                  workerEntriesCount: 0,
+                  memberCount: 1,
+                  limits: PlanLimits(
+                    activeProjects: 1,
+                    expensesPerMonth: 30,
+                    paymentsPerMonth: 30,
+                    workerEntriesPerMonth: 30,
+                    teamMembers: 1,
+                  ),
                 ),
               ),
             ),
@@ -210,6 +480,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Free Plan'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Monthly Usage'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Monthly Usage'), findsOneWidget);
+      expect(find.textContaining('7 / 30'), findsOneWidget);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(SettingsScreen)),
@@ -219,7 +496,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Free Plan'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsWidgets);
     },
   );
 }

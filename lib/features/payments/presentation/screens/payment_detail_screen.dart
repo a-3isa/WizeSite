@@ -1,11 +1,18 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
@@ -17,9 +24,21 @@ final paymentDetailsProvider = FutureProvider.family((ref, String paymentId) {
 });
 
 class PaymentDetailScreen extends ConsumerWidget {
-  const PaymentDetailScreen({required this.paymentId, super.key});
+  const PaymentDetailScreen({
+    required this.paymentId,
+    this.projectId,
+    super.key,
+  });
 
   final String paymentId;
+  final String? projectId;
+
+  String _fallbackRoute() {
+    if (projectId != null && projectId!.isNotEmpty) {
+      return AppRoutes.paymentsPath(projectId: projectId);
+    }
+    return AppRoutes.payments;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,17 +46,36 @@ class PaymentDetailScreen extends ConsumerWidget {
     final paymentAsync = ref.watch(paymentDetailsProvider(paymentId));
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
+
+    Future<void> openAttachment(Attachment attachment) async {
+      try {
+        final storageUploadService = ref.read(storageUploadServiceProvider);
+        final rawUrl = attachment.downloadUrl?.trim();
+        final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
+            ? rawUrl
+            : await storageUploadService.getDownloadUrl(attachment.storagePath);
+        final launched = await launchSafeExternalUrl(downloadUrl);
+        if (!launched) {
+          throw Exception('Could not open attachment.');
+        }
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
+      }
+    }
+
     return AppBackScope(
-      fallbackRoute: AppRoutes.payments,
+      fallbackRoute: _fallbackRoute(),
       child: Scaffold(
         appBar: appBackAppBar(
           context: context,
           title: l10n.t('paymentDetails'),
-          fallbackRoute: AppRoutes.payments,
+          fallbackRoute: _fallbackRoute(),
         ),
-        body: paymentAsync.when(
+        body: paymentAsync.whenStale(
           data: (payment) {
             if (payment == null) {
               return Center(child: Text(l10n.t('paymentNotFound')));
@@ -100,14 +138,44 @@ class PaymentDetailScreen extends ConsumerWidget {
                             },
                           ),
                         ),
+                        if (payment.attachments.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Attachments',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Column(
+                            children: payment.attachments
+                                .map(
+                                  (attachment) => Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      child: AttachmentTile(
+                                        attachment: attachment,
+                                        onOpen: () =>
+                                            openAttachment(attachment),
+                                        onDownload: () =>
+                                            openAttachment(attachment),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 FilledButton.tonal(
-                  onPressed: () =>
-                      context.push(AppRoutes.paymentEditPath(payment.id)),
+                  onPressed: () => context.push(
+                    AppRoutes.paymentEditPath(payment.id, projectId: projectId),
+                  ),
                   child: Text(l10n.t('edit')),
                 ),
                 const SizedBox(height: 8),
@@ -146,7 +214,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                       if (context.mounted) {
                         appNavigateBack(
                           context,
-                          fallbackRoute: AppRoutes.payments,
+                          fallbackRoute: _fallbackRoute(),
                         );
                       }
                     }
@@ -157,8 +225,9 @@ class PaymentDetailScreen extends ConsumerWidget {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

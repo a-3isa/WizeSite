@@ -39,7 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const strict_1 = __importDefault(require("node:assert/strict"));
 const node_test_1 = __importDefault(require("node:test"));
 const rules_unit_testing_1 = require("@firebase/rules-unit-testing");
-const admin = __importStar(require("firebase-admin"));
+const app_1 = require("firebase-admin/app");
+const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 function snapshotOf(data) {
@@ -84,6 +85,164 @@ function workerEntryWriteEvent(before, after, entryId = "entry_1") {
         params: { entryId },
     };
 }
+function workerAccountingWriteEvent(before, after, recordId = "worker_record_1") {
+    return {
+        data: {
+            before: snapshotOf(before),
+            after: snapshotOf(after),
+        },
+        params: { recordId },
+    };
+}
+(0, node_test_1.default)("summary builder maintains project, weekly, entity, and category payloads", async () => {
+    const { buildAccountingSummaryPayloads } = await Promise.resolve().then(() => __importStar(require("./index")));
+    const now = new Date(Date.UTC(2026, 4, 28, 10));
+    const monday = new Date(Date.UTC(2026, 4, 25, 9));
+    const previousWeek = new Date(Date.UTC(2026, 4, 18, 9));
+    const summaries = buildAccountingSummaryPayloads({
+        workspaceId: "workspace_1",
+        projectId: "project_1",
+        now,
+        expenses: [
+            {
+                id: "expense_1",
+                workspaceId: "workspace_1",
+                projectId: "project_1",
+                entityId: "supplier_1",
+                entityName: "Steel Supplier",
+                entityType: "supplier",
+                category: "materials",
+                amount: 200,
+                date: firestore_1.Timestamp.fromDate(now),
+                attachments: [{ id: "attachment_1" }],
+            },
+            {
+                id: "expense_2",
+                workspaceId: "workspace_1",
+                projectId: "project_1",
+                entityName: "Equipment Rental",
+                entityType: "equipment",
+                category: "equipment",
+                amount: 50,
+                date: firestore_1.Timestamp.fromDate(previousWeek),
+            },
+        ],
+        payments: [
+            {
+                id: "payment_1",
+                workspaceId: "workspace_1",
+                projectId: "project_1",
+                entityId: "client_1",
+                entityName: "Client One",
+                entityType: "client",
+                amount: 125,
+                paymentMethod: "cash",
+                date: firestore_1.Timestamp.fromDate(monday),
+                attachments: [{ id: "attachment_2" }],
+            },
+        ],
+        workerEntries: [
+            {
+                id: "entry_1",
+                workspaceId: "workspace_1",
+                projectId: "project_1",
+                workerId: "worker_1",
+                workerName: "Worker One",
+                daysWorked: 2,
+                dailyWage: 75,
+                date: firestore_1.Timestamp.fromDate(monday),
+            },
+        ],
+    });
+    strict_1.default.equal(Number(summaries.projectSummary.todayExpenses ?? 0), 200);
+    strict_1.default.equal(Number(summaries.projectSummary.weeklyExpenses ?? 0), 200);
+    strict_1.default.equal(Number(summaries.projectSummary.monthlyExpenses ?? 0), 250);
+    strict_1.default.equal(Number(summaries.projectSummary.totalPayments ?? 0), 125);
+    strict_1.default.equal(Number(summaries.projectSummary.transactionCount ?? 0), 4);
+    strict_1.default.equal(Number(summaries.projectSummary.attachmentCount ?? 0), 2);
+    const currentWeekly = summaries.weeklySummaries.find((summary) => `${summary.id ?? ""}`.includes("2026_05_25"));
+    strict_1.default.ok(currentWeekly);
+    strict_1.default.equal(Number(currentWeekly.totalExpenses ?? 0), 350);
+    strict_1.default.equal(Number(currentWeekly.totalPayments ?? 0), 125);
+    strict_1.default.deepEqual(currentWeekly.topCategory, {
+        id: "materials",
+        name: "materials",
+        total: 200,
+    });
+    const supplierSummary = summaries.entitySummaries.find((summary) => summary.entityId === "supplier_1");
+    strict_1.default.ok(supplierSummary);
+    strict_1.default.equal(Number(supplierSummary.totalExpenses ?? 0), 200);
+    strict_1.default.equal(Number(supplierSummary.attachmentCount ?? 0), 1);
+    strict_1.default.deepEqual(supplierSummary.categoryBreakdown, { materials: 200 });
+    const laborSummary = summaries.categorySummaries.find((summary) => summary.category === "labor");
+    strict_1.default.ok(laborSummary);
+    strict_1.default.equal(Number(laborSummary.totalAmount ?? 0), 150);
+    strict_1.default.equal(Number(laborSummary.transactionCount ?? 0), 1);
+});
+(0, node_test_1.default)("worker accounting summary builder excludes unresolved legacy partials from confirmed totals", async () => {
+    const { buildWorkerAccountingSummaryPayload } = await Promise.resolve().then(() => __importStar(require("./index")));
+    const summary = buildWorkerAccountingSummaryPayload({
+        workspaceId: "workspace_1",
+        workerId: "worker_1",
+        records: [
+            { amount: 100, paymentStatus: "paid" },
+            { amount: 200, paymentStatus: "unpaid" },
+            { amount: 300, paymentStatus: "partial", paidAmount: 125 },
+            { amount: 400, paymentStatus: "partial" },
+        ],
+    });
+    strict_1.default.equal(Number(summary.totalAmount ?? 0), 1000);
+    strict_1.default.equal(Number(summary.confirmedPaid ?? 0), 225);
+    strict_1.default.equal(Number(summary.confirmedOutstanding ?? 0), 375);
+    strict_1.default.equal(Number(summary.unresolvedLegacyCount ?? 0), 1);
+    strict_1.default.equal(Number(summary.recordCount ?? 0), 4);
+});
+(0, node_test_1.default)("workspace metrics builder composes bounded financial dashboard data", async () => {
+    const { buildWorkspaceMetricsPayload } = await Promise.resolve().then(() => __importStar(require("./index")));
+    const payload = buildWorkspaceMetricsPayload("workspace_1", [
+        {
+            projectId: "project_1",
+            status: "active",
+            isArchived: false,
+            totalExpenses: 500,
+            totalIncome: 900,
+            weeklyExpenses: 80,
+            weeklyIncome: 120,
+            categoryTotals: { materials: 300, labor: 200 },
+            entityTotals: { Acme: 400 },
+            paymentMethodTotals: { cash: 120 },
+            totalLaborCost: 200,
+            totalEquipmentCost: 40,
+            recentTransactions: [
+                { id: "payment_1", type: "payment", title: "Client", amount: 120, date: "2026-06-15T10:00:00.000Z" },
+            ],
+        },
+        {
+            projectId: "project_2",
+            status: "completed",
+            isArchived: false,
+            totalExpenses: 100,
+            totalIncome: 50,
+            weeklyExpenses: 20,
+            weeklyIncome: 10,
+            categoryTotals: { materials: 100 },
+            entityTotals: { Acme: 50, Beta: 90 },
+            paymentMethodTotals: { bank: 10 },
+            totalLaborCost: 0,
+            totalEquipmentCost: 10,
+            recentTransactions: [],
+        },
+    ]);
+    strict_1.default.equal(payload.totalProjects, 2);
+    strict_1.default.equal(payload.activeProjects, 1);
+    strict_1.default.equal(payload.totalExpenses, 600);
+    strict_1.default.equal(payload.totalIncome, 950);
+    strict_1.default.equal(payload.weeklyExpenses, 100);
+    strict_1.default.equal(payload.weeklyIncome, 130);
+    strict_1.default.equal(payload.topCategory, "materials");
+    strict_1.default.equal(payload.topEntity, "Acme");
+    strict_1.default.equal(payload.recentTransactions.length, 1);
+});
 if (!emulatorHost) {
     (0, node_test_1.default)("Project trigger emulator tests require FIRESTORE_EMULATOR_HOST (skipped)", { skip: true }, () => { });
 }
@@ -98,6 +257,8 @@ else {
     let handleExpenseWriteRecompute;
     let handlePaymentWriteRecompute;
     let handleWorkerEntryWriteRecompute;
+    let handleWorkerAccountingWriteRecompute;
+    let createExpenseWithQuotaForUser;
     let createPaymentWithQuotaForUser;
     let createWorkerEntryWithQuotaForUser;
     const workspaceId = "workspace_1";
@@ -117,24 +278,33 @@ else {
         budgetLimit: 700,
     };
     async function seedRecomputeInputs() {
-        await db.collection("projects").doc("project_1").set({
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .set({
             ...baseProject,
         });
-        await db.collection("expenses").doc("expense_1").set({
+        await db
+            .collection("expenses")
+            .doc("expense_1")
+            .set({
             id: "expense_1",
             workspaceId,
             projectId: "project_1",
             category: "materials",
             amount: 200,
-            date: admin.firestore.Timestamp.fromDate(previousMonthDate),
+            date: firestore_1.Timestamp.fromDate(previousMonthDate),
             isArchived: false,
         });
-        await db.collection("payments").doc("payment_1").set({
+        await db
+            .collection("payments")
+            .doc("payment_1")
+            .set({
             id: "payment_1",
             workspaceId,
             projectId: "project_1",
             amount: 300,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             isArchived: false,
         });
         await db.collection("workers").doc("worker_1").set({
@@ -143,7 +313,10 @@ else {
             name: "Worker One",
             isArchived: false,
         });
-        await db.collection("worker_entries").doc("entry_1").set({
+        await db
+            .collection("worker_entries")
+            .doc("entry_1")
+            .set({
             id: "entry_1",
             workspaceId,
             workerId: "worker_1",
@@ -151,7 +324,7 @@ else {
             daysWorked: 1,
             dailyWage: 100,
             totalCost: 100,
-            date: admin.firestore.Timestamp.fromDate(twoMonthsAgoDate),
+            date: firestore_1.Timestamp.fromDate(twoMonthsAgoDate),
             isArchived: false,
         });
         await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
@@ -177,19 +350,130 @@ else {
         handleProjectWriteRecompute = indexModule.handleProjectWriteRecompute;
         handleExpenseWriteRecompute = indexModule.handleExpenseWriteRecompute;
         handlePaymentWriteRecompute = indexModule.handlePaymentWriteRecompute;
-        handleWorkerEntryWriteRecompute = indexModule.handleWorkerEntryWriteRecompute;
+        handleWorkerEntryWriteRecompute =
+            indexModule.handleWorkerEntryWriteRecompute;
+        handleWorkerAccountingWriteRecompute =
+            indexModule.handleWorkerAccountingWriteRecompute;
+        createExpenseWithQuotaForUser = indexModule.createExpenseWithQuotaForUser;
         createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
-        createWorkerEntryWithQuotaForUser = indexModule.createWorkerEntryWithQuotaForUser;
-        db = admin.firestore();
+        createWorkerEntryWithQuotaForUser =
+            indexModule.createWorkerEntryWithQuotaForUser;
+        db = (0, firestore_1.getFirestore)();
     });
     node_test_1.default.after(async () => {
         await env.cleanup();
-        await Promise.all(admin.apps
+        await Promise.all((0, app_1.getApps)()
             .filter((app) => app !== null)
-            .map((app) => app.delete().catch(() => undefined)));
+            .map((app) => (0, app_1.deleteApp)(app).catch(() => undefined)));
     });
     node_test_1.default.beforeEach(async () => {
         await env.clearFirestore();
+    });
+    (0, node_test_1.default)("createExpenseWithQuotaForUser persists attachments", async () => {
+        await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+            workspaceId,
+            userId: "user_1",
+            role: "owner",
+        });
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .set({
+            ...baseProject,
+        });
+        const result = await createExpenseWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            category: "materials",
+            amount: 50,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            notes: "Attachment test",
+            paymentMethod: "cash",
+            attachments: [
+                {
+                    id: "attach_1",
+                    fileName: "receipt.pdf",
+                    downloadUrl: "https://example.com/receipt.pdf",
+                    storagePath: "attachments/receipt.pdf",
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
+                    contentType: "application/pdf",
+                    size: 12345,
+                },
+            ],
+            clientMutationId: "mutation_1",
+        });
+        const saved = (await db.collection("expenses").doc(result.id).get()).data();
+        strict_1.default.equal(Array.isArray(saved.attachments), true);
+        strict_1.default.equal(saved.attachments?.length, 1);
+        strict_1.default.equal(saved.attachments?.[0]?.id, "attach_1");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/receipt.pdf");
+    });
+    (0, node_test_1.default)("createPaymentWithQuotaForUser persists attachments", async () => {
+        await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+            workspaceId,
+            userId: "user_1",
+            role: "owner",
+        });
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .set({
+            ...baseProject,
+        });
+        const result = await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 75,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            paymentMethod: "credit_card",
+            notes: "Payment attachment test",
+            attachments: [
+                {
+                    id: "attach_2",
+                    fileName: "receipt.png",
+                    downloadUrl: "https://example.com/receipt.png",
+                    storagePath: "attachments/receipt.png",
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
+                    contentType: "image/png",
+                    size: 54321,
+                },
+            ],
+            clientMutationId: "mutation_2",
+        });
+        const saved = (await db.collection("payments").doc(result.id).get()).data();
+        strict_1.default.equal(Array.isArray(saved.attachments), true);
+        strict_1.default.equal(saved.attachments?.length, 1);
+        strict_1.default.equal(saved.attachments?.[0]?.id, "attach_2");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/receipt.png");
+    });
+    (0, node_test_1.default)("createWorkerEntryWithQuotaForUser persists attachments", async () => {
+        await seedRecomputeInputs();
+        const result = await createWorkerEntryWithQuotaForUser("user_1", {
+            workspaceId,
+            workerId: "worker_1",
+            projectId: "project_1",
+            daysWorked: 1,
+            dailyWage: 125,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            notes: "Worker attachment test",
+            attachments: [
+                {
+                    id: "attach_worker_1",
+                    fileName: "signed-timesheet.pdf",
+                    downloadUrl: "https://example.com/signed-timesheet.pdf",
+                    storagePath: "attachments/signed-timesheet.pdf",
+                    uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
+                    contentType: "application/pdf",
+                    size: 24680,
+                },
+            ],
+            clientMutationId: "mutation_worker_1",
+        });
+        const saved = (await db.collection("worker_entries").doc(result.id).get()).data();
+        strict_1.default.equal(Array.isArray(saved.attachments), true);
+        strict_1.default.equal(saved.attachments?.length, 1);
+        strict_1.default.equal(saved.attachments?.[0]?.id, "attach_worker_1");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/signed-timesheet.pdf");
     });
     (0, node_test_1.default)("project write does not loop on derived-only project field changes", async () => {
         await seedRecomputeInputs();
@@ -199,7 +483,10 @@ else {
         const afterData = { ...beforeData, totalExpenses: 999 };
         await handleProjectWriteRecompute(projectWriteEvent(beforeData, afterData));
         const afterSnap = await projectRef.get();
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         strict_1.default.equal(afterSnap.updateTime?.toMillis(), beforeSnap.updateTime?.toMillis(), "project doc must not be rewritten for derived-only changes");
         strict_1.default.equal(metricsSnap.exists, false);
     });
@@ -212,8 +499,14 @@ else {
         const projectBeforeHandler = await projectRef.get();
         await handleProjectWriteRecompute(projectWriteEvent(before, after));
         const projectAfterHandler = await projectRef.get();
-        const projectMetricsSnap = await db.collection("project_metrics").doc("project_1").get();
-        const workspaceMetricsSnap = await db.collection("workspace_metrics").doc(workspaceId).get();
+        const projectMetricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
+        const workspaceMetricsSnap = await db
+            .collection("workspace_metrics")
+            .doc(workspaceId)
+            .get();
         const metricsData = projectMetricsSnap.data() ?? {};
         strict_1.default.equal(projectAfterHandler.updateTime?.toMillis(), projectBeforeHandler.updateTime?.toMillis(), "onProjectWriteRecompute must not rewrite projects/{projectId}");
         strict_1.default.equal(projectMetricsSnap.exists, true);
@@ -226,7 +519,9 @@ else {
         const afterData = (await projectRef.get()).data();
         const projectBeforeFirst = await projectRef.get();
         const projectMetricsRef = db.collection("project_metrics").doc("project_1");
-        const workspaceMetricsRef = db.collection("workspace_metrics").doc(workspaceId);
+        const workspaceMetricsRef = db
+            .collection("workspace_metrics")
+            .doc(workspaceId);
         await handleProjectWriteRecompute(projectWriteEvent(undefined, afterData));
         const projectAfterFirst = await projectRef.get();
         const projectMetricsAfterFirst = await projectMetricsRef.get();
@@ -249,7 +544,10 @@ else {
         const expenseAfter = (await db.collection("expenses").doc("expense_1").get()).data();
         await handleExpenseWriteRecompute(expenseWriteEvent(undefined, expenseAfter));
         const projectAfterExpenseSnap = await projectRef.get();
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         strict_1.default.equal(projectAfterExpenseSnap.updateTime?.toMillis(), projectBeforeExpenseSnap.updateTime?.toMillis(), "expense recompute must not mutate projects/{projectId}");
         strict_1.default.equal(metricsSnap.exists, true);
     });
@@ -260,16 +558,66 @@ else {
         const workerEntryAfter = (await db.collection("worker_entries").doc("entry_1").get()).data();
         await handleWorkerEntryWriteRecompute(workerEntryWriteEvent(undefined, workerEntryAfter));
         const projectAfterWorkerSnap = await projectRef.get();
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         strict_1.default.equal(projectAfterWorkerSnap.updateTime?.toMillis(), projectBeforeWorkerSnap.updateTime?.toMillis(), "worker-entry recompute must not mutate projects/{projectId}");
         strict_1.default.equal(metricsSnap.exists, true);
+    });
+    (0, node_test_1.default)("worker accounting recompute maintains exact worker summary", async () => {
+        await seedRecomputeInputs();
+        const paidRecordRef = db
+            .collection("worker_accounting_records")
+            .doc("worker_record_paid");
+        const partialRecordRef = db
+            .collection("worker_accounting_records")
+            .doc("worker_record_partial");
+        await paidRecordRef.set({
+            workspaceId,
+            projectId: "project_1",
+            workerId: "worker_1",
+            workerName: "Worker One",
+            description: "Paid wage",
+            amount: 100,
+            paymentMethod: "cash",
+            paymentStatus: "paid",
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            notes: "",
+        });
+        await partialRecordRef.set({
+            workspaceId,
+            projectId: "project_1",
+            workerId: "worker_1",
+            workerName: "Worker One",
+            description: "Partial wage",
+            amount: 300,
+            paidAmount: 125,
+            paymentMethod: "cash",
+            paymentStatus: "partial",
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            notes: "",
+        });
+        const partialAfter = (await partialRecordRef.get()).data();
+        await handleWorkerAccountingWriteRecompute(workerAccountingWriteEvent(undefined, partialAfter, "worker_record_partial"));
+        const summarySnap = await db
+            .collection("worker_accounting_summaries")
+            .doc(`${workspaceId}_worker_1`)
+            .get();
+        const summary = summarySnap.data() ?? {};
+        strict_1.default.equal(Number(summary.totalAmount ?? 0), 400);
+        strict_1.default.equal(Number(summary.confirmedPaid ?? 0), 225);
+        strict_1.default.equal(Number(summary.confirmedOutstanding ?? 0), 175);
+        strict_1.default.equal(Number(summary.recordCount ?? 0), 2);
     });
     (0, node_test_1.default)("expense trigger skips writes when irrelevant fields change", async () => {
         await seedRecomputeInputs();
         const expenseRef = db.collection("expenses").doc("expense_1");
         const projectRef = db.collection("projects").doc("project_1");
         const projectMetricsRef = db.collection("project_metrics").doc("project_1");
-        const workspaceMetricsRef = db.collection("workspace_metrics").doc(workspaceId);
+        const workspaceMetricsRef = db
+            .collection("workspace_metrics")
+            .doc(workspaceId);
         const initialExpense = (await expenseRef.get()).data();
         await handleExpenseWriteRecompute(expenseWriteEvent(undefined, initialExpense));
         const projectBefore = await projectRef.get();
@@ -277,7 +625,7 @@ else {
         const workspaceMetricsBefore = await workspaceMetricsRef.get();
         const updatedExpense = {
             ...initialExpense,
-            updatedAt: admin.firestore.Timestamp.now(),
+            updatedAt: firestore_1.Timestamp.now(),
         };
         await expenseRef.set(updatedExpense, { merge: true });
         await handleExpenseWriteRecompute(expenseWriteEvent(initialExpense, updatedExpense));
@@ -293,7 +641,9 @@ else {
         const expenseAfter = (await db.collection("expenses").doc("expense_1").get()).data();
         const projectRef = db.collection("projects").doc("project_1");
         const projectMetricsRef = db.collection("project_metrics").doc("project_1");
-        const workspaceMetricsRef = db.collection("workspace_metrics").doc(workspaceId);
+        const workspaceMetricsRef = db
+            .collection("workspace_metrics")
+            .doc(workspaceId);
         await handleExpenseWriteRecompute(expenseWriteEvent(undefined, expenseAfter));
         const projectBefore = await projectRef.get();
         const projectMetricsBefore = await projectMetricsRef.get();
@@ -335,12 +685,15 @@ else {
             ...beforeEntry,
             daysWorked: 2,
             dailyWage: 125,
-            totalCost: admin.firestore.FieldValue.delete(),
+            totalCost: firestore_1.FieldValue.delete(),
         };
         await workerEntryRef.update(afterEntry);
         const currentEntry = (await workerEntryRef.get()).data();
         await handleWorkerEntryWriteRecompute(workerEntryWriteEvent(beforeEntry, currentEntry));
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         const metricsData = metricsSnap.data() ?? {};
         const categoryTotals = metricsData.categoryTotals;
         const topWorkers = metricsData.topWorkers;
@@ -352,7 +705,10 @@ else {
         await seedRecomputeInputs();
         const projectData = (await db.collection("projects").doc("project_1").get()).data();
         await handleProjectWriteRecompute(projectWriteEvent(undefined, projectData));
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         const monthlyFlow = (metricsSnap.data()?.monthlyFlow ?? []);
         const previousKey = `${previousMonthDate.getUTCFullYear()}-${`${previousMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
         const currentKey = `${currentMonthDate.getUTCFullYear()}-${`${currentMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
@@ -367,26 +723,35 @@ else {
     });
     (0, node_test_1.default)("recompute monthly flow includes active finance records outside the latest six months", async () => {
         await seedRecomputeInputs();
-        await db.collection("expenses").doc("old_expense").set({
+        await db
+            .collection("expenses")
+            .doc("old_expense")
+            .set({
             id: "old_expense",
             workspaceId,
             projectId: "project_1",
             category: "equipment",
             amount: 75,
-            date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+            date: firestore_1.Timestamp.fromDate(oldHistoryDate),
             isArchived: false,
         });
-        await db.collection("payments").doc("old_payment").set({
+        await db
+            .collection("payments")
+            .doc("old_payment")
+            .set({
             id: "old_payment",
             workspaceId,
             projectId: "project_1",
             amount: 125,
-            date: admin.firestore.Timestamp.fromDate(oldHistoryDate),
+            date: firestore_1.Timestamp.fromDate(oldHistoryDate),
             isArchived: false,
         });
         const projectData = (await db.collection("projects").doc("project_1").get()).data();
         await handleProjectWriteRecompute(projectWriteEvent(undefined, projectData));
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         const monthlyFlow = (metricsSnap.data()?.monthlyFlow ?? []);
         const oldMonthKey = `${oldHistoryDate.getUTCFullYear()}-${`${oldHistoryDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
         const oldPoint = monthlyFlow.find((item) => item["month"] === oldMonthKey) ?? {};
@@ -402,12 +767,18 @@ else {
         const targetDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 20));
         const afterPayment = {
             ...beforePayment,
-            date: admin.firestore.Timestamp.fromDate(targetDate),
+            date: firestore_1.Timestamp.fromDate(targetDate),
         };
         await paymentRef.set(afterPayment, { merge: true });
-        const metricsBefore = await db.collection("project_metrics").doc("project_1").get();
+        const metricsBefore = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         await handlePaymentWriteRecompute(paymentWriteEvent(beforePayment, afterPayment));
-        const metricsAfter = await db.collection("project_metrics").doc("project_1").get();
+        const metricsAfter = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         const monthlyFlow = (metricsAfter.data()?.monthlyFlow ?? []);
         const movedMonthKey = `${targetDate.getUTCFullYear()}-${`${targetDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
         const originalMonthKey = `${currentMonthDate.getUTCFullYear()}-${`${currentMonthDate.getUTCMonth() + 1}`.padStart(2, "0")}`;
@@ -419,18 +790,21 @@ else {
     });
     (0, node_test_1.default)("payment creation rejects archived projects", async () => {
         await seedRecomputeInputs();
-        await db.collection("projects").doc("project_1").update({ isArchived: true });
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .update({ isArchived: true });
         await strict_1.default.rejects(() => createPaymentWithQuotaForUser("user_1", {
             workspaceId,
             projectId: "project_1",
             amount: 300,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             paymentMethod: "cash",
         }), (error) => {
             const handled = error;
-            return handled instanceof https_1.HttpsError &&
+            return (handled instanceof https_1.HttpsError &&
                 handled.code === "permission-denied" &&
-                handled.message.includes("Project is archived");
+                handled.message.includes("Project is archived"));
         });
     });
     (0, node_test_1.default)("payment creation increments project payment and net metrics", async () => {
@@ -446,30 +820,36 @@ else {
             workspaceId,
             projectId: "project_1",
             amount: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
             paymentMethod: "cash",
             clientMutationId: "client_payment_1",
         });
-        const metricsSnap = await db.collection("project_metrics").doc("project_1").get();
+        const metricsSnap = await db
+            .collection("project_metrics")
+            .doc("project_1")
+            .get();
         const metricsData = metricsSnap.data() ?? {};
         strict_1.default.equal(Number(metricsData.totalPayments ?? 0), 425);
         strict_1.default.equal(Number(metricsData.netProfit ?? 0), 125);
     });
     (0, node_test_1.default)("worker entry creation rejects archived projects", async () => {
         await seedRecomputeInputs();
-        await db.collection("projects").doc("project_1").update({ isArchived: true });
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .update({ isArchived: true });
         await strict_1.default.rejects(() => createWorkerEntryWithQuotaForUser("user_1", {
             workspaceId,
             workerId: "worker_1",
             projectId: "project_1",
             daysWorked: 2,
             dailyWage: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
         }), (error) => {
             const handled = error;
-            return handled instanceof https_1.HttpsError &&
+            return (handled instanceof https_1.HttpsError &&
                 handled.code === "permission-denied" &&
-                handled.message.includes("Project is archived");
+                handled.message.includes("Project is archived"));
         });
     });
     (0, node_test_1.default)("worker entry creation rejects archived workers", async () => {
@@ -481,12 +861,12 @@ else {
             projectId: "project_1",
             daysWorked: 2,
             dailyWage: 125,
-            date: admin.firestore.Timestamp.fromDate(currentMonthDate),
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
         }), (error) => {
             const handled = error;
-            return handled instanceof https_1.HttpsError &&
+            return (handled instanceof https_1.HttpsError &&
                 handled.code === "permission-denied" &&
-                handled.message.includes("Worker is archived");
+                handled.message.includes("Worker is archived"));
         });
     });
 }

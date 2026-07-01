@@ -9,16 +9,44 @@ service firebase.storage {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function validUpload(contentTypePattern) {
+      return request.resource != null
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches(contentTypePattern);
+    }
+
+    function validAttachmentUpload() {
+      return validUpload(
+        "application/pdf|image/(jpeg|png|gif)|text/(plain|csv)|application/(msword|vnd.openxmlformats-officedocument.wordprocessingml.document|vnd.ms-excel|vnd.openxmlformats-officedocument.spreadsheetml.sheet|vnd.ms-powerpoint|vnd.openxmlformats-officedocument.presentationml.presentation|zip)"
+      );
+    }
+
+    function validVoiceUpload() {
+      return validUpload("audio/(wav|mpeg|aac|webm|mp4)");
+    }
+
+    function validProfilePhotoUpload() {
+      return validUpload("image/(jpeg|png)");
+    }
+
     match /voice-expenses/{userId}/{fileName} {
-      allow read, write: if owner(userId);
+      allow read, delete: if owner(userId);
+      allow create, update: if owner(userId) && validVoiceUpload();
     }
 
     match /receipts/{userId}/{fileName} {
-      allow read, write: if owner(userId);
+      allow read, delete: if owner(userId);
+      allow create, update: if owner(userId) && validAttachmentUpload();
+    }
+
+    match /attachments/{userId}/{fileName} {
+      allow read, delete: if owner(userId);
+      allow create, update: if owner(userId) && validAttachmentUpload();
     }
 
     match /profile-photos/{userId}/{fileName} {
-      allow read, write: if owner(userId);
+      allow read, delete: if owner(userId);
+      allow create, update: if owner(userId) && validProfilePhotoUpload();
     }
 
     match /{allPaths=**} {

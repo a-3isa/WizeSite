@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Buildozer — UX Mockups</title>
+<style>
+  :root{
+    --orange:#F76B1C; --orange-soft:#FFF1E8;
+    --ink:#0F172A; --body:#475569; --muted:#94A3B8;
+    --bg:#EEF1F4; --card:#FFFFFF; --line:#E2E8F0;
+    --green:#16A34A; --green-soft:#E7F6EC;
+    --red:#DC2626; --red-soft:#FCEBEB;
+    --warn:#D97706; --warn-soft:#FEF3E2;
+    --radius:16px; --shadow:0 6px 20px rgba(15,23,42,.07);
+  }
+  *{box-sizing:border-box;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--ink);padding:32px}
+  h1{margin:0 0 4px}
+  .sub{color:var(--body);margin:0 0 28px;max-width:720px}
+  .row{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start;margin-bottom:48px}
+  .col-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}
+  .tag.now{background:#E2E8F0;color:#475569}
+  .tag.new{background:var(--orange-soft);color:var(--orange)}
+  /* phone */
+  .phone{width:300px;background:var(--bg);border-radius:34px;padding:12px;box-shadow:var(--shadow);border:1px solid var(--line)}
+  .screen{background:var(--bg);border-radius:24px;overflow:hidden;height:620px;display:flex;flex-direction:column}
+  .statusbar{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:11px;color:var(--body)}
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 10px}
+  .appbar .ws{display:flex;align-items:center;gap:4px;font-weight:800;font-size:18px}
+  .appbar .icons{display:flex;gap:14px;color:var(--body);font-size:18px}
+  .scroll{flex:1;overflow:auto;padding:4px 16px 16px}
+  .scroll::-webkit-scrollbar{width:0}
+  .sec{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:18px 2px 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .metric{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+  .metric .ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:8px}
+  .metric .lbl{font-size:11px;color:var(--body);margin-bottom:2px}
+  .metric .val{font-size:16px;font-weight:800}
+  .pill{display:inline-flex;background:#F1F5F9;border-radius:999px;padding:3px;gap:2px;font-size:11px;font-weight:700}
+  .pill span{padding:4px 12px;border-radius:999px;color:var(--body)}
+  .pill span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .hero{background:linear-gradient(135deg,#FFF7F0,#FFFFFF);border:1px solid var(--orange-soft)}
+  .hero .net{font-size:26px;font-weight:900;color:var(--green)}
+  .hero .sub2{font-size:12px;color:var(--body)}
+  .chips{display:flex;gap:8px;overflow:auto;padding-bottom:4px}
+  .chip{flex:0 0 auto;display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:12px;font-weight:700}
+  .dot{width:9px;height:9px;border-radius:3px}
+  .row2{display:flex;gap:10px}
+  .row2>*{flex:1}
+  .upgrade{background:var(--orange);color:#fff;border-radius:var(--radius);padding:13px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:13px}
+  .navbar{height:58px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;font-size:11px;color:var(--muted)}
+  .navbar .it{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .navbar .it.on{color:var(--orange)}
+  .navbar .ic{font-size:18px}
+  /* form bits */
+  .field{margin:10px 0}
+  .field label{display:block;font-size:11px;color:var(--body);margin-bottom:5px;font-weight:600}
+  .input{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:14px;display:flex;align-items:center;justify-content:space-between}
+  .input.amount{font-weight:800;font-size:16px}
+  .input .cur{color:var(--muted);font-size:12px;font-weight:600}
+  .input .car{color:var(--muted)}
+  .menu{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-top:6px}
+  .menu .opt{padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:9px;border-bottom:1px solid #F1F5F9}
+  .menu .opt:last-child{border-bottom:0}
+  .menu .opt.on{background:var(--orange-soft);color:var(--orange);font-weight:700}
+  .menu .opt small{color:var(--muted);font-weight:400;margin-left:auto}
+  .note{font-size:12px;color:var(--body);background:#fff;border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin-top:14px}
+  .legend{max-width:300px;font-size:13px;color:var(--body)}
+  .legend b{color:var(--ink)}
+  .strike{color:var(--muted);text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<h1>Buildozer — UX Mockups</h1>
+<p class="sub">Visual proposal for your review. Nothing here is shipped yet. Compare current vs proposed, then tell me which to build. Numbers shown with the new live thousands-separators.</p>
+
+<!-- ================= DASHBOARD ================= -->
+<div class="row">
+  <div>
+    <p class="col-title">Dashboard — Current <span class="tag now">NOW</span></p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <div class="appbar"><div class="ws">Villa Project ▾</div><div class="icons"><span>🔔</span><span>⚙️</span></div></div>
+      <div class="scroll">
+        <div class="sec">Resources</div>
+        <div class="grid2">
+          <div class="metric"><div class="ic" style="background:var(--warn-soft);color:var(--warn)">👷</div><div class="val" style="font-size:13px">Workers</div></div>
+          <div class="metric"><div class="ic" style="background:var(--orange-soft);color:var(--orange)">🛠️</div><div class="val" style="font-size:13px">Contractors</div></div>
+          <div class="metric"><div class="ic" style="background:var(--green-soft);color:var(--green)">🚜</div><div class="val" style="font-size:13px">Equipment</div></div>
+          <div class="metric"><div class="ic" style="background:var(--red-soft);color:var(--red)">🚚</div><div class="val" style="font-size:13px">Transport</div></div>
+        </div>
+        <div class="sec">Overview</div>
+        <div class="grid2">
+          <div class="metric"><div class="ic" style="background:var(--orange-soft);color:var(--orange)">💼</div><div class="lbl">Active projects</div><div class="val">7</div></div>
+          <div class="metric"><div class="ic" style="background:var(--red-soft);color:var(--red)">📉</div><div class="lbl">Total expenses</div><div class="val">195,500</div></div>
+          <div class="metric"><div class="ic" style="background:var(--green-soft);color:var(--green)">📈</div><div class="lbl">Total income</div><div class="val">320,000</div></div>
+          <div class="metric"><div class="ic" style="background:var(--green-soft);color:var(--green)">📈</div><div class="lbl">Net profit</div><div class="val">124,500</div></div>
+        </div>
+        <div class="sec">Weekly summary</div>
+        <div class="grid2">
+          <div class="metric"><div class="ic" style="background:var(--red-soft);color:var(--red)">📉</div><div class="lbl">Total expenses</div><div class="val">22,300</div></div>
+          <div class="metric"><div class="ic" style="background:var(--green-soft);color:var(--green)">📈</div><div class="lbl">Total income</div><div class="val">40,000</div></div>
+        </div>
+      </div>
+      <div class="navbar"><div class="it on"><span class="ic">🏠</span>Home</div><div class="it"><span class="ic">➕</span>Add</div><div class="it"><span class="ic">💼</span>Projects</div></div>
+    </div></div>
+  </div>
+
+  <div>
+    <p class="col-title">Dashboard — Proposed <span class="tag new">NEW</span></p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <div class="appbar"><div class="ws">Villa Project ▾</div><div class="icons"><span>🔔</span><span>⚙️</span></div></div>
+      <div class="scroll">
+        <!-- hero -->
+        <div class="card hero" style="margin-top:6px">
+          <div class="sub2">Net this month</div>
+          <div class="net">▲ 124,500 <span style="font-size:14px;color:var(--body)">EGP</span></div>
+          <div class="row2" style="margin-top:10px">
+            <div><div class="sub2">Income</div><div style="font-weight:800;color:var(--green)">320,000</div></div>
+            <div><div class="sub2">Expenses</div><div style="font-weight:800;color:var(--red)">195,500</div></div>
+          </div>
+        </div>
+        <!-- period toggle -->
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="sub2" style="font-weight:700;color:var(--ink)">Activity</div>
+            <div class="pill"><span class="on">Week</span><span>Month</span></div>
+          </div>
+          <div class="row2" style="margin-top:12px">
+            <div><div class="sub2">Income</div><div style="font-weight:800;color:var(--green)">40,000</div></div>
+            <div><div class="sub2">Expenses</div><div style="font-weight:800;color:var(--red)">22,300</div></div>
+          </div>
+        </div>
+        <!-- compact stats -->
+        <div class="row2" style="margin-top:12px">
+          <div class="metric"><div class="lbl">Active projects</div><div class="val">7</div></div>
+          <div class="metric"><div class="lbl">Top category</div><div class="val" style="font-size:14px">Materials</div></div>
+        </div>
+        <!-- quick access demoted -->
+        <div class="sec">Quick access</div>
+        <div class="chips">
+          <div class="chip"><span class="dot" style="background:var(--warn)"></span>Workers</div>
+          <div class="chip"><span class="dot" style="background:var(--orange)"></span>Contractors</div>
+          <div class="chip"><span class="dot" style="background:var(--green)"></span>Equipment</div>
+          <div class="chip"><span class="dot" style="background:var(--red)"></span>Transport</div>
+        </div>
+        <div class="upgrade" style="margin-top:16px">⭐ Upgrade to Pro <span style="margin-left:auto">→</span></div>
+      </div>
+      <div class="navbar"><div class="it on"><span class="ic">🏠</span>Home</div><div class="it"><span class="ic">➕</span>Add</div><div class="it"><span class="ic">💼</span>Projects</div></div>
+    </div></div>
+  </div>
+
+  <div class="legend">
+    <p class="col-title">What changed</p>
+    <p>• <b>Financial first.</b> A single <b>hero net card</b> replaces the 2×2 money grid — the number you open the app for is at the top.</p>
+    <p>• <b>Week/Month is a toggle</b>, not a second section. Kills the duplicated "Income / Expenses" labels.</p>
+    <p>• <b>Resources demoted</b> from a big 4-card grid to a one-line <b>Quick access</b> strip below the data.</p>
+    <p>• Spacing tightened 24→16. Less scrolling, less crowding.</p>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD APPROACH B (project-scoped) ================= -->
+<div class="row">
+  <div>
+    <p class="col-title">Dashboard — Approach B <span class="tag new">NEW · project-scoped</span></p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <!-- two dropdowns in the top bar -->
+      <div style="padding:8px 14px 10px;border-bottom:1px solid var(--line);background:#fff">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--body)">🏢 <b style="color:var(--ink)">Cairo Co.</b> ▾</div>
+          <div class="icons" style="display:flex;gap:14px;color:var(--body);font-size:16px"><span>🔔</span><span>⚙️</span></div>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;background:var(--orange-soft);border:1px solid #FBD9C2;border-radius:12px;padding:9px 12px">
+          <span style="font-size:15px">💼</span>
+          <div style="flex:1"><div style="font-size:10px;color:var(--orange);font-weight:700">PROJECT</div><div style="font-weight:800;font-size:14px">Villa Project</div></div>
+          <span style="color:var(--orange)">▾</span>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="sub2" style="margin:8px 2px 0;font-size:11px;color:var(--muted)">Showing data for <b style="color:var(--ink)">Villa Project</b> only</div>
+        <!-- project hero -->
+        <div class="card hero" style="margin-top:8px">
+          <div class="sub2">Project net</div>
+          <div class="net">▲ 84,500 <span style="font-size:14px;color:var(--body)">EGP</span></div>
+          <div class="row2" style="margin-top:10px">
+            <div><div class="sub2">Funds in</div><div style="font-weight:800;color:var(--green)">220,000</div></div>
+            <div><div class="sub2">Expenses</div><div style="font-weight:800;color:var(--red)">135,500</div></div>
+          </div>
+        </div>
+        <!-- budget progress (project-specific) -->
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span class="sub2" style="color:var(--ink);font-weight:700">Budget used</span><span style="color:var(--body)">135,500 / 180,000</span></div>
+          <div style="height:8px;background:#F1F5F9;border-radius:999px;margin-top:8px;overflow:hidden"><div style="width:75%;height:100%;background:var(--orange)"></div></div>
+          <div class="sub2" style="margin-top:6px">75% of contract value</div>
+        </div>
+        <!-- compact stats -->
+        <div class="row2" style="margin-top:12px">
+          <div class="metric"><div class="lbl">Workers on site</div><div class="val">12</div></div>
+          <div class="metric"><div class="lbl">Top category</div><div class="val" style="font-size:14px">Materials</div></div>
+        </div>
+        <!-- recent (project only) -->
+        <div class="sec">Recent — this project</div>
+        <div class="card" style="padding:0">
+          <div style="display:flex;justify-content:space-between;padding:11px 12px;border-bottom:1px solid #F1F5F9;font-size:13px"><span>🧱 El-Nasr Supplies</span><span style="color:var(--red);font-weight:700">-45,000</span></div>
+          <div style="display:flex;justify-content:space-between;padding:11px 12px;border-bottom:1px solid #F1F5F9;font-size:13px"><span>💰 Owner deposit</span><span style="color:var(--green);font-weight:700">+120,000</span></div>
+          <div style="display:flex;justify-content:space-between;padding:11px 12px;font-size:13px"><span>👷 Worker wages</span><span style="color:var(--red);font-weight:700">-18,300</span></div>
+        </div>
+        <!-- workspace-level quick access kept -->
+        <div class="sec">Quick access</div>
+        <div class="chips">
+          <div class="chip"><span class="dot" style="background:var(--warn)"></span>Workers</div>
+          <div class="chip"><span class="dot" style="background:var(--orange)"></span>Contractors</div>
+          <div class="chip"><span class="dot" style="background:var(--green)"></span>Equipment</div>
+          <div class="chip"><span class="dot" style="background:var(--red)"></span>Transport</div>
+        </div>
+      </div>
+      <div class="navbar"><div class="it on"><span class="ic">🏠</span>Home</div><div class="it"><span class="ic">➕</span>Add</div><div class="it"><span class="ic">💼</span>Projects</div></div>
+    </div></div>
+  </div>
+
+  <!-- project dropdown open state -->
+  <div>
+    <p class="col-title">Project dropdown — open</p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <div style="padding:8px 14px 10px;border-bottom:1px solid var(--line);background:#fff">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--body)">🏢 <b style="color:var(--ink)">Cairo Co.</b> ▾</div>
+          <div class="icons" style="display:flex;gap:14px;color:var(--body);font-size:16px"><span>🔔</span><span>⚙️</span></div>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;background:var(--orange-soft);border:1px solid #FBD9C2;border-radius:12px;padding:9px 12px">
+          <span style="font-size:15px">💼</span>
+          <div style="flex:1"><div style="font-size:10px;color:var(--orange);font-weight:700">PROJECT</div><div style="font-weight:800;font-size:14px">Villa Project</div></div>
+          <span style="color:var(--orange)">▴</span>
+        </div>
+        <div class="menu" style="margin-top:6px">
+          <div class="opt"><span>🌐</span> All Projects <small>workspace total</small></div>
+          <div class="opt on"><span>💼</span> Villa Project</div>
+          <div class="opt"><span>💼</span> Tower B Renovation</div>
+          <div class="opt"><span>💼</span> Warehouse Fit-out</div>
+          <div class="opt"><span>💼</span> Road Works — Phase 2</div>
+        </div>
+      </div>
+      <div class="scroll" style="opacity:.35">
+        <div class="card hero" style="margin-top:8px"><div class="sub2">Project net</div><div class="net">▲ 84,500</div></div>
+      </div>
+    </div></div>
+    <p class="legend" style="margin-top:10px">Default selection is <b>All Projects</b> (today's workspace-wide view). Pick a project → every card, total, and the Recent list re-scope to that project. Per-project income/expense is already computed in <code>dashboard_providers.dart</code> (<code>incomeByProjectId</code>), so the data exists.</p>
+  </div>
+
+  <div class="legend">
+    <p class="col-title">Approach B — at a glance</p>
+    <p>• <b>Two dropdowns</b> in the top bar: workspace (small) + <b>project</b> (prominent, orange).</p>
+    <p>• Everything below is <b>scoped to the selected project</b> — net, funds-in, expenses, recent list.</p>
+    <p>• Adds a project-only <b>budget-used bar</b> (spent vs contract value) you can't show at workspace level.</p>
+    <p>• <b>Payment = funds in</b> (green +). Expense = funds out (red −). Clear money direction.</p>
+    <p>• Workspace <b>Quick access</b> kept for navigation, per your call.</p>
+    <p>• Difference vs Approach A: A is a tighter <i>workspace</i> dashboard; B makes the dashboard a <b>project cockpit</b> with a project selector.</p>
+  </div>
+</div>
+
+<!-- ================= ADD EXPENSE vs ADD PAYMENT ================= -->
+<div style="background:#FEF3E2;border:1px solid #F8C98A;border-radius:12px;padding:12px 16px;margin:0 0 18px;max-width:760px;font-size:13px;color:#7A4A00">
+  <b>Not being implemented.</b> The two add-screen redesigns below are kept for reference only. Per your decision we are <b>not</b> applying these layouts or adding a payment-type dropdown. The only shipped add-screen changes are: live commas in all fields, and <b>Labor</b> + <b>Payments</b> removed from the expense category list (Payment = funds, not an expense category).
+</div>
+<div class="row" style="opacity:.55">
+  <div>
+    <p class="col-title">Add Expense — categories <span class="tag new">NEW</span></p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <div class="appbar"><div class="ws" style="font-size:16px">← Add Expense</div></div>
+      <div class="scroll">
+        <div class="field"><label>Amount</label>
+          <div class="input amount"><span>1,250,000</span><span class="cur">EGP</span></div>
+        </div>
+        <div class="field"><label>Category</label>
+          <div class="input"><span>Select…</span><span class="car">▾</span></div>
+          <div class="menu">
+            <div class="opt">👷 Worker <small>daily wage</small></div>
+            <div class="opt on">🧱 Materials</div>
+            <div class="opt">🛠️ Contractor</div>
+            <div class="opt">🚜 Equipment</div>
+            <div class="opt">🚚 Transport</div>
+            <div class="opt">📦 Storage</div>
+            <div class="opt">🏗️ Rentals</div>
+            <div class="opt">➕ Other</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <p class="legend" style="margin-top:10px">Removed <span class="strike">Labor</span> (merged into Worker) and <span class="strike">Payments</span> (belongs to the Payments feature, not an expense type).</p>
+  </div>
+
+  <div>
+    <p class="col-title">Add Payment — categories <span class="tag new">NEW · proposal</span></p>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>11:13</span><span>📶 🔋</span></div>
+      <div class="appbar"><div class="ws" style="font-size:16px">← Add Payment</div></div>
+      <div class="scroll">
+        <div class="field"><label>Amount</label>
+          <div class="input amount"><span>1,250,000</span><span class="cur">EGP</span></div>
+        </div>
+        <div class="field"><label>Payment type</label>
+          <div class="input"><span>Select…</span><span class="car">▾</span></div>
+          <div class="menu">
+            <div class="opt on">🏦 Supplier payment</div>
+            <div class="opt">👷 Worker wage</div>
+            <div class="opt">🛠️ Contractor payment</div>
+            <div class="opt">🚜 Equipment rental</div>
+            <div class="opt">🚚 Transport</div>
+            <div class="opt">↩️ Advance / refund</div>
+            <div class="opt">➕ Other</div>
+          </div>
+        </div>
+        <div class="field"><label>Method</label>
+          <div class="input"><span>Cash</span><span class="car">▾</span></div>
+        </div>
+      </div>
+    </div></div>
+    <p class="legend" style="margin-top:10px">Today Add-Payment has <b>no</b> category at all. Proposed: a <b>distinct "Payment type"</b> list (payment-flavored), so expense categories and payment types no longer collide. <b>Confirm this list and I'll wire it.</b></p>
+  </div>
+
+  <div class="legend">
+    <p class="col-title">Differentiation summary</p>
+    <p><b>Expense → Category</b> = what the money was spent <i>on</i> (materials, equipment…).</p>
+    <p><b>Payment → Payment type</b> = <i>who/why</i> you paid (supplier, worker wage, contractor…).</p>
+    <p>Separate label sets, separate constants, no shared dropdown — so changing one never disturbs the other.</p>
+    <div class="note">Commas now appear live in <b>every</b> number field app-wide: amount, wage, days, quantity, rate, contract value, budget, paid amount.</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,11 +1,16 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
@@ -40,8 +45,7 @@ class WorkerDetailScreen extends ConsumerWidget {
     final entriesAsync = ref.watch(workerEntriesProvider(workerId));
     final locale = Localizations.localeOf(context).languageCode;
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.workers,
@@ -51,7 +55,7 @@ class WorkerDetailScreen extends ConsumerWidget {
           title: l10n.t('workerDetails'),
           fallbackRoute: AppRoutes.workers,
         ),
-        body: workerAsync.when(
+        body: workerAsync.whenStale(
           data: (worker) {
             if (worker == null) {
               return Center(child: Text(l10n.t('workerNotFound')));
@@ -124,10 +128,21 @@ class WorkerDetailScreen extends ConsumerWidget {
                       child: FilledButton.tonal(
                         onPressed: () =>
                             context.push(AppRoutes.workerEntryPath(worker.id)),
-                        child: Text(l10n.t('addEntry')),
+                        child: Text(l10n.t('addWorkerEntry')),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: () => context.push(
+                    AppRoutes.workerAccountingPath(
+                      worker.id,
+                      name: worker.name,
+                    ),
+                  ),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: Text(l10n.t('workerAccounting')),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -137,7 +152,7 @@ class WorkerDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                entriesAsync.when(
+                entriesAsync.whenStale(
                   data: (entries) {
                     if (entries.isEmpty) {
                       return Card(
@@ -167,108 +182,144 @@ class WorkerDetailScreen extends ConsumerWidget {
                         ),
                         ...entries.map(
                           (entry) => Card(
-                            child: ListTile(
-                              title: Text(
-                                worker.billingType == 'project'
-                                    ? l10n.t(
-                                        'totalWageWithValue',
-                                        params: {
-                                          'value': Formatters.money(
-                                            entry.totalCost,
-                                            currencyCode: currency,
-                                            locale: locale,
-                                          ),
-                                        },
-                                      )
-                                    : l10n.t(
-                                        'workerEntryLine',
-                                        params: {
-                                          'days': '${entry.daysWorked}',
-                                          'wage': Formatters.money(
-                                            entry.dailyWage,
-                                            currencyCode: currency,
-                                            locale: locale,
-                                          ),
-                                          'total': Formatters.money(
-                                            entry.totalCost,
-                                            currencyCode: currency,
-                                            locale: locale,
-                                          ),
-                                        },
-                                      ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
                               ),
-                              subtitle: Text(
-                                entry.date.toIso8601String().split('T').first,
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) async {
-                                  if (value == 'edit') {
-                                    context.push(
-                                      AppRoutes.workerEntryPath(worker.id),
-                                      extra: {'entryId': entry.id},
-                                    );
-                                  } else {
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: Text(l10n.t('archive')),
-                                        content: Text(
-                                          l10n.t('confirmArchiveWorkerEntry'),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: Text(l10n.t('cancel')),
-                                          ),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: Text(l10n.t('archive')),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirmed == true) {
-                                      final result = await ref
-                                          .read(workerEntryRepositoryProvider)
-                                          .archiveEntry(entry.id);
-                                      if (result.queued) {
-                                        await ref
-                                            .read(
-                                              offlineQueueCoordinatorProvider,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(
+                                      worker.billingType == 'project'
+                                          ? l10n.t(
+                                              'totalWageWithValue',
+                                              params: {
+                                                'value': Formatters.money(
+                                                  entry.totalCost,
+                                                  currencyCode: currency,
+                                                  locale: locale,
+                                                ),
+                                              },
                                             )
-                                            .refreshCounts();
-                                        unawaited(
-                                          ref
-                                              .read(
-                                                offlineQueueCoordinatorProvider,
-                                              )
-                                              .drainNow(),
-                                        );
-                                        // if (context.mounted) {
-                                        //   ScaffoldMessenger.of(context)
-                                        //       .showSnackBar(
-                                        //     SnackBar(
-                                        //       content: Text(
-                                        //         l10n.t('queuedForSync'),
-                                        //       ),
-                                        //     ),
-                                        //   );
-                                        // }
-                                      }
-                                    }
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text(l10n.t('edit')),
+                                          : l10n.t(
+                                              'workerEntryLine',
+                                              params: {
+                                                'days': '${entry.daysWorked}',
+                                                'wage': Formatters.money(
+                                                  entry.dailyWage,
+                                                  currencyCode: currency,
+                                                  locale: locale,
+                                                ),
+                                                'total': Formatters.money(
+                                                  entry.totalCost,
+                                                  currencyCode: currency,
+                                                  locale: locale,
+                                                ),
+                                              },
+                                            ),
+                                    ),
+                                    subtitle: Text(
+                                      entry.date
+                                          .toIso8601String()
+                                          .split('T')
+                                          .first,
+                                    ),
+                                    trailing: PopupMenuButton<String>(
+                                      onSelected: (value) async {
+                                        if (value == 'edit') {
+                                          context.push(
+                                            AppRoutes.workerEntryPath(
+                                              worker.id,
+                                            ),
+                                            extra: {'entryId': entry.id},
+                                          );
+                                        } else {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: Text(l10n.t('archive')),
+                                              content: Text(
+                                                l10n.t(
+                                                  'confirmArchiveWorkerEntry',
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
+                                                  child: Text(l10n.t('cancel')),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
+                                                  child: Text(
+                                                    l10n.t('archive'),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed == true) {
+                                            final result = await ref
+                                                .read(
+                                                  workerEntryRepositoryProvider,
+                                                )
+                                                .archiveEntry(entry.id);
+                                            if (result.queued) {
+                                              await ref
+                                                  .read(
+                                                    offlineQueueCoordinatorProvider,
+                                                  )
+                                                  .refreshCounts();
+                                              unawaited(
+                                                ref
+                                                    .read(
+                                                      offlineQueueCoordinatorProvider,
+                                                    )
+                                                    .drainNow(),
+                                              );
+                                            }
+                                          }
+                                        }
+                                      },
+                                      itemBuilder: (_) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text(l10n.t('edit')),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Text(l10n.t('archive')),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text(l10n.t('archive')),
-                                  ),
+                                  if (entry.attachments.isNotEmpty) ...[
+                                    const Divider(height: 1),
+                                    ...entry.attachments.map(
+                                      (attachment) => AttachmentTile(
+                                        attachment: attachment,
+                                        onOpen: () {
+                                          final url =
+                                              attachment.downloadUrl ?? '';
+                                          if (url.isNotEmpty) {
+                                            unawaited(
+                                              launchSafeExternalUrl(url),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -277,14 +328,18 @@ class WorkerDetailScreen extends ConsumerWidget {
                       ],
                     );
                   },
-                  error: (error, _) => Text(error.toString()),
-                  loading: () => const SizedBox.shrink(),
+                  error: (error, _) => Text(appErrorMessage(l10n, error)),
+                  loading: () => const AppLoadingSkeleton(
+                    lineCount: 3,
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
                 ),
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

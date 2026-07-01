@@ -1,11 +1,20 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,8 +38,28 @@ class ExpenseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final expenseAsync = ref.watch(expenseDetailsProvider(expenseId));
+    final storageUploadService = ref.read(storageUploadServiceProvider);
     final locale = Localizations.localeOf(context).languageCode;
-    final fallbackProjectId = projectId ?? expenseAsync.valueOrNull?.projectId;
+    final fallbackProjectId = projectId ?? expenseAsync.value?.projectId;
+
+    Future<void> openAttachment(Attachment attachment) async {
+      try {
+        final rawUrl = attachment.downloadUrl?.trim();
+        final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
+            ? rawUrl
+            : await storageUploadService.getDownloadUrl(attachment.storagePath);
+        final launched = await launchSafeExternalUrl(downloadUrl);
+        if (!launched) {
+          throw Exception('Could not open attachment.');
+        }
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(appErrorMessage(l10n, error))));
+      }
+    }
+
     final fallbackRoute =
         fallbackProjectId != null && fallbackProjectId.isNotEmpty
         ? AppRoutes.projectExpensesPath(fallbackProjectId)
@@ -44,7 +73,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           title: l10n.t('expenseDetails'),
           fallbackRoute: fallbackRoute,
         ),
-        body: expenseAsync.when(
+        body: expenseAsync.whenStale(
           data: (expense) {
             if (expense == null) {
               return Center(child: Text(l10n.t('expenseNotFound')));
@@ -138,6 +167,59 @@ class ExpenseDetailScreen extends ConsumerWidget {
                             },
                           ),
                         ),
+                        if (expense.attachments.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            l10n.t('attachments'),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          for (final attachment in expense.attachments.where(
+                            _isImageAttachment,
+                          ))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  attachment.downloadUrl ?? '',
+                                  key: Key(
+                                    'qa_expense_image_preview_${attachment.id}',
+                                  ),
+                                  height: 180,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    height: 120,
+                                    color: Colors.black12,
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.broken_image),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Column(
+                            children: expense.attachments
+                                .map(
+                                  (attachment) => Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      child: AttachmentTile(
+                                        attachment: attachment,
+                                        onOpen: () =>
+                                            openAttachment(attachment),
+                                        onDownload: () =>
+                                            openAttachment(attachment),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -151,6 +233,87 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   child: Text(l10n.t('edit')),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonal(
+                  onPressed: () async {
+                    final workspaceId = ref.read(activeWorkspaceIdProvider);
+                    final userId = ref.read(activeUserIdProvider);
+                    if (workspaceId == null || userId == null) {
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(content: Text(l10n.t('pleaseLoginFirst'))),
+                        );
+                      return;
+                    }
+                    try {
+                      final result = await ref
+                          .read(expenseRepositoryProvider)
+                          .createExpense(
+                            workspaceId: workspaceId,
+                            userId: userId,
+                            projectId: expense.projectId,
+                            projectName: expense.projectName,
+                            category: expense.category,
+                            amount: expense.amount,
+                            currency: expense.currency,
+                            date: DateTime.now(),
+                            purpose: expense.purpose,
+                            description: expense.description,
+                            notes: expense.notes,
+                            supplierName: expense.supplierName,
+                            entityId: expense.entityId,
+                            entityName: expense.entityName,
+                            entityType: expense.entityType,
+                            paymentMethod: expense.paymentMethod,
+                            paymentStatus: expense.paymentStatus,
+                            attachments: expense.attachments.isNotEmpty
+                                ? expense.attachments
+                                : null,
+                          );
+                      if (result.queued) {
+                        await ref
+                            .read(offlineQueueCoordinatorProvider)
+                            .refreshCounts();
+                        unawaited(
+                          ref.read(offlineQueueCoordinatorProvider).drainNow(),
+                        );
+                        pushAppUiNotice(ref, l10n.t('queuedForSync'));
+                      }
+                      if (context.mounted) {
+                        appNavigateBack(
+                          context,
+                          fallbackRoute: AppRoutes.projectExpensesPath(
+                            expense.projectId,
+                          ),
+                        );
+                      }
+                    } on CallableClientException catch (e) {
+                      if (e.code == 'failed-precondition') {
+                        if (context.mounted) {
+                          context.push(
+                            '${AppRoutes.subscriptionLimit}?limit=expensesPerMonth',
+                          );
+                        }
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(SnackBar(content: Text(e.message)));
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.t('unexpectedErrorTryAgain')),
+                            ),
+                          );
+                      }
+                    }
+                  },
+                  child: Text(l10n.t('duplicate')),
                 ),
                 const SizedBox(height: 8),
                 FilledButton(
@@ -201,10 +364,24 @@ class ExpenseDetailScreen extends ConsumerWidget {
               ],
             );
           },
-          error: (error, _) => Center(child: Text(error.toString())),
-          loading: () => const SizedBox.shrink(),
+          error: (error, _) =>
+              Center(child: Text(appErrorMessage(l10n, error))),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );
+  }
+
+  bool _isImageAttachment(Attachment attachment) {
+    final contentType = attachment.contentType.toLowerCase();
+    if (contentType.startsWith('image/')) {
+      return attachment.downloadUrl?.trim().isNotEmpty == true;
+    }
+    final fileName = attachment.fileName.toLowerCase();
+    return attachment.downloadUrl?.trim().isNotEmpty == true &&
+        (fileName.endsWith('.png') ||
+            fileName.endsWith('.jpg') ||
+            fileName.endsWith('.jpeg') ||
+            fileName.endsWith('.webp'));
   }
 }

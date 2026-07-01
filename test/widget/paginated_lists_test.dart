@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
@@ -137,8 +141,14 @@ class _FakePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? projectTotalPaymentsBefore,
+    List<Attachment>? attachments,
   }) async {
     return const MutationResult();
   }
@@ -147,6 +157,14 @@ class _FakePaymentRepository implements PaymentRepository {
   Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
   }) async {
@@ -170,7 +188,13 @@ class _FakePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    List<Attachment>? attachments,
   }) async {}
 
   @override
@@ -202,6 +226,9 @@ PaymentRecord _payment({
   required String id,
   required String projectId,
   required double amount,
+  String paymentStatus = 'paid',
+  String entityName = '',
+  String description = '',
 }) {
   return PaymentRecord(
     id: id,
@@ -210,7 +237,12 @@ PaymentRecord _payment({
     amount: amount,
     date: DateTime(2026, 3, 26),
     paymentMethod: 'cash',
+    paymentStatus: paymentStatus,
+    description: description,
     notes: '',
+    entityName: entityName,
+    entityType: entityName.isEmpty ? '' : 'supplier',
+    attachments: const [],
     isArchived: false,
   );
 }
@@ -261,6 +293,45 @@ GoRouter _projectsRouter() {
 }
 
 void main() {
+  testWidgets(
+    'PaymentsScreen shows loading content while first page resolves',
+    (tester) async {
+      final fakeProjectRepository = _FakeProjectRepository(
+        activeProjects: [_project(1)],
+        firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+      );
+      final fakePaymentRepository = _PendingPaymentRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+            projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
+            paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+          ],
+          child: MaterialApp.router(routerConfig: _paymentsRouter()),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+      expect(find.textContaining('Steel Supplier'), findsNothing);
+
+      fakePaymentRepository.completeFirstPage([
+        _payment(
+          id: 'pay_1',
+          projectId: 'project_1',
+          amount: 100,
+          entityName: 'Steel Supplier',
+        ),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppLoadingSkeleton), findsNothing);
+      expect(find.textContaining('Steel Supplier'), findsOneWidget);
+    },
+  );
+
   testWidgets('PaymentsScreen applies the selected project filter', (
     tester,
   ) async {
@@ -301,6 +372,110 @@ void main() {
     expect(find.textContaining('project_1'), findsOneWidget);
     expect(find.textContaining('project_2'), findsNothing);
   });
+
+  testWidgets(
+    'PaymentsScreen supports compact filters, bulk archive, and empty CTA',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final fakeProjectRepository = _FakeProjectRepository(
+        activeProjects: [_project(1)],
+        firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+      );
+      final fakePaymentRepository = _FakePaymentRepository({
+        null: [
+          _payment(
+            id: 'pay_1',
+            projectId: 'project_1',
+            amount: 100,
+            paymentStatus: 'partial',
+            entityName: 'Steel Supplier',
+            description: 'invoice advance',
+          ),
+          _payment(
+            id: 'pay_2',
+            projectId: 'project_1',
+            amount: 200,
+            entityName: 'Paint Crew',
+          ),
+        ],
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+            projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
+            paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+          ],
+          child: MaterialApp.router(routerConfig: _paymentsRouter()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsOneWidget);
+      expect(find.textContaining('Steel Supplier'), findsOneWidget);
+      expect(find.textContaining('Partial'), findsOneWidget);
+      expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Group by entity'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search'),
+        'invoice',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Search: invoice'), findsOneWidget);
+      expect(find.byTooltip('Remove filter'), findsOneWidget);
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsNothing);
+
+      await tester.tap(find.byTooltip('Remove filter'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('100'), findsOneWidget);
+      expect(find.textContaining('200'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search'),
+        'missing',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No matching results.'), findsOneWidget);
+      expect(find.text('Clear filters'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.textContaining('100').first);
+      await tester.pump();
+
+      expect(find.byTooltip('Archive selected'), findsOneWidget);
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      expect(find.text('Archive 1 selected items?'), findsOneWidget);
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('100'), findsNothing);
+
+      await tester.ensureVisible(find.textContaining('200').first);
+      await tester.pumpAndSettle();
+      await tester.longPress(find.textContaining('200').first);
+      await tester.tap(find.byTooltip('Archive selected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archive').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('No payments yet.'), findsOneWidget);
+      expect(find.text('Add Payment'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('ProjectsScreen loads the next page when scrolled', (
     tester,
@@ -343,4 +518,35 @@ void main() {
 
     expect(find.text('Project 25'), findsOneWidget);
   });
+}
+
+class _PendingPaymentRepository extends _FakePaymentRepository {
+  _PendingPaymentRepository() : super(const {});
+
+  final _firstPageCompleter = Completer<FirestorePage<PaymentRecord>>();
+
+  @override
+  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+    String workspaceId, {
+    String? projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
+    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    int pageSize = 20,
+  }) {
+    requestedProjectIds.add(projectId);
+    return _firstPageCompleter.future;
+  }
+
+  void completeFirstPage(List<PaymentRecord> items) {
+    _firstPageCompleter.complete(
+      FirestorePage<PaymentRecord>(items: items, hasMore: false),
+    );
+  }
 }

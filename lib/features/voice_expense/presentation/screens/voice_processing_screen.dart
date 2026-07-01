@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/cloud_function_service.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
@@ -136,8 +137,7 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
     if (error is FirebaseFunctionsException) {
       return firebaseFunctionsErrorMessage(error, l10n);
     }
-    final message = error.toString().trim();
-    return message.isEmpty ? l10n.t('unexpectedErrorTryAgain') : message;
+    return appErrorMessage(l10n, error);
   }
 
   @override

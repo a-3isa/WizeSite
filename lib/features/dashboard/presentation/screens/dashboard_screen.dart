@@ -1,22 +1,35 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
-import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
-import 'package:go_router/go_router.dart';
-import 'package:buildtrack_app/core/widgets/usage_card.dart';
-import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
-import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
-import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
+import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
+import 'package:buildtrack_app/features/projects/domain/project.dart';
+import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
+import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:go_router/go_router.dart';
+
+/// Currently selected project for the dashboard. `null` means "All Projects"
+/// (workspace-wide aggregate).
+final selectedDashboardProjectIdProvider = StateProvider<String?>(
+  (ref) => null,
+);
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -25,362 +38,843 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final workspaceId = ref.watch(activeWorkspaceIdProvider);
-    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
-    final usageAsync = ref.watch(currentUsageProvider);
     final pendingSyncCount = ref.watch(offlinePendingCountProvider);
     final deadLetterCount = ref.watch(offlineDeadLetterCountProvider);
+    final unreadCount = ref.watch(unreadNotificationCountProvider);
+    final subscriptionAsync = ref.watch(currentSubscriptionStreamProvider);
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final locale = Localizations.localeOf(context).languageCode;
-    final summaryAsync = workspaceId == null
-        ? const AsyncValue.data(<String, num>{})
-        : ref.watch(dashboardSummaryProvider(workspaceId));
+
+    final projects = ref.watch(projectsProvider).value ?? const <Project>[];
+    final rawSelectedProjectId = ref.watch(selectedDashboardProjectIdProvider);
+    // Honour the selection only while it still belongs to the active workspace.
+    Project? selectedProject;
+    if (rawSelectedProjectId != null) {
+      for (final project in projects) {
+        if (project.id == rawSelectedProjectId) {
+          selectedProject = project;
+          break;
+        }
+      }
+    }
+
+    final snapshotAsync = workspaceId == null || workspaceId.isEmpty
+        ? const AsyncValue<DashboardSnapshot>.data(
+            DashboardSnapshot(
+              hasFinancialAccess: false,
+              totalProjects: 0,
+              activeProjects: 0,
+              totalExpenses: 0,
+              totalIncome: 0,
+              weeklyExpenses: 0,
+              weeklyIncome: 0,
+              topCategory: null,
+              topEntity: null,
+              recentTransactions: [],
+            ),
+          )
+        : ref.watch(dashboardSnapshotProvider(workspaceId));
+
+    Future<void> refresh() async {
+      if (workspaceId != null && workspaceId.isNotEmpty) {
+        ref.invalidate(dashboardSnapshotProvider(workspaceId));
+      }
+      ref.invalidate(notificationItemsProvider);
+      ref.invalidate(currentSubscriptionStreamProvider);
+      await Future.wait([
+        if (workspaceId != null && workspaceId.isNotEmpty)
+          ref.read(dashboardSnapshotProvider(workspaceId).future),
+        ref.read(notificationItemsProvider.future),
+      ]);
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.t('home')),
+        title: const WorkspaceSwitcher(),
         actions: [
+          Badge(
+            isLabelVisible: unreadCount > 0,
+            label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
+            child: IconButton(
+              key: const Key('qa_dashboard_notifications'),
+              tooltip: l10n.t('notifications'),
+              onPressed: () => context.push(AppRoutes.notifications),
+              icon: const Icon(Icons.notifications_outlined),
+            ),
+          ),
           IconButton(
             key: const Key('qa_dashboard_settings'),
+            tooltip: l10n.t('settings'),
             onPressed: () {
               ref.read(appPrefetcherProvider).warmSettings();
               context.push(AppRoutes.settings);
             },
             icon: const Icon(Icons.settings_outlined),
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.surfaceSolid,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: AppColors.borderGrey),
-              ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: _DashboardProjectSelector(
+              projects: projects,
+              selectedProject: selectedProject,
             ),
           ),
-          const SizedBox(width: 16),
-        ],
+        ),
       ),
       body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: refresh,
           child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          children: [
-            if (deadLetterCount > 0) ...[
-              _QueueStatusCard(
-                color: AppColors.danger,
-                icon: Icons.sync_problem_outlined,
-                message: l10n.t(
-                  'offlineSyncFailed',
-                  params: {'count': '$deadLetterCount'},
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              if (deadLetterCount > 0)
+                _QueueStatusCard(
+                  color: AppColors.danger,
+                  icon: Icons.sync_problem_outlined,
+                  message: l10n.t(
+                    'offlineSyncFailed',
+                    params: {'count': '$deadLetterCount'},
+                  ),
+                  actionLabel: l10n.t('syncStatus'),
+                  onAction: () => context.push(AppRoutes.syncStatus),
+                )
+              else if (pendingSyncCount > 0)
+                _QueueStatusCard(
+                  color: AppColors.warning,
+                  icon: Icons.cloud_upload_outlined,
+                  message: l10n.t(
+                    'offlineSyncPending',
+                    params: {'count': '$pendingSyncCount'},
+                  ),
+                  actionLabel: l10n.t('syncStatus'),
+                  onAction: () => context.push(AppRoutes.syncStatus),
+                ),
+              if (deadLetterCount > 0 || pendingSyncCount > 0)
+                const SizedBox(height: 16),
+              SectionHeader(title: l10n.t('overview')),
+              const SizedBox(height: 12),
+              if (selectedProject != null)
+                ProjectFinancialSection(
+                  project: selectedProject,
+                  currency: currency,
+                  workspaceId: workspaceId ?? '',
+                )
+              else
+                snapshotAsync.whenStale(
+                  data: (snapshot) => DashboardFinancialSection(
+                    snapshot: snapshot,
+                    currency: currency,
+                    locale: locale,
+                  ),
+                  loading: () => AppLoadingSkeleton(
+                    semanticsLabel: l10n.t('loadingContent'),
+                  ),
+                  error: (error, _) => AppRecoverableError(
+                    message: appErrorMessage(l10n, error),
+                    onRetry: workspaceId == null
+                        ? null
+                        : () => ref.invalidate(
+                            dashboardSnapshotProvider(workspaceId),
+                          ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              SectionHeader(title: l10n.t('resources')),
+              const SizedBox(height: 12),
+              const _ResourceLinks(),
+              const SizedBox(height: 24),
+              subscriptionAsync.whenStale(
+                data: (subscription) => subscription.tier == PlanTier.free
+                    ? _UpgradeCard(
+                        onTap: () => context.push(AppRoutes.subscriptionPlans),
+                      )
+                    : const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+                loading: () => const AppLoadingSkeleton(
+                  lineCount: 2,
+                  padding: EdgeInsets.symmetric(vertical: 8),
                 ),
               ),
-              const SizedBox(height: 12),
-            ] else if (pendingSyncCount > 0) ...[
-              _QueueStatusCard(
-                color: AppColors.warning,
-                icon: Icons.cloud_upload_outlined,
-                message: l10n.t(
-                  'offlineSyncPending',
-                  params: {'count': '$pendingSyncCount'},
-                ),
-              ),
-              const SizedBox(height: 12),
             ],
-            SectionHeader(title: l10n.t('overview')),
-            const SizedBox(height: 16),
-            summaryAsync.when(
-              data: (summary) {
-                if (summary.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSolid,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.borderGrey),
-                    ),
-                    child: Center(
-                      child: Text(
-                        l10n.t('noWorkspaceSelected'),
-                        style: TextStyle(color: AppColors.textBody),
-                      ),
-                    ),
-                  );
-                }
-                final net = summary['net'] ?? 0;
-                return GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.4,
-                  children: [
-                    MetricCard(
-                      label: l10n.t('activeProjects'),
-                      value: '${summary['activeProjects']?.toInt() ?? 0}',
-                      color: AppColors.constructionOrange,
-                      icon: Icons.work_outline,
-                    ),
-                    MetricCard(
-                      label: l10n.t('totalExpenses'),
-                      value: Formatters.money(
-                        summary['totalExpenses'] ?? 0,
-                        currencyCode: currency,
-                        locale: locale,
-                      ),
-                      color: AppColors.danger,
-                      icon: Icons.trending_down,
-                    ),
-                    MetricCard(
-                      label: l10n.t('totalIncome'),
-                      value: Formatters.money(
-                        summary['totalIncome'] ?? 0,
-                        currencyCode: currency,
-                        locale: locale,
-                      ),
-                      color: AppColors.success,
-                      icon: Icons.trending_up,
-                    ),
-                    MetricCard(
-                      label: l10n.t('netProfit'),
-                      value: Formatters.money(
-                        net,
-                        currencyCode: currency,
-                        locale: locale,
-                      ),
-                      color: net >= 0 ? AppColors.success : AppColors.danger,
-                      icon: Icons.account_balance_wallet_outlined,
-                    ),
-                  ],
-                );
-              },
-              error: (e, s) => Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.danger.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.danger.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: AppColors.danger),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        e.toString(),
-                        style: const TextStyle(color: AppColors.danger),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              loading: () => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 24),
-            SectionHeader(title: l10n.t('quickActions')),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickActionCard(
-                    qaKey: const Key('qa_add_expense'),
-                    icon: Icons.receipt_long_outlined,
-                    label: l10n.t('addExpense'),
-                    color: AppColors.danger,
-                    onTap: () => _onQuotaAction(
-                      context,
-                      ref,
-                      LimitType.expensesPerMonth,
-                      AppRoutes.addExpense,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _QuickActionCard(
-                    qaKey: const Key('qa_add_payment'),
-                    icon: Icons.payments_outlined,
-                    label: l10n.t('addPayment'),
-                    color: AppColors.success,
-                    onTap: () => _onQuotaAction(
-                      context,
-                      ref,
-                      LimitType.paymentsPerMonth,
-                      AppRoutes.addPayment,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickActionCard(
-                    qaKey: const Key('qa_workers_list'),
-                    icon: Icons.engineering_outlined,
-                    label: l10n.t('workers'),
-                    color: AppColors.warning,
-                    onTap: () {
-                      ref.read(appPrefetcherProvider).warmProjects();
-                      context.push(AppRoutes.workers);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _QuickActionCard(
-                    qaKey: const Key('qa_create_project'),
-                    icon: Icons.dashboard_customize_outlined,
-                    label: l10n.t('createProject'),
-                    color: AppColors.constructionOrange,
-                    onTap: () => _onQuotaAction(
-                      context,
-                      ref,
-                      LimitType.activeProjects,
-                      AppRoutes.createProject,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            usageAsync.when(
-              data: (usage) => UsageCard(usage: usage),
-              error: (e, s) => const SizedBox.shrink(),
-              loading: () => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 16),
-            subscriptionAsync.when(
-              data: (sub) => sub.tier == PlanTier.free
-                  ? Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            AppColors.constructionOrange,
-                            Color(0xFFFF9100),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.constructionOrange.withValues(
-                              alpha: 0.3,
-                            ),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () =>
-                              context.push(AppRoutes.subscriptionPlans),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.workspace_premium,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        l10n.t('upgradeToPro'),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                          letterSpacing: -0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        l10n.t('unlockHigherLimits'),
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
-              loading: () => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 32),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  void _onQuotaAction(
+/// Project filter shown under the dashboard AppBar. Scopes all financial data
+/// to a single project, or to "All Projects" (workspace aggregate) when null.
+class _DashboardProjectSelector extends ConsumerWidget {
+  const _DashboardProjectSelector({
+    required this.projects,
+    required this.selectedProject,
+  });
+
+  final List<Project> projects;
+  final Project? selectedProject;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final label = selectedProject?.name.trim().isNotEmpty == true
+        ? selectedProject!.name.trim()
+        : l10n.t('allProjects');
+
+    return Material(
+      color: AppColors.constructionOrange.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(12),
+      child: PopupMenuButton<String>(
+        key: const Key('qa_dashboard_project_selector'),
+        position: PopupMenuPosition.under,
+        tooltip: l10n.t('selectProject'),
+        // Empty string is the "All Projects" sentinel. A null value would be
+        // swallowed by PopupMenuButton as a cancel, making it impossible to
+        // switch back to the workspace-wide view.
+        onSelected: (value) =>
+            ref.read(selectedDashboardProjectIdProvider.notifier).state =
+                value.isEmpty ? null : value,
+        itemBuilder: (context) => [
+          PopupMenuItem<String>(
+            value: '',
+            child: Row(
+              children: [
+                Icon(
+                  selectedProject == null ? Icons.check : Icons.public_outlined,
+                  size: 18,
+                  color: AppColors.constructionOrange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(l10n.t('allProjects'))),
+              ],
+            ),
+          ),
+          for (final project in projects)
+            PopupMenuItem<String>(
+              value: project.id,
+              child: Row(
+                children: [
+                  Icon(
+                    project.id == selectedProject?.id
+                        ? Icons.check
+                        : Icons.work_outline,
+                    size: 18,
+                    color: AppColors.constructionOrange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(project.name, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.work_outline,
+                size: 18,
+                color: AppColors.constructionOrange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.t('project').toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.constructionOrange,
+                      ),
+                    ),
+                    Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_drop_down,
+                color: AppColors.constructionOrange,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Financial overview scoped to a single project: reuses the project
+/// [FinancialGrid] and adds a budget-used bar.
+class ProjectFinancialSection extends ConsumerWidget {
+  const ProjectFinancialSection({
+    required this.project,
+    required this.currency,
+    required this.workspaceId,
+    super.key,
+  });
+
+  final Project project;
+  final String currency;
+  final String workspaceId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).languageCode;
+    final recentAsync = workspaceId.isEmpty
+        ? const AsyncValue<List<DashboardTransactionRef>>.data(
+            <DashboardTransactionRef>[],
+          )
+        : ref.watch(
+            projectRecentTransactionsProvider((
+              workspaceId: workspaceId,
+              projectId: project.id,
+            )),
+          );
+    final budgetBase = (project.budgetLimit != null && project.budgetLimit! > 0)
+        ? project.budgetLimit!
+        : project.contractValue;
+    final hasBudget = budgetBase > 0;
+    final ratio = hasBudget
+        ? (project.totalExpenses / budgetBase).clamp(0.0, 1.0)
+        : 0.0;
+    final overBudget = hasBudget && project.totalExpenses > budgetBase;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            l10n.t('showingDataForProject', params: {'project': project.name}),
+            key: const Key('qa_dashboard_project_scope_caption'),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+          ),
+        ),
+        FinancialGrid(project: project, currency: currency),
+        if (hasBudget) ...[
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderGrey),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l10n.t('budgetUsed'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    Text(
+                      '${Formatters.money(project.totalExpenses, currencyCode: currency, locale: locale)} / ${Formatters.money(budgetBase, currencyCode: currency, locale: locale)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textBody,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 8,
+                    backgroundColor: AppColors.constructionOrange.withValues(
+                      alpha: 0.1,
+                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      overBudget
+                          ? AppColors.danger
+                          : AppColors.constructionOrange,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: overBudget
+                        ? AppColors.danger
+                        : AppColors.constructionOrange,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        SectionHeader(title: l10n.t('recent')),
+        const SizedBox(height: 12),
+        recentAsync.when(
+          data: (items) => items.isEmpty
+              ? AppEmptyState(
+                  key: const Key('qa_dashboard_project_recent_empty'),
+                  icon: Icons.receipt_long_outlined,
+                  message: l10n.t('noDataYet'),
+                )
+              : Container(
+                  key: const Key('qa_dashboard_project_recent'),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderGrey),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final item in items)
+                        _ProjectRecentRow(
+                          item: item,
+                          currency: currency,
+                          locale: locale,
+                          isLast: item == items.last,
+                        ),
+                    ],
+                  ),
+                ),
+          loading: () =>
+              AppLoadingSkeleton(semanticsLabel: l10n.t('loadingContent')),
+          error: (_, _) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+/// One row of the project-scoped recent transactions list. Payments (funds in)
+/// are shown green and positive; expenses (funds out) red and negative.
+class _ProjectRecentRow extends StatelessWidget {
+  const _ProjectRecentRow({
+    required this.item,
+    required this.currency,
+    required this.locale,
+    required this.isLast,
+  });
+
+  final DashboardTransactionRef item;
+  final String currency;
+  final String locale;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPayment = item.type == 'payment';
+    final color = isPayment ? AppColors.success : AppColors.danger;
+    final sign = isPayment ? '+' : '-';
+    final money = Formatters.money(
+      item.amount,
+      currencyCode: currency,
+      locale: locale,
+    );
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.surfaceGrey),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Row(
+        children: [
+          Icon(
+            isPayment ? Icons.south_west : Icons.north_east,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item.title.isNotEmpty ? item.title : '—',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          Text(
+            '$sign$money',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact workspace control rendered as the dashboard AppBar title.
+///
+/// Shows the active workspace name instantly from the cached summaries (no
+/// loading skeleton). When the user belongs to more than one workspace it
+/// becomes a dropdown with the current workspace shown first; otherwise it is
+/// plain title text. Switching is optimistic and rolls back on failure.
+class WorkspaceSwitcher extends ConsumerWidget {
+  const WorkspaceSwitcher({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final activeWorkspaceId = ref.watch(activeWorkspaceIdProvider);
+    final workspaces =
+        ref.watch(userWorkspaceSummariesProvider).value ??
+        const <WorkspaceSummary>[];
+    final activeWorkspaceName =
+        ref.watch(activeWorkspaceNameProvider).value?.trim() ?? '';
+
+    WorkspaceSummary? current;
+    for (final workspace in workspaces) {
+      if (workspace.id == activeWorkspaceId) {
+        current = workspace;
+        break;
+      }
+    }
+    final title = (current?.name.trim().isNotEmpty ?? false)
+        ? current!.name.trim()
+        : activeWorkspaceName.isNotEmpty
+        ? activeWorkspaceName
+        : l10n.t('home');
+
+    if (workspaces.length < 2) {
+      return Text(
+        title,
+        key: const Key('qa_workspace_switcher'),
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return PopupMenuButton<String>(
+      key: const Key('qa_workspace_dropdown'),
+      tooltip: l10n.t('chooseWorkspace'),
+      position: PopupMenuPosition.under,
+      onSelected: (workspaceId) {
+        if (workspaceId == activeWorkspaceId) {
+          return;
+        }
+        _switchWorkspace(context, ref, workspaceId);
+      },
+      itemBuilder: (context) => [
+        for (final workspace in workspaces)
+          PopupMenuItem<String>(
+            value: workspace.id,
+            child: Row(
+              children: [
+                Icon(
+                  workspace.id == activeWorkspaceId
+                      ? Icons.check
+                      : Icons.business_outlined,
+                  size: 18,
+                  color: AppColors.constructionOrange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(workspace.name, overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _switchWorkspace(
     BuildContext context,
     WidgetRef ref,
-    LimitType type,
-    String route,
-  ) {
-    ref.read(appPrefetcherProvider).warmAddEntry();
-    final workspaceId = ref.read(activeWorkspaceIdProvider);
-    if (workspaceId == null ||
-        workspaceId.isEmpty ||
-        AppLimits.usageLimitsDisabled) {
-      context.push(route);
-      return;
+    String workspaceId,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final previousWorkspaceId = ref.read(activeWorkspaceIdProvider);
+    ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
+    try {
+      final persistedWorkspaceId = await ref
+          .read(workspaceMutationServiceProvider)
+          .setActiveWorkspace(workspaceId: workspaceId);
+      if (persistedWorkspaceId.isNotEmpty &&
+          persistedWorkspaceId != workspaceId) {
+        ref.read(activeWorkspaceIdProvider.notifier).state =
+            persistedWorkspaceId;
+      }
+    } catch (error) {
+      ref.read(activeWorkspaceIdProvider.notifier).state = previousWorkspaceId;
+      messenger.showSnackBar(
+        SnackBar(content: Text(appErrorMessage(l10n, error))),
+      );
     }
+  }
+}
 
-    // Use already-loaded subscription data — no network call needed
-    final sub = ref.read(currentSubscriptionStreamProvider).value;
-    if (sub != null && sub.isActiveOrTrial && sub.tier == PlanTier.pro) {
-      context.push(route);
-      return;
-    }
+class DashboardFinancialSection extends StatelessWidget {
+  const DashboardFinancialSection({
+    required this.snapshot,
+    required this.currency,
+    required this.locale,
+    super.key,
+  });
 
-    // Use already-loaded usage snapshot — no network call needed
-    final usage = ref.read(currentUsageProvider).value;
-    if (usage == null) {
-      context.push(route); // data not yet loaded, navigate optimistically
-      return;
-    }
+  final DashboardSnapshot snapshot;
+  final String currency;
+  final String locale;
 
-    final current = usage.currentByType(type);
-    final max = usage.maxByType(type);
-    if (current + 1 > max) {
-      final limit = Uri.encodeComponent(type.name);
-      context.push('${AppRoutes.subscriptionLimit}?limit=$limit');
-      return;
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (!snapshot.hasFinancialAccess) {
+      return AppEmptyState(
+        key: const Key('dashboard_financial_restricted'),
+        icon: Icons.lock_outline,
+        message: l10n.t('reportAccessDenied'),
+      );
     }
-    context.push(route);
+    final isProfit = snapshot.net >= 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GridView.count(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.35,
+          children: [
+            MetricCard(
+              label: l10n.t('activeProjects'),
+              value: '${snapshot.activeProjects}',
+              color: AppColors.constructionOrange,
+              icon: Icons.work_outline,
+            ),
+            MetricCard(
+              label: l10n.t('totalExpenses'),
+              value: Formatters.money(
+                snapshot.totalExpenses,
+                currencyCode: currency,
+                locale: locale,
+              ),
+              color: AppColors.danger,
+              icon: Icons.trending_down,
+            ),
+            MetricCard(
+              label: l10n.t('totalIncome'),
+              value: Formatters.money(
+                snapshot.totalIncome,
+                currencyCode: currency,
+                locale: locale,
+              ),
+              color: AppColors.success,
+              icon: Icons.trending_up,
+            ),
+            KeyedSubtree(
+              key: Key(
+                isProfit ? 'dashboard_net_profit' : 'dashboard_net_loss',
+              ),
+              child: MetricCard(
+                label: l10n.t('netProfit'),
+                value: Formatters.money(
+                  snapshot.net,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+                color: isProfit ? AppColors.success : AppColors.danger,
+                icon: isProfit ? Icons.trending_up : Icons.trending_down,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        SectionHeader(title: l10n.t('weeklySummary')),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: MetricCard(
+                label: l10n.t('totalExpenses'),
+                value: Formatters.money(
+                  snapshot.weeklyExpenses,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+                color: AppColors.danger,
+                icon: Icons.trending_down,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: MetricCard(
+                label: l10n.t('totalIncome'),
+                value: Formatters.money(
+                  snapshot.weeklyIncome,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+                color: AppColors.success,
+                icon: Icons.trending_up,
+              ),
+            ),
+          ],
+        ),
+        // if (snapshot.topCategory != null || snapshot.topEntity != null) ...[
+        //   const SizedBox(height: 20),
+        //   Wrap(
+        //     spacing: 12,
+        //     runSpacing: 12,
+        //     children: [
+        //       if (snapshot.topCategory != null)
+        //         Chip(
+        //           avatar: const Icon(Icons.category_outlined, size: 18),
+        //           label: Text(
+        //             '${l10n.t('topCategory')}: ${snapshot.topCategory}',
+        //           ),
+        //         ),
+        //       if (snapshot.topEntity != null)
+        //         Chip(
+        //           avatar: const Icon(Icons.business_outlined, size: 18),
+        //           label: Text('${l10n.t('topEntity')}: ${snapshot.topEntity}'),
+        //         ),
+        //     ],
+        //   ),
+        // ],
+      ],
+    );
+  }
+}
+
+class _ResourceLinks extends StatelessWidget {
+  const _ResourceLinks();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return GridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.4,
+      children: [
+        _ResourceCard(
+          qaKey: const Key('qa_resource_workers'),
+          icon: Icons.engineering_outlined,
+          label: l10n.t('workers'),
+          color: AppColors.warning,
+          onTap: () => context.push(AppRoutes.workers),
+        ),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_contractors'),
+          icon: Icons.handyman_outlined,
+          label: l10n.t('contractorsDirectory'),
+          color: AppColors.constructionOrange,
+          onTap: () => context.push(AppRoutes.contractorsDirectory),
+        ),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_equipment'),
+          icon: Icons.construction_outlined,
+          label: l10n.t('equipmentDirectory'),
+          color: AppColors.success,
+          onTap: () => context.push(AppRoutes.equipmentDirectory),
+        ),
+        _ResourceCard(
+          qaKey: const Key('qa_resource_transport'),
+          icon: Icons.local_shipping_outlined,
+          label: l10n.t('transportDirectory'),
+          color: AppColors.danger,
+          onTap: () => context.push(AppRoutes.transportProvidersDirectory),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResourceCard extends StatelessWidget {
+  const _ResourceCard({
+    required this.qaKey,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final Key qaKey;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      button: true,
+      child: Material(
+        key: qaKey,
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -389,115 +883,61 @@ class _QueueStatusCard extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.message,
+    required this.actionLabel,
+    required this.onAction,
   });
 
   final Color color;
   final IconData icon;
   final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+            TextButton(onPressed: onAction, child: Text(actionLabel)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({
-    this.qaKey,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+class _UpgradeCard extends StatelessWidget {
+  const _UpgradeCard({required this.onTap});
 
-  final Key? qaKey;
-  final IconData icon;
-  final String label;
-  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      key: qaKey,
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      color: AppColors.constructionOrange,
+      child: ListTile(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSolid,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderGrey),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.07),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withValues(alpha: 0.78)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: Colors.white, size: 22),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                  fontSize: 13,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+        leading: const Icon(Icons.workspace_premium, color: Colors.white),
+        title: Text(
+          l10n.t('upgradeToPro'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
         ),
+        subtitle: Text(
+          l10n.t('unlockHigherLimits'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        trailing: const Icon(Icons.arrow_forward, color: Colors.white),
       ),
     );
   }

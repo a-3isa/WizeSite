@@ -1,18 +1,21 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/cache/workspace_cache.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/navigation/crashlytics_route_observer.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
-import 'package:buildtrack_app/features/add/presentation/screens/add_entry_screen.dart';
-import 'package:buildtrack_app/features/add/presentation/screens/add_hub_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
-import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/initial_workspace_setup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
-import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
+import 'package:buildtrack_app/features/contractors/presentation/screens/contractors_screen.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:buildtrack_app/features/equipment/presentation/screens/equipment_screen.dart';
+import 'package:buildtrack_app/features/entities/presentation/screens/resource_directory_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expense_detail_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expenses_screen.dart';
@@ -25,16 +28,20 @@ import 'package:buildtrack_app/features/projects/presentation/screens/create_pro
 import 'package:buildtrack_app/features/projects/presentation/screens/project_detail_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/archived_projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/reports/presentation/screens/entity_aggregation_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
-import 'package:buildtrack_app/features/settings/presentation/screens/team_management_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/sync_status_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/workspace_settings_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/limit_reached_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/manage_subscription_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/plans_screen.dart';
 import 'package:buildtrack_app/features/subscription/presentation/screens/subscription_success_screen.dart';
+import 'package:buildtrack_app/features/transport/presentation/screens/transport_providers_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_entry_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
+import 'package:buildtrack_app/features/workers/presentation/screens/worker_accounting_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:flutter/material.dart';
@@ -45,23 +52,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
   final rootRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final dashboardRouteObserver = RouteObserver<ModalRoute<dynamic>>();
-  final addRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final projectsRouteObserver = RouteObserver<ModalRoute<dynamic>>();
   final refresh = _RouterRefreshNotifier(auth.authStateChanges());
   ref.onDispose(refresh.dispose);
-  ref.listen<String?>(
-    activeWorkspaceIdProvider,
-    (previous, next) => refresh.refresh(),
-  );
-  ref.listen<String?>(
-    activeUserIdProvider,
-    (previous, next) => refresh.refresh(),
-  );
+  final workspaceCache = ref.watch(workspaceCacheProvider);
+  ref.listen<String?>(activeWorkspaceIdProvider, (previous, next) {
+    workspaceCache.setActiveWorkspaceId(next);
+    refresh.refresh();
+  });
+  ref.listen<String?>(activeUserIdProvider, (previous, next) {
+    workspaceCache.setActiveUserId(next);
+    refresh.refresh();
+    FirebaseCrashlytics.instance.setUserIdentifier(next ?? '');
+  });
 
   return GoRouter(
     initialLocation: AppRoutes.root,
     refreshListenable: refresh,
-    observers: [rootRouteObserver],
+    observers: [CrashlyticsRouteObserver(), rootRouteObserver],
     redirect: (context, state) {
       final location = state.uri.path;
       final isSignedIn = auth.currentUser != null;
@@ -100,25 +108,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        path: AppRoutes.signup,
-        name: 'signup',
-        builder: (context, state) => const SignUpScreen(),
+        path: AppRoutes.initialWorkspaceSetup,
+        name: 'initialWorkspaceSetup',
+        builder: (context, state) => const InitialWorkspaceSetupScreen(),
       ),
       GoRoute(
-        path: AppRoutes.forgotPassword,
-        name: 'forgotPassword',
-        builder: (context, state) => const ForgotPasswordScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.reports,
-        name: 'reports',
-        pageBuilder: (context, state) {
-          final projectId = state.uri.queryParameters['projectId'];
-          return smoothAppPage<void>(
-            key: state.pageKey,
-            child: ReportsScreen(projectId: projectId),
-          );
-        },
+        path: AppRoutes.entitySummary,
+        name: 'entitySummary',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const EntityAggregationScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settings,
@@ -137,11 +137,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
-        path: AppRoutes.teamManagement,
-        name: 'teamManagement',
+        path: AppRoutes.workspaceSettings,
+        name: 'workspaceSettings',
         pageBuilder: (context, state) => smoothAppPage<void>(
           key: state.pageKey,
-          child: const TeamManagementScreen(),
+          child: const WorkspaceSettingsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.syncStatus,
+        name: 'syncStatus',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const SyncStatusScreen(),
         ),
       ),
       StatefulShellRoute.indexedStack(
@@ -160,16 +168,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
-            observers: [addRouteObserver],
-            routes: [
-              GoRoute(
-                path: AppRoutes.add,
-                name: 'add',
-                builder: (context, state) => const AddHubScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
             observers: [projectsRouteObserver],
             routes: [
               GoRoute(
@@ -180,6 +178,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        name: 'reports',
+        // No projectId => all-projects (portfolio) report.
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: ReportsScreen(
+            projectId: state.uri.queryParameters['projectId'],
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.createProject,
@@ -227,18 +236,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return smoothAppPage<void>(
             key: state.pageKey,
             child: ExpensesScreen(projectId: projectId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.addEntry,
-        name: 'addEntry',
-        pageBuilder: (context, state) {
-          final tabParam = state.uri.queryParameters['tab'];
-          final initialTab = int.tryParse(tabParam ?? '0') ?? 0;
-          return smoothAppPage<void>(
-            key: state.pageKey,
-            child: AddEntryScreen(initialTab: initialTab),
           );
         },
       ),
@@ -312,9 +309,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'paymentDetail',
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final projectId = state.uri.queryParameters['projectId'];
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: PaymentDetailScreen(paymentId: id),
+            child: PaymentDetailScreen(paymentId: id, projectId: projectId),
           );
         },
       ),
@@ -323,9 +321,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'paymentEdit',
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final projectId = state.uri.queryParameters['projectId'];
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: AddPaymentScreen(paymentId: id),
+            child: AddPaymentScreen(paymentId: id, projectId: projectId),
           );
         },
       ),
@@ -389,6 +388,96 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutes.workerAccounting,
+        name: 'workerAccounting',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: WorkerAccountingScreen(
+              workerId: id,
+              workerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.contractorsDirectory,
+        name: 'contractorsDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.contractor,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.equipmentDirectory,
+        name: 'equipmentDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.equipment,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.transportProvidersDirectory,
+        name: 'transportProvidersDirectory',
+        pageBuilder: (context, state) => smoothAppPage<void>(
+          key: state.pageKey,
+          child: const ResourceDirectoryScreen(
+            type: ResourceDirectoryType.transport,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.contractors,
+        name: 'contractors',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: ContractorsScreen(
+              contractorId: id,
+              contractorName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.equipment,
+        name: 'equipment',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: EquipmentScreen(
+              providerId: id,
+              providerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.transportProviders,
+        name: 'transportProviders',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return smoothAppPage<void>(
+            key: state.pageKey,
+            child: TransportProvidersScreen(
+              providerId: id,
+              providerName: state.uri.queryParameters['name'] ?? id,
+              projectId: state.uri.queryParameters['projectId'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: AppRoutes.notifications,
         name: 'notifications',
         pageBuilder: (context, state) => smoothAppPage<void>(
@@ -407,9 +496,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'subscriptionLimit',
         pageBuilder: (context, state) {
           final limitType = state.uri.queryParameters['limit'] ?? 'generic';
+          final current = int.tryParse(
+            state.uri.queryParameters['current'] ?? '',
+          );
+          final max = int.tryParse(state.uri.queryParameters['max'] ?? '');
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: LimitReachedScreen(limitType: limitType),
+            child: LimitReachedScreen(
+              limitType: limitType,
+              current: current,
+              max: max,
+            ),
           );
         },
       ),
@@ -468,10 +565,7 @@ String? resolveAppRedirect({
   required bool hasWorkspace,
 }) {
   final isSplash = location == AppRoutes.root;
-  final isAuthRoute =
-      location == AppRoutes.login ||
-      location == AppRoutes.signup ||
-      location == AppRoutes.forgotPassword;
+  final isAuthRoute = location == AppRoutes.login;
   final isPublicDiscovery =
       location == AppRoutes.features || location == AppRoutes.onboarding;
   final isPublicRoute = isSplash || isAuthRoute || isPublicDiscovery;

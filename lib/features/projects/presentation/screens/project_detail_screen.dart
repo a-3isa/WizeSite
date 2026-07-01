@@ -1,8 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
@@ -25,8 +28,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     final projectAsync = ref.watch(projectDetailsProvider(projectId));
     final prefetcher = ref.read(appPrefetcherProvider);
     final currency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,
@@ -38,7 +40,7 @@ class ProjectDetailScreen extends ConsumerWidget {
           fallbackRoute: AppRoutes.projects,
           centerTitle: true,
         ),
-        body: projectAsync.when(
+        body: projectAsync.whenStale(
           data: (project) {
             if (project == null) {
               return Center(child: Text(l10n.t('projectNotFound')));
@@ -110,26 +112,62 @@ class ProjectDetailScreen extends ConsumerWidget {
                     context.push(AppRoutes.reportsPath(projectId: project.id));
                   },
                   onDelete: () async {
+                    final controller = TextEditingController();
                     final confirmed = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(l10n.t('delete')),
-                        content: Text(l10n.t('confirmDeleteProjectCascade')),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(l10n.t('cancel')),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: Text(
-                              l10n.t('delete'),
-                              style: const TextStyle(color: AppColors.danger),
+                      builder: (context) => StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          final matches =
+                              controller.text.trim() == project.name.trim();
+                          return AlertDialog(
+                            title: Text(l10n.t('delete')),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(l10n.t('confirmDeleteProjectCascade')),
+                                const SizedBox(height: 16),
+                                Text(
+                                  l10n.t('deleteProjectTypeNameToConfirm'),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: controller,
+                                  autofocus: true,
+                                  decoration: InputDecoration(
+                                    hintText: project.name,
+                                  ),
+                                  onChanged: (_) => setDialogState(() {}),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text(l10n.t('cancel')),
+                              ),
+                              TextButton(
+                                onPressed: matches
+                                    ? () => Navigator.pop(context, true)
+                                    : null,
+                                child: Text(
+                                  l10n.t('delete'),
+                                  style: TextStyle(
+                                    color: matches
+                                        ? AppColors.danger
+                                        : AppColors.textBody,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     );
+                    controller.dispose();
                     if (confirmed == true) {
                       await ref
                           .read(projectRepositoryProvider)
@@ -150,7 +188,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               children: [
                 Icon(Icons.error_outline, size: 48, color: AppColors.danger),
                 const SizedBox(height: 16),
-                Text(error.toString()),
+                Text(appErrorMessage(l10n, error)),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () =>
@@ -160,7 +198,7 @@ class ProjectDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
-          loading: () => const SizedBox.shrink(),
+          loading: () => const AppLoadingSkeleton(lineCount: 8),
         ),
       ),
     );

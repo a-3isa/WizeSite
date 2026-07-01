@@ -43,21 +43,29 @@ class ContactsService {
   }
 
   Future<PickedContactResult> pickContact() async {
-    final pickedId = await FlutterContacts.native.showPicker();
-    if (pickedId == null || pickedId.trim().isEmpty) {
+    final pickedContact = await FlutterContacts.native.showPicker();
+
+    final contactId = pickedContact?.id;
+
+    if (contactId == null || contactId.trim().isEmpty) {
       return const PickedContactResult.cancelled();
     }
+
     final contact = await FlutterContacts.get(
-      pickedId,
+      contactId,
       properties: {ContactProperty.name, ContactProperty.phone},
     );
+
     final normalized = ContactsService.normalizePickedContact(
       fullName: contact?.displayName,
-      phoneNumbers: contact?.phones.map((phone) => phone.number).toList() ?? const [],
+      phoneNumbers:
+          contact?.phones.map((phone) => phone.number).toList() ?? const [],
     );
+
     if (normalized == null) {
       return const PickedContactResult.missingPhoneNumber();
     }
+
     return PickedContactResult.selected(normalized);
   }
 

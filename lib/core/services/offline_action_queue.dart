@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
@@ -18,6 +17,9 @@ class OfflineAction {
     this.status = OfflineActionStatus.pending,
     this.nextAttemptAt,
     this.syncedAt,
+    this.resolutionType,
+    this.resolutionAt,
+    this.resolutionTargetId,
   });
 
   final String id;
@@ -30,6 +32,9 @@ class OfflineAction {
   final String status;
   final DateTime? nextAttemptAt;
   final DateTime? syncedAt;
+  final String? resolutionType;
+  final DateTime? resolutionAt;
+  final String? resolutionTargetId;
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -42,6 +47,9 @@ class OfflineAction {
     'status': status,
     'nextAttemptAt': nextAttemptAt?.toIso8601String(),
     'syncedAt': syncedAt?.toIso8601String(),
+    'resolutionType': resolutionType,
+    'resolutionAt': resolutionAt?.toIso8601String(),
+    'resolutionTargetId': resolutionTargetId,
   };
 
   factory OfflineAction.fromMap(Map<String, dynamic> map) {
@@ -60,6 +68,11 @@ class OfflineAction {
       syncedAt: map['syncedAt'] == null
           ? null
           : DateTime.tryParse(map['syncedAt'] as String),
+      resolutionType: map['resolutionType'] as String?,
+      resolutionAt: map['resolutionAt'] == null
+          ? null
+          : DateTime.tryParse(map['resolutionAt'] as String),
+      resolutionTargetId: map['resolutionTargetId'] as String?,
     );
   }
 
@@ -70,9 +83,13 @@ class OfflineAction {
     String? status,
     DateTime? nextAttemptAt,
     DateTime? syncedAt,
+    String? resolutionType,
+    DateTime? resolutionAt,
+    String? resolutionTargetId,
     bool clearLastError = false,
     bool clearNextAttemptAt = false,
     bool clearSyncedAt = false,
+    bool clearResolution = false,
   }) {
     return OfflineAction(
       id: id,
@@ -89,6 +106,15 @@ class OfflineAction {
           ? null
           : (nextAttemptAt ?? this.nextAttemptAt),
       syncedAt: clearSyncedAt ? null : (syncedAt ?? this.syncedAt),
+      resolutionType: clearResolution
+          ? null
+          : (resolutionType ?? this.resolutionType),
+      resolutionAt: clearResolution
+          ? null
+          : (resolutionAt ?? this.resolutionAt),
+      resolutionTargetId: clearResolution
+          ? null
+          : (resolutionTargetId ?? this.resolutionTargetId),
     );
   }
 }
@@ -100,13 +126,61 @@ abstract final class OfflineActionStatus {
   static const deadLetter = 'dead_letter';
 }
 
-typedef OfflineActionHandler = Future<void> Function(OfflineAction action);
+abstract final class OfflineActionResolutionType {
+  static const applied = 'applied';
+  static const skippedNewerVersion = 'skippedNewerVersion';
+}
+
+abstract final class OfflineActionQueueTypes {
+  static const attachmentUpload = 'attachment_upload';
+  static const entityUpsert = 'entity_upsert';
+  static const summaryDelta = 'summary_delta';
+}
+
+abstract final class OfflineActionPayloadKeys {
+  static const workspaceId = 'workspaceId';
+  static const ownerType = 'ownerType';
+  static const ownerId = 'ownerId';
+  static const attachment = 'attachment';
+  static const entity = 'entity';
+  static const summaryScope = 'summaryScope';
+  static const summaryId = 'summaryId';
+  static const summaryDelta = 'summaryDelta';
+  static const clientMutationId = 'clientMutationId';
+  static const clientCreatedAt = 'clientCreatedAt';
+  static const clientUpdatedAt = 'clientUpdatedAt';
+  static const clientSavedAt = 'clientSavedAt';
+}
+
+class OfflineActionOutcome {
+  const OfflineActionOutcome._({required this.resolutionType, this.targetId});
+
+  final String resolutionType;
+  final String? targetId;
+
+  const OfflineActionOutcome.applied({String? targetId})
+    : this._(
+        resolutionType: OfflineActionResolutionType.applied,
+        targetId: targetId,
+      );
+
+  const OfflineActionOutcome.skippedNewerVersion({String? targetId})
+    : this._(
+        resolutionType: OfflineActionResolutionType.skippedNewerVersion,
+        targetId: targetId,
+      );
+}
+
+typedef OfflineActionHandler = Future<dynamic> Function(OfflineAction action);
 
 class OfflineActionQueue {
-  OfflineActionQueue(this._box);
+  OfflineActionQueue(this._box, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final Box<String> _box;
+  final DateTime Function() _now;
   Future<void>? _activeDrain;
+  DateTime? _lastCreatedAt;
   static const _uuid = Uuid();
   static const syncedVisibilityWindow = Duration(minutes: 2);
 
@@ -118,13 +192,18 @@ class OfflineActionQueue {
   Future<OfflineAction> enqueue({
     required String type,
     required Map<String, dynamic> payload,
+    DateTime? clientSavedAt,
   }) async {
     final id = _uuid.v4();
-    final now = DateTime.now();
+    final now = _nextCreatedAt();
     final enrichedPayload = Map<String, dynamic>.from(payload);
-    enrichedPayload['clientMutationId'] ??= id;
-    enrichedPayload['clientCreatedAt'] ??= now.toIso8601String();
-    enrichedPayload['clientUpdatedAt'] ??= now.toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientMutationId] ??= id;
+    enrichedPayload[OfflineActionPayloadKeys.clientCreatedAt] ??= now
+        .toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientUpdatedAt] ??= now
+        .toIso8601String();
+    enrichedPayload[OfflineActionPayloadKeys.clientSavedAt] ??=
+        (clientSavedAt ?? now).toIso8601String();
     final action = OfflineAction(
       id: id,
       type: type,
@@ -132,16 +211,19 @@ class OfflineActionQueue {
       createdAt: now,
     );
     await _box.put(action.id, jsonEncode(action.toMap()));
-    if (kDebugMode && type == 'create_payment') {
-      debugPrint(
-        '[offline_queue.enqueue] type=$type id=${action.id} '
-        'projectId=${enrichedPayload['projectId']} '
-        'amount=${enrichedPayload['amount']} '
-        'before=${enrichedPayload['projectTotalPaymentsBefore']} '
-        'after=${enrichedPayload['projectTotalPaymentsAfter']}',
-      );
-    }
     return action;
+  }
+
+  DateTime _nextCreatedAt() {
+    final candidate = _now();
+    final lastCreatedAt = _lastCreatedAt;
+    if (lastCreatedAt != null && !candidate.isAfter(lastCreatedAt)) {
+      final next = lastCreatedAt.add(const Duration(microseconds: 1));
+      _lastCreatedAt = next;
+      return next;
+    }
+    _lastCreatedAt = candidate;
+    return candidate;
   }
 
   Future<List<OfflineAction>> list({
@@ -173,27 +255,6 @@ class OfflineActionQueue {
             })
             .toList()
           ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    if (kDebugMode) {
-      final paymentActions = actions
-          .where((action) => action.type == 'create_payment')
-          .map(
-            (action) =>
-                '${action.id}:${action.status}:project=${action.payload['projectId']}:'
-                'amount=${action.payload['amount']}:'
-                'before=${action.payload['projectTotalPaymentsBefore']}:'
-                'after=${action.payload['projectTotalPaymentsAfter']}:'
-                'syncedAt=${action.syncedAt?.toIso8601String()}:'
-                'errorCode=${action.lastErrorCode}:'
-                'error=${action.lastError}',
-          )
-          .toList();
-      if (paymentActions.isNotEmpty) {
-        debugPrint(
-          '[offline_queue.list] includeExpiredSynced=$includeExpiredSynced '
-          'payments=${paymentActions.join(' | ')}',
-        );
-      }
-    }
     return actions;
   }
 
@@ -215,18 +276,26 @@ class OfflineActionQueue {
 
   Future<void> save(OfflineAction action) async {
     await _box.put(action.id, jsonEncode(action.toMap()));
-    if (kDebugMode && action.type == 'create_payment') {
-      debugPrint(
-        '[offline_queue.save] type=${action.type} id=${action.id} '
-        'status=${action.status} projectId=${action.payload['projectId']} '
-        'amount=${action.payload['amount']} '
-        'before=${action.payload['projectTotalPaymentsBefore']} '
-        'after=${action.payload['projectTotalPaymentsAfter']} '
-        'syncedAt=${action.syncedAt?.toIso8601String()} '
-        'errorCode=${action.lastErrorCode} '
-        'error=${action.lastError}',
-      );
+  }
+
+  Future<OfflineAction> retryAction(String id) async {
+    final raw = _box.get(id);
+    if (raw == null) {
+      throw StateError('Offline action not found: $id');
     }
+    final action = OfflineAction.fromMap(
+      jsonDecode(raw) as Map<String, dynamic>,
+    );
+    final retried = action.copyWith(
+      retryCount: 0,
+      status: OfflineActionStatus.pending,
+      clearLastError: true,
+      clearNextAttemptAt: true,
+      clearSyncedAt: true,
+      clearResolution: true,
+    );
+    await save(retried);
+    return retried;
   }
 
   Future<void> drain(
@@ -258,42 +327,24 @@ class OfflineActionQueue {
           }
           processedAny = true;
           try {
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] processing id=${action.id} '
-                'type=${action.type} status=${action.status} '
-                'projectId=${action.payload['projectId']} '
-                'amount=${action.payload['amount']} '
-                'retryCount=${action.retryCount}',
-              );
-            }
-            await handler(action);
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] success id=${action.id} '
-                'type=${action.type}',
-              );
-            }
+            final rawOutcome = await handler(action);
+            final outcome = rawOutcome is OfflineActionOutcome
+                ? rawOutcome
+                : const OfflineActionOutcome.applied();
+            final resolvedAt = DateTime.now();
             await save(
               action.copyWith(
                 status: OfflineActionStatus.synced,
-                syncedAt: DateTime.now(),
+                syncedAt: resolvedAt,
+                resolutionType: outcome.resolutionType,
+                resolutionAt: resolvedAt,
+                resolutionTargetId: outcome.targetId,
                 clearLastError: true,
                 clearNextAttemptAt: true,
               ),
             );
           } catch (error) {
             final details = SyncErrorClassifier.detailsFrom(error);
-            if (kDebugMode && action.type == 'create_payment') {
-              debugPrint(
-                '[offline_queue.drain] failure id=${action.id} '
-                'type=${action.type} projectId=${action.payload['projectId']} '
-                'amount=${action.payload['amount']} '
-                'retryCount=${action.retryCount} '
-                'terminal=${SyncErrorClassifier.isTerminal(error)} '
-                'code=${details.code} message=${details.message}',
-              );
-            }
             final nextRetryCount = action.retryCount + 1;
             if (SyncErrorClassifier.isTerminal(error) ||
                 nextRetryCount >= maxRetries) {

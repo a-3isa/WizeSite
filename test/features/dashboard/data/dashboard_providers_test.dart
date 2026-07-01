@@ -1,0 +1,234 @@
+import 'dart:io';
+
+import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
+import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
+import 'package:buildtrack_app/core/services/offline_action_queue.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
+
+Future<T> _readStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  return container.read(provider.future);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory tempDir;
+  late Box<String> box;
+  late OfflineActionQueue queue;
+  late FakeFirebaseFirestore firestore;
+  late ProviderContainer container;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp(
+      'dashboard_providers_test_',
+    );
+    Hive.init(tempDir.path);
+    box = await Hive.openBox<String>('dashboard_providers_test');
+    queue = OfflineActionQueue(box);
+    firestore = FakeFirebaseFirestore();
+    container = ProviderContainer(
+      overrides: [
+        firestoreProvider.overrideWithValue(firestore),
+        offlineActionQueueProvider.overrideWithValue(queue),
+      ],
+    );
+  });
+
+  tearDown(() async {
+    container.dispose();
+    await box.close();
+    await Hive.deleteBoxFromDisk('dashboard_providers_test');
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test('weekly summary excludes future-dated transactions', () async {
+    final now = DateTime.now();
+    await firestore.collection('expenses').doc('expense_this_week').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'amount': 100,
+      'date': DateTime(now.year, now.month, now.day),
+    });
+    await firestore.collection('expenses').doc('expense_future').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'amount': 900,
+      'date': DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).add(const Duration(days: 14)),
+    });
+
+    final summary = await _readStreamProvider(
+      container,
+      dashboardWeeklySummaryProvider('workspace_1'),
+    );
+
+    expect(summary['weeklyExpenses'], 100);
+  });
+
+  test(
+    'weekly summary ignores synced pending actions already reflected',
+    () async {
+      final now = DateTime.now();
+      final date = DateTime(now.year, now.month, now.day);
+      await firestore.collection('expenses').doc('expense_synced').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 100,
+        'date': date,
+      });
+      final action = await queue.enqueue(
+        type: OfflineActionTypes.createExpense,
+        payload: {
+          'workspaceId': 'workspace_1',
+          'projectId': 'project_1',
+          'amount': 100,
+          'date': date.toIso8601String(),
+        },
+      );
+      await queue.save(
+        action.copyWith(
+          status: OfflineActionStatus.synced,
+          syncedAt: DateTime.now(),
+        ),
+      );
+
+      final summary = await _readStreamProvider(
+        container,
+        dashboardWeeklySummaryProvider('workspace_1'),
+      );
+
+      expect(summary['weeklyExpenses'], 100);
+    },
+  );
+
+  test(
+    'weekly insights normalizes empty names and raw category keys',
+    () async {
+      final now = DateTime.now();
+      final date = DateTime(now.year, now.month, now.day);
+      await firestore.collection('expenses').doc('expense_1').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 100,
+        'category': 'labor',
+        'entityName': '',
+        'paymentMethod': 'cash',
+        'date': date,
+      });
+
+      final insights = await _readStreamProvider(
+        container,
+        dashboardWeeklyInsightsProvider('workspace_1'),
+      );
+
+      expect(insights.topEntity, 'unassigned');
+      expect(insights.topCategory, 'labor');
+      expect(insights.paymentSummary.keys, contains('cash'));
+      expect(insights.recentTransactions.single.title, 'unassigned');
+    },
+  );
+
+  test('dashboard snapshot parses one bounded maintained metrics document', () {
+    final snapshot = DashboardSnapshot.fromMap({
+      'totalProjects': 8,
+      'activeProjects': 5,
+      'totalExpenses': 1200,
+      'totalIncome': 1800,
+      'weeklyExpenses': 200,
+      'weeklyIncome': 450,
+      'topCategory': 'materials',
+      'topEntity': 'Acme',
+      'recentTransactions': [
+        {
+          'id': 'expense_1',
+          'type': 'expense',
+          'title': 'Steel',
+          'amount': 90,
+          'date': DateTime(2026, 6, 15).toIso8601String(),
+        },
+      ],
+    });
+
+    expect(snapshot.net, 600);
+    expect(snapshot.weeklyNet, 250);
+    expect(snapshot.recentTransactions, hasLength(1));
+    expect(snapshot.recentTransactions.single.id, 'expense_1');
+  });
+
+  test(
+    'member receives a restricted snapshot without financial totals',
+    () async {
+      final deniedContainer = ProviderContainer(
+        overrides: [
+          firestoreProvider.overrideWithValue(firestore),
+          offlineActionQueueProvider.overrideWithValue(queue),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.member),
+          ),
+        ],
+      );
+      addTearDown(deniedContainer.dispose);
+
+      final snapshot = await _readStreamProvider(
+        deniedContainer,
+        dashboardSnapshotProvider('workspace_1'),
+      );
+
+      expect(snapshot.hasFinancialAccess, isFalse);
+      expect(snapshot.totalExpenses, 0);
+    },
+  );
+
+  test('accounting role reads the maintained workspace snapshot', () async {
+    await firestore.collection('workspace_metrics').doc('workspace_1').set({
+      'workspaceId': 'workspace_1',
+      'totalProjects': 3,
+      'activeProjects': 2,
+      'totalExpenses': 400,
+      'totalIncome': 700,
+      'weeklyExpenses': 50,
+      'weeklyIncome': 90,
+    });
+    final allowedContainer = ProviderContainer(
+      overrides: [
+        firestoreProvider.overrideWithValue(firestore),
+        offlineActionQueueProvider.overrideWithValue(queue),
+        currentAccountingRoleProvider.overrideWithValue(
+          const AsyncData(AccountingAccessRoleType.accountingApproved),
+        ),
+      ],
+    );
+    addTearDown(allowedContainer.dispose);
+
+    final snapshot = await _readStreamProvider(
+      allowedContainer,
+      dashboardSnapshotProvider('workspace_1'),
+    );
+
+    expect(snapshot.hasFinancialAccess, isTrue);
+    expect(snapshot.net, 300);
+    expect(snapshot.weeklyNet, 40);
+  });
+}

@@ -1,12 +1,35 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
+import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/features/contractors/domain/contractor_accounting_record.dart';
+import 'package:buildtrack_app/features/equipment/domain/equipment_accounting_record.dart';
+import 'package:buildtrack_app/features/transport/domain/transport_provider_accounting_record.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
+import 'package:buildtrack_app/features/reports/domain/report_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 final reportProjectIdProvider = StateProvider<String?>((ref) => null);
+final reportNowProvider = Provider<DateTime>((ref) => DateTime.now());
+final reportScopeProvider = StateProvider<ReportScope>(
+  (ref) => ReportScope.monthToDate(now: ref.watch(reportNowProvider)),
+);
+final effectiveReportScopeProvider = Provider<ReportScope>((ref) {
+  final scope = ref.watch(reportScopeProvider);
+  final legacyProjectId = ref.watch(reportProjectIdProvider);
+  if (scope.hasProject || legacyProjectId == null || legacyProjectId.isEmpty) {
+    return scope;
+  }
+  return scope.copyWith(projectId: legacyProjectId);
+});
 
 class MonthlyFlowData {
   const MonthlyFlowData({
@@ -30,6 +53,18 @@ class WorkerCostData {
   final String name;
   final double totalCost;
   final double totalDays;
+}
+
+class ReportScopedRows {
+  const ReportScopedRows({
+    required this.expenses,
+    required this.payments,
+    required this.hasMore,
+  });
+
+  final List<Expense> expenses;
+  final List<PaymentRecord> payments;
+  final bool hasMore;
 }
 
 class ReportMetrics {
@@ -476,6 +511,7 @@ List<Expense> _mergeRecentExpenses(
       transcript: current.transcript,
       source: current.source,
       storagePath: current.storagePath,
+      attachments: current.attachments,
       isArchived: current.isArchived,
       clientMutationId: current.clientMutationId,
     );
@@ -513,6 +549,7 @@ List<Expense> _mergeRecentExpenses(
         transcript: '${action.payload['transcript'] ?? ''}',
         source: 'pending',
         storagePath: '${action.payload['storagePath'] ?? ''}',
+        attachments: Attachment.listFromDynamic(action.payload['attachments']),
         isArchived: false,
         clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
       ),
@@ -572,6 +609,7 @@ List<PaymentRecord> _mergeRecentPayments(
       paymentMethod:
           '${action.payload['paymentMethod'] ?? current.paymentMethod}',
       notes: '${action.payload['notes'] ?? current.notes}',
+      attachments: current.attachments,
       isArchived: current.isArchived,
       clientMutationId: current.clientMutationId,
     );
@@ -601,6 +639,7 @@ List<PaymentRecord> _mergeRecentPayments(
         date: _parsePendingDate(action.payload['date']) ?? action.createdAt,
         paymentMethod: '${action.payload['paymentMethod'] ?? 'cash'}',
         notes: '${action.payload['notes'] ?? ''}',
+        attachments: Attachment.listFromDynamic(action.payload['attachments']),
         isArchived: false,
         clientMutationId: '${action.payload['clientMutationId'] ?? action.id}',
       ),
@@ -874,23 +913,194 @@ bool _isReportDeltaAlreadyReflected({
   return delta > 0 ? currentTotal >= expected : currentTotal <= expected;
 }
 
+final reportScopedRowsProvider = FutureProvider<ReportScopedRows?>((ref) async {
+  final role = await ref.watch(currentAccountingRoleProvider.future);
+  if (role?.canAccessAccounting != true) {
+    return null;
+  }
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  final scope = ref.watch(effectiveReportScopeProvider);
+  if (workspaceId == null || workspaceId.isEmpty) {
+    return null;
+  }
+
+  // Portfolio (all-projects) rollup: aggregate workspace-wide rows in range.
+  // Backed by the existing (workspaceId, isArchived, date) composite indexes.
+  if (!scope.hasProject) {
+    final firestore = ref.watch(firestoreProvider);
+    const limit = 1000;
+    final results = await Future.wait([
+      firestore
+          .collection('expenses')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('isArchived', isEqualTo: false)
+          .where('date', isGreaterThanOrEqualTo: scope.startDate)
+          .where('date', isLessThanOrEqualTo: scope.endDate)
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get(),
+      firestore
+          .collection('payments')
+          .where('workspaceId', isEqualTo: workspaceId)
+          .where('isArchived', isEqualTo: false)
+          .where('date', isGreaterThanOrEqualTo: scope.startDate)
+          .where('date', isLessThanOrEqualTo: scope.endDate)
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get(),
+    ]);
+    final allExpenses =
+        results[0].docs
+            .map((doc) => Expense.fromMap(doc.id, doc.data()))
+            .where((item) => scope.contains(item.date))
+            .toList(growable: false)
+          ..sort((a, b) => b.date.compareTo(a.date));
+    final allPayments =
+        results[1].docs
+            .map((doc) => PaymentRecord.fromMap(doc.id, doc.data()))
+            .where((item) => scope.contains(item.date))
+            .toList(growable: false)
+          ..sort((a, b) => b.date.compareTo(a.date));
+    return ReportScopedRows(
+      expenses: allExpenses,
+      payments: allPayments,
+      hasMore:
+          results[0].docs.length >= limit || results[1].docs.length >= limit,
+    );
+  }
+
+  final expensePage = await ref
+      .watch(expenseRepositoryProvider)
+      .fetchExpensesPage(
+        workspaceId,
+        projectId: scope.projectId!,
+        startDate: scope.startDate,
+        endDate: scope.endDate,
+        cursor: null,
+        pageSize: 500,
+      );
+  final paymentPage = await ref
+      .watch(paymentRepositoryProvider)
+      .fetchPaymentsPage(
+        workspaceId,
+        projectId: scope.projectId!,
+        startDate: scope.startDate,
+        endDate: scope.endDate,
+        cursor: null,
+        pageSize: 500,
+      );
+
+  final expenses =
+      expensePage.items
+          .where(
+            (item) =>
+                item.projectId == scope.projectId && scope.contains(item.date),
+          )
+          .toList(growable: false)
+        ..sort((a, b) => b.date.compareTo(a.date));
+  final payments =
+      paymentPage.items
+          .where(
+            (item) =>
+                item.projectId == scope.projectId && scope.contains(item.date),
+          )
+          .toList(growable: false)
+        ..sort((a, b) => b.date.compareTo(a.date));
+  return ReportScopedRows(
+    expenses: expenses,
+    payments: payments,
+    hasMore: expensePage.hasMore || paymentPage.hasMore,
+  );
+});
+
+ReportMetrics _metricsFromScopedRows(
+  ReportMetrics? base,
+  ReportScope scope,
+  ReportScopedRows rows,
+) {
+  final categoryTotals = <String, double>{};
+  final monthly = <String, MonthlyFlowData>{};
+
+  MonthlyFlowData monthFor(DateTime date) {
+    final key = _monthKey(date);
+    return monthly.putIfAbsent(
+      key,
+      () => MonthlyFlowData(
+        month: DateTime.utc(date.year, date.month),
+        expenses: 0,
+        income: 0,
+      ),
+    );
+  }
+
+  var totalExpenses = 0.0;
+  for (final expense in rows.expenses) {
+    totalExpenses += expense.amount;
+    categoryTotals.update(
+      expense.category,
+      (value) => value + expense.amount,
+      ifAbsent: () => expense.amount,
+    );
+    final point = monthFor(expense.date);
+    monthly[_monthKey(point.month)] = MonthlyFlowData(
+      month: point.month,
+      expenses: point.expenses + expense.amount,
+      income: point.income,
+    );
+  }
+
+  var totalIncome = 0.0;
+  for (final payment in rows.payments) {
+    totalIncome += payment.amount;
+    final point = monthFor(payment.date);
+    monthly[_monthKey(point.month)] = MonthlyFlowData(
+      month: point.month,
+      expenses: point.expenses,
+      income: point.income + payment.amount,
+    );
+  }
+
+  final monthlyFlow = monthly.values.toList(growable: false)
+    ..sort((a, b) => a.month.compareTo(b.month));
+  return ReportMetrics(
+    projectId: scope.projectId ?? '',
+    projectName: base?.projectName ?? '',
+    status: base?.status ?? 'active',
+    isArchived: base?.isArchived ?? false,
+    totalExpenses: totalExpenses,
+    totalIncome: totalIncome,
+    net: totalIncome - totalExpenses,
+    categoryTotals: categoryTotals,
+    monthlyFlow: monthlyFlow,
+    topWorkers: const [],
+    recentExpenses: rows.expenses.take(5).toList(growable: false),
+    recentPayments: rows.payments.take(5).toList(growable: false),
+  );
+}
+
 final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
-  final projectId = ref.watch(reportProjectIdProvider);
+  final projectId = ref.watch(effectiveReportScopeProvider).projectId;
   if (projectId == null || projectId.isEmpty) {
     return Stream.value(null);
   }
-
-  return ref
-      .watch(firestoreProvider)
-      .collection('project_metrics')
-      .doc(projectId)
-      .snapshots()
-      .map((snap) {
-        if (!snap.exists) {
-          return null;
-        }
-        return ReportMetrics.fromMap(snap.id, snap.data() ?? const {});
-      });
+  final firestore = ref.watch(firestoreProvider);
+  return (() async* {
+    final role = await ref.watch(currentAccountingRoleProvider.future);
+    if (role?.canAccessAccounting != true) {
+      yield null;
+      return;
+    }
+    yield* firestore
+        .collection('project_metrics')
+        .doc(projectId)
+        .snapshots()
+        .map((snap) {
+          if (!snap.exists) {
+            return null;
+          }
+          return ReportMetrics.fromMap(snap.id, snap.data() ?? const {});
+        });
+  })();
 });
 
 final reportPendingActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
@@ -900,18 +1110,38 @@ final reportPendingActionsProvider = StreamProvider<List<OfflineAction>>((ref) {
 });
 
 final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
-  final projectId = ref.watch(reportProjectIdProvider);
-  if (projectId == null || projectId.isEmpty) {
-    return const AsyncData(null);
-  }
+  final scope = ref.watch(effectiveReportScopeProvider);
 
   final baseAsync = ref.watch(reportBaseMetricsProvider);
   final pendingAsync = ref.watch(reportPendingActionsProvider);
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  final scopedRowsAsync = workspaceId == null || workspaceId.isEmpty
+      ? const AsyncData<ReportScopedRows?>(null)
+      : ref.watch(reportScopedRowsProvider);
 
   return baseAsync.when(
     data: (base) => pendingAsync.when(
-      data: (actions) =>
-          AsyncData(_mergePendingActionsIntoMetrics(base, actions, projectId)),
+      data: (actions) => scopedRowsAsync.when(
+        data: (rows) {
+          // Portfolio (all-projects) rollup: derive purely from the
+          // workspace-wide rows; there is no single project to merge against.
+          if (!scope.hasProject) {
+            return AsyncData(
+              rows == null ? null : _metricsFromScopedRows(null, scope, rows),
+            );
+          }
+          final merged = _mergePendingActionsIntoMetrics(
+            base,
+            actions,
+            scope.projectId!,
+          );
+          return AsyncData(
+            rows == null ? merged : _metricsFromScopedRows(merged, scope, rows),
+          );
+        },
+        error: (error, stackTrace) => AsyncError(error, stackTrace),
+        loading: () => const AsyncLoading(),
+      ),
       error: (error, stackTrace) => AsyncError(error, stackTrace),
       loading: () => const AsyncLoading(),
     ),
@@ -921,16 +1151,116 @@ final reportMetricsProvider = Provider<AsyncValue<ReportMetrics?>>((ref) {
 });
 
 final reportExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
-  return ref
-      .watch(reportMetricsProvider)
-      .whenData((metrics) => metrics?.recentExpenses ?? const []);
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  final scopedRows = workspaceId == null || workspaceId.isEmpty
+      ? const AsyncData<ReportScopedRows?>(null)
+      : ref.watch(reportScopedRowsProvider);
+  return scopedRows.when(
+    data: (rows) => rows == null
+        ? ref
+              .watch(reportMetricsProvider)
+              .whenData((metrics) => metrics?.recentExpenses ?? const [])
+        : AsyncData(rows.expenses),
+    error: (error, stackTrace) => AsyncError(error, stackTrace),
+    loading: () => const AsyncLoading(),
+  );
 });
 
 final reportPaymentsProvider = Provider<AsyncValue<List<PaymentRecord>>>((ref) {
-  return ref
-      .watch(reportMetricsProvider)
-      .whenData((metrics) => metrics?.recentPayments ?? const []);
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  final scopedRows = workspaceId == null || workspaceId.isEmpty
+      ? const AsyncData<ReportScopedRows?>(null)
+      : ref.watch(reportScopedRowsProvider);
+  return scopedRows.when(
+    data: (rows) => rows == null
+        ? ref
+              .watch(reportMetricsProvider)
+              .whenData((metrics) => metrics?.recentPayments ?? const [])
+        : AsyncData(rows.payments),
+    error: (error, stackTrace) => AsyncError(error, stackTrace),
+    loading: () => const AsyncLoading(),
+  );
 });
+
+Stream<List<T>> _scopedAccountingRecordsStream<T>({
+  required Ref ref,
+  required String collection,
+  required T Function(String id, Map<String, dynamic> data) fromMap,
+}) {
+  final workspaceId = ref.watch(activeWorkspaceIdProvider);
+  final scope = ref.watch(effectiveReportScopeProvider);
+  if (workspaceId == null || workspaceId.isEmpty || !scope.hasProject) {
+    return Stream.value(List<T>.empty(growable: false));
+  }
+  final firestore = ref.watch(firestoreProvider);
+  return (() async* {
+    final role = await ref.watch(currentAccountingRoleProvider.future);
+    if (role?.canAccessAccounting != true) {
+      yield List<T>.empty(growable: false);
+      return;
+    }
+    yield* firestore
+        .collection(collection)
+        .where('workspaceId', isEqualTo: workspaceId)
+        .where('projectId', isEqualTo: scope.projectId)
+        .where('date', isGreaterThanOrEqualTo: scope.startDate)
+        .where('date', isLessThanOrEqualTo: scope.endDate)
+        .orderBy('date', descending: true)
+        .limit(50)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => fromMap(doc.id, doc.data()))
+              .where((record) {
+                final date = switch (record) {
+                  WorkerAccountingRecord item => item.date,
+                  ContractorAccountingRecord item => item.date,
+                  EquipmentAccountingRecord item => item.date,
+                  TransportProviderAccountingRecord item => item.date,
+                  _ => null,
+                };
+                return date != null && scope.contains(date);
+              })
+              .toList(growable: false),
+        );
+  })();
+}
+
+final reportWorkerAccountingRecordsProvider =
+    StreamProvider<List<WorkerAccountingRecord>>((ref) {
+      return _scopedAccountingRecordsStream(
+        ref: ref,
+        collection: 'worker_accounting_records',
+        fromMap: WorkerAccountingRecord.fromMap,
+      );
+    });
+
+final reportContractorAccountingRecordsProvider =
+    StreamProvider<List<ContractorAccountingRecord>>((ref) {
+      return _scopedAccountingRecordsStream(
+        ref: ref,
+        collection: 'contractor_accounting_records',
+        fromMap: ContractorAccountingRecord.fromMap,
+      );
+    });
+
+final reportEquipmentAccountingRecordsProvider =
+    StreamProvider<List<EquipmentAccountingRecord>>((ref) {
+      return _scopedAccountingRecordsStream(
+        ref: ref,
+        collection: 'equipment_accounting_records',
+        fromMap: EquipmentAccountingRecord.fromMap,
+      );
+    });
+
+final reportTransportAccountingRecordsProvider =
+    StreamProvider<List<TransportProviderAccountingRecord>>((ref) {
+      return _scopedAccountingRecordsStream(
+        ref: ref,
+        collection: 'transport_provider_accounting_records',
+        fromMap: TransportProviderAccountingRecord.fromMap,
+      );
+    });
 
 final expensesByCategoryProvider = Provider<AsyncValue<Map<String, double>>>((
   ref,
@@ -949,9 +1279,27 @@ final monthlyFlowProvider = Provider<AsyncValue<List<MonthlyFlowData>>>((ref) {
 });
 
 final topWorkersProvider = Provider<AsyncValue<List<WorkerCostData>>>((ref) {
-  return ref
-      .watch(reportMetricsProvider)
-      .whenData((metrics) => metrics?.topWorkers ?? const <WorkerCostData>[]);
+  final recordsAsync = ref.watch(reportWorkerAccountingRecordsProvider);
+  return recordsAsync.whenData((records) {
+    final totals = <String, WorkerCostData>{};
+    for (final record in records) {
+      final key = record.workerId.isNotEmpty
+          ? record.workerId
+          : record.workerName;
+      final current = totals[key];
+      totals[key] = WorkerCostData(
+        name: record.workerName,
+        totalCost: (current?.totalCost ?? 0) + record.amount,
+        totalDays: current?.totalDays ?? 0,
+      );
+    }
+    final workers = totals.values.toList(growable: false)
+      ..sort((a, b) {
+        final costCompare = b.totalCost.compareTo(a.totalCost);
+        return costCompare != 0 ? costCompare : a.name.compareTo(b.name);
+      });
+    return workers.take(5).toList(growable: false);
+  });
 });
 
 final reportSummaryProvider = Provider<AsyncValue<Map<String, num>>>((ref) {

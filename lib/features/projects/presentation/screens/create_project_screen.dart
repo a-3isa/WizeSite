@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:flutter/material.dart';
@@ -63,7 +67,20 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
         setState(() {
           _nameController.text = project.name;
           _clientController.text = project.clientName;
-          _contractController.text = project.contractValue.toStringAsFixed(2);
+          _contractController.text =
+              ThousandsSeparatorInputFormatter.formatInitial(
+                project.contractValue.toStringAsFixed(2),
+              );
+          _locationController.text = project.location;
+          _descriptionController.text = project.description;
+          if (project.budgetLimit != null) {
+            _budgetController.text =
+                ThousandsSeparatorInputFormatter.formatInitial(
+                  project.budgetLimit!.toStringAsFixed(2),
+                );
+          }
+          if (project.startDate != null) _startDate = project.startDate!;
+          _endDate = project.expectedEndDate;
           _completion = project.completionPercentage;
           _status = project.status;
         });
@@ -101,10 +118,10 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       return;
     }
 
-    final contract = double.tryParse(_contractController.text.trim());
+    final contract = NumberParser.parseDouble(_contractController.text);
     if (_nameController.text.trim().isEmpty ||
         contract == null ||
-        contract <= 0) {
+        contract < 0) {
       setState(() => _error = l10n.t('fillRequiredFields'));
       return;
     }
@@ -129,7 +146,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: double.tryParse(_budgetController.text.trim()),
+              budgetLimit: NumberParser.parseDouble(_budgetController.text),
               completionPercentage: _completion,
             );
         queued = result.queued;
@@ -145,7 +162,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: double.tryParse(_budgetController.text.trim()),
+              budgetLimit: NumberParser.parseDouble(_budgetController.text),
               completionPercentage: _completion,
               status: _status,
             );
@@ -175,7 +192,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString());
+        setState(() => _error = appErrorMessage(l10n, e));
       }
     } finally {
       if (mounted) {
@@ -236,7 +253,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       fallbackRoute: fallbackRoute,
       child: Scaffold(
         body: _prefilling
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoadingSkeleton(lineCount: 8)
             : SafeArea(
                 child: CustomScrollView(
                   slivers: [
@@ -290,6 +307,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
+                            inputFormatters: const [
+                              ThousandsSeparatorInputFormatter(),
+                            ],
                             decoration: _inputDecoration(
                               l10n.t('contractValue'),
                               required: true,
@@ -317,6 +337,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
+                            inputFormatters: const [
+                              ThousandsSeparatorInputFormatter(),
+                            ],
                             decoration: _inputDecoration(l10n.t('budgetLimit')),
                             textInputAction: TextInputAction.next,
                           ),

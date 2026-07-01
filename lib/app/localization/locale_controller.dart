@@ -1,6 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 
 class LocaleController extends StateNotifier<Locale> {

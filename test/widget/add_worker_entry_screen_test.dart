@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
@@ -31,6 +32,7 @@ class _FakeWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
     double? projectTotalExpensesBefore,
   }) async {
     createdWorkerId = workerId;
@@ -48,6 +50,7 @@ class _FakeWorkerEntryRepository implements WorkerEntryRepository {
     required double dailyWage,
     required DateTime date,
     String? notes,
+    List<Attachment>? attachments,
   }) async {}
 
   @override

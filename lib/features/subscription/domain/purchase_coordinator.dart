@@ -6,6 +6,12 @@ class OfferingPackage {
     required this.periodLabel,
     required this.productCode,
     required this.offeringId,
+    this.packageType,
+    this.trialPeriodLabel,
+    this.hasFreeTrial = false,
+    this.isRecommended = false,
+    this.featureKeys = const [],
+    this.savingsLabel,
   });
 
   final String id;
@@ -14,6 +20,55 @@ class OfferingPackage {
   final String periodLabel;
   final String productCode;
   final String offeringId;
+
+  /// Store package type (e.g. `monthly`, `annual`). Null when unknown.
+  final String? packageType;
+
+  /// Localized/explicit trial label (e.g. `7-day free trial`). Null when the
+  /// package has no introductory trial.
+  final String? trialPeriodLabel;
+
+  /// Whether the store reports an introductory free trial for this package.
+  final bool hasFreeTrial;
+
+  /// Recommendation input used to highlight a plan in the comparison UI.
+  final bool isRecommended;
+
+  /// Local feature-comparison content keys associated with this package.
+  final List<String> featureKeys;
+
+  /// Optional savings/value framing (e.g. `Save 20%`). Null when not applicable.
+  final String? savingsLabel;
+
+  OfferingPackage copyWith({
+    String? id,
+    String? title,
+    String? priceString,
+    String? periodLabel,
+    String? productCode,
+    String? offeringId,
+    String? packageType,
+    String? trialPeriodLabel,
+    bool? hasFreeTrial,
+    bool? isRecommended,
+    List<String>? featureKeys,
+    String? savingsLabel,
+  }) {
+    return OfferingPackage(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      priceString: priceString ?? this.priceString,
+      periodLabel: periodLabel ?? this.periodLabel,
+      productCode: productCode ?? this.productCode,
+      offeringId: offeringId ?? this.offeringId,
+      packageType: packageType ?? this.packageType,
+      trialPeriodLabel: trialPeriodLabel ?? this.trialPeriodLabel,
+      hasFreeTrial: hasFreeTrial ?? this.hasFreeTrial,
+      isRecommended: isRecommended ?? this.isRecommended,
+      featureKeys: featureKeys ?? this.featureKeys,
+      savingsLabel: savingsLabel ?? this.savingsLabel,
+    );
+  }
 }
 
 class CustomerSubscriptionInfo {

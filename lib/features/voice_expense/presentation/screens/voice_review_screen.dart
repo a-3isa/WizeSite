@@ -1,5 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/number_parser.dart';
+import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
@@ -42,7 +44,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
 
   static const _allowedCurrencies = <String>['EGP', 'USD', 'SAR', 'AED'];
   static const _allowedCategories = <String>[
-    'labor',
+    'worker',
     'materials',
     'equipment',
     'transport',
@@ -53,7 +55,11 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   void initState() {
     super.initState();
     final parsed = widget.response.parsed;
-    _amountController.text = parsed.amount?.toString() ?? '';
+    _amountController.text = parsed.amount == null
+        ? ''
+        : ThousandsSeparatorInputFormatter.formatInitial(
+            parsed.amount.toString(),
+          );
     _noteController.text = parsed.note ?? '';
     _currency = _allowedCurrencies.contains(parsed.currency)
         ? parsed.currency!
@@ -126,7 +132,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId =
         await _resolvedWorkspaceId() ?? await _workspaceIdFromSelectedProject();
-    final amount = double.tryParse(_amountController.text.trim());
+    final amount = NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || workspaceId.isEmpty) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
@@ -230,8 +236,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final parsed = widget.response.parsed;
     final confidence = widget.response.confidence;
     final defaultCurrency =
-        ref.watch(currentUserSettingsProvider).valueOrNull?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     if (_currency == 'EGP' &&
         (parsed.currency == null || parsed.currency!.isEmpty) &&
         defaultCurrency != 'EGP') {
@@ -295,6 +300,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: const [ThousandsSeparatorInputFormatter()],
               decoration: InputDecoration(labelText: l10n.t('amount')),
             ),
             const SizedBox(height: 12),

@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -37,8 +38,14 @@ class _FakePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
     double? projectTotalPaymentsBefore,
+    List<Attachment>? attachments,
   }) async {
     createCalls += 1;
     return const MutationResult(queued: false);
@@ -48,6 +55,14 @@ class _FakePaymentRepository implements PaymentRepository {
   Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? searchText,
+    DateTime? startDate,
+    DateTime? endDate,
     DocumentSnapshot<Map<String, dynamic>>? cursor,
     int pageSize = 20,
   }) async {
@@ -65,7 +80,13 @@ class _FakePaymentRepository implements PaymentRepository {
     required double amount,
     required DateTime date,
     required String paymentMethod,
+    String? paymentStatus,
+    String? description,
     String? notes,
+    String? entityId,
+    String? entityName,
+    String? entityType,
+    List<Attachment>? attachments,
   }) async {}
 
   @override
@@ -163,9 +184,104 @@ GoRouter _router() {
 }
 
 void main() {
+  testWidgets(
+    'AddPaymentScreen exposes description and payment status controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            paymentRepositoryProvider.overrideWithValue(
+              _FakePaymentRepository(),
+            ),
+            projectsProvider.overrideWith((ref) => Stream.value([_project()])),
+            entitlementGuardProvider.overrideWithValue(
+              EntitlementGuardService(
+                subscriptionRepository: _FakeSubscriptionRepository(),
+                usageQuotaRepository: _FakeUsageQuotaRepository(),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: _router(),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Description'), findsOneWidget);
+      expect(find.text('Payment status'), findsOneWidget);
+    },
+  );
+
+  testWidgets('AddPaymentScreen localizes attachment controls in Arabic', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          activeUserIdProvider.overrideWith((ref) => 'user_1'),
+          paymentRepositoryProvider.overrideWithValue(_FakePaymentRepository()),
+          projectsProvider.overrideWith((ref) => Stream.value([_project()])),
+          entitlementGuardProvider.overrideWithValue(
+            EntitlementGuardService(
+              subscriptionRepository: _FakeSubscriptionRepository(),
+              usageQuotaRepository: _FakeUsageQuotaRepository(),
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          locale: const Locale('ar'),
+          routerConfig: _router(),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('المرفقات'), findsOneWidget);
+    expect(find.text('اختيار المرفقات'), findsOneWidget);
+    expect(find.text('Attachments'), findsNothing);
+    expect(find.text('Select attachments'), findsNothing);
+  });
+
   testWidgets('AddPaymentScreen bypasses quota while limits are disabled', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final paymentRepository = _FakePaymentRepository();
 
     await tester.pumpWidget(
@@ -196,9 +312,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).at(1), '100');
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '100');
+    await tester.scrollUntilVisible(
+      find.text('Save Payment'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Save Payment'), findsOneWidget);
-    await tester.tap(find.text('Save Payment'));
+    await tester.tap(
+      find.ancestor(
+        of: find.text('Save Payment'),
+        matching: find.byType(FilledButton),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(paymentRepository.createCalls, 1);
