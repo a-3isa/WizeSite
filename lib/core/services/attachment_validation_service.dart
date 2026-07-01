@@ -29,6 +29,23 @@ class AttachmentValidationService {
     return null;
   }
 
+  static ({List<PlatformFile> validFiles, List<String> invalidMessages})
+  validatePickedFiles(Iterable<PlatformFile> files) {
+    final invalidMessages = <String>[];
+    final validFiles = <PlatformFile>[];
+
+    for (final file in files.where((file) => file.path != null)) {
+      final validationError = validatePickedFile(file);
+      if (validationError != null) {
+        invalidMessages.add(validationError);
+        continue;
+      }
+      validFiles.add(file);
+    }
+
+    return (validFiles: validFiles, invalidMessages: invalidMessages);
+  }
+
   static Future<String?> validateLocalFile(String localFilePath) async {
     final extension = AttachmentFileTypes.extensionOf(localFilePath);
     if (!isSupportedExtension(extension)) {

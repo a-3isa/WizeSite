@@ -52,7 +52,7 @@ class CallableClient {
       if (kDebugMode) {
         debugPrint(
           '[callable.error] function=$functionName '
-          'code=${error.code} message=${error.message}',
+          'code=${error.code}',
         );
       }
       await _telemetry.log('callable.error', {
@@ -90,7 +90,7 @@ class CallableClient {
           if (kDebugMode) {
             debugPrint(
               '[callable.retry_error] function=$functionName '
-              'code=${retryError.code} message=${retryError.message}',
+              'code=${retryError.code}',
             );
           }
           await _telemetry.log('callable.retry_error', {
@@ -156,14 +156,13 @@ class CallableClient {
       appCheckToken = await _appCheck.getToken(true);
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('$functionName App Check refresh failed: $error');
+        debugPrint('$functionName App Check refresh failed');
       }
     }
 
     if (kDebugMode) {
       debugPrint(
         '$functionName session refresh: '
-        'user=${user.uid}, '
         'appCheckReady=${appCheckToken != null && appCheckToken.isNotEmpty}',
       );
     }
@@ -208,7 +207,7 @@ class CallableClient {
       }
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('$functionName HTTP App Check fetch failed: $error');
+        debugPrint('$functionName HTTP App Check fetch failed');
       }
     }
 

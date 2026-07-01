@@ -47,7 +47,7 @@ class AppTelemetry {
       await log('$event.failure', {
         ...details,
         'duration_ms': stopwatch.elapsedMilliseconds,
-        'error': error.toString(),
+        'error_type': error.runtimeType.toString(),
       });
       await recordError(error, stackTrace, reason: event);
       rethrow;
@@ -61,9 +61,16 @@ class AppTelemetry {
       if (value == null) {
         continue;
       }
-      parts.add('${entry.key}=$value');
+      parts.add('${entry.key}=${_safeValue(entry.key, value)}');
     }
     return parts.join(' ');
+  }
+
+  Object _safeValue(String key, Object value) {
+    if (key == 'error' || key.endsWith('_error')) {
+      return value.runtimeType.toString();
+    }
+    return value;
   }
 }
 

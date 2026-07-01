@@ -140,22 +140,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (result == null) {
       return;
     }
-    final invalidMessages = <String>[];
-    final validFiles = <PlatformFile>[];
-    for (final file in result.files.where((file) => file.path != null)) {
-      final validationError = AttachmentValidationService.validatePickedFile(
-        file,
-      );
-      if (validationError != null) {
-        invalidMessages.add(validationError);
-        continue;
-      }
-      validFiles.add(file);
-    }
+    final validation = AttachmentValidationService.validatePickedFiles(
+      result.files,
+    );
     setState(() {
-      _pickedFiles.addAll(validFiles);
-      if (invalidMessages.isNotEmpty) {
-        _error = invalidMessages.join('\n');
+      _pickedFiles.addAll(validation.validFiles);
+      if (validation.invalidMessages.isNotEmpty) {
+        _error = validation.invalidMessages.join('\n');
       }
     });
   }

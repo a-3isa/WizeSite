@@ -45,6 +45,33 @@ void main() {
     expect(error, contains('too large'));
   });
 
+  test('validatePickedFiles separates valid files and validation messages', () {
+    final valid = PlatformFile(
+      name: 'receipt.pdf',
+      size: 1024,
+      path: '${tempDir.path}/receipt.pdf',
+    );
+    final unsupported = PlatformFile(
+      name: 'malware.exe',
+      size: 1024,
+      path: '${tempDir.path}/malware.exe',
+    );
+    final pathless = PlatformFile(name: 'ignored.pdf', size: 1024);
+
+    final result = AttachmentValidationService.validatePickedFiles([
+      valid,
+      unsupported,
+      pathless,
+    ]);
+
+    expect(result.validFiles, [valid]);
+    expect(result.invalidMessages, hasLength(1));
+    expect(
+      result.invalidMessages.single,
+      contains('Unsupported attachment type'),
+    );
+  });
+
   test('validateLocalFile rejects missing file', () async {
     final missingPath = tempDir.uri.resolve('missing.pdf').toFilePath();
     final error = await AttachmentValidationService.validateLocalFile(

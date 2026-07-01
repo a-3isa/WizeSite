@@ -53,6 +53,9 @@ void main() {
       'lib/core/services/callable_client.dart': File(
         'lib/core/services/callable_client.dart',
       ).readAsStringSync(),
+      'lib/core/services/app_telemetry.dart': File(
+        'lib/core/services/app_telemetry.dart',
+      ).readAsStringSync(),
       'lib/core/services/offline_action_queue.dart': File(
         'lib/core/services/offline_action_queue.dart',
       ).readAsStringSync(),
@@ -72,6 +75,14 @@ void main() {
         'body=\${response.body}',
         'details=\${error.details}',
         'details=\${retryError.details}',
+        'message=\${error.message}',
+        'message=\${retryError.message}',
+        'failed: \$error',
+        'user=\${user.uid}',
+      ],
+      'lib/core/services/app_telemetry.dart': [
+        "'error': error.toString()",
+        r'error=$value',
       ],
       'lib/core/services/offline_action_queue.dart': ['[offline_queue.'],
       'lib/core/services/workspace_mutation_service.dart': [
