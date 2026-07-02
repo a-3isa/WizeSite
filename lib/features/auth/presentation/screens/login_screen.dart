@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 
@@ -145,7 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: AppColors.surfaceGrey, // Subtle background
+      backgroundColor: context.tokens.bg, // Subtle background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -172,7 +173,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                     letterSpacing: -1,
-                    color: AppColors.textDark,
+                    color: context.tokens.text,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -181,7 +182,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyLarge?.copyWith(color: AppColors.textBody),
+                  ).textTheme.bodyLarge?.copyWith(color: context.tokens.textMuted),
                 ),
                 const SizedBox(height: 48),
                 if (_error != null) ...[
@@ -235,7 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                                 label: Text(l10n.t('continueWithGoogle')),
                                 style: OutlinedButton.styleFrom(
-                                  backgroundColor: AppColors.surfaceSolid,
+                                  backgroundColor: context.tokens.surface,
                                 ),
                               )
                             : const SizedBox.shrink(),
