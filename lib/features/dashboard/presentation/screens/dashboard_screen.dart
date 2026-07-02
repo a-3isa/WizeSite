@@ -1,6 +1,9 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
+import 'package:intl/intl.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -377,9 +380,9 @@ class ProjectFinancialSection extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tokens.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.borderGrey),
+              border: Border.all(color: context.tokens.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,16 +392,16 @@ class ProjectFinancialSection extends ConsumerWidget {
                   children: [
                     Text(
                       l10n.t('budgetUsed'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
+                        color: context.tokens.text,
                       ),
                     ),
                     Text(
                       '${Formatters.money(project.totalExpenses, currencyCode: currency, locale: locale)} / ${Formatters.money(budgetBase, currencyCode: currency, locale: locale)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textBody,
+                        color: context.tokens.textMuted,
                       ),
                     ),
                   ],
@@ -409,13 +412,11 @@ class ProjectFinancialSection extends ConsumerWidget {
                   child: LinearProgressIndicator(
                     value: ratio,
                     minHeight: 8,
-                    backgroundColor: AppColors.constructionOrange.withValues(
-                      alpha: 0.1,
-                    ),
+                    backgroundColor: context.tokens.surface3,
                     valueColor: AlwaysStoppedAnimation<Color>(
                       overBudget
-                          ? AppColors.danger
-                          : AppColors.constructionOrange,
+                          ? context.tokens.expense
+                          : context.tokens.accent,
                     ),
                   ),
                 ),
@@ -447,9 +448,9 @@ class ProjectFinancialSection extends ConsumerWidget {
               : Container(
                   key: const Key('qa_dashboard_project_recent'),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.tokens.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.borderGrey),
+                    border: Border.all(color: context.tokens.border),
                   ),
                   child: Column(
                     children: [
@@ -466,6 +467,30 @@ class ProjectFinancialSection extends ConsumerWidget {
           loading: () =>
               AppLoadingSkeleton(semanticsLabel: l10n.t('loadingContent')),
           error: (_, _) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 20),
+        SectionHeader(title: l10n.t('quickAdd')),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            BuildChip(
+              label: l10n.t('addExpense'),
+              icon: Icons.north_east,
+              onTap: () => context.push(AppRoutes.addExpense),
+            ),
+            BuildChip(
+              label: l10n.t('addPayment'),
+              icon: Icons.south_west,
+              onTap: () => context.push(AppRoutes.addPayment),
+            ),
+            BuildChip(
+              label: l10n.t('voiceExpense'),
+              icon: Icons.mic,
+              onTap: () => context.push(AppRoutes.voiceExpense),
+            ),
+          ],
         ),
       ],
     );
@@ -490,46 +515,14 @@ class _ProjectRecentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPayment = item.type == 'payment';
-    final color = isPayment ? AppColors.success : AppColors.danger;
-    final sign = isPayment ? '+' : '-';
-    final money = Formatters.money(
-      item.amount,
-      currencyCode: currency,
-      locale: locale,
-    );
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: isLast
-              ? BorderSide.none
-              : const BorderSide(color: AppColors.surfaceGrey),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      child: Row(
-        children: [
-          Icon(
-            isPayment ? Icons.south_west : Icons.north_east,
-            size: 18,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              item.title.isNotEmpty ? item.title : '—',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-          Text(
-            '$sign$money',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: MoneyRow(
+        title: item.title.isNotEmpty ? item.title : '—',
+        amount: NumberFormat.decimalPattern(locale).format(item.amount.abs()),
+        currency: currency,
+        kind: isPayment ? MoneyKind.income : MoneyKind.expense,
+        showDivider: !isLast,
       ),
     );
   }

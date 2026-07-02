@@ -339,7 +339,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('El-Nasr Supplies', skipOffstage: false), findsOneWidget);
-    expect(find.textContaining('-45,000', skipOffstage: false), findsOneWidget);
+    // MoneyRow renders a proper minus sign (U+2212) with the currency shown
+    // separately.
+    expect(find.textContaining('−45,000', skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('project selector can switch back to All Projects', (
