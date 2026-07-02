@@ -251,6 +251,35 @@
 
 ---
 
+## Progress (2026-07-02)
+
+**Shipped & committed on branch `002-buildozer-v2-design-system`** (analyze clean; full
+suite green except one pre-existing network-flaky PDF font test):
+
+- Task 1 BuildTokens · Task 2 v2 palette + dark theme · Task 3 ThemeController ·
+  Task 4 i18n · Task 5 DS primitives · Task 6 shared-widget dark-awareness ·
+  Task 7 custom raised-FAB 5-tab nav + Add sheet · Task 8 Activity · Task 9 More ·
+  Task 10 Home restyle.
+
+**Remaining — mechanical dark-mode sweep (Tasks 11–15).** Replace hardcoded
+light values with `context.tokens.*` (import `app/theme/build_tokens.dart`; drop
+`const` on affected styles). ~130 sites across these files (counts from
+`AppColors.(textDark|textBody|surfaceGrey|borderGrey)` grep):
+
+- projects_screen (11), project_details_widgets (14), project_detail_screen (2)
+- add_expense_screen / add_payment_screen (`Colors.white` ×2 each)
+- voice_record_screen (4), login_screen (3), features_screen (3),
+  initial_workspace_setup_screen (3), resource_directory_screen (2)
+- settings_screen (24), create_project_screen (9), archived_projects_screen (5),
+  sync_status_screen (2)
+- reports_screen (9) + report chart/table widgets (~38)
+
+Mapping: `textDark`→`tokens.text`, `textBody`→`tokens.textMuted`,
+`borderGrey`→`tokens.border`, `surfaceGrey` (as surface)→`tokens.surface2`,
+`Colors.white` (as surface)→`tokens.surface`. Then add Task 15's
+`dark_mode_smoke_test.dart` and re-run `flutter analyze` + `flutter test`.
+Light mode already renders v2; this sweep is dark-mode correctness only.
+
 ## Self-Review
 
 - **Spec coverage:** Tokens(T1) · palette+dark theme(T2) · ThemeController(T3) · i18n(T4) · primitives(T5) · shared-widget restyle(T6) · nav IA(T7) · Activity(T8) · More(T9) · Home(T10) · Projects(T11) · Add(T12) · Voice(T13) · Login/Notif/Profile/Workspace/Resources(T14) · dark sweep+testing(T15). All spec §1–9 mapped.
