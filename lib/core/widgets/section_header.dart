@@ -1,4 +1,4 @@
-import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:flutter/material.dart';
 
 class SectionHeader extends StatelessWidget {
@@ -14,7 +14,7 @@ class SectionHeader extends StatelessWidget {
           width: 4,
           height: 22,
           decoration: BoxDecoration(
-            color: AppColors.constructionOrange,
+            color: context.tokens.accent,
             borderRadius: BorderRadius.circular(2),
           ),
         ),

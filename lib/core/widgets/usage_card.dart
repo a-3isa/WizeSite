@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:flutter/material.dart';
@@ -16,8 +17,8 @@ class UsageCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(
-          color: AppColors.borderGrey,
+        side: BorderSide(
+          color: context.tokens.border,
         ), // Outline style card
       ),
       child: Padding(
@@ -102,7 +103,7 @@ class _UsageRow extends StatelessWidget {
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AppColors.textDark,
+                color: context.tokens.text,
               ),
             ),
             Text(

@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -112,7 +113,7 @@ class ActiveFilterBar extends StatelessWidget {
               icon: const Icon(Icons.clear_all, size: 18),
               label: Text(l10n.t('clearAllFilters')),
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.textBody,
+                foregroundColor: context.tokens.textMuted,
                 visualDensity: VisualDensity.compact,
               ),
             ),

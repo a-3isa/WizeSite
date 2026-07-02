@@ -1,34 +1,32 @@
-import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:flutter/material.dart';
 
 class MetricCard extends StatelessWidget {
   const MetricCard({
     required this.label,
     required this.value,
-    this.color = AppColors.textDark,
+    this.color,
     this.icon,
     super.key,
   });
 
   final String label;
   final String value;
-  final Color color;
+
+  /// Meaning color for the top bar + icon badge. Defaults to the theme text color.
+  final Color? color;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
+    final barColor = color ?? t.text;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: t.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: t.border),
+        boxShadow: t.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,7 +35,7 @@ class MetricCard extends StatelessWidget {
           Container(
             height: 3,
             decoration: BoxDecoration(
-              color: color,
+              color: barColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(15),
                 topRight: Radius.circular(15),
@@ -56,8 +54,8 @@ class MetricCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         label,
-                        style: const TextStyle(
-                          color: AppColors.textBody,
+                        style: TextStyle(
+                          color: t.textMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -68,14 +66,10 @@ class MetricCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
+                        color: barColor.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        icon ?? Icons.bar_chart,
-                        color: color,
-                        size: 14,
-                      ),
+                      child: Icon(icon ?? Icons.bar_chart, color: barColor, size: 14),
                     ),
                   ],
                 ),
@@ -85,9 +79,9 @@ class MetricCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
+                      color: t.text,
                       fontSize: 21,
                       letterSpacing: -0.8,
                     ),
