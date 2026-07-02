@@ -7,6 +7,8 @@ class AppRoutes {
 
   static const String dashboard = '/dashboard';
   static const String projects = '/projects';
+  static const String activity = '/activity';
+  static const String more = '/more';
   static const String archivedProjects = '/projects/archived';
   static const String reports = '/reports';
   static const String entitySummary = '/entity-summary';

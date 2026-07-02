@@ -721,6 +721,9 @@ class AppLocalizations {
     // --- v2 design system ---
     'activity': 'Activity',
     'more': 'More',
+    'income': 'Income',
+    'account': 'Account',
+    'plan': 'Plan',
     'netThisMonth': 'Net this month',
     'week': 'Week',
     'month': 'Month',
@@ -1414,6 +1417,9 @@ class AppLocalizations {
     // --- v2 design system ---
     'activity': 'النشاط',
     'more': 'المزيد',
+    'income': 'الدخل',
+    'account': 'الحساب',
+    'plan': 'الباقة',
     'netThisMonth': 'صافي هذا الشهر',
     'week': 'أسبوع',
     'month': 'شهر',

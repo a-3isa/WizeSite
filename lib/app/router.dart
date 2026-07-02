@@ -12,6 +12,7 @@ import 'package:buildtrack_app/features/auth/presentation/screens/initial_worksp
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
+import 'package:buildtrack_app/features/activity/presentation/screens/activity_screen.dart';
 import 'package:buildtrack_app/features/contractors/presentation/screens/contractors_screen.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/equipment/presentation/screens/equipment_screen.dart';
@@ -30,6 +31,7 @@ import 'package:buildtrack_app/features/projects/presentation/screens/archived_p
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/entity_aggregation_screen.dart';
 import 'package:buildtrack_app/features/reports/presentation/screens/reports_screen.dart';
+import 'package:buildtrack_app/features/settings/presentation/screens/more_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/profile_edit_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/sync_status_screen.dart';
@@ -174,6 +176,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: AppRoutes.projects,
                 name: 'projects',
                 builder: (context, state) => const ProjectsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.activity,
+                name: 'activity',
+                builder: (context, state) => const ActivityScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.more,
+                name: 'more',
+                builder: (context, state) => const MoreScreen(),
               ),
             ],
           ),
