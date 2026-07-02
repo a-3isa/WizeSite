@@ -85,7 +85,7 @@ void main() {
       Directionality.of(tester.element(find.text(l10n.t('home')).first)),
       TextDirection.rtl,
     );
-    for (final key in ['home', 'add', 'projects']) {
+    for (final key in ['home', 'projects', 'activity', 'more']) {
       expect(find.text(l10n.t(key)), findsOneWidget);
     }
   });

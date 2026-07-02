@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -75,8 +76,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               const SizedBox(height: 16),
               Expanded(
                 child: insightsAsync.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
+                  loading: () => AppLoadingSkeleton(
+                    semanticsLabel: l10n.t('loadingContent'),
+                  ),
                   error: (_, _) => Center(
                     child: Text(
                       l10n.t('somethingWentWrong'),
