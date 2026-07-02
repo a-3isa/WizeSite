@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/app/router.dart';
 import 'package:buildtrack_app/app/theme/app_theme.dart';
+import 'package:buildtrack_app/core/providers/theme_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,6 +14,7 @@ class BuildozerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeControllerProvider);
+    final themeMode = ref.watch(themeControllerProvider);
 
     return AppBootstrapScope(
       child: MaterialApp.router(
@@ -20,6 +22,8 @@ class BuildozerApp extends ConsumerWidget {
         title: AppLocalizations(locale).t('appName'),
         locale: locale,
         theme: AppTheme.light(locale),
+        darkTheme: AppTheme.dark(locale),
+        themeMode: themeMode,
         routerConfig: ref.watch(appRouterProvider),
         localizationsDelegates: const [
           AppLocalizations.delegate,
