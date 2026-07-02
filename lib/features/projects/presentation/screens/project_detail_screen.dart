@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -33,7 +34,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     return AppBackScope(
       fallbackRoute: AppRoutes.projects,
       child: Scaffold(
-        backgroundColor: AppColors.surfaceGrey,
+        backgroundColor: context.tokens.bg,
         appBar: appBackAppBar(
           context: context,
           title: l10n.t('projectDetails'),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
@@ -893,7 +894,7 @@ class _BudgetBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: ratio.clamp(0.0, 1.0).toDouble(),
             minHeight: 6,
-            backgroundColor: AppColors.surfaceGrey,
+            backgroundColor: context.tokens.surface3,
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
@@ -904,7 +905,7 @@ class _BudgetBar extends StatelessWidget {
             Flexible(
               child: Text(
                 '${Formatters.money(spent, currencyCode: currency, locale: locale)} / ${Formatters.money(budget, currencyCode: currency, locale: locale)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textBody),
+                style: TextStyle(fontSize: 11, color: context.tokens.textMuted),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
