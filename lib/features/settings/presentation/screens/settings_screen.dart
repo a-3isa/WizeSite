@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
@@ -68,7 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
-                                color: AppColors.textDark,
+                                color: context.tokens.text,
                               ),
                         ),
                       ),
@@ -435,9 +436,9 @@ class _SettingsCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.surfaceSolid,
+            color: context.tokens.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderGrey),
+            border: Border.all(color: context.tokens.border),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -476,14 +477,14 @@ class _SettingsCard extends StatelessWidget {
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
+                        color: context.tokens.text,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textBody,
+                        color: context.tokens.textMuted,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -522,9 +523,9 @@ class _SubscriptionCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -584,14 +585,14 @@ class _SubscriptionCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textDark,
+                              color: context.tokens.text,
                             ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         planLabel,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textBody,
+                          color: context.tokens.textMuted,
                         ),
                       ),
                     ],
@@ -640,7 +641,7 @@ class _SubscriptionActionTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: AppColors.borderGrey)),
+            border: Border(top: BorderSide(color: context.tokens.border)),
           ),
           child: Row(
             children: [
@@ -648,14 +649,14 @@ class _SubscriptionActionTile extends StatelessWidget {
                 title,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
+                  color: context.tokens.text,
                 ),
               ),
               const Spacer(),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 22,
-                color: AppColors.textBody.withValues(alpha: 0.6),
+                color: context.tokens.textMuted.withValues(alpha: 0.6),
               ),
             ],
           ),
@@ -673,9 +674,9 @@ class _SubscriptionLoadingCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: const LinearProgressIndicator(minHeight: 2),
     );
@@ -691,9 +692,9 @@ class _AboutAndLegalSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -777,12 +778,12 @@ class _SettingsLinkTile extends StatelessWidget {
               ? null
               : BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: AppColors.borderGrey),
+                    bottom: BorderSide(color: context.tokens.border),
                   ),
                 ),
           child: Row(
             children: [
-              Icon(icon, color: AppColors.textBody, size: 22),
+              Icon(icon, color: context.tokens.textMuted, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -792,14 +793,14 @@ class _SettingsLinkTile extends StatelessWidget {
                       title,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
+                        color: context.tokens.text,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textBody,
+                        color: context.tokens.textMuted,
                       ),
                     ),
                   ],
@@ -808,7 +809,7 @@ class _SettingsLinkTile extends StatelessWidget {
               if (canOpen)
                 Icon(
                   Icons.open_in_new_rounded,
-                  color: AppColors.textBody.withValues(alpha: 0.6),
+                  color: context.tokens.textMuted.withValues(alpha: 0.6),
                   size: 18,
                 ),
             ],
@@ -880,9 +881,9 @@ class _ProfileSection extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -929,7 +930,7 @@ class _ProfileSection extends ConsumerWidget {
                   name,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textDark,
+                    color: context.tokens.text,
                     letterSpacing: -0.5,
                   ),
                   maxLines: 1,
@@ -939,7 +940,7 @@ class _ProfileSection extends ConsumerWidget {
                 Text(
                   email,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textBody,
+                    color: context.tokens.textMuted,
                     letterSpacing: 0,
                   ),
                   maxLines: 1,
@@ -956,7 +957,7 @@ class _ProfileSection extends ConsumerWidget {
             },
             icon: Icon(
               Icons.chevron_right_rounded,
-              color: AppColors.textBody.withValues(alpha: 0.5),
+              color: context.tokens.textMuted.withValues(alpha: 0.5),
             ),
           ),
         ],
@@ -996,7 +997,7 @@ class _CrashlyticsTestCardState extends State<_CrashlyticsTestCard> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
       ),
@@ -1099,7 +1100,7 @@ class _DebugTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.danger : AppColors.textDark;
+    final color = isDestructive ? AppColors.danger : context.tokens.text;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1113,7 +1114,7 @@ class _DebugTile extends StatelessWidget {
               ? null
               : BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: AppColors.borderGrey),
+                    bottom: BorderSide(color: context.tokens.border),
                   ),
                 ),
           child: Row(
@@ -1123,7 +1124,7 @@ class _DebugTile extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
                   color: onTap == null
-                      ? AppColors.textBody.withValues(alpha: 0.5)
+                      ? context.tokens.textMuted.withValues(alpha: 0.5)
                       : color,
                 ),
               ),

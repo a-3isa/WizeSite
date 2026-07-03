@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -88,7 +89,7 @@ class _InitialWorkspaceSetupScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: AppColors.surfaceGrey,
+      backgroundColor: context.tokens.bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -109,7 +110,7 @@ class _InitialWorkspaceSetupScreenState
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
+                      color: context.tokens.text,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -118,7 +119,7 @@ class _InitialWorkspaceSetupScreenState
                     textAlign: TextAlign.center,
                     style: Theme.of(
                       context,
-                    ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+                    ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
                   ),
                   const SizedBox(height: 28),
                   TextField(

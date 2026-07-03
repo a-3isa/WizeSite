@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -220,7 +221,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
         unawaited(_handleBackNavigation());
       },
       child: Scaffold(
-        backgroundColor: AppColors.surfaceGrey,
+        backgroundColor: context.tokens.bg,
         appBar: AppBar(
           leading: IconButton(
             icon: const BackButtonIcon(),
@@ -342,7 +343,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceSolid,
+                      color: context.tokens.surface,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(32),
                       ),
@@ -365,15 +366,15 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                                 : null,
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: AppColors.borderGrey),
+                              side: BorderSide(color: context.tokens.border),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                             child: Text(
                               l10n.t('cancelRerecord'),
-                              style: const TextStyle(
-                                color: AppColors.textDark,
+                              style: TextStyle(
+                                color: context.tokens.text,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -448,7 +449,7 @@ class _StatusLine extends StatelessWidget {
       label,
       key: const Key('voiceStatusLine'),
       style: TextStyle(
-        color: state.isRecording ? AppColors.danger : AppColors.textBody,
+        color: state.isRecording ? AppColors.danger : context.tokens.textMuted,
         fontWeight: FontWeight.w600,
       ),
     );

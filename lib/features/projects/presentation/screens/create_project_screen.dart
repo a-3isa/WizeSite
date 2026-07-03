@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
@@ -205,14 +206,14 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     return InputDecoration(
       labelText: required ? '$label *' : label,
       filled: true,
-      fillColor: AppColors.surfaceSolid,
+      fillColor: context.tokens.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.borderGrey),
+        borderSide: BorderSide(color: context.tokens.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.borderGrey),
+        borderSide: BorderSide(color: context.tokens.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -273,7 +274,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                     ?.copyWith(
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.5,
-                                      color: AppColors.textDark,
+                                      color: context.tokens.text,
                                     ),
                               ),
                             ),
@@ -410,9 +411,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceSolid,
+                              color: context.tokens.surface,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.borderGrey),
+                              border: Border.all(color: context.tokens.border),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,7 +434,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                           .titleSmall
                                           ?.copyWith(
                                             fontWeight: FontWeight.w600,
-                                            color: AppColors.textDark,
+                                            color: context.tokens.text,
                                           ),
                                     ),
                                     Container(
@@ -564,7 +565,7 @@ class _SectionHeader extends StatelessWidget {
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
-        color: AppColors.textBody,
+        color: context.tokens.textMuted,
         letterSpacing: 0.5,
       ),
     );
@@ -580,7 +581,7 @@ class _DateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surfaceSolid,
+      color: context.tokens.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -589,7 +590,7 @@ class _DateTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.borderGrey),
+            border: Border.all(color: context.tokens.border),
           ),
           child: Row(
             children: [
@@ -603,14 +604,14 @@ class _DateTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textDark,
+                    color: context.tokens.text,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.textBody.withValues(alpha: 0.6),
+                color: context.tokens.textMuted.withValues(alpha: 0.6),
                 size: 22,
               ),
             ],

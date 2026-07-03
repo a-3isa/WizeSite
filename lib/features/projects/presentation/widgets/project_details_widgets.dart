@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -18,9 +19,9 @@ class ProjectHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -44,24 +45,24 @@ class ProjectHeader extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.textDark,
+                            color: context.tokens.text,
                             letterSpacing: -0.5,
                           ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.person_outline,
                           size: 16,
-                          color: AppColors.textBody,
+                          color: context.tokens.textMuted,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           project.clientName,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                color: AppColors.textBody,
+                                color: context.tokens.textMuted,
                                 fontWeight: FontWeight.w500,
                               ),
                         ),
@@ -78,18 +79,18 @@ class ProjectHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.success.withValues(alpha: 0.1)
-                      : AppColors.textBody.withValues(alpha: 0.1),
+                      : context.tokens.textMuted.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isActive
                         ? AppColors.success.withValues(alpha: 0.2)
-                        : AppColors.textBody.withValues(alpha: 0.2),
+                        : context.tokens.textMuted.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Text(
                   l10n.projectStatusLabel(project.status).toUpperCase(),
                   style: TextStyle(
-                    color: isActive ? AppColors.success : AppColors.textBody,
+                    color: isActive ? AppColors.success : context.tokens.textMuted,
                     fontWeight: FontWeight.w800,
                     fontSize: 10,
                     letterSpacing: 0.5,
@@ -123,7 +124,7 @@ class _CompletionProgress extends StatelessWidget {
               l10n.t('completion'),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppColors.textDark,
+                color: context.tokens.text,
               ),
             ),
             Text(
@@ -301,28 +302,28 @@ class ActionGrid extends StatelessWidget {
               qaKey: const Key('qa_project_expenses'),
               icon: Icons.list_outlined,
               label: l10n.t('expenseList'),
-              color: AppColors.textBody,
+              color: context.tokens.textMuted,
               onTap: onViewExpenses,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_payments'),
               icon: Icons.list_alt_outlined,
               label: l10n.t('paymentList'),
-              color: AppColors.textBody,
+              color: context.tokens.textMuted,
               onTap: onViewPayments,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_edit'),
               icon: Icons.edit_outlined,
               label: l10n.t('edit'),
-              color: AppColors.textBody,
+              color: context.tokens.textMuted,
               onTap: onEdit,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_archive'),
               icon: Icons.archive_outlined,
               label: l10n.t('archive'),
-              color: AppColors.textBody,
+              color: context.tokens.textMuted,
               onTap: onArchive,
             ),
             _ActionCard(
@@ -366,9 +367,9 @@ class _ActionCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.surfaceSolid,
+            color: context.tokens.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.borderGrey),
+            border: Border.all(color: context.tokens.border),
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: 0.06),
@@ -404,7 +405,7 @@ class _ActionCard extends StatelessWidget {
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
+                    color: context.tokens.text,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

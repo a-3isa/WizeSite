@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
@@ -69,7 +70,7 @@ class _AppLoadingSkeletonState extends State<AppLoadingSkeleton>
                     height: 14,
                     width: i.isEven ? double.infinity : 180,
                     decoration: BoxDecoration(
-                      color: AppColors.borderGrey,
+                      color: context.tokens.surface3,
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
@@ -193,21 +194,21 @@ class AppEmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 36, color: AppColors.textBody),
+          Icon(icon, size: 36, color: context.tokens.textMuted),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+            ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
           ),
           if (hasAction) ...[
             const SizedBox(height: 16),

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -40,9 +41,9 @@ class CashflowLineChart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,7 +52,7 @@ class CashflowLineChart extends StatelessWidget {
             l10n.t('cashFlowTrend'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
+              color: context.tokens.text,
             ),
           ),
           const SizedBox(height: 16),
@@ -63,7 +64,7 @@ class CashflowLineChart extends StatelessWidget {
                   l10n.t('noDataYet'),
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
                 ),
               ),
             )
@@ -77,7 +78,7 @@ class CashflowLineChart extends StatelessWidget {
                     drawVerticalLine: false,
                     horizontalInterval: _interval(),
                     getDrawingHorizontalLine: (value) =>
-                        FlLine(color: AppColors.borderGrey, strokeWidth: 1),
+                        FlLine(color: context.tokens.border, strokeWidth: 1),
                   ),
                   titlesData: FlTitlesData(
                     bottomTitles: AxisTitles(
@@ -93,10 +94,10 @@ class CashflowLineChart extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
                               _monthAbbr[data[idx].month.month - 1],
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.textBody,
+                                color: context.tokens.textMuted,
                               ),
                             ),
                           );
@@ -110,9 +111,9 @@ class CashflowLineChart extends StatelessWidget {
                         getTitlesWidget: (value, meta) {
                           return Text(
                             _formatCompact(value),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textBody,
+                              color: context.tokens.textMuted,
                             ),
                           );
                         },
@@ -129,7 +130,7 @@ class CashflowLineChart extends StatelessWidget {
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipColor: (_) =>
-                          AppColors.textDark.withValues(alpha: 0.9),
+                          context.tokens.text.withValues(alpha: 0.9),
                       getTooltipItems: (spots) => spots.map((spot) {
                         final net = spot.y;
                         return LineTooltipItem(
@@ -169,7 +170,7 @@ class CashflowLineChart extends StatelessWidget {
                                   ? AppColors.success
                                   : AppColors.danger,
                               strokeWidth: 2,
-                              strokeColor: AppColors.surfaceSolid,
+                              strokeColor: context.tokens.surface,
                             ),
                       ),
                       belowBarData: BarAreaData(

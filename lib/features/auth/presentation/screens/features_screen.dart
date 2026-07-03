@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -145,7 +146,7 @@ class FeaturesScreen extends StatelessWidget {
                         child: Text(
                           l10n.t('whatYouGet'),
                           style: theme.textTheme.titleMedium?.copyWith(
-                            color: AppColors.darkGray.withValues(alpha: 0.8),
+                            color: context.tokens.text.withValues(alpha: 0.8),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -285,7 +286,7 @@ class _FeatureCard extends StatelessWidget {
                       title,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
+                        color: context.tokens.text,
                       ),
                     ),
                     if (subtitle != null) ...[
@@ -293,7 +294,7 @@ class _FeatureCard extends StatelessWidget {
                       Text(
                         subtitle!,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.darkGray.withValues(alpha: 0.8),
+                          color: context.tokens.text.withValues(alpha: 0.8),
                         ),
                       ),
                     ],

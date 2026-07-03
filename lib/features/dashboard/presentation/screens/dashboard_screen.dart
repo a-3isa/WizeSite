@@ -303,10 +303,10 @@ class _DashboardProjectSelector extends ConsumerWidget {
                     Text(
                       label,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textDark,
+                        color: context.tokens.text,
                       ),
                     ),
                   ],
@@ -371,7 +371,7 @@ class ProjectFinancialSection extends ConsumerWidget {
             key: const Key('qa_dashboard_project_scope_caption'),
             style: Theme.of(
               context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+            ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
           ),
         ),
         FinancialGrid(project: project, currency: currency),

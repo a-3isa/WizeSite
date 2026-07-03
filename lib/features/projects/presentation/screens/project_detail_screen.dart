@@ -159,7 +159,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                                   style: TextStyle(
                                     color: matches
                                         ? AppColors.danger
-                                        : AppColors.textBody,
+                                        : context.tokens.textMuted,
                                   ),
                                 ),
                               ),

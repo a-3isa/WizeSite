@@ -329,7 +329,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                 child: Text(
                   l10n.t('delete'),
                   style: TextStyle(
-                    color: matches ? AppColors.danger : AppColors.textBody,
+                    color: matches ? AppColors.danger : context.tokens.textMuted,
                   ),
                 ),
               ),
@@ -511,18 +511,18 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.folder_open,
                   size: 64,
-                  color: AppColors.borderGrey,
+                  color: context.tokens.border,
                 ),
                 const SizedBox(height: 16),
                 Text(
                   _projects.isEmpty
                       ? l10n.t('noProjectsYet')
                       : l10n.t('noDataYet'),
-                  style: const TextStyle(
-                    color: AppColors.textBody,
+                  style: TextStyle(
+                    color: context.tokens.textMuted,
                     fontSize: 16,
                   ),
                 ),
@@ -594,14 +594,14 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                               // const Icon(
                               //   Icons.person_outline,
                               //   size: 14,
-                              //   color: AppColors.textBody,
+                              //   color: context.tokens.textMuted,
                               // ),
                               // const SizedBox(width: 4),
                               // Expanded(
                               //   child: Text(
                               //     project.clientName,
                               //     style: const TextStyle(
-                              //       color: AppColors.textBody,
+                              //       color: context.tokens.textMuted,
                               //       fontSize: 13,
                               //     ),
                               //     overflow: TextOverflow.ellipsis,
@@ -616,7 +616,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                                 decoration: BoxDecoration(
                                   color: project.status == 'active'
                                       ? AppColors.successLight
-                                      : AppColors.surfaceGrey,
+                                      : context.tokens.surface2,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -626,7 +626,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                                     fontWeight: FontWeight.bold,
                                     color: project.status == 'active'
                                         ? AppColors.success
-                                        : AppColors.textBody,
+                                        : context.tokens.textMuted,
                                   ),
                                 ),
                               ),
@@ -679,8 +679,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           const SizedBox(height: 4),
                           Text(
                             positiveProfit ? l10n.t('profit') : l10n.t('loss'),
-                            style: const TextStyle(
-                              color: AppColors.textBody,
+                            style: TextStyle(
+                              color: context.tokens.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -844,7 +844,7 @@ class _ProjectMenuButton<T> extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.borderGrey),
+          border: Border.all(color: context.tokens.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(

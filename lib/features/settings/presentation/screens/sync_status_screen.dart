@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -162,7 +163,7 @@ class _SyncSection extends StatelessWidget {
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
+              color: context.tokens.text,
             ),
           ),
           const SizedBox(height: 8),
@@ -171,7 +172,7 @@ class _SyncSection extends StatelessWidget {
               emptyMessage,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+              ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
             )
           else
             ...actions.map(

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -322,15 +323,15 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
                 Icon(
                   Icons.archive_outlined,
                   size: 64,
-                  color: AppColors.borderGrey,
+                  color: context.tokens.border,
                 ),
                 const SizedBox(height: 16),
                 Text(
                   _projects.isEmpty
                       ? l10n.t('noArchivedProjects')
                       : l10n.t('noDataYet'),
-                  style: const TextStyle(
-                    color: AppColors.textBody,
+                  style: TextStyle(
+                    color: context.tokens.textMuted,
                     fontSize: 16,
                   ),
                 ),
@@ -367,12 +368,12 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceGrey,
+                      color: context.tokens.surface2,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.architecture,
-                      color: AppColors.textBody,
+                      color: context.tokens.textMuted,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -388,8 +389,8 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
                         const SizedBox(height: 4),
                         Text(
                           project.clientName,
-                          style: const TextStyle(
-                            color: AppColors.textBody,
+                          style: TextStyle(
+                            color: context.tokens.textMuted,
                             fontSize: 13,
                           ),
                         ),

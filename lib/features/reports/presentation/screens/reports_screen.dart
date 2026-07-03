@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -911,16 +912,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             : Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceGrey,
+                                  color: context.tokens.surface2,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: AppColors.borderGrey,
+                                    color: context.tokens.border,
                                   ),
                                 ),
                                 child: Text(
                                   '${metrics.projectName} • ${l10n.projectStatusLabel(metrics.status)}',
                                   style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: AppColors.textBody),
+                                      ?.copyWith(color: context.tokens.textMuted),
                                 ),
                               ),
                         error: (error, _) => AppRecoverableError(
@@ -939,16 +940,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceGrey,
+                            color: context.tokens.surface2,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.borderGrey),
+                            border: Border.all(color: context.tokens.border),
                           ),
                           child: Row(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.pie_chart_outline,
                                 size: 20,
-                                color: AppColors.textBody,
+                                color: context.tokens.textMuted,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -963,7 +964,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     },
                                   ),
                                   style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: AppColors.textBody),
+                                      ?.copyWith(color: context.tokens.textMuted),
                                 ),
                               ),
                             ],
@@ -1029,7 +1030,7 @@ class _ReportScopeControls extends StatelessWidget {
           l10n.t('reportScope'),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
+            color: context.tokens.text,
           ),
         ),
         const SizedBox(height: 10),
@@ -1141,7 +1142,7 @@ class _ReportsHeaderTitle extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
-              color: AppColors.textDark,
+              color: context.tokens.text,
             ),
           ),
         ),

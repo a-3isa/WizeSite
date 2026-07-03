@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -40,9 +41,9 @@ class MonthlyFlowChart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,7 +52,7 @@ class MonthlyFlowChart extends StatelessWidget {
             l10n.t('monthlyCashFlow'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
+              color: context.tokens.text,
             ),
           ),
           const SizedBox(height: 8),
@@ -75,7 +76,7 @@ class MonthlyFlowChart extends StatelessWidget {
                   l10n.t('noDataYet'),
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
                 ),
               ),
             )
@@ -89,7 +90,7 @@ class MonthlyFlowChart extends StatelessWidget {
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
                       getTooltipColor: (_) =>
-                          AppColors.textDark.withValues(alpha: 0.9),
+                          context.tokens.text.withValues(alpha: 0.9),
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final isIncome = rodIndex == 0;
                         return BarTooltipItem(
@@ -123,10 +124,10 @@ class MonthlyFlowChart extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
                               _monthAbbr[data[idx].month.month - 1],
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.textBody,
+                                color: context.tokens.textMuted,
                               ),
                             ),
                           );
@@ -142,9 +143,9 @@ class MonthlyFlowChart extends StatelessWidget {
                           if (value == 0) return const SizedBox.shrink();
                           return Text(
                             _formatCompact(value),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textBody,
+                              color: context.tokens.textMuted,
                             ),
                           );
                         },
@@ -162,7 +163,7 @@ class MonthlyFlowChart extends StatelessWidget {
                     drawVerticalLine: false,
                     horizontalInterval: _maxY() / 4,
                     getDrawingHorizontalLine: (value) =>
-                        FlLine(color: AppColors.borderGrey, strokeWidth: 1),
+                        FlLine(color: context.tokens.border, strokeWidth: 1),
                   ),
                   borderData: FlBorderData(show: false),
                   barGroups: List.generate(data.length, (i) {
@@ -247,7 +248,7 @@ class _DotLabel extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textBody,
+            color: context.tokens.textMuted,
             fontWeight: FontWeight.w500,
           ),
         ),

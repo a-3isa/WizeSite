@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -22,9 +23,9 @@ class WorkerCostTable extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,7 +36,7 @@ class WorkerCostTable extends StatelessWidget {
               l10n.t('topWorkers'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppColors.textDark,
+                color: context.tokens.text,
               ),
             ),
           ),
@@ -47,7 +48,7 @@ class WorkerCostTable extends StatelessWidget {
                   l10n.t('noDataYet'),
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
                 ),
               ),
             )
@@ -56,17 +57,17 @@ class WorkerCostTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(AppColors.surfaceGrey),
+                headingRowColor: WidgetStateProperty.all(context.tokens.surface2),
                 dataRowMinHeight: 48,
                 dataRowMaxHeight: 56,
                 columnSpacing: 24,
                 headingTextStyle: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textBody,
+                      color: context.tokens.textMuted,
                     ),
                 dataTextStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textDark,
+                  color: context.tokens.text,
                   fontWeight: FontWeight.w500,
                 ),
                 columns: [

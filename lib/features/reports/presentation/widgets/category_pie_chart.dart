@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -48,9 +49,9 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,7 +60,7 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
             l10n.t('expenseBreakdown'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
+              color: context.tokens.text,
             ),
           ),
           const SizedBox(height: 20),
@@ -153,7 +154,7 @@ class _LegendItem extends StatelessWidget {
         Text(
           '$label ($value)',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textBody,
+            color: context.tokens.textMuted,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -171,16 +172,16 @@ class _EmptyChartCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSolid,
+        color: context.tokens.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderGrey),
+        border: Border.all(color: context.tokens.border),
       ),
       child: Center(
         child: Text(
           label,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textBody),
+          ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
         ),
       ),
     );

@@ -1,7 +1,7 @@
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -385,7 +385,7 @@ class _ResourceDirectoryScreenState
                     l10n.t('projectFinancialAccessRestricted'),
                     style: Theme.of(
                       context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+                    ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
                   ),
                 ),
               if (!canAccessFinancial) const SizedBox(height: 8),
@@ -463,7 +463,7 @@ class _ResourceDirectoryScreenState
                     _formatTotals(l10n, summary),
                     style: Theme.of(
                       context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.textBody),
+                    ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
                   ),
                 ],
               ],
