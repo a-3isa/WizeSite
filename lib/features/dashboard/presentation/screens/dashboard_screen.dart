@@ -659,56 +659,44 @@ class DashboardFinancialSection extends StatelessWidget {
       );
     }
     final isProfit = snapshot.net >= 0;
+    final numberFormat = NumberFormat.decimalPattern(locale);
+    final netText =
+        '${isProfit ? '' : '−'}${numberFormat.format(snapshot.net.abs())}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GridView.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.35,
+        // v2 hero: big net figure with income/expense split, keyed so tests
+        // (and QA) can tell profit from loss without relying on color.
+        KeyedSubtree(
+          key: Key(isProfit ? 'dashboard_net_profit' : 'dashboard_net_loss'),
+          child: HeroNetCard(
+            title: l10n.t('netProfit'),
+            net: netText,
+            negative: !isProfit,
+            currency: currency,
+            income: numberFormat.format(snapshot.totalIncome),
+            expense: numberFormat.format(snapshot.totalExpenses),
+            incomeLabel: l10n.t('totalIncome'),
+            expenseLabel: l10n.t('totalExpenses'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
           children: [
-            MetricCard(
-              label: l10n.t('activeProjects'),
-              value: '${snapshot.activeProjects}',
-              color: AppColors.constructionOrange,
-              icon: Icons.work_outline,
-            ),
-            MetricCard(
-              label: l10n.t('totalExpenses'),
-              value: Formatters.money(
-                snapshot.totalExpenses,
-                currencyCode: currency,
-                locale: locale,
+            Expanded(
+              child: StatTile(
+                icon: Icons.apartment_outlined,
+                label: l10n.t('activeProjects'),
+                value: '${snapshot.activeProjects}',
               ),
-              color: AppColors.danger,
-              icon: Icons.trending_down,
             ),
-            MetricCard(
-              label: l10n.t('totalIncome'),
-              value: Formatters.money(
-                snapshot.totalIncome,
-                currencyCode: currency,
-                locale: locale,
-              ),
-              color: AppColors.success,
-              icon: Icons.trending_up,
-            ),
-            KeyedSubtree(
-              key: Key(
-                isProfit ? 'dashboard_net_profit' : 'dashboard_net_loss',
-              ),
-              child: MetricCard(
-                label: l10n.t('netProfit'),
-                value: Formatters.money(
-                  snapshot.net,
-                  currencyCode: currency,
-                  locale: locale,
-                ),
-                color: isProfit ? AppColors.success : AppColors.danger,
-                icon: isProfit ? Icons.trending_up : Icons.trending_down,
+            const SizedBox(width: 12),
+            Expanded(
+              child: StatTile(
+                icon: Icons.work_outline,
+                label: l10n.t('projects'),
+                value: '${snapshot.totalProjects}',
+                iconColor: context.tokens.income,
               ),
             ),
           ],

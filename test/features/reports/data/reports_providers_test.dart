@@ -839,6 +839,9 @@ void main() {
             firestoreProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             reportProjectIdProvider.overrideWith((ref) => 'project_1'),
+            // Pin the report clock inside the seeded June 2026 window so the
+            // default month-to-date scope stays stable as real time advances.
+            reportNowProvider.overrideWithValue(DateTime(2026, 6, 15)),
             currentAccountingRoleProvider.overrideWithValue(
               const AsyncData(AccountingAccessRoleType.owner),
             ),
