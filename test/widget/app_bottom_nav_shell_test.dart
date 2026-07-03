@@ -64,6 +64,17 @@ void main() {
     expect(find.byKey(const Key('qa_nav_activity')), findsOneWidget);
     expect(find.byKey(const Key('qa_nav_more')), findsOneWidget);
 
+    // Regression: the nav bar must keep a fixed intrinsic height. An
+    // unconstrained child once expanded it to fill the screen, collapsing the
+    // body to zero height and breaking every tap target.
+    final navHeight = tester.getSize(find.byType(BuildBottomNav)).height;
+    expect(navHeight, lessThan(120));
+    // Body content must remain visible alongside the nav.
+    expect(
+      tester.getSize(find.text(AppRoutes.dashboard)).height,
+      greaterThan(0),
+    );
+
     for (final entry in const {
       'Projects': AppRoutes.projects,
       'Activity': AppRoutes.activity,

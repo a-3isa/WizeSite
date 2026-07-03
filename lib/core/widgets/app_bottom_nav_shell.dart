@@ -74,13 +74,15 @@ class AppBottomNavShell extends ConsumerWidget {
             ),
           ],
         ),
-        bottomNavigationBar: BuildBottomNav(
-          currentIndex: currentIndex,
-          addKey: const Key('qa_nav_add'),
-          onAdd: () {
+        floatingActionButton: BuildAddFab(
+          onPressed: () {
             ref.read(appPrefetcherProvider).warmAddEntry();
             showAddSheet(context);
           },
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        bottomNavigationBar: BuildBottomNav(
+          currentIndex: currentIndex,
           onSelect: (index) {
             final prefetcher = ref.read(appPrefetcherProvider);
             switch (index) {

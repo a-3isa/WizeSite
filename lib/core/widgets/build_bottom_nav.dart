@@ -16,27 +16,25 @@ class BuildNavItem {
   final Key? key;
 }
 
-/// v2 bottom navigation: five slots with a raised center "+" FAB. Active tabs
-/// fill their icon and take the accent color; the bar casts an upward shadow.
-///
-/// [currentIndex] is the selected *branch* index (0-based, excluding the center
-/// add button). [items] must contain exactly four entries — two before and two
-/// after the center button.
+/// Height of the nav content (excluding the bottom safe-area inset).
+const double kBuildBottomNavHeight = 62;
+
+/// v2 bottom navigation: four fixed-height tabs with a central gap for the
+/// docked add FAB (see [BuildAddFab] + `FloatingActionButtonLocation.centerDocked`).
+/// Active tabs fill their icon and take the accent color; the bar casts an
+/// upward shadow. The bar's height is fixed so the Scaffold body keeps its
+/// full size (an unconstrained child here would swallow the whole screen).
 class BuildBottomNav extends StatelessWidget {
   const BuildBottomNav({
     required this.currentIndex,
     required this.items,
     required this.onSelect,
-    required this.onAdd,
-    this.addKey,
     super.key,
   }) : assert(items.length == 4, 'BuildBottomNav expects exactly 4 items');
 
   final int currentIndex;
   final List<BuildNavItem> items;
   final ValueChanged<int> onSelect;
-  final VoidCallback onAdd;
-  final Key? addKey;
 
   @override
   Widget build(BuildContext context) {
@@ -49,14 +47,14 @@ class BuildBottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+        child: SizedBox(
+          height: kBuildBottomNavHeight,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _tab(context, 0),
               _tab(context, 1),
-              _AddButton(onTap: onAdd, addKey: addKey, tokens: t),
+              // Central gap the docked FAB floats over.
+              const SizedBox(width: 76),
               _tab(context, 2),
               _tab(context, 3),
             ],
@@ -74,66 +72,57 @@ class BuildBottomNav extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: () => onSelect(index),
-        borderRadius: BorderRadius.circular(t.rMd),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(on ? item.activeIcon : item.icon, size: 24, color: color, key: item.key),
-              const SizedBox(height: 3),
-              Text(
-                item.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: on ? FontWeight.w700 : FontWeight.w600,
-                  color: color,
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              on ? item.activeIcon : item.icon,
+              size: 24,
+              color: color,
+              key: item.key,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: on ? FontWeight.w700 : FontWeight.w600,
+                color: color,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _AddButton extends StatelessWidget {
-  const _AddButton({required this.onTap, required this.tokens, this.addKey});
+/// The raised orange add button docked over the bottom nav's central gap.
+/// Use with `Scaffold.floatingActionButton` +
+/// `FloatingActionButtonLocation.centerDocked`.
+class BuildAddFab extends StatelessWidget {
+  const BuildAddFab({required this.onPressed, super.key});
 
-  final VoidCallback onTap;
-  final BuildTokens tokens;
-  final Key? addKey;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Transform.translate(
-          offset: const Offset(0, -18),
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              key: addKey,
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: tokens.accent,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: tokens.accent.withValues(alpha: 0.45),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Icon(Icons.add, size: 30, color: tokens.onAccent),
-            ),
-          ),
+    final t = context.tokens;
+    return SizedBox(
+      width: 58,
+      height: 58,
+      child: Material(
+        color: t.accent,
+        borderRadius: BorderRadius.circular(20),
+        elevation: 6,
+        shadowColor: t.accent.withValues(alpha: 0.45),
+        child: InkWell(
+          key: const Key('qa_nav_add'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(20),
+          child: Icon(Icons.add, size: 30, color: t.onAccent),
         ),
       ),
     );

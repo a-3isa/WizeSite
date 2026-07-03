@@ -436,7 +436,16 @@ class ProjectFinancialSection extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 20),
-        SectionHeader(title: l10n.t('recent')),
+        Row(
+          children: [
+            Expanded(child: SectionHeader(title: l10n.t('recent'))),
+            TextButton(
+              key: const Key('qa_dashboard_recent_see_all'),
+              onPressed: () => context.go(AppRoutes.activity),
+              child: Text(l10n.t('seeAll')),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         recentAsync.when(
           data: (items) => items.isEmpty
