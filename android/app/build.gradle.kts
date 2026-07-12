@@ -21,6 +21,22 @@ if (hasReleaseKeystore) {
     FileInputStream(keystorePropertiesFile).use(keystoreProperties::load)
 }
 
+// versionCode auto-derived from commit count: every commit gets a new, strictly
+// increasing value with zero manual bumping, so a fresh AAB/APK is always
+// uploadable to Play without editing pubspec.yaml by hand. Falls back to 1 if
+// git isn't available (e.g. a source archive with no .git directory).
+val autoVersionCode: Int = try {
+    val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+        .directory(rootDir.parentFile)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    process.waitFor()
+    output.toInt()
+} catch (e: Exception) {
+    1
+}
+
 android {
     namespace = "com.ahmed.buildozer"
     compileSdk = flutter.compileSdkVersion
@@ -41,37 +57,24 @@ android {
         applicationId = "com.ahmed.buildozer"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        versionCode = autoVersionCode
         versionName = flutter.versionName
     }
 
     signingConfigs {
-        if (hasCiReleaseKeystore || hasReleaseKeystore) {
-            create("release") {
-                if (hasCiReleaseKeystore) {
-                    storeFile = file(ciKeystorePath)
-                    storePassword = System.getenv("CM_KEYSTORE_PASSWORD")
-                    keyAlias = System.getenv("CM_KEY_ALIAS")
-                    keyPassword = System.getenv("CM_KEY_PASSWORD")
-                } else {
-                    keyAlias = keystoreProperties["keyAlias"] as String
-                    keyPassword = keystoreProperties["keyPassword"] as String
-                    storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
-                    storePassword = keystoreProperties["storePassword"] as String
-                }
-            }
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
         }
     }
 
     buildTypes {
-        release {
-            // Use a real upload keystore when available, otherwise keep local release
-            // builds working with the debug key.
-            signingConfig = if (hasCiReleaseKeystore || hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }
