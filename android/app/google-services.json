@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "549941684400-kia51cri180ltob4e6ievfehgiac2923.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ahmed.buildozer",
+            "certificate_hash": "caccb2f6caefb69b00ac00e29a3735f4b6f6a091"
+          }
+        },
+        {
           "client_id": "549941684400-p03oaa7s7kf66ndscjshia7b5hb7cheg.apps.googleusercontent.com",
           "client_type": 3
         }
