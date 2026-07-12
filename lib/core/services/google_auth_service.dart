@@ -1,7 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show debugPrint, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
+
+/// Thrown when Google reports the OAuth client itself is misconfigured (SHA
+/// fingerprint not registered/propagated yet, package name mismatch, etc.),
+/// as opposed to the user simply backing out of the account picker.
+class GoogleSignInConfigException implements Exception {
+  GoogleSignInConfigException(this.description);
+  final String? description;
+
+  @override
+  String toString() => 'GoogleSignInConfigException: $description';
+}
 
 class GoogleAuthService {
   GoogleAuthService({GoogleSignIn? googleSignIn})
@@ -20,6 +31,10 @@ class GoogleAuthService {
     await _initializeIfNeeded();
 
     if (!_googleSignIn.supportsAuthenticate()) {
+      debugPrint(
+        'GoogleAuthService: supportsAuthenticate() is false — Google Play '
+        'Services / Credential Manager provider unavailable on this device.',
+      );
       return null;
     }
 
@@ -33,10 +48,21 @@ class GoogleAuthService {
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       return auth.signInWithCredential(credential);
     } on GoogleSignInException catch (e) {
+      // Always log the real code: canceled/interrupted here can mean a
+      // genuine user tap-back, but it's also what Google's SDK reports when
+      // the OAuth client's SHA fingerprint isn't registered/propagated yet —
+      // logcat is the only way to tell those apart after the fact.
+      debugPrint(
+        'GoogleAuthService: sign-in exception ${e.code.name}: '
+        '${e.description ?? "(no description)"}',
+      );
       switch (e.code) {
         case GoogleSignInExceptionCode.canceled:
         case GoogleSignInExceptionCode.interrupted:
           return null;
+        case GoogleSignInExceptionCode.clientConfigurationError:
+        case GoogleSignInExceptionCode.providerConfigurationError:
+          throw GoogleSignInConfigException(e.description);
         default:
           throw StateError(
             'Google Sign-In failed: ${e.description ?? e.code.name}',

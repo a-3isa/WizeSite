@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/google_auth_service.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -129,6 +130,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) {
         await _clearFailedSignInSession(auth, includeGoogle: true);
         setState(() => _error = _authErrorMessage(l10n, e.code));
+      }
+    } on GoogleSignInConfigException {
+      if (mounted) {
+        await _clearFailedSignInSession(auth, includeGoogle: true);
+        setState(() => _error = l10n.t('authGoogleConfigError'));
       }
     } catch (_) {
       if (mounted) {

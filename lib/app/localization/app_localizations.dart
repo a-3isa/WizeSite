@@ -220,6 +220,9 @@ class AppLocalizations {
         'An account already exists with this email. Try signing in with email and password.',
     'authSignInFailed':
         'Sign-in failed. Please check your email and password and try again.',
+    'authGoogleConfigError':
+        'Google Sign-In is temporarily unavailable for this app version. '
+        'Please try again in a few minutes.',
     'actionNotAllowed': 'You are not allowed to perform this action.',
     'featureTemporarilyUnavailable':
         'This feature is temporarily unavailable. Please try again later.',
@@ -938,6 +941,9 @@ class AppLocalizations {
     'authDifferentProvider':
         'يوجد حساب بهذا البريد. جرّب تسجيل الدخول بالبريد وكلمة المرور.',
     'authSignInFailed': 'فشل تسجيل الدخول. تحقق من البيانات وحاول مرة أخرى.',
+    'authGoogleConfigError':
+        'تسجيل الدخول عبر جوجل غير متاح مؤقتًا لهذا الإصدار من التطبيق. '
+        'يرجى المحاولة مرة أخرى بعد بضع دقائق.',
     'authInvalidEmailFormat': 'تنسيق البريد الإلكتروني غير صحيح',
     'authPasswordMinLength': 'يجب أن تكون كلمة المرور 8 أحرف على الأقل',
     'authPasswordsDoNotMatch': 'كلمتا المرور غير متطابقتين',
