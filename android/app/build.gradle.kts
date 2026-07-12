@@ -21,20 +21,57 @@ if (hasReleaseKeystore) {
     FileInputStream(keystorePropertiesFile).use(keystoreProperties::load)
 }
 
-// versionCode auto-derived from commit count: every commit gets a new, strictly
-// increasing value with zero manual bumping, so a fresh AAB/APK is always
-// uploadable to Play without editing pubspec.yaml by hand. Falls back to 1 if
-// git isn't available (e.g. a source archive with no .git directory).
-val autoVersionCode: Int = try {
-    val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-        .directory(rootDir.parentFile)
-        .redirectErrorStream(true)
-        .start()
-    val output = process.inputStream.bufferedReader().readText().trim()
-    process.waitFor()
-    output.toInt()
-} catch (e: Exception) {
-    1
+// Auto-versioning, but ONLY for an AAB build (`flutter build appbundle` ->
+// Gradle task `bundleRelease`). APK builds (`flutter build apk`,
+// `flutter run`, etc.) are unaffected and keep pubspec.yaml's version as-is.
+//
+// On a bundle build:
+//   - versionName's patch number is bumped by 1 (1.0.0 -> 1.0.1 -> 1.0.2 ...)
+//     and the new version is written back into pubspec.yaml, so the bump is
+//     visible there and persists into the next build.
+//   - versionCode is derived from git commit count: strictly increasing and
+//     unique per commit, so Play never rejects an upload for reusing a code.
+// Caveat: the pubspec.yaml bump happens at Gradle configuration time, before
+// the bundle is actually produced — if the build fails afterwards, the
+// version has still been consumed (rare in practice, but re-running after a
+// genuine failure will skip a patch number rather than reuse one).
+val isBundleBuild = gradle.startParameter.taskNames.any {
+    it.contains("bundle", ignoreCase = true)
+}
+val pubspecFile = rootDir.parentFile.resolve("pubspec.yaml")
+val pubspecVersionLine = Regex("""(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)""")
+
+val bundleVersionName: String? = if (isBundleBuild) {
+    val text = pubspecFile.readText()
+    val match = pubspecVersionLine.find(text)
+    if (match == null) {
+        null
+    } else {
+        val (major, minor, patch, build) = match.destructured
+        val newVersionName = "$major.$minor.${patch.toInt() + 1}"
+        pubspecFile.writeText(
+            pubspecVersionLine.replaceFirst(text, "version: $newVersionName+$build"),
+        )
+        newVersionName
+    }
+} else {
+    null
+}
+
+val autoVersionCode: Int = if (isBundleBuild) {
+    try {
+        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+            .directory(rootDir.parentFile)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        output.toInt()
+    } catch (e: Exception) {
+        1
+    }
+} else {
+    flutter.versionCode
 }
 
 android {
@@ -58,7 +95,7 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = autoVersionCode
-        versionName = flutter.versionName
+        versionName = bundleVersionName ?: flutter.versionName
     }
 
     signingConfigs {
