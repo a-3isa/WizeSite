@@ -17,6 +17,10 @@ class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
 
+class _MockUserCredential extends Mock implements UserCredential {}
+
+class _MockUser extends Mock implements User {}
+
 void main() {
   Future<ProviderContainer> pumpLogin({
     required WidgetTester tester,
@@ -78,7 +82,7 @@ void main() {
     return container;
   }
 
-  testWidgets('LoginScreen is Google-only and keeps the Google slot stable', (
+  testWidgets('LoginScreen offers both email and Google sign-in', (
     tester,
   ) async {
     final auth = _MockFirebaseAuth();
@@ -93,21 +97,103 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('login_app_icon')), findsOneWidget);
-    expect(
-      find.image(const AssetImage('assets/branding/app_icon.png')),
-      findsOneWidget,
-    );
     expect(find.byKey(const Key('google_sign_in_slot')), findsOneWidget);
     expect(
       find.image(const AssetImage('assets/branding/google_g.png')),
       findsOneWidget,
     );
-    expect(find.byType(Image), findsNWidgets(2));
-    expect(find.widgetWithText(TextField, 'Email'), findsNothing);
-    expect(find.widgetWithText(TextField, 'Password'), findsNothing);
-    expect(find.text('Forgot Password'), findsNothing);
-    expect(find.text("Don't have an account?"), findsNothing);
-    expect(find.text('Sign Up'), findsNothing);
+
+    // Email/password path.
+    expect(find.byKey(const Key('qa_login_email')), findsOneWidget);
+    expect(find.byKey(const Key('qa_login_password')), findsOneWidget);
+    expect(find.byKey(const Key('qa_login_submit')), findsOneWidget);
+    expect(find.byKey(const Key('qa_login_forgot')), findsOneWidget);
+    expect(find.byKey(const Key('qa_login_to_signup')), findsOneWidget);
+  });
+
+  testWidgets('LoginScreen rejects an empty email/password submit', (
+    tester,
+  ) async {
+    final auth = _MockFirebaseAuth();
+    final workspaceService = _MockWorkspaceMutationService();
+
+    await pumpLogin(
+      tester: tester,
+      auth: auth,
+      workspaceService: workspaceService,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('qa_login_submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('qa_auth_error')), findsOneWidget);
+    expect(find.text('Please enter your email and password.'), findsOneWidget);
+    // Never reached Firebase.
+    verifyNever(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ));
+  });
+
+  testWidgets('LoginScreen rejects a malformed email before calling Firebase', (
+    tester,
+  ) async {
+    final auth = _MockFirebaseAuth();
+    final workspaceService = _MockWorkspaceMutationService();
+
+    await pumpLogin(
+      tester: tester,
+      auth: auth,
+      workspaceService: workspaceService,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('qa_login_email')), 'not-email');
+    await tester.enterText(
+      find.byKey(const Key('qa_login_password')),
+      'password123',
+    );
+    await tester.tap(find.byKey(const Key('qa_login_submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('qa_auth_error')), findsOneWidget);
+    verifyNever(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ));
+  });
+
+  testWidgets('LoginScreen surfaces a wrong-password failure', (tester) async {
+    final auth = _MockFirebaseAuth();
+    final workspaceService = _MockWorkspaceMutationService();
+
+    when(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenThrow(FirebaseAuthException(code: 'wrong-password'));
+    when(() => auth.signOut()).thenAnswer((_) async {});
+
+    await pumpLogin(
+      tester: tester,
+      auth: auth,
+      workspaceService: workspaceService,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('qa_login_email')),
+      'sam@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('qa_login_password')),
+      'wrongpass1',
+    );
+    await tester.tap(find.byKey(const Key('qa_login_submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('LoginScreen preserves Google slot when support check fails', (
@@ -126,6 +212,50 @@ void main() {
 
     expect(find.byKey(const Key('google_sign_in_slot')), findsOneWidget);
     expect(find.text('Continue with Google'), findsNothing);
+  });
+
+  testWidgets('LoginScreen signs in with email and lands on the dashboard', (
+    tester,
+  ) async {
+    final auth = _MockFirebaseAuth();
+    final workspaceService = _MockWorkspaceMutationService();
+    final credential = _MockUserCredential();
+    final user = _MockUser();
+
+    when(() => user.uid).thenReturn('user_1');
+    when(() => credential.user).thenReturn(user);
+    when(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenAnswer((_) async => credential);
+    when(() => workspaceService.ensureUserWorkspaceBootstrap()).thenAnswer(
+      (_) async => const WorkspaceBootstrapResult(
+        workspaceId: 'workspace_1',
+        created: false,
+        setupCompleted: true,
+      ),
+    );
+
+    await pumpLogin(
+      tester: tester,
+      auth: auth,
+      workspaceService: workspaceService,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('qa_login_email')),
+      'sam@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('qa_login_password')),
+      'password123',
+    );
+    await tester.tap(find.byKey(const Key('qa_login_submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard'), findsOneWidget);
+    verify(() => workspaceService.ensureUserWorkspaceBootstrap()).called(1);
   });
 
   testWidgets('LoginScreen routes restored sessions away from login', (

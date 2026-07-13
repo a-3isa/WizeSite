@@ -207,6 +207,12 @@ class AppLocalizations {
         'The selected contact does not have a phone number.',
     'sendResetLink': 'Send reset link',
     'resetLinkSent': 'Reset link sent to your email.',
+    'signUpToContinue': 'Create an account to get started',
+    'resetPasswordSubtitle':
+        'Enter your email and we will send you a link to reset your password.',
+    'backToSignIn': 'Back to sign in',
+    'orContinueWith': 'or',
+    'authNameRequired': 'Enter your name.',
     'signInCancelled': 'Sign-in was cancelled or could not complete.',
     'pleaseEnterEmailAndPassword': 'Please enter your email and password.',
     'authNoAccountFound':
@@ -930,6 +936,12 @@ class AppLocalizations {
     'phoneNumber': 'رقم الهاتف',
     'sendResetLink': 'إرسال رابط إعادة التعيين',
     'resetLinkSent': 'تم إرسال رابط إعادة التعيين إلى بريدك.',
+    'signUpToContinue': 'أنشئ حسابًا للبدء',
+    'resetPasswordSubtitle':
+        'أدخل بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.',
+    'backToSignIn': 'العودة لتسجيل الدخول',
+    'orContinueWith': 'أو',
+    'authNameRequired': 'أدخل اسمك.',
     'signInCancelled': 'تم إلغاء تسجيل الدخول أو لم يكتمل.',
     'pleaseEnterEmailAndPassword': 'يرجى إدخال البريد الإلكتروني وكلمة المرور.',
     'authNoAccountFound': 'لا يوجد حساب مرتبط بهذا البريد.',

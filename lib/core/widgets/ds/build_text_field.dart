@@ -1,9 +1,13 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Labelled text field matching the v2 `Field` primitive: label above, rounded
 /// bordered input that shows a 2px accent border on focus.
-class BuildTextField extends StatelessWidget {
+///
+/// When [obscureText] is set the field manages its own show/hide toggle, so
+/// password inputs get a reveal affordance without every caller rebuilding it.
+class BuildTextField extends StatefulWidget {
   const BuildTextField({
     required this.label,
     this.controller,
@@ -11,7 +15,13 @@ class BuildTextField extends StatelessWidget {
     this.suffixText,
     this.keyboardType,
     this.onChanged,
+    this.onSubmitted,
     this.inputFormatters,
+    this.obscureText = false,
+    this.textInputAction,
+    this.autofillHints,
+    this.enabled = true,
+    this.errorText,
     super.key,
   });
 
@@ -21,7 +31,20 @@ class BuildTextField extends StatelessWidget {
   final String? suffixText;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
-  final List<dynamic>? inputFormatters;
+  final ValueChanged<String>? onSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool obscureText;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final bool enabled;
+  final String? errorText;
+
+  @override
+  State<BuildTextField> createState() => _BuildTextFieldState();
+}
+
+class _BuildTextFieldState extends State<BuildTextField> {
+  late bool _obscured = widget.obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +55,7 @@ class BuildTextField extends StatelessWidget {
         Padding(
           padding: const EdgeInsetsDirectional.only(bottom: 7),
           child: Text(
-            label,
+            widget.label,
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
@@ -41,17 +64,36 @@ class BuildTextField extends StatelessWidget {
           ),
         ),
         TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          onChanged: onChanged,
+          controller: widget.controller,
+          keyboardType: widget.keyboardType,
+          onChanged: widget.onChanged,
+          onSubmitted: widget.onSubmitted,
+          inputFormatters: widget.inputFormatters,
+          obscureText: _obscured,
+          textInputAction: widget.textInputAction,
+          autofillHints: widget.autofillHints,
+          enabled: widget.enabled,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: t.text,
           ),
           decoration: InputDecoration(
-            hintText: hintText,
-            suffixText: suffixText,
+            hintText: widget.hintText,
+            suffixText: widget.suffixText,
+            errorText: widget.errorText,
+            suffixIcon: widget.obscureText
+                ? IconButton(
+                    onPressed: () => setState(() => _obscured = !_obscured),
+                    icon: Icon(
+                      _obscured
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                      color: t.textMuted,
+                    ),
+                  )
+                : null,
           ),
         ),
       ],

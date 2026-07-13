@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:buildtrack_app/core/services/email_auth_service.dart';
 import 'package:buildtrack_app/core/services/google_auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,10 @@ final functionsProvider = Provider<FirebaseFunctions>((ref) {
 
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
   return GoogleAuthService();
+});
+
+final emailAuthServiceProvider = Provider<EmailAuthService>((ref) {
+  return const EmailAuthService();
 });
 
 final googleSignInSupportedProvider = FutureProvider<bool>((ref) async {

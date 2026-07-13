@@ -9,7 +9,9 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/initial_workspace_setup_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
 import 'package:buildtrack_app/features/activity/presentation/screens/activity_screen.dart';
@@ -108,6 +110,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.login,
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.signup,
+        name: 'signup',
+        builder: (context, state) => const SignUpScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        name: 'forgotPassword',
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: AppRoutes.initialWorkspaceSetup,
@@ -585,7 +597,10 @@ String? resolveAppRedirect({
   required bool hasWorkspace,
 }) {
   final isSplash = location == AppRoutes.root;
-  final isAuthRoute = location == AppRoutes.login;
+  final isAuthRoute =
+      location == AppRoutes.login ||
+      location == AppRoutes.signup ||
+      location == AppRoutes.forgotPassword;
   final isPublicDiscovery =
       location == AppRoutes.features || location == AppRoutes.onboarding;
   final isPublicRoute = isSplash || isAuthRoute || isPublicDiscovery;

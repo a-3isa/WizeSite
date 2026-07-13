@@ -1,17 +1,19 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/google_auth_service.dart';
-import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:buildtrack_app/core/utils/auth_error_messages.dart';
+import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
+import 'package:buildtrack_app/features/auth/presentation/auth_session.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart'
+    show isValidEmail;
+import 'package:buildtrack_app/features/auth/presentation/widgets/auth_error_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
-import 'package:buildtrack_app/core/widgets/async_content.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +23,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
   bool _loading = false;
   String? _error;
 
@@ -44,44 +49,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  String _authErrorMessage(AppLocalizations l10n, String? code) {
-    switch (code) {
-      case 'user-not-found':
-        return l10n.t('authNoAccountFound');
-      case 'wrong-password':
-      case 'invalid-credential':
-        return l10n.t('authIncorrectPassword');
-      case 'invalid-email':
-        return l10n.t('authInvalidEmail');
-      case 'user-disabled':
-        return l10n.t('authAccountDisabled');
-      case 'too-many-requests':
-        return l10n.t('authTooManyAttempts');
-      case 'network-request-failed':
-        return l10n.t('authNetworkError');
-      case 'account-exists-with-different-credential':
-        return l10n.t('authDifferentProvider');
-      default:
-        return l10n.t('authSignInFailed');
-    }
-  }
+  Future<void> _loginWithEmail() async {
+    final l10n = AppLocalizations.of(context);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-  Future<void> _clearFailedSignInSession(
-    FirebaseAuth auth, {
-    bool includeGoogle = false,
-  }) async {
-    ref.read(activeUserIdProvider.notifier).state = null;
-    ref.read(activeWorkspaceIdProvider.notifier).state = null;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = l10n.t('pleaseEnterEmailAndPassword'));
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setState(() => _error = l10n.t('authInvalidEmailFormat'));
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final auth = ref.read(firebaseAuthProvider);
     try {
-      if (includeGoogle) {
-        await ref.read(googleAuthServiceProvider).signOut();
+      final credential = await ref
+          .read(emailAuthServiceProvider)
+          .signIn(auth: auth, email: email, password: password);
+
+      final user = credential.user;
+      if (user == null) {
+        throw StateError('Sign-in returned no user.');
       }
-      await auth.signOut();
-    } catch (_) {
-      // Keep the visible login failure instead of replacing it with sign-out noise.
+      if (!mounted) return;
+      await completeAuthSession(ref: ref, context: context, user: user);
+    } catch (e) {
+      if (!mounted) return;
+      await clearFailedAuthSession(ref: ref, auth: auth);
+      if (!mounted) return;
+      setState(() => _error = AuthErrorMessages.signIn(l10n, e));
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -93,6 +105,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     final auth = ref.read(firebaseAuthProvider);
+    Future<void> signOutGoogle() =>
+        ref.read(googleAuthServiceProvider).signOut();
+
     try {
       final credential = await ref
           .read(googleAuthServiceProvider)
@@ -100,6 +115,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       final user = credential?.user;
       if (user == null) {
+        // Null (rather than a thrown error) means the user backed out.
         if (mounted) {
           setState(() {
             _error = l10n.t('signInCancelled');
@@ -108,39 +124,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         return;
       }
-
-      final workspaceId = await ref
-          .read(workspaceMutationServiceProvider)
-          .ensureUserWorkspaceBootstrap();
-      if (workspaceId.workspaceId.isEmpty) {
-        throw StateError('Workspace bootstrap failed.');
-      }
-      ref.read(activeUserIdProvider.notifier).state = user.uid;
-      ref.read(activeWorkspaceIdProvider.notifier).state =
-          workspaceId.workspaceId;
-
-      if (mounted) {
-        context.go(
-          workspaceId.setupCompleted
-              ? AppRoutes.dashboard
-              : AppRoutes.initialWorkspaceSetup,
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        await _clearFailedSignInSession(auth, includeGoogle: true);
-        setState(() => _error = _authErrorMessage(l10n, e.code));
-      }
+      if (!mounted) return;
+      await completeAuthSession(ref: ref, context: context, user: user);
     } on GoogleSignInConfigException {
-      if (mounted) {
-        await _clearFailedSignInSession(auth, includeGoogle: true);
-        setState(() => _error = l10n.t('authGoogleConfigError'));
-      }
-    } catch (_) {
-      if (mounted) {
-        await _clearFailedSignInSession(auth, includeGoogle: true);
-        setState(() => _error = _authErrorMessage(l10n, null));
-      }
+      if (!mounted) return;
+      await clearFailedAuthSession(
+        ref: ref,
+        auth: auth,
+        alsoSignOut: signOutGoogle,
+      );
+      if (!mounted) return;
+      setState(() => _error = l10n.t('authGoogleConfigError'));
+    } catch (e) {
+      if (!mounted) return;
+      await clearFailedAuthSession(
+        ref: ref,
+        auth: auth,
+        alsoSignOut: signOutGoogle,
+      );
+      if (!mounted) return;
+      setState(() => _error = AuthErrorMessages.signIn(l10n, e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -151,113 +154,174 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+
     return Scaffold(
-      backgroundColor: context.tokens.bg, // Subtle background
+      backgroundColor: t.bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        toolbarHeight: 0, // Hide appbar to get full screen real estate visually
+        toolbarHeight: 0,
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/branding/app_icon.png',
-                  key: const Key('login_app_icon'),
-                  height: 72,
-                  width: 72,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  l10n.t('welcomeBack'),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                    color: context.tokens.text,
+            child: AutofillGroup(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/branding/app_icon.png',
+                    key: const Key('login_app_icon'),
+                    height: 72,
+                    width: 72,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.t('signInToContinue'),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: context.tokens.textMuted),
-                ),
-                const SizedBox(height: 48),
-                if (_error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.dangerLight,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.danger.withValues(alpha: 0.3),
-                      ),
+                  const SizedBox(height: 24),
+                  Text(
+                    l10n.t('welcomeBack'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                      color: t.text,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: AppColors.danger,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(
-                              color: AppColors.danger,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.t('signInToContinue'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(color: t.textMuted),
+                  ),
+                  const SizedBox(height: 32),
+                  if (_error != null) ...[
+                    AuthErrorBanner(message: _error!),
+                    const SizedBox(height: 16),
+                  ],
+                  BuildTextField(
+                    key: const Key('qa_login_email'),
+                    label: l10n.t('email'),
+                    controller: _emailController,
+                    enabled: !_loading,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
                   ),
                   const SizedBox(height: 16),
-                ],
-                SizedBox(
-                  key: const Key('google_sign_in_slot'),
-                  height: 48,
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final supported = ref.watch(
-                        googleSignInSupportedProvider,
-                      );
-                      return supported.whenStale(
-                        data: (isSupported) => isSupported
-                            ? OutlinedButton.icon(
-                                onPressed: _loading ? null : _loginWithGoogle,
-                                icon: Image.asset(
-                                  'assets/branding/google_g.png',
-                                  height: 20,
-                                  width: 20,
-                                ),
-                                label: Text(l10n.t('continueWithGoogle')),
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: context.tokens.surface,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                        loading: () =>
-                            const LinearProgressIndicator(minHeight: 2),
-                        error: (_, _) => const SizedBox.shrink(),
-                      );
-                    },
+                  BuildTextField(
+                    key: const Key('qa_login_password'),
+                    label: l10n.t('password'),
+                    controller: _passwordController,
+                    enabled: !_loading,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _loading ? null : _loginWithEmail(),
                   ),
-                ),
-              ],
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: TextButton(
+                      key: const Key('qa_login_forgot'),
+                      onPressed: _loading
+                          ? null
+                          : () => context.push(AppRoutes.forgotPassword),
+                      child: Text(l10n.t('forgotPassword')),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    BuildButton(
+                      key: const Key('qa_login_submit'),
+                      label: l10n.t('login'),
+                      size: BuildButtonSize.lg,
+                      full: true,
+                      onPressed: _loginWithEmail,
+                    ),
+                  const SizedBox(height: 20),
+                  _OrDivider(label: l10n.t('orContinueWith')),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    key: const Key('google_sign_in_slot'),
+                    height: 48,
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final supported = ref.watch(
+                          googleSignInSupportedProvider,
+                        );
+                        return supported.whenStale(
+                          data: (isSupported) => isSupported
+                              ? OutlinedButton.icon(
+                                  onPressed: _loading ? null : _loginWithGoogle,
+                                  icon: Image.asset(
+                                    'assets/branding/google_g.png',
+                                    height: 20,
+                                    width: 20,
+                                  ),
+                                  label: Text(l10n.t('continueWithGoogle')),
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: t.surface,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                          loading: () =>
+                              const LinearProgressIndicator(minHeight: 2),
+                          error: (_, _) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        l10n.t('dontHaveAccount'),
+                        style: TextStyle(fontSize: 14, color: t.textMuted),
+                      ),
+                      TextButton(
+                        key: const Key('qa_login_to_signup'),
+                        onPressed: _loading
+                            ? null
+                            : () => context.push(AppRoutes.signup),
+                        child: Text(l10n.t('signup')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  const _OrDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Row(
+      children: [
+        Expanded(child: Divider(color: t.border)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12.5, color: t.textFaint),
+          ),
+        ),
+        Expanded(child: Divider(color: t.border)),
+      ],
     );
   }
 }

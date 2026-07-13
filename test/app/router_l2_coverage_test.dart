@@ -40,8 +40,9 @@ void main() {
     expect(routePaths, contains(AppRoutes.contractorsDirectory));
     expect(routePaths, contains(AppRoutes.equipmentDirectory));
     expect(routePaths, contains(AppRoutes.transportProvidersDirectory));
-    expect(routePaths, isNot(contains('/signup')));
-    expect(routePaths, isNot(contains('/forgot-password')));
+    expect(routePaths, contains(AppRoutes.login));
+    expect(routePaths, contains(AppRoutes.signup));
+    expect(routePaths, contains(AppRoutes.forgotPassword));
     expect(routePaths, isNot(contains('/add')));
     expect(routePaths, isNot(contains('/add-entry')));
   });
@@ -67,6 +68,35 @@ void main() {
       AppRoutes.dashboard,
     );
   });
+
+  test('resolveAppRedirect lets signed-out users reach the email auth screens', () {
+    for (final route in [AppRoutes.signup, AppRoutes.forgotPassword]) {
+      expect(
+        resolveAppRedirect(
+          location: route,
+          isSignedIn: false,
+          hasWorkspace: false,
+        ),
+        isNull,
+        reason: '$route must stay reachable while signed out',
+      );
+    }
+  });
+
+  test('resolveAppRedirect pushes signed-in users off the email auth screens', () {
+    for (final route in [AppRoutes.signup, AppRoutes.forgotPassword]) {
+      expect(
+        resolveAppRedirect(
+          location: route,
+          isSignedIn: true,
+          hasWorkspace: true,
+        ),
+        AppRoutes.dashboard,
+        reason: '$route must not be reachable once signed in',
+      );
+    }
+  });
+
 }
 
 Iterable<String> _routePaths(List<RouteBase> routes) sync* {
