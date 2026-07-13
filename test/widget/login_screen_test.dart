@@ -21,6 +21,8 @@ class _MockUserCredential extends Mock implements UserCredential {}
 
 class _MockUser extends Mock implements User {}
 
+class _MockUserInfo extends Mock implements UserInfo {}
+
 void main() {
   Future<ProviderContainer> pumpLogin({
     required WidgetTester tester,
@@ -52,6 +54,11 @@ void main() {
           path: AppRoutes.initialWorkspaceSetup,
           builder: (context, state) =>
               const Text('Workspace Setup', textDirection: TextDirection.ltr),
+        ),
+        GoRoute(
+          path: AppRoutes.verifyEmail,
+          builder: (context, state) =>
+              const Text('Verify Email', textDirection: TextDirection.ltr),
         ),
       ],
     );
@@ -223,6 +230,7 @@ void main() {
     final user = _MockUser();
 
     when(() => user.uid).thenReturn('user_1');
+    when(() => user.emailVerified).thenReturn(true);
     when(() => credential.user).thenReturn(user);
     when(() => auth.signInWithEmailAndPassword(
           email: any(named: 'email'),
@@ -256,6 +264,48 @@ void main() {
 
     expect(find.text('Dashboard'), findsOneWidget);
     verify(() => workspaceService.ensureUserWorkspaceBootstrap()).called(1);
+  });
+
+  testWidgets('LoginScreen sends an unverified user to email verification', (
+    tester,
+  ) async {
+    final auth = _MockFirebaseAuth();
+    final workspaceService = _MockWorkspaceMutationService();
+    final credential = _MockUserCredential();
+    final user = _MockUser();
+    final passwordProvider = _MockUserInfo();
+
+    when(() => passwordProvider.providerId).thenReturn('password');
+    when(() => user.uid).thenReturn('user_1');
+    when(() => user.emailVerified).thenReturn(false);
+    when(() => user.providerData).thenReturn([passwordProvider]);
+    when(() => credential.user).thenReturn(user);
+    when(() => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        )).thenAnswer((_) async => credential);
+
+    await pumpLogin(
+      tester: tester,
+      auth: auth,
+      workspaceService: workspaceService,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('qa_login_email')),
+      'sam@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('qa_login_password')),
+      'password123',
+    );
+    await tester.tap(find.byKey(const Key('qa_login_submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verify Email'), findsOneWidget);
+    // No workspace for an unverified address.
+    verifyNever(() => workspaceService.ensureUserWorkspaceBootstrap());
   });
 
   testWidgets('LoginScreen routes restored sessions away from login', (

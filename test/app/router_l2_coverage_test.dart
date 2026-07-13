@@ -83,6 +83,52 @@ void main() {
     }
   });
 
+  test('resolveAppRedirect holds an unverified user at the verify screen', () {
+    // Any in-app destination bounces to verification...
+    expect(
+      resolveAppRedirect(
+        location: AppRoutes.dashboard,
+        isSignedIn: true,
+        hasWorkspace: true,
+        needsEmailVerification: true,
+      ),
+      AppRoutes.verifyEmail,
+    );
+    // ...and the verify screen itself stays reachable.
+    expect(
+      resolveAppRedirect(
+        location: AppRoutes.verifyEmail,
+        isSignedIn: true,
+        hasWorkspace: false,
+        needsEmailVerification: true,
+      ),
+      isNull,
+    );
+  });
+
+  test('resolveAppRedirect releases a verified user from the verify screen', () {
+    expect(
+      resolveAppRedirect(
+        location: AppRoutes.verifyEmail,
+        isSignedIn: true,
+        hasWorkspace: true,
+        needsEmailVerification: false,
+      ),
+      AppRoutes.dashboard,
+    );
+  });
+
+  test('resolveAppRedirect keeps signed-out users off the verify screen', () {
+    expect(
+      resolveAppRedirect(
+        location: AppRoutes.verifyEmail,
+        isSignedIn: false,
+        hasWorkspace: false,
+      ),
+      AppRoutes.features,
+    );
+  });
+
   test('resolveAppRedirect pushes signed-in users off the email auth screens', () {
     for (final route in [AppRoutes.signup, AppRoutes.forgotPassword]) {
       expect(

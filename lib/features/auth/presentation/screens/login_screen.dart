@@ -3,6 +3,7 @@ import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/email_auth_service.dart';
 import 'package:buildtrack_app/core/services/google_auth_service.dart';
 import 'package:buildtrack_app/core/utils/auth_error_messages.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
@@ -84,6 +85,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         throw StateError('Sign-in returned no user.');
       }
       if (!mounted) return;
+      if (requiresEmailVerification(user)) {
+        // Signed in, but hold them at verification rather than bootstrapping.
+        context.go(AppRoutes.verifyEmail);
+        return;
+      }
       await completeAuthSession(ref: ref, context: context, user: user);
     } catch (e) {
       if (!mounted) return;

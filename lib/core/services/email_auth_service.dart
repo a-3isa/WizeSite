@@ -52,4 +52,41 @@ class EmailAuthService {
   }) {
     return auth.sendPasswordResetEmail(email: email.trim());
   }
+
+  /// Sends (or re-sends) the address-verification email to the current user.
+  Future<void> sendVerificationEmail({required FirebaseAuth auth}) async {
+    final user = auth.currentUser;
+    if (user == null || user.emailVerified) {
+      return;
+    }
+    await user.sendEmailVerification();
+  }
+
+  /// Re-fetches the user from Firebase and reports whether the address is now
+  /// verified.
+  ///
+  /// [User.emailVerified] is a snapshot taken at sign-in; clicking the link in
+  /// the email does not push an update to the client, so the only way to observe
+  /// it is to reload.
+  Future<bool> refreshEmailVerified({required FirebaseAuth auth}) async {
+    final user = auth.currentUser;
+    if (user == null) {
+      return false;
+    }
+    await user.reload();
+    return auth.currentUser?.emailVerified ?? false;
+  }
+}
+
+/// True when [user] signed up with email/password and has not verified yet.
+///
+/// Federated identities (Google) arrive pre-verified, so they must never be
+/// caught by the verification gate.
+bool requiresEmailVerification(User? user) {
+  if (user == null || user.emailVerified) {
+    return false;
+  }
+  return user.providerData.any(
+    (provider) => provider.providerId == 'password',
+  );
 }

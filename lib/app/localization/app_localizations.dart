@@ -213,6 +213,15 @@ class AppLocalizations {
     'backToSignIn': 'Back to sign in',
     'orContinueWith': 'or',
     'authNameRequired': 'Enter your name.',
+    'verifyEmailTitle': 'Verify your email',
+    'verifyEmailSubtitle':
+        'We sent a verification link to {email}. Open it, then continue.',
+    'verificationEmailSent': 'Verification email sent.',
+    'emailNotVerifiedYet':
+        'Not verified yet. Open the link in your email, then try again.',
+    'iVerifiedContinue': "I've verified — Continue",
+    'resendVerificationEmail': 'Resend email',
+    'resendInSeconds': 'Resend in {seconds}s',
     'signInCancelled': 'Sign-in was cancelled or could not complete.',
     'pleaseEnterEmailAndPassword': 'Please enter your email and password.',
     'authNoAccountFound':
@@ -942,6 +951,15 @@ class AppLocalizations {
     'backToSignIn': 'العودة لتسجيل الدخول',
     'orContinueWith': 'أو',
     'authNameRequired': 'أدخل اسمك.',
+    'verifyEmailTitle': 'تأكيد بريدك الإلكتروني',
+    'verifyEmailSubtitle':
+        'أرسلنا رابط تأكيد إلى {email}. افتحه ثم تابع.',
+    'verificationEmailSent': 'تم إرسال رسالة التأكيد.',
+    'emailNotVerifiedYet':
+        'لم يتم التأكيد بعد. افتح الرابط في بريدك ثم حاول مرة أخرى.',
+    'iVerifiedContinue': 'لقد أكدت — متابعة',
+    'resendVerificationEmail': 'إعادة إرسال الرسالة',
+    'resendInSeconds': 'إعادة الإرسال خلال {seconds} ثانية',
     'signInCancelled': 'تم إلغاء تسجيل الدخول أو لم يكتمل.',
     'pleaseEnterEmailAndPassword': 'يرجى إدخال البريد الإلكتروني وكلمة المرور.',
     'authNoAccountFound': 'لا يوجد حساب مرتبط بهذا البريد.',

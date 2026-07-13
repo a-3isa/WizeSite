@@ -86,7 +86,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         throw StateError('Sign-up returned no user.');
       }
       if (!mounted) return;
-      await completeAuthSession(ref: ref, context: context, user: user);
+      // No workspace is created yet: the verify screen bootstraps once the
+      // address is confirmed, so an unverified signup leaves nothing behind.
+      context.go(AppRoutes.verifyEmail);
     } catch (e) {
       if (!mounted) return;
       await clearFailedAuthSession(ref: ref, auth: auth);

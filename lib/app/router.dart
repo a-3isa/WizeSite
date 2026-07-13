@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/crashlytics_route_observer.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/email_auth_service.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
@@ -12,6 +13,7 @@ import 'package:buildtrack_app/features/auth/presentation/screens/initial_worksp
 import 'package:buildtrack_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/signup_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/verify_email_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
 import 'package:buildtrack_app/features/activity/presentation/screens/activity_screen.dart';
@@ -76,7 +78,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     observers: [CrashlyticsRouteObserver(), rootRouteObserver],
     redirect: (context, state) {
       final location = state.uri.path;
-      final isSignedIn = auth.currentUser != null;
+      final currentUser = auth.currentUser;
+      final isSignedIn = currentUser != null;
       final workspaceId = ref.read(activeWorkspaceIdProvider);
       final userId = ref.read(activeUserIdProvider);
       final hasWorkspace =
@@ -88,6 +91,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         location: location,
         isSignedIn: isSignedIn,
         hasWorkspace: hasWorkspace,
+        needsEmailVerification: requiresEmailVerification(currentUser),
       );
     },
     routes: [
@@ -120,6 +124,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.forgotPassword,
         name: 'forgotPassword',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        name: 'verifyEmail',
+        builder: (context, state) => const VerifyEmailScreen(),
       ),
       GoRoute(
         path: AppRoutes.initialWorkspaceSetup,
@@ -595,6 +604,7 @@ String? resolveAppRedirect({
   required String location,
   required bool isSignedIn,
   required bool hasWorkspace,
+  bool needsEmailVerification = false,
 }) {
   final isSplash = location == AppRoutes.root;
   final isAuthRoute =
@@ -603,13 +613,25 @@ String? resolveAppRedirect({
       location == AppRoutes.forgotPassword;
   final isPublicDiscovery =
       location == AppRoutes.features || location == AppRoutes.onboarding;
+  final isVerifyRoute = location == AppRoutes.verifyEmail;
   final isPublicRoute = isSplash || isAuthRoute || isPublicDiscovery;
 
   if (!isSignedIn) {
+    // The verify screen is only meaningful for a signed-in, unverified user.
     if (!isPublicRoute) {
       return AppRoutes.features;
     }
     return null;
+  }
+
+  // An unverified email/password user is held at the verification screen: no
+  // workspace, no app. Google users never reach here (they arrive verified).
+  if (needsEmailVerification) {
+    return isVerifyRoute ? null : AppRoutes.verifyEmail;
+  }
+
+  if (isVerifyRoute) {
+    return hasWorkspace ? AppRoutes.dashboard : AppRoutes.root;
   }
 
   if (isAuthRoute) {

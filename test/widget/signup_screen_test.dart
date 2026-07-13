@@ -49,6 +49,11 @@ void main() {
           builder: (context, state) =>
               const Text('Workspace Setup', textDirection: TextDirection.ltr),
         ),
+        GoRoute(
+          path: AppRoutes.verifyEmail,
+          builder: (context, state) =>
+              const Text('Verify Email', textDirection: TextDirection.ltr),
+        ),
       ],
     );
 
@@ -189,7 +194,7 @@ void main() {
     expect(find.byType(SignUpScreen), findsOneWidget);
   });
 
-  testWidgets('creates the account, sets the display name, and bootstraps', (
+  testWidgets('creates the account, sets the display name, and awaits verification', (
     tester,
   ) async {
     final auth = _MockFirebaseAuth();
@@ -207,13 +212,6 @@ void main() {
         password: any(named: 'password'),
       ),
     ).thenAnswer((_) async => credential);
-    when(() => workspaceService.ensureUserWorkspaceBootstrap()).thenAnswer(
-      (_) async => const WorkspaceBootstrapResult(
-        workspaceId: 'workspace_1',
-        created: true,
-        setupCompleted: false,
-      ),
-    );
 
     await pumpSignUp(
       tester: tester,
@@ -225,8 +223,9 @@ void main() {
     await tester.pumpAndSettle();
 
     verify(() => user.updateDisplayName('Sam Builder')).called(1);
-    verify(() => workspaceService.ensureUserWorkspaceBootstrap()).called(1);
-    // A brand-new workspace has not completed setup, so route there, not home.
-    expect(find.text('Workspace Setup'), findsOneWidget);
+    // Sign-up hands off to email verification; the workspace is NOT created for
+    // an address nobody has confirmed yet.
+    expect(find.text('Verify Email'), findsOneWidget);
+    verifyNever(() => workspaceService.ensureUserWorkspaceBootstrap());
   });
 }
