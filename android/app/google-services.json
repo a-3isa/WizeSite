@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "549941684400-853nh83tsvsnu8b7akjd9h91pm6g6ejj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ahmed.buildozer",
+            "certificate_hash": "7c7bf15de2a34864e0aa6f5d21d029e543277565"
+          }
+        },
+        {
           "client_id": "549941684400-87t4o8jien52a6l5lag10akoqtes2ct1.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
