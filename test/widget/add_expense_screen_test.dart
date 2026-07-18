@@ -122,14 +122,17 @@ void main() {
     await tester.pumpWidget(_screen(locale: locale));
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownMenu<String>).last);
+    await tester.tap(find.byKey(const Key('qa_add_expense_category')));
     await tester.pumpAndSettle();
     await tester.tap(
       find.text(l10n.expenseCategoryLabel(AccountingCategories.materials)).last,
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView), const Offset(0, -800));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('qa_add_expense_pick_attachments')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     expect(find.text(l10n.t('attachments')), findsOneWidget);
     expect(find.text(l10n.t('selectAttachments')), findsOneWidget);
@@ -140,6 +143,11 @@ void main() {
   testWidgets('resource category shows saved resources and calculates amount', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final contractor = AppEntity(
       id: 'contractor_1',
       workspaceId: 'workspace_1',
@@ -158,7 +166,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownMenu<String>).last);
+    await tester.tap(find.byKey(const Key('qa_add_expense_category')));
     await tester.pumpAndSettle();
     await tester.tap(
       find
@@ -209,7 +217,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownMenu<String>).last);
+    await tester.tap(find.byKey(const Key('qa_add_expense_category')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Worker').last);
     await tester.pumpAndSettle();

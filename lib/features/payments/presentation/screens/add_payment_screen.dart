@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
@@ -17,6 +18,7 @@ import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -311,11 +313,13 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
     return AppBackScope(
       fallbackRoute: _fallbackRoute(),
       child: Scaffold(
+        backgroundColor: t.bg,
         appBar: appBackAppBar(
           context: context,
           title: widget.paymentId == null
@@ -326,36 +330,53 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
         body: _prefilling
             ? const AppLoadingSkeleton(lineCount: 8)
             : ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 children: [
+                  if (_error != null) ...[
+                    _ErrorBanner(message: _error!),
+                    const SizedBox(height: 16),
+                  ],
                   projectsAsync.whenStale(
-                    data: (projects) => BelowDropdownField<String>(
-                      label: l10n.t('project'),
-                      value: _projectId,
-                      entries: projects
-                          .map(
-                            (p) =>
-                                DropdownMenuEntry(value: p.id, label: p.name),
-                          )
-                          .toList(),
-                      onSelected: (value) => setState(() => _projectId = value),
-                    ),
+                    data: (projects) {
+                      final selected = projects.where(
+                        (p) => p.id == _projectId,
+                      );
+                      return SelectField(
+                        key: const Key('qa_add_payment_project'),
+                        label: l10n.t('project'),
+                        valueLabel: selected.isEmpty
+                            ? null
+                            : selected.first.name,
+                        placeholder: l10n.t('selectProject'),
+                        icon: Icons.apartment_outlined,
+                        onTap: () => _pickOption(
+                          context: context,
+                          title: l10n.t('project'),
+                          selected: _projectId,
+                          options: [
+                            for (final project in projects)
+                              (value: project.id, label: project.name),
+                          ],
+                          onSelected: (value) =>
+                              setState(() => _projectId = value),
+                        ),
+                      );
+                    },
                     error: (e, _) => Text(appErrorMessage(l10n, e)),
                     loading: () => const AppLoadingSkeleton(
                       lineCount: 2,
                       padding: EdgeInsets.symmetric(vertical: 8),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
+                  const SizedBox(height: 16),
+                  _AmountHero(
+                    textFieldKey: const Key('qa_add_payment_amount'),
                     controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
-                    decoration: InputDecoration(labelText: l10n.t('amount')),
+                    color: t.income,
+                    currency: 'EGP',
+                    label: l10n.t('amount'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(
@@ -366,7 +387,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                         },
                       ),
                     ),
-                    trailing: const Icon(Icons.calendar_today),
+                    trailing: const Icon(Icons.calendar_today_outlined),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
@@ -379,26 +400,26 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                       }
                     },
                   ),
-                  const SizedBox(height: 12),
-                  BelowDropdownField<String>(
+                  const SizedBox(height: 16),
+                  SelectField(
+                    key: const Key('qa_add_payment_method'),
                     label: l10n.t('paymentMethod'),
-                    value: _method,
-                    entries: [
-                      DropdownMenuEntry(
-                        value: 'cash',
-                        label: l10n.paymentMethodLabel('cash'),
-                      ),
-                      DropdownMenuEntry(
-                        value: 'bank',
-                        label: l10n.paymentMethodLabel('bank'),
-                      ),
-                      DropdownMenuEntry(
-                        value: 'check',
-                        label: l10n.paymentMethodLabel('check'),
-                      ),
-                    ],
-                    onSelected: (value) =>
-                        setState(() => _method = value ?? 'cash'),
+                    valueLabel: l10n.paymentMethodLabel(_method),
+                    icon: Icons.payments_outlined,
+                    onTap: () => _pickOption(
+                      context: context,
+                      title: l10n.t('paymentMethod'),
+                      selected: _method,
+                      options: [
+                        for (final method in const ['cash', 'bank', 'check'])
+                          (
+                            value: method,
+                            label: l10n.paymentMethodLabel(method),
+                          ),
+                      ],
+                      onSelected: (value) =>
+                          setState(() => _method = value),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   EntityAutocompleteField(
@@ -438,22 +459,26 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  BuildTextField(
+                    key: const Key('qa_add_payment_description'),
+                    label: l10n.t('description'),
                     controller: _descriptionController,
-                    decoration: InputDecoration(
-                      labelText: l10n.t('description'),
-                    ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  BuildTextField(
+                    key: const Key('qa_add_payment_notes'),
+                    label: l10n.t('notes'),
                     controller: _notesController,
                     maxLines: 3,
-                    decoration: InputDecoration(labelText: l10n.t('notes')),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(
                     l10n.t('attachments'),
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: t.text,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   if (_attachments.isNotEmpty)
@@ -471,17 +496,19 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                                 );
                               },
                               background: Container(
-                                color: Colors.redAccent,
+                                color: t.expense,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 16),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.delete_outline,
-                                  color: Colors.white,
+                                  color: t.onAccent,
                                 ),
                               ),
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.attach_file),
+                                leading: const Icon(
+                                  Icons.attach_file_outlined,
+                                ),
                                 title: Text(entry.value.fileName),
                                 subtitle: Text(entry.value.storagePath),
                               ),
@@ -506,17 +533,19 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                                 );
                               },
                               background: Container(
-                                color: Colors.redAccent,
+                                color: t.expense,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 16),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.delete_outline,
-                                  color: Colors.white,
+                                  color: t.onAccent,
                                 ),
                               ),
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.description),
+                                leading: const Icon(
+                                  Icons.description_outlined,
+                                ),
                                 title: Text(entry.value.name),
                                 subtitle: Text(entry.value.path ?? ''),
                               ),
@@ -524,29 +553,198 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                           )
                           .toList(),
                     ),
-                  FilledButton.tonal(
+                  BuildButton(
+                    key: const Key('qa_add_payment_pick_attachments'),
+                    label: l10n.t('selectAttachments'),
+                    variant: BuildButtonVariant.soft,
+                    icon: Icons.attach_file_outlined,
                     onPressed: _loading ? null : _pickAttachments,
-                    child: Text(l10n.t('selectAttachments')),
                   ),
-                  const SizedBox(height: 12),
-                  if (_error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _loading ? null : _save,
-                    child: _loading
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            widget.paymentId == null
-                                ? l10n.t('savePayment')
-                                : l10n.t('updatePayment'),
-                          ),
-                  ),
+                  const SizedBox(height: 16),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    BuildButton(
+                      key: const Key('qa_add_payment_save'),
+                      label: widget.paymentId == null
+                          ? l10n.t('savePayment')
+                          : l10n.t('updatePayment'),
+                      size: BuildButtonSize.lg,
+                      full: true,
+                      onPressed: _save,
+                    ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+typedef _PickerOption = ({String value, String label});
+
+/// Shows a bottom-sheet list of [options] and invokes [onSelected] with the
+/// tapped value's `value`. Mirrors the v2 "picker" affordance used behind
+/// [SelectField]s; kept private to this screen to avoid growing the shared
+/// DS surface for a single-screen concern.
+Future<void> _pickOption({
+  required BuildContext context,
+  required String title,
+  required String? selected,
+  required List<_PickerOption> options,
+  required ValueChanged<String> onSelected,
+}) async {
+  final t = context.tokens;
+  final result = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: t.surface,
+    isScrollControlled: true,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(t.rLg)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: t.text,
+                  ),
+                ),
+              ),
+              for (final option in options)
+                ListTile(
+                  title: Text(
+                    option.label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: t.text,
+                    ),
+                  ),
+                  trailing: option.value == selected
+                      ? Icon(Icons.check, color: t.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(option.value),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  if (result != null) {
+    onSelected(result);
+  }
+}
+
+/// Compact banner for the top-level form error, tinted with the expense
+/// (danger) semantic color.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.expenseSoft, borderRadius: t.radiusMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 18, color: t.expense),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: t.expense),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Big, centered amount entry used at the top of the non-worker expense form
+/// and the payment form. [color] carries the money semantic (expense red for
+/// outflow, income green for inflow).
+class _AmountHero extends StatelessWidget {
+  const _AmountHero({
+    required this.controller,
+    required this.color,
+    required this.currency,
+    required this.label,
+    this.textFieldKey,
+  });
+
+  final TextEditingController controller;
+  final Color color;
+  final String currency;
+  final String label;
+  final Key? textFieldKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return BuildCard(
+      elevated: true,
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: t.textMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: textFieldKey,
+            controller: controller,
+            textAlign: TextAlign.center,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [ThousandsSeparatorInputFormatter()],
+            style: TextStyle(
+              fontSize: 42,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1,
+              color: color,
+            ),
+            decoration: InputDecoration(
+              isCollapsed: true,
+              border: InputBorder.none,
+              hintText: '0.00',
+              hintStyle: TextStyle(
+                fontSize: 42,
+                fontWeight: FontWeight.w800,
+                color: t.textFaint,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            currency,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: t.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }

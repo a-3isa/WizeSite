@@ -22,6 +22,8 @@ class BuildTextField extends StatefulWidget {
     this.autofillHints,
     this.enabled = true,
     this.errorText,
+    this.maxLines = 1,
+    this.fieldKey,
     super.key,
   });
 
@@ -38,6 +40,14 @@ class BuildTextField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final bool enabled;
   final String? errorText;
+
+  /// Number of lines for the underlying [TextField] (defaults to 1). Ignored
+  /// while [obscureText] is set, matching [TextField]'s own behavior.
+  final int maxLines;
+
+  /// Optional key applied directly to the inner [TextField] so tests can
+  /// target the editable widget without depending on label placement.
+  final Key? fieldKey;
 
   @override
   State<BuildTextField> createState() => _BuildTextFieldState();
@@ -64,12 +74,14 @@ class _BuildTextFieldState extends State<BuildTextField> {
           ),
         ),
         TextField(
+          key: widget.fieldKey,
           controller: widget.controller,
           keyboardType: widget.keyboardType,
           onChanged: widget.onChanged,
           onSubmitted: widget.onSubmitted,
           inputFormatters: widget.inputFormatters,
           obscureText: _obscured,
+          maxLines: widget.obscureText ? 1 : widget.maxLines,
           textInputAction: widget.textInputAction,
           autofillHints: widget.autofillHints,
           enabled: widget.enabled,

@@ -221,8 +221,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -500));
-      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('qa_add_payment_description')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
 
       expect(find.text('Description'), findsOneWidget);
       expect(find.text('Payment status'), findsOneWidget);
@@ -265,8 +268,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView), const Offset(0, -700));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('qa_add_payment_pick_attachments')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     expect(find.text('المرفقات'), findsOneWidget);
     expect(find.text('اختيار المرفقات'), findsOneWidget);
@@ -312,19 +318,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '100');
+    await tester.enterText(
+      find.byKey(const Key('qa_add_payment_amount')),
+      '100',
+    );
     await tester.scrollUntilVisible(
-      find.text('Save Payment'),
+      find.byKey(const Key('qa_add_payment_save')),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Save Payment'), findsOneWidget);
-    await tester.tap(
-      find.ancestor(
-        of: find.text('Save Payment'),
-        matching: find.byType(FilledButton),
-      ),
-    );
+    await tester.tap(find.byKey(const Key('qa_add_payment_save')));
     await tester.pumpAndSettle();
 
     expect(paymentRepository.createCalls, 1);
