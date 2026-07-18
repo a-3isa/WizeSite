@@ -162,7 +162,7 @@ void main() {
         player: _FakePlayer(),
       );
 
-      expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.mic_outlined), findsOneWidget);
       expect(find.text('Tap the microphone to start'), findsOneWidget);
       expect(find.text('Play recording'), findsNothing);
     },
@@ -181,7 +181,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 5));
 
-    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.stop_circle_outlined), findsOneWidget);
     expect(find.text('55s remaining'), findsOneWidget);
 
     await controller.cancel();
@@ -273,11 +273,11 @@ void main() {
     final recorder = _FakeRecorder();
     await _pumpScreen(tester, recorder: recorder, player: _FakePlayer());
 
-    await tester.tap(find.byIcon(Icons.mic_rounded));
+    await tester.tap(find.byIcon(Icons.mic_outlined));
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 10));
     }
 
-    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.stop_circle_outlined), findsOneWidget);
   });
 }

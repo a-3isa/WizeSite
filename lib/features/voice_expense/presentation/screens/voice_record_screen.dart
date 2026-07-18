@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
@@ -11,6 +10,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_capture_state.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
@@ -200,6 +200,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final projectsAsync = ref.watch(projectsProvider);
     final captureState = ref.watch(voiceCaptureControllerProvider);
 
@@ -221,7 +222,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
         unawaited(_handleBackNavigation());
       },
       child: Scaffold(
-        backgroundColor: context.tokens.bg,
+        backgroundColor: t.bg,
         appBar: AppBar(
           leading: IconButton(
             icon: const BackButtonIcon(),
@@ -231,7 +232,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
           elevation: 0,
           title: Text(
             l10n.t('voiceExpense'),
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(fontWeight: FontWeight.w700, color: t.text),
           ),
           centerTitle: true,
         ),
@@ -252,7 +253,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _StatusLine(state: captureState),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                       _MicButton(
                         isRecording: captureState.isRecording,
                         pulseController: _pulseController,
@@ -269,33 +270,13 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                           !captureState.isRecording)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
-                          child: TextButton.icon(
+                          child: BuildButton(
+                            label: l10n.t('voicePlayRecording'),
+                            variant: BuildButtonVariant.soft,
+                            icon: captureState.isPlaying
+                                ? Icons.pause_circle_outlined
+                                : Icons.play_circle_outlined,
                             onPressed: _controller.togglePlayback,
-                            icon: Icon(
-                              captureState.isPlaying
-                                  ? Icons.pause_circle
-                                  : Icons.play_circle,
-                              size: 32,
-                              color: AppColors.constructionOrange,
-                            ),
-                            label: Text(
-                              l10n.t('voicePlayRecording'),
-                              style: const TextStyle(
-                                color: AppColors.constructionOrange,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
-                              backgroundColor: AppColors.constructionOrange
-                                  .withValues(alpha: 0.1),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
                           ),
                         ),
                     ],
@@ -306,35 +287,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                     top: 100,
                     left: 20,
                     right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.dangerLight,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.danger.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: AppColors.danger,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              l10n.t(errorKey),
-                              style: const TextStyle(
-                                color: AppColors.danger,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: _ErrorBanner(message: l10n.t(errorKey)),
                   ),
                 Positioned(
                   bottom: 0,
@@ -343,46 +296,33 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
                     decoration: BoxDecoration(
-                      color: context.tokens.surface,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(32),
+                      color: t.surface,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(t.rXl),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 20,
-                          offset: const Offset(0, -5),
-                        ),
-                      ],
+                      boxShadow: t.shadowNav,
                     ),
                     child: Row(
                       children: [
                         Expanded(
-                          child: OutlinedButton(
+                          child: BuildButton(
+                            label: l10n.t('cancelRerecord'),
+                            variant: BuildButtonVariant.outline,
+                            size: BuildButtonSize.lg,
+                            full: true,
                             onPressed:
                                 captureState.isRecording ||
                                     captureState.hasRecording
                                 ? _controller.cancel
                                 : null,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: context.tokens.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: Text(
-                              l10n.t('cancelRerecord'),
-                              style: TextStyle(
-                                color: context.tokens.text,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: FilledButton(
+                          child: BuildButton(
+                            label: l10n.t('processVoice'),
+                            size: BuildButtonSize.lg,
+                            full: true,
                             onPressed:
                                 captureState.isRecording ||
                                     !captureState.hasRecording
@@ -391,20 +331,6 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                                     projectOptions,
                                     captureState,
                                   ),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.constructionOrange,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              l10n.t('processVoice'),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
                           ),
                         ),
                       ],
@@ -418,6 +344,34 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
           error: (error, _) =>
               Center(child: Text(l10n.t('somethingWentWrong'))),
         ),
+      ),
+    );
+  }
+}
+
+/// Compact banner for a sanitized recording/permission error, tinted with the
+/// expense (danger) semantic color. Matches the v2 `_ErrorBanner` pattern used
+/// on the add-expense/add-payment screens.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.expenseSoft, borderRadius: t.radiusMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 20, color: t.expense),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13, color: t.expense)),
+          ),
+        ],
       ),
     );
   }
@@ -445,17 +399,22 @@ class _StatusLine extends StatelessWidget {
       label = l10n.t('tapToStart');
     }
 
+    final t = context.tokens;
     return Text(
       label,
       key: const Key('voiceStatusLine'),
       style: TextStyle(
-        color: state.isRecording ? AppColors.danger : context.tokens.textMuted,
+        color: state.isRecording ? t.expense : t.textMuted,
         fontWeight: FontWeight.w600,
       ),
     );
   }
 }
 
+/// Idle: a plain accent-colored mic button. Listening: the same button gains
+/// a pulsing ring built entirely from an animated [BoxShadow] (blur radius and
+/// spread grow/shrink in lockstep with [pulseController]'s looping value),
+/// rather than a stack of discrete circles.
 class _MicButton extends StatelessWidget {
   const _MicButton({
     required this.isRecording,
@@ -469,60 +428,36 @@ class _MicButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
+    final ringColor = isRecording ? t.expense : t.accent;
     return AnimatedBuilder(
       animation: pulseController,
       builder: (context, child) {
-        final scale = 1.0 + (pulseController.value * 0.15);
+        final pulse = pulseController.value;
         return GestureDetector(
           onTap: onPressed,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (isRecording)
-                Container(
-                  width: 120 * scale,
-                  height: 120 * scale,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.constructionOrange.withValues(alpha: 0.2),
+          child: Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: ringColor,
+              boxShadow: [
+                BoxShadow(
+                  color: ringColor.withValues(
+                    alpha: isRecording ? 0.35 - (pulse * 0.2) : 0.4,
                   ),
+                  blurRadius: isRecording ? 20 + (pulse * 24) : 20,
+                  spreadRadius: isRecording ? 4 + (pulse * 16) : 0,
+                  offset: isRecording ? Offset.zero : const Offset(0, 10),
                 ),
-              if (isRecording)
-                Container(
-                  width: 150 * scale,
-                  height: 150 * scale,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.constructionOrange.withValues(alpha: 0.1),
-                  ),
-                ),
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isRecording
-                      ? AppColors.danger
-                      : AppColors.constructionOrange,
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          (isRecording
-                                  ? AppColors.danger
-                                  : AppColors.constructionOrange)
-                              .withValues(alpha: 0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                  color: Colors.white,
-                  size: 48,
-                ),
-              ),
-            ],
+              ],
+            ),
+            child: Icon(
+              isRecording ? Icons.stop_circle_outlined : Icons.mic_outlined,
+              color: t.onAccent,
+              size: 48,
+            ),
           ),
         );
       },
@@ -549,6 +484,7 @@ class _WaveformVisualizer extends StatelessWidget {
       return const SizedBox(height: 40);
     }
 
+    final t = context.tokens;
     return SizedBox(
       height: 40,
       child: Row(
@@ -565,7 +501,7 @@ class _WaveformVisualizer extends StatelessWidget {
             height: height,
             margin: const EdgeInsets.symmetric(horizontal: 1.5),
             decoration: BoxDecoration(
-              color: AppColors.constructionOrange,
+              color: t.accent,
               borderRadius: BorderRadius.circular(2),
             ),
           );

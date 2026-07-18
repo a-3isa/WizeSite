@@ -48,7 +48,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.mic_rounded));
+    await tester.tap(find.byIcon(Icons.mic_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('Allow microphone access'), findsOneWidget);

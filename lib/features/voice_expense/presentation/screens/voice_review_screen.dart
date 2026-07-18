@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
@@ -8,7 +9,7 @@ import 'package:buildtrack_app/core/services/expense_save_service.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
-import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
@@ -233,6 +234,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final parsed = widget.response.parsed;
     final confidence = widget.response.confidence;
     final defaultCurrency =
@@ -245,111 +247,134 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     return AppBackScope(
       fallbackRoute: AppRoutes.voiceExpense,
       child: Scaffold(
+        backgroundColor: t.bg,
         appBar: appBackAppBar(
           context: context,
           title: l10n.t('reviewVoiceExpense'),
           fallbackRoute: AppRoutes.voiceExpense,
         ),
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.t('transcript'),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+            // Transcript card: what was heard, plus source + confidence.
+            BuildCard(
+              elevated: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.t('transcript'),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: t.textMuted,
                     ),
-                    const SizedBox(height: 8),
-                    Text(widget.response.transcript),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.t(
-                        'sourceWithValue',
-                        params: {'value': widget.response.source},
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.response.transcript,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: t.text,
                     ),
-                    Text(
-                      l10n.t(
-                        'voiceConfidenceSummary',
-                        params: {
-                          'amount': (confidence.amount * 100).toStringAsFixed(
-                            0,
-                          ),
-                          'category': (confidence.category * 100)
-                              .toStringAsFixed(0),
-                          'project': (confidence.project * 100).toStringAsFixed(
-                            0,
-                          ),
-                          'overall': (confidence.overall * 100).toStringAsFixed(
-                            0,
-                          ),
-                        },
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.t(
+                      'sourceWithValue',
+                      params: {'value': widget.response.source},
                     ),
-                  ],
-                ),
+                    style: TextStyle(fontSize: 12.5, color: t.textMuted),
+                  ),
+                  Text(
+                    l10n.t(
+                      'voiceConfidenceSummary',
+                      params: {
+                        'amount': (confidence.amount * 100).toStringAsFixed(
+                          0,
+                        ),
+                        'category': (confidence.category * 100)
+                            .toStringAsFixed(0),
+                        'project': (confidence.project * 100).toStringAsFixed(
+                          0,
+                        ),
+                        'overall': (confidence.overall * 100).toStringAsFixed(
+                          0,
+                        ),
+                      },
+                    ),
+                    style: TextStyle(fontSize: 12.5, color: t.textMuted),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: 20),
+            // Parsed fields list: amount, currency, category, project, date, notes.
+            BuildTextField(
+              key: const Key('qa_voice_review_amount'),
+              label: l10n.t('amount'),
               controller: _amountController,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               inputFormatters: const [ThousandsSeparatorInputFormatter()],
-              decoration: InputDecoration(labelText: l10n.t('amount')),
             ),
-            const SizedBox(height: 12),
-            BelowDropdownField<String>(
+            const SizedBox(height: 16),
+            SelectField(
+              key: const Key('qa_voice_review_currency'),
               label: l10n.t('currencyLabel'),
-              value: _currency,
-              entries: _allowedCurrencies
-                  .map(
-                    (currency) =>
-                        DropdownMenuEntry(value: currency, label: currency),
-                  )
-                  .toList(),
-              onSelected: (value) {
-                setState(() => _currency = value ?? _currency);
-              },
+              valueLabel: _currency,
+              icon: Icons.payments_outlined,
+              onTap: () => _pickOption(
+                context: context,
+                title: l10n.t('currencyLabel'),
+                selected: _currency,
+                options: [
+                  for (final currency in _allowedCurrencies)
+                    (value: currency, label: currency),
+                ],
+                onSelected: (value) => setState(() => _currency = value),
+              ),
             ),
-            const SizedBox(height: 12),
-            BelowDropdownField<String>(
+            const SizedBox(height: 16),
+            SelectField(
+              key: const Key('qa_voice_review_category'),
               label: l10n.t('category'),
-              value: _category,
-              entries: _allowedCategories
-                  .map(
-                    (category) => DropdownMenuEntry(
-                      value: category,
-                      label: l10n.expenseCategoryLabel(category),
-                    ),
-                  )
-                  .toList(),
-              onSelected: (value) {
-                setState(() => _category = value ?? _category);
-              },
+              valueLabel: l10n.expenseCategoryLabel(_category),
+              icon: Icons.category_outlined,
+              onTap: () => _pickOption(
+                context: context,
+                title: l10n.t('category'),
+                selected: _category,
+                options: [
+                  for (final category in _allowedCategories)
+                    (value: category, label: l10n.expenseCategoryLabel(category)),
+                ],
+                onSelected: (value) => setState(() => _category = value),
+              ),
             ),
-            const SizedBox(height: 12),
-            BelowDropdownField<String>(
+            const SizedBox(height: 16),
+            SelectField(
+              key: const Key('qa_voice_review_project'),
               label: l10n.t('project'),
-              value: _projectId,
-              entries: widget.projects
-                  .map(
-                    (project) => DropdownMenuEntry(
-                      value: project.id,
-                      label: project.name,
-                    ),
-                  )
-                  .toList(),
-              onSelected: (value) {
-                setState(() => _projectId = value);
-              },
+              valueLabel: _projectId == null
+                  ? null
+                  : _projectNameFromId(_projectId!),
+              placeholder: l10n.t('selectProject'),
+              icon: Icons.apartment_outlined,
+              onTap: () => _pickOption(
+                context: context,
+                title: l10n.t('project'),
+                selected: _projectId,
+                options: [
+                  for (final project in widget.projects)
+                    (value: project.id, label: project.name),
+                ],
+                onSelected: (value) => setState(() => _projectId = value),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
@@ -357,8 +382,9 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                   'dateWithValue',
                   params: {'value': _date.toIso8601String().split('T').first},
                 ),
+                style: TextStyle(fontWeight: FontWeight.w600, color: t.text),
               ),
-              trailing: const Icon(Icons.calendar_today),
+              trailing: Icon(Icons.calendar_today_outlined, color: t.accent),
               onTap: () async {
                 final picked = await showDatePicker(
                   context: context,
@@ -371,56 +397,161 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                 }
               },
             ),
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: 16),
+            BuildTextField(
+              key: const Key('qa_voice_review_notes'),
+              label: l10n.t('notes'),
               controller: _noteController,
               maxLines: 3,
-              decoration: InputDecoration(labelText: l10n.t('notes')),
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 16),
+              _ErrorBanner(message: _error!),
             ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _saving
-                        ? null
-                        : () => appNavigateBack(
-                            context,
-                            fallbackRoute: AppRoutes.voiceExpense,
-                          ),
-                    child: Text(l10n.t('cancel')),
+            const SizedBox(height: 20),
+            if (_saving)
+              const Center(child: CircularProgressIndicator())
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: BuildButton(
+                      key: const Key('qa_voice_review_cancel'),
+                      label: l10n.t('cancel'),
+                      variant: BuildButtonVariant.outline,
+                      size: BuildButtonSize.lg,
+                      full: true,
+                      onPressed: () => appNavigateBack(
+                        context,
+                        fallbackRoute: AppRoutes.voiceExpense,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _saving ? null : _saveConfirmed,
-                    child: _saving
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(l10n.t('confirmAndSave')),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: BuildButton(
+                      key: const Key('qa_voice_review_confirm'),
+                      label: l10n.t('confirmAndSave'),
+                      size: BuildButtonSize.lg,
+                      full: true,
+                      onPressed: _saveConfirmed,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                ],
+              ),
             if (parsed.matchedProjectId == null &&
-                parsed.matchedProjectName != null)
+                parsed.matchedProjectName != null) ...[
+              const SizedBox(height: 8),
               Text(
                 l10n.t(
                   'detectedProjectName',
                   params: {'name': parsed.matchedProjectName ?? ''},
                 ),
-                style: const TextStyle(fontSize: 12),
+                style: TextStyle(fontSize: 12, color: t.textFaint),
               ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+typedef _PickerOption = ({String value, String label});
+
+/// Shows a bottom-sheet list of [options] and invokes [onSelected] with the
+/// tapped value's `value`. Mirrors the v2 "picker" affordance used behind
+/// [SelectField]s on the add-expense/add-payment screens; kept private to
+/// this screen to avoid growing the shared DS surface for a single-screen
+/// concern (matches the established, intentionally-duplicated pattern).
+Future<void> _pickOption({
+  required BuildContext context,
+  required String title,
+  required String? selected,
+  required List<_PickerOption> options,
+  required ValueChanged<String> onSelected,
+}) async {
+  final t = context.tokens;
+  final result = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: t.surface,
+    isScrollControlled: true,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(t.rLg)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: t.text,
+                  ),
+                ),
+              ),
+              for (final option in options)
+                ListTile(
+                  title: Text(
+                    option.label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: t.text,
+                    ),
+                  ),
+                  trailing: option.value == selected
+                      ? Icon(Icons.check, color: t.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(option.value),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  if (result != null) {
+    onSelected(result);
+  }
+}
+
+/// Compact banner for the top-level form error, tinted with the expense
+/// (danger) semantic color. Matches the v2 `_ErrorBanner` pattern used on the
+/// add-expense/add-payment screens.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.expenseSoft, borderRadius: t.radiusMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 18, color: t.expense),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: t.expense),
+            ),
+          ),
+        ],
       ),
     );
   }
