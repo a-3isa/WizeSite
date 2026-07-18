@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
+exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.createWorkspace = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
 exports.writeIfChanged = writeIfChanged;
 exports.workerEntryTotalCost = workerEntryTotalCost;
@@ -20,6 +20,7 @@ exports.createWorkerEntryWithQuotaForUser = createWorkerEntryWithQuotaForUser;
 exports.bootstrapWorkspaceForUser = bootstrapWorkspaceForUser;
 exports.setActiveWorkspaceForUser = setActiveWorkspaceForUser;
 exports.completeInitialWorkspaceSetupForUser = completeInitialWorkspaceSetupForUser;
+exports.createWorkspaceForUser = createWorkspaceForUser;
 exports.updateWorkspaceMemberRoleForUser = updateWorkspaceMemberRoleForUser;
 exports.removeWorkspaceMemberForUser = removeWorkspaceMemberForUser;
 exports.inviteMemberByEmailForUser = inviteMemberByEmailForUser;
@@ -2755,6 +2756,70 @@ exports.completeInitialWorkspaceSetup = (0, https_1.onCall)(async (request) => {
     return completeInitialWorkspaceSetupForUser({
         uid: request.auth.uid,
         workspaceId: requireString(data, "workspaceId"),
+        workspaceName: requireString(data, "workspaceName"),
+        defaultCurrency: requireString(data, "defaultCurrency"),
+    });
+});
+/**
+ * Creates an additional workspace for a user who already owns at least one.
+ * Gated on Pro: the caller must own `sourceWorkspaceId` and that workspace's
+ * subscription must have unlimited quota (pro + active/trial/grace) — a free
+ * user only ever gets the single workspace from bootstrapWorkspaceForUser.
+ */
+async function createWorkspaceForUser(input) {
+    const uid = input.uid.trim();
+    const sourceWorkspaceId = input.sourceWorkspaceId.trim();
+    const workspaceName = input.workspaceName.trim();
+    const defaultCurrency = requireCurrencyCode(input.defaultCurrency);
+    if (!uid || !sourceWorkspaceId) {
+        throw new https_1.HttpsError("invalid-argument", "Missing source workspace");
+    }
+    if (!workspaceName) {
+        throw new https_1.HttpsError("invalid-argument", "Missing workspace name");
+    }
+    const role = await assertMember(sourceWorkspaceId, uid);
+    if (role !== "owner") {
+        throw new https_1.HttpsError("permission-denied", "Only the workspace owner can create additional workspaces");
+    }
+    const subscription = await getSubscription(sourceWorkspaceId);
+    if (!hasUnlimitedQuota(subscription)) {
+        throw new https_1.HttpsError("failed-precondition", "Upgrade to Pro to create additional workspaces");
+    }
+    const workspaceRef = db.collection("workspaces").doc();
+    const workspaceId = workspaceRef.id;
+    const batch = db.batch();
+    batch.set(workspaceRef, {
+        id: workspaceId,
+        name: workspaceName,
+        ownerId: uid,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    batch.set(membershipRef(workspaceId, uid), {
+        workspaceId,
+        userId: uid,
+        role: "owner",
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    batch.set(db.collection("users").doc(uid), {
+        id: uid,
+        workspaceId,
+        defaultCurrency,
+        setupCompleted: true,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await batch.commit();
+    return { workspaceId, created: true };
+}
+exports.createWorkspace = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    return createWorkspaceForUser({
+        uid: request.auth.uid,
+        sourceWorkspaceId: requireString(data, "sourceWorkspaceId"),
         workspaceName: requireString(data, "workspaceName"),
         defaultCurrency: requireString(data, "defaultCurrency"),
     });

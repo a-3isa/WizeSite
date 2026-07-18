@@ -624,6 +624,26 @@ class WorkspaceMutationService {
     );
   }
 
+  Future<String> createWorkspace({
+    required String sourceWorkspaceId,
+    required String workspaceName,
+    required String defaultCurrency,
+  }) {
+    return _client.call<String>(
+      functionName: 'createWorkspace',
+      payload: {
+        'sourceWorkspaceId': sourceWorkspaceId,
+        'workspaceName': workspaceName,
+        'defaultCurrency': defaultCurrency,
+      },
+      parseResult: (result) {
+        final data = Map<String, dynamic>.from(result as Map);
+        return '${data['workspaceId'] ?? ''}'.trim();
+      },
+      defaultErrorMessage: 'Failed to create workspace.',
+    );
+  }
+
   Future<String> setActiveWorkspace({required String workspaceId}) {
     return _client.call<String>(
       functionName: 'setActiveWorkspace',

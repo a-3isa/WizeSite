@@ -3785,6 +3785,90 @@ export const completeInitialWorkspaceSetup = onCall(async (request) => {
   });
 });
 
+/**
+ * Creates an additional workspace for a user who already owns at least one.
+ * Gated on Pro: the caller must own `sourceWorkspaceId` and that workspace's
+ * subscription must have unlimited quota (pro + active/trial/grace) — a free
+ * user only ever gets the single workspace from bootstrapWorkspaceForUser.
+ */
+export async function createWorkspaceForUser(input: {
+  uid: string;
+  sourceWorkspaceId: string;
+  workspaceName: string;
+  defaultCurrency: string;
+}): Promise<{workspaceId: string; created: boolean}> {
+  const uid = input.uid.trim();
+  const sourceWorkspaceId = input.sourceWorkspaceId.trim();
+  const workspaceName = input.workspaceName.trim();
+  const defaultCurrency = requireCurrencyCode(input.defaultCurrency);
+  if (!uid || !sourceWorkspaceId) {
+    throw new HttpsError("invalid-argument", "Missing source workspace");
+  }
+  if (!workspaceName) {
+    throw new HttpsError("invalid-argument", "Missing workspace name");
+  }
+
+  const role = await assertMember(sourceWorkspaceId, uid);
+  if (role !== "owner") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only the workspace owner can create additional workspaces",
+    );
+  }
+
+  const subscription = await getSubscription(sourceWorkspaceId);
+  if (!hasUnlimitedQuota(subscription)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Upgrade to Pro to create additional workspaces",
+    );
+  }
+
+  const workspaceRef = db.collection("workspaces").doc();
+  const workspaceId = workspaceRef.id;
+  const batch = db.batch();
+  batch.set(workspaceRef, {
+    id: workspaceId,
+    name: workspaceName,
+    ownerId: uid,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(membershipRef(workspaceId, uid), {
+    workspaceId,
+    userId: uid,
+    role: "owner",
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.set(
+    db.collection("users").doc(uid),
+    {
+      id: uid,
+      workspaceId,
+      defaultCurrency,
+      setupCompleted: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  await batch.commit();
+  return {workspaceId, created: true};
+}
+
+export const createWorkspace = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+  const data = request.data as Record<string, unknown>;
+  return createWorkspaceForUser({
+    uid: request.auth.uid,
+    sourceWorkspaceId: requireString(data, "sourceWorkspaceId"),
+    workspaceName: requireString(data, "workspaceName"),
+    defaultCurrency: requireString(data, "defaultCurrency"),
+  });
+});
+
 function validWorkspaceRole(role: string): boolean {
   return ["owner", "admin", "accountingApproved", "member", "entryOnly"]
     .includes(role);

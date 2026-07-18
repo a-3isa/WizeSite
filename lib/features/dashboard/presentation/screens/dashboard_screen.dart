@@ -20,9 +20,9 @@ import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/settings/presentation/widgets/workspace_switcher_sheet.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -540,9 +540,9 @@ class _ProjectRecentRow extends StatelessWidget {
 /// Compact workspace control rendered as the dashboard AppBar title.
 ///
 /// Shows the active workspace name instantly from the cached summaries (no
-/// loading skeleton). When the user belongs to more than one workspace it
-/// becomes a dropdown with the current workspace shown first; otherwise it is
-/// plain title text. Switching is optimistic and rolls back on failure.
+/// loading skeleton). Always tappable — even with a single workspace — so
+/// "create another workspace" stays reachable regardless of how many the
+/// user already has. Opens the premium [showWorkspaceSwitcherSheet].
 class WorkspaceSwitcher extends ConsumerWidget {
   const WorkspaceSwitcher({super.key});
 
@@ -569,79 +569,21 @@ class WorkspaceSwitcher extends ConsumerWidget {
         ? activeWorkspaceName
         : l10n.t('home');
 
-    if (workspaces.length < 2) {
-      return Text(
-        title,
-        key: const Key('qa_workspace_switcher'),
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    return PopupMenuButton<String>(
+    return InkWell(
       key: const Key('qa_workspace_dropdown'),
-      tooltip: l10n.t('chooseWorkspace'),
-      position: PopupMenuPosition.under,
-      onSelected: (workspaceId) {
-        if (workspaceId == activeWorkspaceId) {
-          return;
-        }
-        _switchWorkspace(context, ref, workspaceId);
-      },
-      itemBuilder: (context) => [
-        for (final workspace in workspaces)
-          PopupMenuItem<String>(
-            value: workspace.id,
-            child: Row(
-              children: [
-                Icon(
-                  workspace.id == activeWorkspaceId
-                      ? Icons.check
-                      : Icons.business_outlined,
-                  size: 18,
-                  color: AppColors.constructionOrange,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(workspace.name, overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ),
-          ),
-      ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
-          const Icon(Icons.arrow_drop_down),
-        ],
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => showWorkspaceSwitcherSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
       ),
     );
-  }
-
-  Future<void> _switchWorkspace(
-    BuildContext context,
-    WidgetRef ref,
-    String workspaceId,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    final previousWorkspaceId = ref.read(activeWorkspaceIdProvider);
-    ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
-    try {
-      final persistedWorkspaceId = await ref
-          .read(workspaceMutationServiceProvider)
-          .setActiveWorkspace(workspaceId: workspaceId);
-      if (persistedWorkspaceId.isNotEmpty &&
-          persistedWorkspaceId != workspaceId) {
-        ref.read(activeWorkspaceIdProvider.notifier).state =
-            persistedWorkspaceId;
-      }
-    } catch (error) {
-      ref.read(activeWorkspaceIdProvider.notifier).state = previousWorkspaceId;
-      messenger.showSnackBar(
-        SnackBar(content: Text(appErrorMessage(l10n, error))),
-      );
-    }
   }
 }
 
