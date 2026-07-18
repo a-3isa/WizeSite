@@ -66,7 +66,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                   l10n: l10n,
                 ),
                 const SizedBox(height: 24),
-                SectionHeader(title: l10n.t('recent')),
+                SectionHeader(title: l10n.t('recentTransactions')),
                 const SizedBox(height: 12),
                 _ProjectRecentTransactions(
                   workspaceId: project.workspaceId,

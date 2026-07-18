@@ -438,7 +438,7 @@ class ProjectFinancialSection extends ConsumerWidget {
         const SizedBox(height: 20),
         Row(
           children: [
-            Expanded(child: SectionHeader(title: l10n.t('recent'))),
+            Expanded(child: SectionHeader(title: l10n.t('recentTransactions'))),
             TextButton(
               key: const Key('qa_dashboard_recent_see_all'),
               onPressed: () => context.go(AppRoutes.activity),
