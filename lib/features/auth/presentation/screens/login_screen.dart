@@ -196,7 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    l10n.t('signInToContinue'),
+                    l10n.t('welcomeSub'),
                     textAlign: TextAlign.center,
                     style: Theme.of(
                       context,
@@ -268,9 +268,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     height: 20,
                                     width: 20,
                                   ),
-                                  label: Text(l10n.t('continueWithGoogle')),
+                                  label: Text(
+                                    l10n.t('continueWithGoogle'),
+                                    style: TextStyle(
+                                      color: t.text,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15.5,
+                                    ),
+                                  ),
                                   style: OutlinedButton.styleFrom(
                                     backgroundColor: t.surface,
+                                    side: BorderSide(
+                                      color: t.borderStrong,
+                                      width: 1.5,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        t.rMd,
+                                      ),
+                                    ),
                                   ),
                                 )
                               : const SizedBox.shrink(),

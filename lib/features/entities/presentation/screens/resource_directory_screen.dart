@@ -11,6 +11,7 @@ import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
@@ -354,15 +355,20 @@ class _ResourceDirectoryScreenState
         summary.entityId: summary,
     };
 
+    final t = context.tokens;
     return Scaffold(
+      backgroundColor: t.bg,
       appBar: AppBar(
         title: Text(l10n.t(widget.type.titleKey)),
         actions: [
           TextButton.icon(
             key: const Key('qa_resource_add'),
             onPressed: () => _showResourceForm(),
-            icon: const Icon(Icons.add),
-            label: Text(l10n.t('add')),
+            icon: Icon(Icons.add, color: t.accent),
+            label: Text(
+              l10n.t('add'),
+              style: TextStyle(color: t.accent, fontWeight: FontWeight.w700),
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -383,9 +389,7 @@ class _ResourceDirectoryScreenState
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.t('projectFinancialAccessRestricted'),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
+                    style: TextStyle(fontSize: 12.5, color: t.textMuted),
                   ),
                 ),
               if (!canAccessFinancial) const SizedBox(height: 8),
@@ -420,70 +424,83 @@ class _ResourceDirectoryScreenState
       return AppEmptyState(message: l10n.t(widget.type.emptyKey));
     }
 
+    final t = context.tokens;
     return ListView.separated(
       itemCount: _items.length + (_hasMore ? 1 : 0),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index >= _items.length) {
-          return OutlinedButton.icon(
+          return BuildButton(
+            label: l10n.t('loadMore'),
+            variant: BuildButtonVariant.outline,
+            full: true,
+            icon: _isLoadingMore ? null : Icons.expand_more,
             onPressed: _isLoadingMore ? null : _loadMore,
-            icon: _isLoadingMore
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.expand_more),
-            label: Text(l10n.t('loadMore')),
           );
         }
         final entity = _items[index];
         final summary = summariesById[entity.id];
-        return Card(
-          child: ListTile(
-            title: Text(entity.name),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.t(
-                    'lastUsedAtLabel',
-                    params: {
-                      'value':
-                          entity.lastUsedAt
-                              ?.toIso8601String()
-                              .split('T')
-                              .first ??
-                          '-',
-                    },
-                  ),
+        return BuildCard(
+          onTap: () => _openEntity(entity),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Avatar(label: entity.name, size: 44),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entity.name,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: t.text,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.t(
+                        'lastUsedAtLabel',
+                        params: {
+                          'value':
+                              entity.lastUsedAt
+                                  ?.toIso8601String()
+                                  .split('T')
+                                  .first ??
+                              '-',
+                        },
+                      ),
+                      style: TextStyle(fontSize: 12.5, color: t.textMuted),
+                    ),
+                    if (canAccessFinancial && summary != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatTotals(l10n, summary),
+                        style: TextStyle(fontSize: 12.5, color: t.textMuted),
+                      ),
+                    ],
+                  ],
                 ),
-                if (canAccessFinancial && summary != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTotals(l10n, summary),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
-                  ),
+              ),
+              PopupMenuButton<String>(
+                key: Key('qa_resource_actions_${entity.id}'),
+                icon: Icon(Icons.more_vert, color: t.textMuted),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      _showResourceForm(entity: entity);
+                    case 'delete':
+                      _confirmDelete(entity);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.t('delete'))),
                 ],
-              ],
-            ),
-            trailing: PopupMenuButton<String>(
-              key: Key('qa_resource_actions_${entity.id}'),
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    _showResourceForm(entity: entity);
-                  case 'delete':
-                    _confirmDelete(entity);
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'edit', child: Text(l10n.t('edit'))),
-                PopupMenuItem(value: 'delete', child: Text(l10n.t('delete'))),
-              ],
-            ),
-            onTap: () => _openEntity(entity),
+              ),
+            ],
           ),
         );
       },

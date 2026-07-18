@@ -1,5 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
@@ -10,6 +10,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -246,6 +247,7 @@ class _WorkspaceSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final membersAsync = ref.watch(teamMembersProvider);
     final currentUserRole = ref.watch(currentUserRoleProvider);
     final workspaceName = ref.watch(workspaceNameProvider).value ?? '';
@@ -254,6 +256,7 @@ class _WorkspaceSettingsScreenState
     return AppBackScope(
       fallbackRoute: AppRoutes.settings,
       child: Scaffold(
+        backgroundColor: t.bg,
         appBar: appBackAppBar(
           context: context,
           title: l10n.t('settingsWorkspace'),
@@ -271,55 +274,53 @@ class _WorkspaceSettingsScreenState
             ),
             const SizedBox(height: 24),
             if (canManage) ...[
-              Text(
-                l10n.t('inviteMember'),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
+              _SectionLabel(l10n.t('inviteMember')),
               const SizedBox(height: 12),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: l10n.t('inviteByEmail')),
-              ),
-              const SizedBox(height: 12),
-              BelowDropdownField<String>(
-                label: l10n.t('role'),
-                value: _role,
-                entries: _roles
-                    .map(
-                      (role) => DropdownMenuEntry(
-                        value: role,
-                        label: _roleLabel(l10n, role),
-                      ),
-                    )
-                    .toList(growable: false),
-                onSelected: (value) =>
-                    setState(() => _role = value ?? 'member'),
+              BuildCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BuildTextField(
+                      label: l10n.t('inviteByEmail'),
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      enabled: !_inviting,
+                    ),
+                    const SizedBox(height: 12),
+                    BelowDropdownField<String>(
+                      label: l10n.t('role'),
+                      value: _role,
+                      entries: _roles
+                          .map(
+                            (role) => DropdownMenuEntry(
+                              value: role,
+                              label: _roleLabel(l10n, role),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onSelected: (value) =>
+                          setState(() => _role = value ?? 'member'),
+                    ),
+                  ],
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                _ErrorBanner(message: _error!),
               ],
               const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _inviting ? null : _invite,
-                child: _inviting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(l10n.t('inviteMember')),
-              ),
+              if (_inviting)
+                const Center(child: CircularProgressIndicator())
+              else
+                BuildButton(
+                  label: l10n.t('inviteMember'),
+                  size: BuildButtonSize.lg,
+                  full: true,
+                  onPressed: _invite,
+                ),
               const SizedBox(height: 24),
             ],
-            Text(
-              l10n.t('workspaceCrewTitle'),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
+            _SectionLabel(l10n.t('workspaceCrewTitle')),
             const SizedBox(height: 12),
             membersAsync.whenStale(
               data: (members) {
@@ -420,6 +421,38 @@ class _RenameWorkspaceDialogState extends State<_RenameWorkspaceDialog> {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Text(
+      label,
+      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: t.text),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.expenseSoft, borderRadius: t.radiusMd),
+      child: Text(message, style: TextStyle(color: t.expense, fontSize: 13.5)),
+    );
+  }
+}
+
 class _WorkspaceNameTile extends StatelessWidget {
   const _WorkspaceNameTile({
     required this.name,
@@ -434,18 +467,43 @@ class _WorkspaceNameTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.business_outlined),
-        title: Text(l10n.t('workspaceNameTitle')),
-        subtitle: Text(name),
-        trailing: canRename
-            ? IconButton(
-                tooltip: l10n.t('renameWorkspace'),
-                onPressed: onRename,
-                icon: const Icon(Icons.edit_outlined),
-              )
-            : null,
+    final t = context.tokens;
+    return BuildCard(
+      child: Row(
+        children: [
+          Icon(Icons.business_outlined, color: t.textMuted, size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.t('workspaceNameTitle'),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: t.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: t.text,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (canRename)
+            IconButton(
+              tooltip: l10n.t('renameWorkspace'),
+              onPressed: onRename,
+              icon: Icon(Icons.edit_outlined, color: t.accent),
+            ),
+        ],
       ),
     );
   }
@@ -472,48 +530,85 @@ class _MemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final displayName = member.fullName.isEmpty
         ? member.email.split('@').first
         : member.fullName;
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundImage: member.photoUrl.isEmpty
-              ? null
-              : NetworkImage(member.photoUrl),
-          child: member.photoUrl.isEmpty ? Text(_initials(displayName)) : null,
-        ),
-        title: Text(displayName),
-        subtitle: Text(member.email),
-        trailing: canManage
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButton<String>(
-                    value: member.role,
-                    underline: const SizedBox.shrink(),
-                    items: roles
-                        .map(
-                          (role) => DropdownMenuItem(
-                            value: role,
-                            child: Text(roleLabelBuilder(role)),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value != null) {
-                        onRoleChanged(value);
-                      }
-                    },
+    return BuildCard(
+      margin: const EdgeInsetsDirectional.only(bottom: 10),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: t.accentSoft,
+            backgroundImage: member.photoUrl.isEmpty
+                ? null
+                : NetworkImage(member.photoUrl),
+            child: member.photoUrl.isEmpty
+                ? Text(
+                    _initials(displayName),
+                    style: TextStyle(
+                      color: t.accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: t.text,
                   ),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).t('delete'),
-                    onPressed: onRemove,
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                ],
-              )
-            : Text(roleLabel),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  member.email,
+                  style: TextStyle(fontSize: 13, color: t.textMuted),
+                ),
+              ],
+            ),
+          ),
+          if (canManage)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButton<String>(
+                  value: member.role,
+                  underline: const SizedBox.shrink(),
+                  items: roles
+                      .map(
+                        (role) => DropdownMenuItem(
+                          value: role,
+                          child: Text(roleLabelBuilder(role)),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) {
+                      onRoleChanged(value);
+                    }
+                  },
+                ),
+                IconButton(
+                  tooltip: AppLocalizations.of(context).t('delete'),
+                  onPressed: onRemove,
+                  icon: Icon(Icons.remove_circle_outline, color: t.expense),
+                ),
+              ],
+            )
+          else
+            Text(
+              roleLabel,
+              style: TextStyle(fontSize: 13, color: t.textMuted),
+            ),
+        ],
       ),
     );
   }

@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/settings/data/profile_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:flutter/material.dart';
@@ -103,11 +105,13 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final settingsAsync = ref.watch(currentUserSettingsProvider);
 
     return AppBackScope(
       fallbackRoute: AppRoutes.settings,
       child: Scaffold(
+        backgroundColor: t.bg,
         appBar: appBackAppBar(
           context: context,
           title: l10n.t('profile'),
@@ -135,6 +139,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                     children: [
                       CircleAvatar(
                         radius: 44,
+                        backgroundColor: t.accentSoft,
                         backgroundImage: imageProvider,
                         child: imageProvider == null
                             ? Text(
@@ -143,44 +148,80 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                                       ? settings.email
                                       : settings.fullName,
                                 ),
+                                style: TextStyle(
+                                  color: t.accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 28,
+                                ),
                               )
                             : null,
                       ),
                       const SizedBox(height: 12),
-                      OutlinedButton(
+                      BuildButton(
+                        label: l10n.t('changePhoto'),
+                        variant: BuildButtonVariant.outline,
+                        size: BuildButtonSize.sm,
                         onPressed: _saving ? null : _pickImage,
-                        child: Text(l10n.t('changePhoto')),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                TextField(
-                  controller: _nameController,
-                  decoration: InputDecoration(labelText: l10n.t('fullName')),
+                BuildCard(
+                  child: BuildTextField(
+                    label: l10n.t('fullName'),
+                    controller: _nameController,
+                    enabled: !_saving,
+                    textInputAction: TextInputAction.done,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  enabled: false,
-                  decoration: InputDecoration(
-                    labelText: l10n.t('email'),
-                    hintText: settings.email,
+                BuildCard(
+                  child: Row(
+                    children: [
+                      Icon(Icons.mail_outline, color: t.textMuted, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              l10n.t('email'),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: t.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              settings.email,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: t.text,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 16),
+                  _ErrorBanner(message: _error!),
                 ],
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(l10n.t('save')),
-                ),
+                if (_saving)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  BuildButton(
+                    label: l10n.t('save'),
+                    size: BuildButtonSize.lg,
+                    full: true,
+                    onPressed: _save,
+                  ),
               ],
             );
           },
@@ -205,5 +246,25 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       return parts.first.substring(0, 1).toUpperCase();
     }
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.expenseSoft,
+        borderRadius: t.radiusMd,
+      ),
+      child: Text(message, style: TextStyle(color: t.expense, fontSize: 13.5)),
+    );
   }
 }

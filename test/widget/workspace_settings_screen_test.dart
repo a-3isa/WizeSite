@@ -87,6 +87,8 @@ void main() {
     expect(find.text('Owner One'), findsOneWidget);
     expect(find.text('Member One'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Member').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Member').last);
     await tester.pumpAndSettle();
 
