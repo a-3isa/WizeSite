@@ -25,7 +25,6 @@
 
 const PROJECT_ID = "wize-site";
 const DEMO_EMAIL = "demo.reviewer@buildozer.app";
-const WORKSPACE_NAME = "Buildozer Demo";
 const CURRENCY = "EGP";
 
 const TOKEN = process.env.GOOGLE_OAUTH_ACCESS_TOKEN;
@@ -123,8 +122,29 @@ async function wipe(collection, workspaceId) {
   return docs.length;
 }
 
+// Three separate workspaces so reviewers can exercise the workspace switcher.
+// Deterministic doc IDs make re-runs idempotent and stale ones detectable.
 // Categories must be one of the five createExpenseWithQuota accepts.
-const PROJECTS = [
+const WORKSPACES = [
+  {
+    id: "demows-cairo",
+    name: "Cairo Co.",
+    projects: CAIRO_PROJECTS(),
+  },
+  {
+    id: "demows-delta",
+    name: "Delta Contracting",
+    projects: DELTA_PROJECTS(),
+  },
+  {
+    id: "demows-redsea",
+    name: "Red Sea Developments",
+    projects: REDSEA_PROJECTS(),
+  },
+];
+
+function CAIRO_PROJECTS() {
+  return [
   {
     name: "Villa October",
     clientName: "Hassan Group",
@@ -179,7 +199,127 @@ const PROJECTS = [
       { amount: 150000, paymentMethod: "cheque", notes: "Second instalment", day: 4 },
     ],
   },
-];
+  ];
+}
+
+function DELTA_PROJECTS() {
+  return [
+    {
+      name: "Bridge Expansion — Mansoura",
+      clientName: "Roads Authority",
+      location: "Mansoura",
+      description: "Widening the east approach and deck resurfacing.",
+      contractValue: 5200000,
+      budgetLimit: 4100000,
+      completionPercentage: 47,
+      expenses: [
+        { category: "materials", amount: 620000, supplierName: "Delta Steel", notes: "Rebar and girders", paymentMethod: "bank", day: 27 },
+        { category: "equipment", amount: 185000, supplierName: "NileLift", notes: "Mobile crane month hire", paymentMethod: "bank", day: 18 },
+        { category: "labor", amount: 240000, supplierName: "", notes: "Two crews, night works", paymentMethod: "cash", day: 10 },
+        { category: "other", amount: 45000, supplierName: "", notes: "Traffic control permits", paymentMethod: "bank", day: 6 },
+      ],
+      payments: [
+        { amount: 1500000, paymentMethod: "bank", notes: "Mobilisation payment", day: 29 },
+        { amount: 900000, paymentMethod: "bank", notes: "Milestone 1", day: 7 },
+      ],
+    },
+    {
+      name: "Irrigation Canal Lining",
+      clientName: "Ministry of Water",
+      location: "Kafr El-Sheikh",
+      description: "Concrete lining of 4.2 km of irrigation canal.",
+      contractValue: 2100000,
+      budgetLimit: 1700000,
+      completionPercentage: 71,
+      expenses: [
+        { category: "materials", amount: 480000, supplierName: "Alpha Cement", notes: "Bulk cement", paymentMethod: "bank", day: 21 },
+        { category: "transport", amount: 66000, supplierName: "Fast Trucks", notes: "Aggregate haulage", paymentMethod: "cash", day: 13 },
+        { category: "labor", amount: 152000, supplierName: "", notes: "Formwork crews", paymentMethod: "cash", day: 4 },
+      ],
+      payments: [
+        { amount: 700000, paymentMethod: "bank", notes: "Advance payment", day: 25 },
+      ],
+    },
+    {
+      name: "Service Road — Zone 4",
+      clientName: "Industrial Parks Co.",
+      location: "Sadat City",
+      description: "1.8 km service road with drainage and lighting.",
+      contractValue: 1350000,
+      budgetLimit: 1000000,
+      completionPercentage: 22,
+      expenses: [
+        { category: "equipment", amount: 210000, supplierName: "HeavyRent", notes: "Grader and rollers", paymentMethod: "bank", day: 16 },
+        { category: "materials", amount: 175000, supplierName: "Asphalt Misr", notes: "Base course", paymentMethod: "bank", day: 9 },
+        { category: "labor", amount: 58000, supplierName: "", notes: "Earthworks crew", paymentMethod: "cash", day: 3 },
+      ],
+      payments: [
+        { amount: 300000, paymentMethod: "cheque", notes: "Mobilisation", day: 14 },
+      ],
+    },
+  ];
+}
+
+function REDSEA_PROJECTS() {
+  return [
+    {
+      name: "Marina Hotel — Phase 1",
+      clientName: "Azure Hospitality",
+      location: "Hurghada",
+      description: "Structure and envelope for a 120-room seafront hotel.",
+      contractValue: 9800000,
+      budgetLimit: 7600000,
+      completionPercentage: 33,
+      expenses: [
+        { category: "materials", amount: 1150000, supplierName: "Red Sea Concrete", notes: "Piling and raft", paymentMethod: "bank", day: 24 },
+        { category: "equipment", amount: 340000, supplierName: "CoastCranes", notes: "Tower crane erection", paymentMethod: "bank", day: 17 },
+        { category: "labor", amount: 410000, supplierName: "", notes: "Structure crews", paymentMethod: "bank", day: 8 },
+        { category: "transport", amount: 95000, supplierName: "LongHaul", notes: "Materials from Cairo", paymentMethod: "cash", day: 5 },
+      ],
+      payments: [
+        { amount: 2800000, paymentMethod: "bank", notes: "Owner deposit", day: 28 },
+        { amount: 1200000, paymentMethod: "bank", notes: "Milestone — raft complete", day: 6 },
+      ],
+    },
+    {
+      name: "Beach Chalets Row C",
+      clientName: "Coral Bay Resort",
+      location: "El Gouna",
+      description: "Twelve chalets — finishing and landscaping package.",
+      contractValue: 1800000,
+      budgetLimit: 1450000,
+      completionPercentage: 88,
+      expenses: [
+        { category: "materials", amount: 385000, supplierName: "Gouna Finishes", notes: "Tiles, paint, joinery", paymentMethod: "bank", day: 19 },
+        { category: "labor", amount: 176000, supplierName: "", notes: "Finishing crews", paymentMethod: "cash", day: 11 },
+        { category: "other", amount: 52000, supplierName: "GreenScape", notes: "Landscaping subcontract", paymentMethod: "cheque", day: 2 },
+      ],
+      payments: [
+        { amount: 950000, paymentMethod: "bank", notes: "Owner deposit", day: 26 },
+        { amount: 420000, paymentMethod: "bank", notes: "Progress payment", day: 3 },
+      ],
+    },
+    {
+      // Deliberately over budget / negative net so reviewers see the
+      // warning states (red net, over-budget bar) somewhere in the demo.
+      name: "Desalination Skid Install",
+      clientName: "Aqua Marine",
+      location: "Safaga",
+      description: "Pump house and skid installation for a small RO plant.",
+      contractValue: 760000,
+      budgetLimit: 550000,
+      completionPercentage: 64,
+      expenses: [
+        { category: "equipment", amount: 390000, supplierName: "AquaTech", notes: "Skid handling and rigging", paymentMethod: "bank", day: 15 },
+        { category: "materials", amount: 145000, supplierName: "PipeWorks", notes: "HDPE piping", paymentMethod: "bank", day: 10 },
+        { category: "labor", amount: 88000, supplierName: "", notes: "Mechanical crew", paymentMethod: "cash", day: 4 },
+      ],
+      payments: [
+        { amount: 380000, paymentMethod: "bank", notes: "Advance payment", day: 20 },
+      ],
+    },
+  ];
+}
 
 async function main() {
   // --- look up the demo user ---
@@ -192,20 +332,53 @@ async function main() {
   const uid = account.localId;
   console.log(`demo user: ${DEMO_EMAIL} (${uid})`);
 
-  // --- workspace + membership + user doc (mirrors bootstrapWorkspaceForUser) ---
+  // --- retire any demo workspaces that are not in the current fixed set ---
+  // (e.g. the auto-generated one from an earlier single-workspace seed), so the
+  // in-app switcher shows exactly the three below.
+  const keepIds = new Set(WORKSPACES.map((w) => w.id));
   const memberships = await runQuery("memberships", "userId", uid);
-  let workspaceId;
-  if (memberships.length > 0) {
-    workspaceId = memberships[0].fields.workspaceId.stringValue;
-    console.log(`reusing workspace ${workspaceId}`);
-  } else {
-    workspaceId = newId();
-    console.log(`creating workspace ${workspaceId}`);
+  for (const m of memberships) {
+    const wsId = m.fields.workspaceId.stringValue;
+    if (keepIds.has(wsId)) continue;
+    console.log(`retiring stale workspace ${wsId}`);
+    await wipe("expenses", wsId);
+    await wipe("payments", wsId);
+    await wipe("projects", wsId);
+    await wipe("project_metrics", wsId);
+    await wipe("usage_counters", wsId);
+    await api(`https://firestore.googleapis.com/v1/${m.name}`, { method: "DELETE" });
+    await api(`${FS}/workspaces/${wsId}`, { method: "DELETE" }).catch(() => {});
   }
+
+  // The app opens on the first workspace; the switcher reaches the other two.
+  await setDoc("users", uid, {
+    id: S(uid),
+    workspaceId: S(WORKSPACES[0].id),
+    email: S(DEMO_EMAIL),
+    fullName: S(account.displayName || "Store Reviewer"),
+    defaultCurrency: S(CURRENCY),
+    riskAlertsEnabled: B(true),
+    // Skip the first-run setup wizard so reviewers land straight on the
+    // dashboard with data already in it.
+    setupCompleted: B(true),
+    createdAt: now(),
+    updatedAt: now(),
+  });
+
+  for (const ws of WORKSPACES) {
+    await seedWorkspace(ws, uid);
+  }
+
+  console.log(`\ndone: ${WORKSPACES.length} workspaces for ${DEMO_EMAIL}`);
+}
+
+async function seedWorkspace(ws, uid) {
+  const workspaceId = ws.id;
+  console.log(`\n=== ${ws.name} (${workspaceId}) ===`);
 
   await setDoc("workspaces", workspaceId, {
     id: S(workspaceId),
-    name: S(WORKSPACE_NAME),
+    name: S(ws.name),
     ownerId: S(uid),
     createdAt: now(),
     updatedAt: now(),
@@ -214,19 +387,6 @@ async function main() {
     workspaceId: S(workspaceId),
     userId: S(uid),
     role: S("owner"),
-    createdAt: now(),
-    updatedAt: now(),
-  });
-  await setDoc("users", uid, {
-    id: S(uid),
-    workspaceId: S(workspaceId),
-    email: S(DEMO_EMAIL),
-    fullName: S(account.displayName || "Store Reviewer"),
-    defaultCurrency: S(CURRENCY),
-    riskAlertsEnabled: B(true),
-    // Skip the first-run setup wizard so reviewers land straight on the
-    // dashboard with data already in it.
-    setupCompleted: B(true),
     createdAt: now(),
     updatedAt: now(),
   });
@@ -243,7 +403,7 @@ async function main() {
   let expenseCount = 0;
   let paymentCount = 0;
 
-  for (const p of PROJECTS) {
+  for (const p of ws.projects) {
     const projectId = newId();
     await setDoc("projects", projectId, {
       id: S(projectId),
@@ -350,8 +510,8 @@ async function main() {
   });
 
   console.log(
-    `\ndone: ${PROJECTS.length} projects, ${expenseCount} expenses, ` +
-      `${paymentCount} payments in workspace ${workspaceId}`,
+    `seeded: ${ws.projects.length} projects, ${expenseCount} expenses, ` +
+      `${paymentCount} payments`,
   );
 }
 
