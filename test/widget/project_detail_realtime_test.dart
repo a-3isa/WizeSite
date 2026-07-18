@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/project_detail_screen.dart';
@@ -181,6 +183,9 @@ void main() {
           projectRepositoryProvider.overrideWithValue(
             _RealtimeProjectRepository(controller),
           ),
+          projectRecentTransactionsProvider.overrideWith(
+            (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+          ),
         ],
         child: MaterialApp.router(routerConfig: _router()),
       ),
@@ -195,9 +200,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Project name/client come from the (unchanged) ProjectHeader; the
+    // financial numbers now come from the v2 hero net card's income/expense
+    // split (raw formatted numbers, currency shown once on the net figure).
     expect(find.text('Project Alpha'), findsOneWidget);
     expect(find.text('Client One'), findsOneWidget);
-    expect(find.text('1,500 EGP'), findsOneWidget);
+    expect(find.text('500'), findsOneWidget); // net = 2000 - 1500 (profit)
+    expect(find.text('1,500'), findsOneWidget); // expense split value
 
     controller.add(
       _project(
@@ -212,6 +221,7 @@ void main() {
     expect(find.text('Client One'), findsNothing);
     expect(find.text('Project Beta'), findsOneWidget);
     expect(find.text('Client Two'), findsOneWidget);
-    expect(find.text('3,200 EGP'), findsOneWidget);
+    expect(find.text('−1,200'), findsOneWidget); // net = 2000 - 3200 (loss)
+    expect(find.text('3,200'), findsOneWidget); // expense split value
   });
 }

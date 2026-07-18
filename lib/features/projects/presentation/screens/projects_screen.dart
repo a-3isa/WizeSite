@@ -12,6 +12,7 @@ import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
@@ -512,7 +513,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.folder_open,
+                  Icons.folder_open_outlined,
                   size: 64,
                   color: context.tokens.border,
                 ),
@@ -549,105 +550,77 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         }
 
         final project = filtered[index];
+        final t = context.tokens;
         final positiveProfit = project.netProfit >= 0;
-        final profitColor = positiveProfit
-            ? AppColors.success
-            : AppColors.danger;
+        final profitColor = positiveProfit ? t.income : t.expense;
+        final isActiveStatus = project.status == 'active';
+        final netAmountText =
+            '${positiveProfit ? '+' : '−'}'
+            '${Formatters.money(project.netProfit.abs(), currencyCode: currency, locale: locale)}';
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: Card(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () =>
-                  context.push(AppRoutes.projectDetailPath(project.id)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
+          child: BuildCard(
+            onTap: () => context.push(AppRoutes.projectDetailPath(project.id)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.constructionOrange.withValues(
-                          alpha: 0.1,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+                        color: t.accentSoft,
+                        borderRadius: t.radiusMd,
                       ),
-                      child: const Icon(
-                        Icons.architecture,
-                        color: AppColors.constructionOrange,
-                      ),
+                      child: Icon(Icons.apartment_outlined, color: t.accent),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             project.name,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              // const Icon(
-                              //   Icons.person_outline,
-                              //   size: 14,
-                              //   color: context.tokens.textMuted,
-                              // ),
-                              // const SizedBox(width: 4),
-                              // Expanded(
-                              //   child: Text(
-                              //     project.clientName,
-                              //     style: const TextStyle(
-                              //       color: context.tokens.textMuted,
-                              //       fontSize: 13,
-                              //     ),
-                              //     overflow: TextOverflow.ellipsis,
-                              //   ),
-                              // ),
-                              // const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: project.status == 'active'
-                                      ? AppColors.successLight
-                                      : context.tokens.surface2,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  l10n.projectStatusLabel(project.status),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: project.status == 'active'
-                                        ? AppColors.success
-                                        : context.tokens.textMuted,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_canAccessFinancial &&
-                              project.budgetLimit != null &&
-                              project.budgetLimit! > 0) ...[
-                            const SizedBox(height: 8),
-                            _BudgetBar(
-                              spent: project.totalExpenses,
-                              budget: project.budgetLimit!,
-                              currency: currency,
-                              locale: locale,
-                              l10n: l10n,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: t.text,
                             ),
-                          ],
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isActiveStatus
+                                  ? t.incomeSoft
+                                  : t.surface2,
+                              borderRadius: t.radiusSm,
+                            ),
+                            child: Text(
+                              l10n.projectStatusLabel(project.status),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isActiveStatus
+                                    ? t.income
+                                    : t.textMuted,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     if (_canAccessFinancial) ...[
+                      const SizedBox(width: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -658,35 +631,30 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                                 positiveProfit
                                     ? Icons.trending_up
                                     : Icons.trending_down,
-                                size: 18,
+                                size: 16,
                                 color: profitColor,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                Formatters.money(
-                                  project.netProfit,
-                                  currencyCode: currency,
-                                  locale: locale,
-                                ),
+                                netAmountText,
                                 style: TextStyle(
                                   color: profitColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             positiveProfit ? l10n.t('profit') : l10n.t('loss'),
                             style: TextStyle(
-                              color: context.tokens.textMuted,
-                              fontSize: 12,
+                              color: t.textMuted,
+                              fontSize: 11,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(width: 8),
                     ],
                     PopupMenuButton<String>(
                       onSelected: (value) async {
@@ -711,15 +679,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           value: 'delete',
                           child: Row(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.delete_outline,
                                 size: 20,
-                                color: AppColors.danger,
+                                color: t.expense,
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 l10n.t('delete'),
-                                style: const TextStyle(color: AppColors.danger),
+                                style: TextStyle(color: t.expense),
                               ),
                             ],
                           ),
@@ -728,7 +696,19 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                     ),
                   ],
                 ),
-              ),
+                if (_canAccessFinancial &&
+                    project.budgetLimit != null &&
+                    project.budgetLimit! > 0) ...[
+                  const SizedBox(height: 14),
+                  _BudgetBar(
+                    spent: project.totalExpenses,
+                    budget: project.budgetLimit!,
+                    currency: currency,
+                    locale: locale,
+                    l10n: l10n,
+                  ),
+                ],
+              ],
             ),
           ),
         );
@@ -879,13 +859,14 @@ class _BudgetBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final ratio = budget <= 0 ? 0.0 : spent / budget;
     final over = ratio > 1.0;
     final color = over
-        ? AppColors.danger
+        ? t.expense
         : ratio >= 0.75
-        ? AppColors.warning
-        : AppColors.success;
+        ? t.warning
+        : t.income;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -894,7 +875,7 @@ class _BudgetBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: ratio.clamp(0.0, 1.0).toDouble(),
             minHeight: 6,
-            backgroundColor: context.tokens.surface3,
+            backgroundColor: t.surface3,
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
