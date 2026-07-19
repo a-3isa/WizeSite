@@ -431,7 +431,10 @@ class _ResourceDirectoryScreenState
       itemBuilder: (context, index) {
         if (index >= _items.length) {
           if (_isLoadingMore) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           return BuildButton(
             label: l10n.t('loadMore'),
