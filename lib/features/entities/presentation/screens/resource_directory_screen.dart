@@ -430,12 +430,15 @@ class _ResourceDirectoryScreenState
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index >= _items.length) {
+          if (_isLoadingMore) {
+            return const Center(child: CircularProgressIndicator());
+          }
           return BuildButton(
             label: l10n.t('loadMore'),
             variant: BuildButtonVariant.outline,
             full: true,
-            icon: _isLoadingMore ? null : Icons.expand_more,
-            onPressed: _isLoadingMore ? null : _loadMore,
+            icon: Icons.expand_more,
+            onPressed: _loadMore,
           );
         }
         final entity = _items[index];
