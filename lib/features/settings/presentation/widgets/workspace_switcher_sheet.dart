@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -312,9 +311,9 @@ class _CreateWorkspaceSheetState extends ConsumerState<_CreateWorkspaceSheet> {
             workspaceName: name,
             defaultCurrency: _currency,
           );
-      ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
-      ref.invalidate(userWorkspaceSummariesProvider);
       if (mounted) {
+        ref.read(activeWorkspaceIdProvider.notifier).state = workspaceId;
+        ref.invalidate(userWorkspaceSummariesProvider);
         Navigator.of(context).pop();
       }
     } catch (error) {
@@ -389,7 +388,7 @@ class _CreateWorkspaceSheetState extends ConsumerState<_CreateWorkspaceSheet> {
               ),
               if (_error != null) ...[
                 SizedBox(height: t.gap),
-                Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                Text(_error!, style: TextStyle(color: t.expense)),
               ],
               SizedBox(height: t.gap),
               BuildButton(
