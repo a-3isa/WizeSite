@@ -4,6 +4,8 @@ import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart'
     show AccountingAccessRoleType;
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart'
+    show showAddSheet;
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -633,6 +635,37 @@ void main() {
           child: wrap(router: router, home: const SizedBox()),
         ),
       );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Add sheet (showAddSheet) renders without exception', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: wrap(
+            home: Builder(
+              builder: (context) {
+                return Scaffold(
+                  body: Center(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        showAddSheet(context);
+                      },
+                      child: const Text('Open Add Sheet'),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap button to open the sheet
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
