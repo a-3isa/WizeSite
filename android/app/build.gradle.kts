@@ -176,6 +176,18 @@ tasks.matching { it.name == "uploadCrashlyticsMappingFileRelease" }.configureEac
     }
 }
 
+// This app ships to Google Play only (Play Integrity App Check, Play billing).
+// RevenueCat's purchases_flutter transitively pulls in `purchases-store-amazon`,
+// whose consumer ProGuard rules inject a global `-dontoptimize` (disabling R8's
+// optimization pass for the ENTIRE app) plus `-keep class com.amazon.** {*;}`
+// (force-keeping ~3000 Amazon billing classes that never run here). Excluding
+// the unused Amazon store module restores R8 optimization and lets those
+// classes be shrunk/obfuscated. Only remove this exclusion if the app is ever
+// published to the Amazon Appstore.
+configurations.all {
+    exclude(group = "com.revenuecat.purchases", module = "purchases-store-amazon")
+}
+
 dependencies {
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     profileImplementation("com.google.firebase:firebase-appcheck-debug")
