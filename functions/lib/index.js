@@ -2785,6 +2785,11 @@ async function createWorkspaceForUser(input) {
     if (!hasUnlimitedQuota(subscription)) {
         throw new https_1.HttpsError("failed-precondition", "Upgrade to Pro to create additional workspaces");
     }
+    const sourceSubscriptionSnap = await db
+        .collection("subscriptions")
+        .doc(sourceWorkspaceId)
+        .get();
+    const sourceSubscriptionData = sourceSubscriptionSnap.data();
     const workspaceRef = db.collection("workspaces").doc();
     const workspaceId = workspaceRef.id;
     const batch = db.batch();
@@ -2795,6 +2800,16 @@ async function createWorkspaceForUser(input) {
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
+    if (sourceSubscriptionData) {
+        // New workspace inherits a snapshot of the owner's Pro entitlement at
+        // creation time (not a live link) — it bills/renews independently from
+        // here on, matching the per-workspace subscription model.
+        batch.set(db.collection("subscriptions").doc(workspaceId), {
+            ...sourceSubscriptionData,
+            workspaceId,
+            lastSyncedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    }
     batch.set(membershipRef(workspaceId, uid), {
         workspaceId,
         userId: uid,

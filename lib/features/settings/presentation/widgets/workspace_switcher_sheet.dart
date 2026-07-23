@@ -13,10 +13,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 /// True when [subscription] entitles the workspace to create additional
-/// workspaces. Mirrors the gate used by [EntitlementGuardService] elsewhere
-/// in the app: Pro tier and an active-or-trial status.
+/// workspaces. Mirrors the server's `hasUnlimitedQuota` gate in
+/// `functions/src/index.ts` exactly (Pro tier + active/trial/grace) so a
+/// user in a billing grace period doesn't see an upsell for something the
+/// server would actually allow.
 bool workspaceCreationEntitled(SubscriptionState subscription) {
-  return subscription.tier == PlanTier.pro && subscription.isActiveOrTrial;
+  return subscription.tier == PlanTier.pro &&
+      (subscription.status == SubscriptionStatus.active ||
+          subscription.status == SubscriptionStatus.trial ||
+          subscription.status == SubscriptionStatus.grace);
 }
 
 /// Opens the v2 workspace switcher as a bottom sheet: lists the user's

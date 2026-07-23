@@ -30,24 +30,39 @@ final _proSubscription = SubscriptionState(
 );
 
 void main() {
-  testWidgets('entitlement helper matches active-or-trial pro only', (
-    tester,
-  ) async {
-    expect(workspaceCreationEntitled(_proSubscription), isTrue);
-    expect(workspaceCreationEntitled(SubscriptionState.free()), isFalse);
-    expect(
-      workspaceCreationEntitled(
-        SubscriptionState(
-          tier: PlanTier.pro,
-          status: SubscriptionStatus.expired,
-          store: 'test',
-          isAutoRenewing: false,
-          lastSyncedAt: DateTime(2026, 1, 1),
+  testWidgets(
+    'entitlement helper matches pro + active/trial/grace, mirroring the server',
+    (tester) async {
+      expect(workspaceCreationEntitled(_proSubscription), isTrue);
+      expect(workspaceCreationEntitled(SubscriptionState.free()), isFalse);
+      expect(
+        workspaceCreationEntitled(
+          SubscriptionState(
+            tier: PlanTier.pro,
+            status: SubscriptionStatus.expired,
+            store: 'test',
+            isAutoRenewing: false,
+            lastSyncedAt: DateTime(2026, 1, 1),
+          ),
         ),
-      ),
-      isFalse,
-    );
-  });
+        isFalse,
+      );
+      expect(
+        workspaceCreationEntitled(
+          SubscriptionState(
+            tier: PlanTier.pro,
+            status: SubscriptionStatus.grace,
+            store: 'test',
+            isAutoRenewing: true,
+            lastSyncedAt: DateTime(2026, 1, 1),
+          ),
+        ),
+        isTrue,
+        reason:
+            'server hasUnlimitedQuota() treats grace as entitled; client must match',
+      );
+    },
+  );
 
   testWidgets(
     'single-workspace switcher is still tappable and opens the sheet',

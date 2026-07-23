@@ -23,6 +23,7 @@ import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:file_picker/file_picker.dart';
@@ -316,6 +317,9 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     final t = context.tokens;
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
+    final currency =
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ??
+        'EGP';
     return AppBackScope(
       fallbackRoute: _fallbackRoute(),
       child: Scaffold(
@@ -373,7 +377,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     textFieldKey: const Key('qa_add_payment_amount'),
                     controller: _amountController,
                     color: t.income,
-                    currency: 'EGP',
+                    currency: currency,
                     label: l10n.t('amount'),
                   ),
                   const SizedBox(height: 16),
