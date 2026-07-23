@@ -528,8 +528,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             : selected.first.name,
                         placeholder: l10n.t('selectProject'),
                         icon: Icons.apartment_outlined,
-                        onTap: () => _pickOption(
-                          context: context,
+                        onTap: () => pickOption(
+                          context,
                           title: l10n.t('project'),
                           selected: _projectId,
                           options: [
@@ -564,8 +564,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         ? null
                         : l10n.expenseCategoryLabel(_category!),
                     icon: Icons.category_outlined,
-                    onTap: () => _pickOption(
-                      context: context,
+                    onTap: () => pickOption(
+                      context,
                       title: l10n.t('category'),
                       selected: _category,
                       options: [
@@ -788,8 +788,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       label: l10n.t('paymentMethod'),
                       valueLabel: l10n.paymentMethodLabel(_paymentMethod),
                       icon: Icons.payments_outlined,
-                      onTap: () => _pickOption(
-                        context: context,
+                      onTap: () => pickOption(
+                        context,
                         title: l10n.t('paymentMethod'),
                         selected: _paymentMethod,
                         options: [
@@ -945,74 +945,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
       ),
     );
-  }
-}
-
-typedef _PickerOption = ({String value, String label});
-
-/// Shows a bottom-sheet list of [options] and invokes [onSelected] with the
-/// tapped value's `value`. Mirrors the v2 "picker" affordance used behind
-/// [SelectField]s; kept private to this screen to avoid growing the shared
-/// DS surface for a single-screen concern.
-Future<void> _pickOption({
-  required BuildContext context,
-  required String title,
-  required String? selected,
-  required List<_PickerOption> options,
-  required ValueChanged<String> onSelected,
-}) async {
-  final t = context.tokens;
-  final result = await showModalBottomSheet<String>(
-    context: context,
-    backgroundColor: t.surface,
-    isScrollControlled: true,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(t.rLg)),
-    ),
-    builder: (sheetContext) {
-      return SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
-          ),
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: t.text,
-                  ),
-                ),
-              ),
-              for (final option in options)
-                ListTile(
-                  title: Text(
-                    option.label,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: t.text,
-                    ),
-                  ),
-                  trailing: option.value == selected
-                      ? Icon(Icons.check, color: t.accent)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(option.value),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-  if (result != null) {
-    onSelected(result);
   }
 }
 

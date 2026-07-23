@@ -10,6 +10,7 @@ export 'build_chip.dart';
 export 'build_text_field.dart';
 export 'hero_net_card.dart';
 export 'money_row.dart';
+export 'option_picker.dart';
 export 'segmented_toggle.dart';
 export 'select_field.dart';
 export 'stat_tile.dart';
