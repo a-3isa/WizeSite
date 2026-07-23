@@ -93,6 +93,7 @@ void main() {
 
       when(() => auth.currentUser).thenReturn(user);
       when(() => user.uid).thenReturn('user_1');
+      when(() => auth.signOut()).thenAnswer((_) async {});
     });
 
     test(
@@ -238,6 +239,31 @@ void main() {
         expect(callable.callCount, 1);
         expect(telemetry.errorReasons, contains('session_restore.bootstrap'));
         expect(telemetry.events, contains('session_restore.no_workspace'));
+      },
+    );
+
+    test(
+      'signs the user out when no workspace can be resolved, so the router '
+      'does not bounce them between splash and login forever',
+      () async {
+        final callable = _FakeCallableClient(
+          error: const CallableClientException(
+            'Failed to restore your workspace.',
+            code: 'failed-precondition',
+          ),
+        );
+
+        final service = SessionRestoreService(
+          auth: auth,
+          firestore: firestore,
+          callableClient: callable,
+          telemetry: telemetry,
+        );
+
+        final result = await service.restore();
+
+        expect(result, isNull);
+        verify(() => auth.signOut()).called(1);
       },
     );
   });

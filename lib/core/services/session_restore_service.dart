@@ -46,6 +46,13 @@ class SessionRestoreService {
       await _telemetry.log('session_restore.no_workspace', {
         'user_id': user.uid,
       });
+      // A cached Firebase session with no resolvable workspace would
+      // otherwise strand the user: the router treats "signed in" as
+      // authoritative and bounces any visit to /login or /signup straight
+      // back to the splash screen to retry this same restore, which fails
+      // the same way forever with no path back to an actual login form.
+      // Signing out here breaks that loop.
+      await _auth.signOut();
       return null;
     }
 
