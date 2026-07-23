@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:intl/intl.dart';
@@ -137,7 +136,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               if (deadLetterCount > 0)
                 _QueueStatusCard(
-                  color: AppColors.danger,
+                  color: context.tokens.expense,
                   icon: Icons.sync_problem_outlined,
                   message: l10n.t(
                     'offlineSyncFailed',
@@ -148,7 +147,7 @@ class DashboardScreen extends ConsumerWidget {
                 )
               else if (pendingSyncCount > 0)
                 _QueueStatusCard(
-                  color: AppColors.warning,
+                  color: context.tokens.warning,
                   icon: Icons.cloud_upload_outlined,
                   message: l10n.t(
                     'offlineSyncPending',
@@ -230,7 +229,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
         : l10n.t('allProjects');
 
     return Material(
-      color: AppColors.constructionOrange.withValues(alpha: 0.1),
+      color: context.tokens.accent.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(12),
       child: PopupMenuButton<String>(
         key: const Key('qa_dashboard_project_selector'),
@@ -250,7 +249,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
                 Icon(
                   selectedProject == null ? Icons.check : Icons.public_outlined,
                   size: 18,
-                  color: AppColors.constructionOrange,
+                  color: context.tokens.accent,
                 ),
                 const SizedBox(width: 8),
                 Expanded(child: Text(l10n.t('allProjects'))),
@@ -267,7 +266,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
                         ? Icons.check
                         : Icons.work_outline,
                     size: 18,
-                    color: AppColors.constructionOrange,
+                    color: context.tokens.accent,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -281,10 +280,10 @@ class _DashboardProjectSelector extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.work_outline,
                 size: 18,
-                color: AppColors.constructionOrange,
+                color: context.tokens.accent,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -294,10 +293,10 @@ class _DashboardProjectSelector extends ConsumerWidget {
                   children: [
                     Text(
                       l10n.t('project').toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.constructionOrange,
+                        color: context.tokens.accent,
                       ),
                     ),
                     Text(
@@ -312,10 +311,7 @@ class _DashboardProjectSelector extends ConsumerWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.arrow_drop_down,
-                color: AppColors.constructionOrange,
-              ),
+              Icon(Icons.arrow_drop_down, color: context.tokens.accent),
             ],
           ),
         ),
@@ -427,8 +423,8 @@ class ProjectFinancialSection extends ConsumerWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: overBudget
-                        ? AppColors.danger
-                        : AppColors.constructionOrange,
+                        ? context.tokens.expense
+                        : context.tokens.accent,
                   ),
                 ),
               ],
@@ -665,7 +661,7 @@ class DashboardFinancialSection extends StatelessWidget {
                   currencyCode: currency,
                   locale: locale,
                 ),
-                color: AppColors.danger,
+                color: context.tokens.expense,
                 icon: Icons.trending_down,
               ),
             ),
@@ -678,7 +674,7 @@ class DashboardFinancialSection extends StatelessWidget {
                   currencyCode: currency,
                   locale: locale,
                 ),
-                color: AppColors.success,
+                color: context.tokens.income,
                 icon: Icons.trending_up,
               ),
             ),
@@ -728,28 +724,28 @@ class _ResourceLinks extends StatelessWidget {
           qaKey: const Key('qa_resource_workers'),
           icon: Icons.engineering_outlined,
           label: l10n.t('workers'),
-          color: AppColors.warning,
+          color: context.tokens.warning,
           onTap: () => context.push(AppRoutes.workers),
         ),
         _ResourceCard(
           qaKey: const Key('qa_resource_contractors'),
           icon: Icons.handyman_outlined,
           label: l10n.t('contractorsDirectory'),
-          color: AppColors.constructionOrange,
+          color: context.tokens.accent,
           onTap: () => context.push(AppRoutes.contractorsDirectory),
         ),
         _ResourceCard(
           qaKey: const Key('qa_resource_equipment'),
           icon: Icons.construction_outlined,
           label: l10n.t('equipmentDirectory'),
-          color: AppColors.success,
+          color: context.tokens.income,
           onTap: () => context.push(AppRoutes.equipmentDirectory),
         ),
         _ResourceCard(
           qaKey: const Key('qa_resource_transport'),
           icon: Icons.local_shipping_outlined,
           label: l10n.t('transportDirectory'),
-          color: AppColors.danger,
+          color: context.tokens.expense,
           onTap: () => context.push(AppRoutes.transportProvidersDirectory),
         ),
       ],
@@ -854,7 +850,7 @@ class _UpgradeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Card(
-      color: AppColors.constructionOrange,
+      color: context.tokens.accent,
       child: ListTile(
         onTap: onTap,
         leading: const Icon(Icons.workspace_premium, color: Colors.white),

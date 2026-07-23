@@ -89,7 +89,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       icon: Icons.language_rounded,
                       title: l10n.t('language'),
                       subtitle: l10n.localeName(locale.languageCode),
-                      color: AppColors.constructionOrange,
+                      color: context.tokens.accent,
                       child: SegmentedButton<Locale>(
                         showSelectedIcon: false,
                         style: ButtonStyle(
@@ -124,7 +124,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       icon: Icons.currency_exchange_rounded,
                       title: l10n.t('currency'),
                       subtitle: currency,
-                      color: AppColors.success,
+                      color: context.tokens.income,
                       child: SizedBox(
                         width: 130,
                         child: BelowDropdownField<String>(
@@ -154,7 +154,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       icon: Icons.notifications_outlined,
                       title: l10n.t('notifications'),
                       subtitle: l10n.t('riskAlerts'),
-                      color: AppColors.warning,
+                      color: context.tokens.warning,
                       child: Switch.adaptive(
                         value: notificationsEnabled,
                         onChanged: (value) => _saveRiskAlerts(
@@ -162,8 +162,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           previous: persistedNotifications,
                           next: value,
                         ),
-                        activeThumbColor: AppColors.constructionOrange,
-                        activeTrackColor: AppColors.constructionOrange,
+                        activeThumbColor: context.tokens.accent,
+                        activeTrackColor: context.tokens.accent,
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -175,7 +175,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       icon: Icons.sync_rounded,
                       title: l10n.t('syncStatus'),
                       subtitle: l10n.t('syncStatusSubtitle'),
-                      color: AppColors.constructionOrange,
+                      color: context.tokens.accent,
                       onTap: () {
                         prefetcher.warmSettings();
                         context.push(AppRoutes.syncStatus);
@@ -325,7 +325,7 @@ class _WorkspaceSettingsCard extends ConsumerWidget {
       icon: Icons.business_outlined,
       title: l10n.t('settingsWorkspace'),
       subtitle: name.isEmpty ? l10n.t('settingsWorkspace') : name,
-      color: AppColors.constructionOrange,
+      color: context.tokens.accent,
       onTap: () {
         prefetcher.warmSettings();
         context.push(AppRoutes.workspaceSettings);
@@ -545,12 +545,8 @@ class _SubscriptionCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        isPro
-                            ? AppColors.success
-                            : AppColors.constructionOrange,
-                        (isPro
-                                ? AppColors.success
-                                : AppColors.constructionOrange)
+                        isPro ? context.tokens.income : context.tokens.accent,
+                        (isPro ? context.tokens.income : context.tokens.accent)
                             .withValues(alpha: 0.78),
                       ],
                       begin: Alignment.topLeft,
@@ -561,8 +557,8 @@ class _SubscriptionCard extends StatelessWidget {
                       BoxShadow(
                         color:
                             (isPro
-                                    ? AppColors.success
-                                    : AppColors.constructionOrange)
+                                    ? context.tokens.income
+                                    : context.tokens.accent)
                                 .withValues(alpha: 0.25),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
@@ -838,19 +834,25 @@ class _LogoutButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
+            border: Border.all(
+              color: context.tokens.expense.withValues(alpha: 0.4),
+            ),
             color: AppColors.dangerLight.withValues(alpha: 0.5),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.logout_rounded, color: AppColors.danger, size: 22),
+              Icon(
+                Icons.logout_rounded,
+                color: context.tokens.expense,
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Text(
                 label,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.danger,
+                  color: context.tokens.expense,
                 ),
               ),
             ],
@@ -899,10 +901,10 @@ class _ProfileSection extends ConsumerWidget {
             height: 60,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.constructionOrange.withValues(alpha: 0.12),
+              color: context.tokens.accent.withValues(alpha: 0.12),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.constructionOrange.withValues(alpha: 0.3),
+                  color: context.tokens.accent.withValues(alpha: 0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -999,7 +1001,9 @@ class _CrashlyticsTestCardState extends State<_CrashlyticsTestCard> {
       decoration: BoxDecoration(
         color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: context.tokens.expense.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         children: [
@@ -1100,7 +1104,7 @@ class _DebugTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.danger : context.tokens.text;
+    final color = isDestructive ? context.tokens.expense : context.tokens.text;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1146,10 +1150,10 @@ class _ProfileAvatarFallback extends StatelessWidget {
     return Container(
       width: 60,
       height: 60,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          colors: [AppColors.constructionOrange, AppColors.warning],
+          colors: [context.tokens.accent, context.tokens.warning],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

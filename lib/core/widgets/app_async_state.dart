@@ -115,7 +115,9 @@ class AppRecoverableError extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.dangerLight,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: context.tokens.expense.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,13 +125,13 @@ class AppRecoverableError extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline, color: AppColors.danger),
+              Icon(Icons.error_outline, color: context.tokens.expense),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   heading,
-                  style: const TextStyle(
-                    color: AppColors.danger,
+                  style: TextStyle(
+                    color: context.tokens.expense,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -137,7 +139,7 @@ class AppRecoverableError extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(message, style: const TextStyle(color: AppColors.danger)),
+          Text(message, style: TextStyle(color: context.tokens.expense)),
           if (onRetry != null) ...[
             const SizedBox(height: 12),
             Align(
@@ -145,7 +147,7 @@ class AppRecoverableError extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: onRetry,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.danger,
+                  backgroundColor: context.tokens.expense,
                   foregroundColor: AppColors.white,
                 ),
                 child: Row(

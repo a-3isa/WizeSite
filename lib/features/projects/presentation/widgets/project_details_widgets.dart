@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
@@ -78,19 +77,21 @@ class ProjectHeader extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: isActive
-                      ? AppColors.success.withValues(alpha: 0.1)
+                      ? context.tokens.income.withValues(alpha: 0.1)
                       : context.tokens.textMuted.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isActive
-                        ? AppColors.success.withValues(alpha: 0.2)
+                        ? context.tokens.income.withValues(alpha: 0.2)
                         : context.tokens.textMuted.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Text(
                   l10n.projectStatusLabel(project.status).toUpperCase(),
                   style: TextStyle(
-                    color: isActive ? AppColors.success : context.tokens.textMuted,
+                    color: isActive
+                        ? context.tokens.income
+                        : context.tokens.textMuted,
                     fontWeight: FontWeight.w800,
                     fontSize: 10,
                     letterSpacing: 0.5,
@@ -131,7 +132,7 @@ class _CompletionProgress extends StatelessWidget {
               '${percentage.toStringAsFixed(0)}%',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: AppColors.constructionOrange,
+                color: context.tokens.accent,
               ),
             ),
           ],
@@ -142,12 +143,8 @@ class _CompletionProgress extends StatelessWidget {
           child: LinearProgressIndicator(
             value: percentage / 100,
             minHeight: 8,
-            backgroundColor: AppColors.constructionOrange.withValues(
-              alpha: 0.1,
-            ),
-            valueColor: const AlwaysStoppedAnimation<Color>(
-              AppColors.constructionOrange,
-            ),
+            backgroundColor: context.tokens.accent.withValues(alpha: 0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(context.tokens.accent),
           ),
         ),
       ],
@@ -183,7 +180,7 @@ class FinancialGrid extends StatelessWidget {
             currencyCode: currency,
             locale: locale,
           ),
-          color: AppColors.constructionOrange,
+          color: context.tokens.accent,
           icon: Icons.assignment_outlined,
         ),
         MetricCard(
@@ -193,7 +190,7 @@ class FinancialGrid extends StatelessWidget {
             currencyCode: currency,
             locale: locale,
           ),
-          color: AppColors.danger,
+          color: context.tokens.expense,
           icon: Icons.trending_down,
         ),
         MetricCard(
@@ -203,7 +200,7 @@ class FinancialGrid extends StatelessWidget {
             currencyCode: currency,
             locale: locale,
           ),
-          color: AppColors.success,
+          color: context.tokens.income,
           icon: Icons.trending_up,
         ),
         MetricCard(
@@ -213,7 +210,9 @@ class FinancialGrid extends StatelessWidget {
             currencyCode: currency,
             locale: locale,
           ),
-          color: project.netProfit >= 0 ? AppColors.success : AppColors.danger,
+          color: project.netProfit >= 0
+              ? context.tokens.income
+              : context.tokens.expense,
           icon: Icons.account_balance_wallet_outlined,
         ),
       ],
@@ -267,35 +266,35 @@ class ActionGrid extends StatelessWidget {
               qaKey: const Key('qa_project_add_expense'),
               icon: Icons.receipt_long_outlined,
               label: l10n.t('addExpense'),
-              color: AppColors.danger,
+              color: context.tokens.expense,
               onTap: onAddExpense,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_add_payment'),
               icon: Icons.payments_outlined,
               label: l10n.t('addPayment'),
-              color: AppColors.success,
+              color: context.tokens.income,
               onTap: onAddPayment,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_add_worker_entry'),
               icon: Icons.engineering_outlined,
               label: l10n.t('addWorkerEntry'),
-              color: AppColors.warning,
+              color: context.tokens.warning,
               onTap: onAddWorkerEntry,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_workers'),
               icon: Icons.engineering_outlined,
               label: l10n.t('workers'),
-              color: AppColors.constructionOrange,
+              color: context.tokens.accent,
               onTap: onViewWorkers,
             ),
             _ActionCard(
               qaKey: const Key('qa_project_report'),
               icon: Icons.picture_as_pdf_outlined,
               label: l10n.t('generateReport'),
-              color: AppColors.constructionOrange,
+              color: context.tokens.accent,
               onTap: onGenerateReport,
             ),
             _ActionCard(
@@ -330,7 +329,7 @@ class ActionGrid extends StatelessWidget {
               qaKey: const Key('qa_project_delete'),
               icon: Icons.delete_outline,
               label: l10n.t('delete'),
-              color: AppColors.danger,
+              color: context.tokens.expense,
               onTap: onDelete,
             ),
           ],

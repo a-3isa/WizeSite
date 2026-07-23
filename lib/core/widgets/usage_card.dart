@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:flutter/material.dart';
 
@@ -28,9 +27,9 @@ class UsageCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.data_usage,
-                  color: AppColors.constructionOrange,
+                  color: context.tokens.accent,
                   size: 24,
                 ),
                 const SizedBox(width: 8),
@@ -90,8 +89,8 @@ class _UsageRow extends StatelessWidget {
     final ratio = limit == 0 ? 0.0 : (current / limit).clamp(0.0, 1.0);
     // Determine color based on threshold (e.g. 80% is warning, 100% is danger)
     final Color progressColor = ratio >= 1.0
-        ? AppColors.danger
-        : (ratio >= 0.8 ? AppColors.warning : AppColors.success);
+        ? context.tokens.expense
+        : (ratio >= 0.8 ? context.tokens.warning : context.tokens.income);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

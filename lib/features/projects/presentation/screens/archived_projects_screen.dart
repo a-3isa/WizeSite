@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
@@ -186,7 +185,7 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               l10n.t('delete'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.expense),
             ),
           ),
         ],
@@ -294,7 +293,7 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
                 children: [
                   Text(
                     appErrorMessage(l10n, _error),
-                    style: const TextStyle(color: AppColors.danger),
+                    style: TextStyle(color: context.tokens.expense),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -420,15 +419,15 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
                         value: 'delete',
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.delete_outline,
                               size: 20,
-                              color: AppColors.danger,
+                              color: context.tokens.expense,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               l10n.t('delete'),
-                              style: const TextStyle(color: AppColors.danger),
+                              style: TextStyle(color: context.tokens.expense),
                             ),
                           ],
                         ),

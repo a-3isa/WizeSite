@@ -126,9 +126,9 @@ class RecentExpensesTable extends StatelessWidget {
                             currencyCode: e.currency,
                             locale: locale,
                           ),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.danger,
+                            color: context.tokens.expense,
                           ),
                         ),
                       ),

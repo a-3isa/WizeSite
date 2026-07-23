@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -60,9 +59,12 @@ class MonthlyFlowChart extends StatelessWidget {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _DotLabel(color: AppColors.success, label: l10n.t('totalIncome')),
               _DotLabel(
-                color: AppColors.danger,
+                color: context.tokens.income,
+                label: l10n.t('totalIncome'),
+              ),
+              _DotLabel(
+                color: context.tokens.expense,
                 label: l10n.t('totalExpenses'),
               ),
             ],
@@ -101,8 +103,8 @@ class MonthlyFlowChart extends StatelessWidget {
                           ),
                           TextStyle(
                             color: isIncome
-                                ? AppColors.success
-                                : AppColors.danger,
+                                ? context.tokens.income
+                                : context.tokens.expense,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -173,15 +175,15 @@ class MonthlyFlowChart extends StatelessWidget {
                       barRods: [
                         BarChartRodData(
                           toY: d.income,
-                          color: AppColors.success,
+                          color: context.tokens.income,
                           width: 14,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(4),
                           ),
                           gradient: LinearGradient(
                             colors: [
-                              AppColors.success,
-                              AppColors.success.withValues(alpha: 0.7),
+                              context.tokens.income,
+                              context.tokens.income.withValues(alpha: 0.7),
                             ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
@@ -189,15 +191,15 @@ class MonthlyFlowChart extends StatelessWidget {
                         ),
                         BarChartRodData(
                           toY: d.expenses,
-                          color: AppColors.danger,
+                          color: context.tokens.expense,
                           width: 14,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(4),
                           ),
                           gradient: LinearGradient(
                             colors: [
-                              AppColors.danger,
-                              AppColors.danger.withValues(alpha: 0.7),
+                              context.tokens.expense,
+                              context.tokens.expense.withValues(alpha: 0.7),
                             ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,

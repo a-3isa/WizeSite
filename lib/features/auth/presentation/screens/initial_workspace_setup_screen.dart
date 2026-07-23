@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -99,10 +98,10 @@ class _InitialWorkspaceSetupScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.business_rounded,
                     size: 56,
-                    color: AppColors.constructionOrange,
+                    color: context.tokens.accent,
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -144,7 +143,7 @@ class _InitialWorkspaceSetupScreenState
                     const SizedBox(height: 12),
                     Text(
                       _error!,
-                      style: const TextStyle(color: AppColors.danger),
+                      style: TextStyle(color: context.tokens.expense),
                     ),
                   ],
                   const SizedBox(height: 24),

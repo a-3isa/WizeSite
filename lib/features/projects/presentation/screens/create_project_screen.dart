@@ -217,10 +217,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: AppColors.constructionOrange,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: context.tokens.accent, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -443,7 +440,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: AppColors.constructionOrange
+                                        color: context.tokens.accent
                                             .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -451,7 +448,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                         '${_completion.toInt()}%',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
-                                          color: AppColors.constructionOrange,
+                                          color: context.tokens.accent,
                                         ),
                                       ),
                                     ),
@@ -459,10 +456,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                 ),
                                 SliderTheme(
                                   data: SliderTheme.of(context).copyWith(
-                                    activeTrackColor:
-                                        AppColors.constructionOrange,
-                                    thumbColor: AppColors.constructionOrange,
-                                    overlayColor: AppColors.constructionOrange
+                                    activeTrackColor: context.tokens.accent,
+                                    thumbColor: context.tokens.accent,
+                                    overlayColor: context.tokens.accent
                                         .withValues(alpha: 0.2),
                                   ),
                                   child: Slider(
@@ -486,7 +482,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                 color: AppColors.dangerLight,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppColors.danger.withValues(
+                                  color: context.tokens.expense.withValues(
                                     alpha: 0.3,
                                   ),
                                 ),
@@ -495,7 +491,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                 children: [
                                   Icon(
                                     Icons.error_outline,
-                                    color: AppColors.danger,
+                                    color: context.tokens.expense,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 12),
@@ -505,7 +501,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyMedium
-                                          ?.copyWith(color: AppColors.danger),
+                                          ?.copyWith(
+                                            color: context.tokens.expense,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -516,7 +514,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                           FilledButton(
                             onPressed: _loading ? null : _save,
                             style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.constructionOrange,
+                              backgroundColor: context.tokens.accent,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
@@ -596,7 +594,7 @@ class _DateTile extends StatelessWidget {
             children: [
               Icon(
                 Icons.calendar_today_outlined,
-                color: AppColors.constructionOrange,
+                color: context.tokens.accent,
                 size: 22,
               ),
               const SizedBox(width: 16),

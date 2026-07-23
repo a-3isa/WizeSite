@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:flutter/material.dart';
@@ -88,15 +87,15 @@ class WorkerCostTable extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: AppColors.constructionOrange.withValues(
+                                color: context.tokens.accent.withValues(
                                   alpha: 0.12,
                                 ),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.engineering,
                                 size: 14,
-                                color: AppColors.constructionOrange,
+                                color: context.tokens.accent,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -117,9 +116,9 @@ class WorkerCostTable extends StatelessWidget {
                             currencyCode: currency,
                             locale: locale,
                           ),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.constructionOrange,
+                            color: context.tokens.accent,
                           ),
                         ),
                       ),

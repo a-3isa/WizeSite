@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -330,7 +329,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                 child: Text(
                   l10n.t('delete'),
                   style: TextStyle(
-                    color: matches ? AppColors.danger : context.tokens.textMuted,
+                    color: matches
+                        ? context.tokens.expense
+                        : context.tokens.textMuted,
                   ),
                 ),
               ),

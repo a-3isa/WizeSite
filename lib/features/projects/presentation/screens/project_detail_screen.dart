@@ -3,7 +3,6 @@ import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
@@ -180,7 +179,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                                   l10n.t('delete'),
                                   style: TextStyle(
                                     color: matches
-                                        ? AppColors.danger
+                                        ? context.tokens.expense
                                         : context.tokens.textMuted,
                                   ),
                                 ),
@@ -209,7 +208,11 @@ class ProjectDetailScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: context.tokens.expense,
+                ),
                 const SizedBox(height: 16),
                 Text(appErrorMessage(l10n, error)),
                 const SizedBox(height: 16),

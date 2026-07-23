@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -168,7 +167,7 @@ class FeaturesScreen extends StatelessWidget {
                               icon: feature.icon,
                               title: l10n.t(feature.titleKey),
                               subtitle: l10n.t(feature.subtitleKey),
-                              iconColor: AppColors.constructionOrange,
+                              iconColor: context.tokens.accent,
                             );
                           },
                         ),
@@ -190,7 +189,7 @@ class FeaturesScreen extends StatelessWidget {
                             });
                           },
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.constructionOrange,
+                            backgroundColor: context.tokens.accent,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(

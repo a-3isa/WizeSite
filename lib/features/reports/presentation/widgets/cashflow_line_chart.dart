@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -141,8 +140,8 @@ class CashflowLineChart extends StatelessWidget {
                           ),
                           TextStyle(
                             color: net >= 0
-                                ? AppColors.success
-                                : AppColors.danger,
+                                ? context.tokens.income
+                                : context.tokens.expense,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -158,7 +157,7 @@ class CashflowLineChart extends StatelessWidget {
                       }),
                       isCurved: true,
                       curveSmoothness: 0.3,
-                      color: _netColor(),
+                      color: _netColor(context),
                       barWidth: 3,
                       isStrokeCapRound: true,
                       dotData: FlDotData(
@@ -167,8 +166,8 @@ class CashflowLineChart extends StatelessWidget {
                             FlDotCirclePainter(
                               radius: 4,
                               color: spot.y >= 0
-                                  ? AppColors.success
-                                  : AppColors.danger,
+                                  ? context.tokens.income
+                                  : context.tokens.expense,
                               strokeWidth: 2,
                               strokeColor: context.tokens.surface,
                             ),
@@ -177,8 +176,8 @@ class CashflowLineChart extends StatelessWidget {
                         show: true,
                         gradient: LinearGradient(
                           colors: [
-                            _netColor().withValues(alpha: 0.2),
-                            _netColor().withValues(alpha: 0.02),
+                            _netColor(context).withValues(alpha: 0.2),
+                            _netColor(context).withValues(alpha: 0.02),
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -197,12 +196,12 @@ class CashflowLineChart extends StatelessWidget {
     );
   }
 
-  Color _netColor() {
+  Color _netColor(BuildContext context) {
     final totalNet = data.fold<double>(
       0,
       (sum, d) => sum + d.income - d.expenses,
     );
-    return totalNet >= 0 ? AppColors.success : AppColors.danger;
+    return totalNet >= 0 ? context.tokens.income : context.tokens.expense;
   }
 
   double _minY() {

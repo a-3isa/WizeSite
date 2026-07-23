@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -86,7 +85,7 @@ class _SyncStatusContent extends ConsumerWidget {
           title: l10n.t('syncPending'),
           actions: pending,
           emptyMessage: l10n.t('syncNoPending'),
-          color: AppColors.warning,
+          color: context.tokens.warning,
           icon: Icons.cloud_upload_outlined,
           l10n: l10n,
         ),
@@ -94,7 +93,7 @@ class _SyncStatusContent extends ConsumerWidget {
           title: l10n.t('syncFailed'),
           actions: failed,
           emptyMessage: l10n.t('syncNoFailed'),
-          color: AppColors.danger,
+          color: context.tokens.expense,
           icon: Icons.sync_problem_outlined,
           l10n: l10n,
           onRetry: (action) => _retry(ref, action.id),
@@ -103,7 +102,7 @@ class _SyncStatusContent extends ConsumerWidget {
           title: l10n.t('syncNeedsAttention'),
           actions: deadLetters,
           emptyMessage: l10n.t('syncNoNeedsAttention'),
-          color: AppColors.danger,
+          color: context.tokens.expense,
           icon: Icons.report_problem_outlined,
           l10n: l10n,
           onRetry: (action) => _retry(ref, action.id),
@@ -112,7 +111,7 @@ class _SyncStatusContent extends ConsumerWidget {
           title: l10n.t('syncRecentlyResolved'),
           actions: resolved,
           emptyMessage: l10n.t('syncNoResolved'),
-          color: AppColors.success,
+          color: context.tokens.income,
           icon: Icons.check_circle_outline,
           l10n: l10n,
         ),

@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -745,7 +744,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       currencyCode: currency,
                                       locale: locale,
                                     ),
-                                    color: AppColors.danger,
+                                    color: context.tokens.expense,
                                     icon: Icons.trending_down,
                                   ),
                                   MetricCard(
@@ -755,7 +754,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       currencyCode: currency,
                                       locale: locale,
                                     ),
-                                    color: AppColors.success,
+                                    color: context.tokens.income,
                                     icon: Icons.trending_up,
                                   ),
                                   MetricCard(
@@ -766,8 +765,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       locale: locale,
                                     ),
                                     color: (summary['net'] ?? 0) >= 0
-                                        ? AppColors.success
-                                        : AppColors.danger,
+                                        ? context.tokens.income
+                                        : context.tokens.expense,
                                     icon: Icons.account_balance_wallet_outlined,
                                   ),
                                 ],
@@ -1231,7 +1230,7 @@ class _ExportButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.constructionOrange.withValues(alpha: 0.1),
+      color: context.tokens.accent.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -1241,17 +1240,17 @@ class _ExportButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.picture_as_pdf_outlined,
                 size: 18,
-                color: AppColors.constructionOrange,
+                color: context.tokens.accent,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: AppColors.constructionOrange,
+                  color: context.tokens.accent,
                 ),
               ),
             ],

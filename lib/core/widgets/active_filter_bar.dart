@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 /// A single active filter shown as a removable token.
@@ -29,10 +28,10 @@ class FilterToken extends StatelessWidget {
     return Container(
       padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
       decoration: BoxDecoration(
-        color: AppColors.constructionOrange.withValues(alpha: 0.1),
+        color: context.tokens.accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AppColors.constructionOrange.withValues(alpha: 0.3),
+          color: context.tokens.accent.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -42,8 +41,8 @@ class FilterToken extends StatelessWidget {
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.constructionOrange,
+              style: TextStyle(
+                color: context.tokens.accent,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -56,7 +55,7 @@ class FilterToken extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             iconSize: 16,
-            icon: const Icon(Icons.close, color: AppColors.constructionOrange),
+            icon: Icon(Icons.close, color: context.tokens.accent),
           ),
         ],
       ),

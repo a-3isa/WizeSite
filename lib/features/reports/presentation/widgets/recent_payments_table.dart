@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:flutter/material.dart';
@@ -88,13 +87,15 @@ class RecentPaymentsTable extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.12),
+                            color: context.tokens.income.withValues(
+                              alpha: 0.12,
+                            ),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             l10n.paymentMethodLabel(p.paymentMethod),
-                            style: const TextStyle(
-                              color: AppColors.success,
+                            style: TextStyle(
+                              color: context.tokens.income,
                               fontWeight: FontWeight.w600,
                               fontSize: 11,
                             ),
@@ -108,9 +109,9 @@ class RecentPaymentsTable extends StatelessWidget {
                             currencyCode: currency,
                             locale: locale,
                           ),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.success,
+                            color: context.tokens.income,
                           ),
                         ),
                       ),
