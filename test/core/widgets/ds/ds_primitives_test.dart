@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/theme/app_theme.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,5 +74,27 @@ void main() {
   testWidgets('Avatar derives initials', (tester) async {
     await tester.pumpWidget(_host(const Avatar(label: 'Eng Ahmed')));
     expect(find.text('EA'), findsOneWidget);
+  });
+
+  group('budgetProgressColor', () {
+    const t = BuildTokens.light;
+
+    test('is income (green) comfortably under budget', () {
+      expect(budgetProgressColor(t, 0.0), t.income);
+      expect(budgetProgressColor(t, 0.5), t.income);
+      expect(budgetProgressColor(t, 0.69), t.income);
+    });
+
+    test('is warning (amber) between 70% and 90%', () {
+      expect(budgetProgressColor(t, 0.7), t.warning);
+      expect(budgetProgressColor(t, 0.75), t.warning);
+      expect(budgetProgressColor(t, 0.89), t.warning);
+    });
+
+    test('is expense (red) at 90% or above, including over-budget', () {
+      expect(budgetProgressColor(t, 0.9), t.expense);
+      expect(budgetProgressColor(t, 0.95), t.expense);
+      expect(budgetProgressColor(t, 1.25), t.expense);
+    });
   });
 }

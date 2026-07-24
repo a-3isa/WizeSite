@@ -140,3 +140,18 @@ class BuildProgress extends StatelessWidget {
     );
   }
 }
+
+/// Shared color-grading rule for budget/usage progress bars: green while
+/// spending is comfortably under budget, amber as it approaches the limit,
+/// red once it's close to or over budget.
+///
+/// [usedFraction] is `spent / budgetBase` (not clamped by the caller is
+/// fine — anything at or above 1.0 already falls in the red band). Every
+/// budget-progress call site (project list cards, project detail hero,
+/// project-scoped dashboard section) should call this instead of rolling
+/// its own thresholds so the color language stays consistent app-wide.
+Color budgetProgressColor(BuildTokens t, double usedFraction) {
+  if (usedFraction >= 0.9) return t.expense;
+  if (usedFraction >= 0.7) return t.warning;
+  return t.income;
+}

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -21,7 +22,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
-Project _project(String id, double net, {String status = 'active'}) {
+Project _project(
+  String id,
+  double net, {
+  String status = 'active',
+  double? budgetLimit,
+  double totalExpenses = 500,
+}) {
   return Project(
     id: id,
     workspaceId: 'workspace_1',
@@ -30,10 +37,11 @@ Project _project(String id, double net, {String status = 'active'}) {
     contractValue: 1000,
     status: status,
     completionPercentage: 50,
-    totalExpenses: 500,
-    totalPayments: 500 + net,
+    totalExpenses: totalExpenses,
+    totalPayments: totalExpenses + net,
     netProfit: net,
     isArchived: false,
+    budgetLimit: budgetLimit,
   );
 }
 
@@ -307,6 +315,54 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets(
+    'budget bar shows remaining amount, color-graded by usage',
+    (tester) async {
+      final repository = _FakeProjectRepository(
+        firstPage: FirestorePage(
+          items: [
+            // 75% used: warning band, 250 remaining out of a 1,000 budget.
+            _project('mid', 500, budgetLimit: 1000, totalExpenses: 750),
+          ],
+          hasMore: false,
+        ),
+      );
+
+      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Remaining'), findsOneWidget);
+      expect(find.textContaining('250'), findsOneWidget);
+
+      final remainingText = tester.widget<Text>(
+        find.textContaining('Remaining'),
+      );
+      expect(remainingText.style?.color, BuildTokens.light.warning);
+    },
+  );
+
+  testWidgets(
+    'budget bar goes expense-red once spending is at/over 90%',
+    (tester) async {
+      final repository = _FakeProjectRepository(
+        firstPage: FirestorePage(
+          items: [
+            _project('hot', 500, budgetLimit: 1000, totalExpenses: 950),
+          ],
+          hasMore: false,
+        ),
+      );
+
+      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+      await tester.pumpAndSettle();
+
+      final remainingText = tester.widget<Text>(
+        find.textContaining('Remaining'),
+      );
+      expect(remainingText.style?.color, BuildTokens.light.expense);
+    },
+  );
 
   testWidgets('archive requires confirmation before mutation', (tester) async {
     final repository = _FakeProjectRepository(

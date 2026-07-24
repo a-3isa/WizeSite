@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -328,6 +329,20 @@ void main() {
     // Project financials (contract value) + budget bar at 75%.
     expect(find.textContaining('180,000', skipOffstage: false), findsWidgets);
     expect(find.text('75%', skipOffstage: false), findsOneWidget);
+    // 75% used sits in the warning band (70-90%): remaining amount is shown
+    // (180,000 - 135,500 = 44,500) and color-graded to match.
+    expect(
+      find.textContaining('44,500', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Remaining', skipOffstage: false),
+      findsOneWidget,
+    );
+    final percentText = tester.widget<Text>(
+      find.text('75%', skipOffstage: false),
+    );
+    expect(percentText.style?.color, BuildTokens.light.warning);
     // Project-scoped recent list with funds-in (+) and expense (-).
     expect(
       find.byKey(const Key('qa_dashboard_project_recent'), skipOffstage: false),

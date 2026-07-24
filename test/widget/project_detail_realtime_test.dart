@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -105,6 +106,7 @@ Project _project({
   required String name,
   required String clientName,
   required double totalExpenses,
+  double? budgetLimit,
 }) {
   return Project(
     id: 'project_1',
@@ -118,6 +120,7 @@ Project _project({
     totalPayments: 8000,
     netProfit: 2000 - totalExpenses,
     isArchived: false,
+    budgetLimit: budgetLimit,
   );
 }
 
@@ -224,4 +227,64 @@ void main() {
     expect(find.text('−1,200'), findsOneWidget); // net = 2000 - 3200 (loss)
     expect(find.text('3,200'), findsOneWidget); // expense split value
   });
+
+  testWidgets(
+    'budget hero shows remaining amount, color-graded by usage',
+    (tester) async {
+      final controller = StreamController<Project?>();
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectRepositoryProvider.overrideWithValue(
+              _RealtimeProjectRepository(controller),
+            ),
+            projectRecentTransactionsProvider.overrideWith(
+              (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      // 50% used (budgetLimit: 2000, spent: 1000): income (green) band, with
+      // the 1,000 remaining amount always shown — even well below the
+      // warning threshold, so the card never looks "empty" at low usage.
+      controller.add(
+        _project(
+          name: 'Project Alpha',
+          clientName: 'Client One',
+          totalExpenses: 1000,
+          budgetLimit: 2000,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Remaining', skipOffstage: false), findsOneWidget);
+      expect(find.textContaining('1,000', skipOffstage: false), findsWidgets);
+      var remainingText = tester.widget<Text>(
+        find.textContaining('Remaining', skipOffstage: false),
+      );
+      expect(remainingText.style?.color, BuildTokens.light.income);
+
+      // 95% used (budgetLimit: 2000, spent: 1900): expense (red) band.
+      controller.add(
+        _project(
+          name: 'Project Alpha',
+          clientName: 'Client One',
+          totalExpenses: 1900,
+          budgetLimit: 2000,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Remaining', skipOffstage: false), findsOneWidget);
+      expect(find.textContaining('100', skipOffstage: false), findsWidgets);
+      remainingText = tester.widget<Text>(
+        find.textContaining('Remaining', skipOffstage: false),
+      );
+      expect(remainingText.style?.color, BuildTokens.light.expense);
+    },
+  );
 }

@@ -259,10 +259,11 @@ class _ProjectFinancialHero extends StatelessWidget {
         ? project.budgetLimit!
         : project.contractValue;
     final hasBudget = budgetBase > 0;
-    final ratio = hasBudget
-        ? (project.totalExpenses / budgetBase).clamp(0.0, 1.0)
-        : 0.0;
+    final rawRatio = hasBudget ? project.totalExpenses / budgetBase : 0.0;
+    final ratio = hasBudget ? rawRatio.clamp(0.0, 1.0) : 0.0;
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
+    final progressColor = budgetProgressColor(t, rawRatio);
+    final remaining = budgetBase - project.totalExpenses;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -310,9 +311,7 @@ class _ProjectFinancialHero extends StatelessWidget {
                     value: ratio.toDouble(),
                     minHeight: 8,
                     backgroundColor: t.surface3,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      overBudget ? t.expense : t.accent,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -323,9 +322,20 @@ class _ProjectFinancialHero extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: overBudget ? t.expense : t.accent,
+                    color: progressColor,
                   ),
                 ),
+                if (!overBudget) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${Formatters.money(remaining, currencyCode: currency, locale: locale)} ${l10n.t('remaining')}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: progressColor,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

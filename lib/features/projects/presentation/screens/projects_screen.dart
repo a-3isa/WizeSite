@@ -863,11 +863,8 @@ class _BudgetBar extends StatelessWidget {
     final t = context.tokens;
     final ratio = budget <= 0 ? 0.0 : spent / budget;
     final over = ratio > 1.0;
-    final color = over
-        ? t.expense
-        : ratio >= 0.75
-        ? t.warning
-        : t.income;
+    final color = budgetProgressColor(t, ratio);
+    final remaining = budget - spent;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -904,6 +901,17 @@ class _BudgetBar extends StatelessWidget {
             ),
           ],
         ),
+        if (!over) ...[
+          const SizedBox(height: 2),
+          Text(
+            '${Formatters.money(remaining, currencyCode: currency, locale: locale)} ${l10n.t('remaining')}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
       ],
     );
   }

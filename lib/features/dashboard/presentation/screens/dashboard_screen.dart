@@ -317,10 +317,11 @@ class ProjectFinancialSection extends ConsumerWidget {
         ? project.budgetLimit!
         : project.contractValue;
     final hasBudget = budgetBase > 0;
-    final ratio = hasBudget
-        ? (project.totalExpenses / budgetBase).clamp(0.0, 1.0)
-        : 0.0;
+    final rawRatio = hasBudget ? project.totalExpenses / budgetBase : 0.0;
+    final ratio = hasBudget ? rawRatio.clamp(0.0, 1.0) : 0.0;
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
+    final progressColor = budgetProgressColor(context.tokens, rawRatio);
+    final remaining = budgetBase - project.totalExpenses;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,24 +375,31 @@ class ProjectFinancialSection extends ConsumerWidget {
                     value: ratio,
                     minHeight: 8,
                     backgroundColor: context.tokens.surface3,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      overBudget
-                          ? context.tokens.expense
-                          : context.tokens.accent,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  overBudget
+                      ? l10n.t('overBudget')
+                      : '${(ratio * 100).toStringAsFixed(0)}%',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: overBudget
-                        ? context.tokens.expense
-                        : context.tokens.accent,
+                    color: progressColor,
                   ),
                 ),
+                if (!overBudget) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${Formatters.money(remaining, currencyCode: currency, locale: locale)} ${l10n.t('remaining')}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: progressColor,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
