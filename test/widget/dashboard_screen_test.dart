@@ -14,6 +14,8 @@ import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
+import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -350,6 +352,87 @@ void main() {
     expect(find.byKey(const Key('qa_add_expense')), findsNothing);
     expect(find.text('Monthly Usage'), findsNothing);
   });
+
+  testWidgets(
+    'Workers resource tile shows a live count and is visually prominent',
+    (tester) async {
+      final workers = List.generate(
+        26,
+        (i) => WorkerProfile(
+          id: 'worker_$i',
+          workspaceId: 'workspace_1',
+          name: 'Worker $i',
+          phoneNumber: '0100000000$i',
+          dailyWage: 100,
+          billingType: 'daily',
+          workerType: 'general',
+          notes: '',
+          isArchived: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+            workersProvider.overrideWith((ref) => Stream.value(workers)),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Live count renders next to the label.
+      expect(find.text('Workers (26)'), findsOneWidget);
+      // The other resource types have no count source and keep plain labels.
+      expect(find.text('Contractors'), findsOneWidget);
+      expect(find.text('Equipment providers'), findsOneWidget);
+      expect(find.text('Transport providers'), findsOneWidget);
+
+      // Workers renders above (before) the Contractors/Equipment/Transport
+      // row in the widget tree, and with a visually larger/bolder style.
+      final workersOffset = tester
+          .getTopLeft(find.byKey(const Key('qa_resource_workers')))
+          .dy;
+      final contractorsOffset = tester
+          .getTopLeft(find.byKey(const Key('qa_resource_contractors')))
+          .dy;
+      expect(workersOffset, lessThan(contractorsOffset));
+
+      final workersTextStyle = tester
+          .widget<Text>(find.text('Workers (26)'))
+          .style;
+      final contractorsTextStyle = tester
+          .widget<Text>(find.text('Contractors'))
+          .style;
+      expect(
+        workersTextStyle!.fontSize,
+        greaterThan(contractorsTextStyle!.fontSize!),
+      );
+    },
+  );
 
   testWidgets('Approach B: project selector scopes dashboard to one project '
       '(financials, 75% budget bar, recent list)', (tester) async {

@@ -22,6 +22,8 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/presentation/widgets/workspace_switcher_sheet.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart'
+    show workersProvider;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -807,47 +809,76 @@ Widget? _weeklyTrendIndicator({
   );
 }
 
-class _ResourceLinks extends StatelessWidget {
+/// Resources quick-links. Workers is surfaced as the most-used resource and
+/// gets a larger, bolder tile of its own; Contractors/Equipment/Transport
+/// remain grouped as a visually secondary row beneath it.
+class _ResourceLinks extends ConsumerWidget {
   const _ResourceLinks();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 3.4,
+    // Workers already has a cheap, unlimited live count via the same
+    // `workersProvider` stream used by add_expense_screen.dart and the
+    // workers screen itself, so it can carry a real count. Contractors,
+    // Equipment and Transport route through the shared entity-directory
+    // system (resource_directory_screen.dart), which only exposes paginated
+    // fetches — there is no existing unlimited count stream for those types,
+    // so their labels are intentionally left without a count rather than
+    // showing a number capped by a page size.
+    final workersCount = ref.watch(workersProvider).value?.length;
+    final workersLabel = workersCount != null
+        ? l10n.t(
+            'resourceCountLabel',
+            params: {'label': l10n.t('workers'), 'count': '$workersCount'},
+          )
+        : l10n.t('workers');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _ResourceCard(
           qaKey: const Key('qa_resource_workers'),
           icon: Icons.engineering_outlined,
-          label: l10n.t('workers'),
+          label: workersLabel,
           color: context.tokens.warning,
           onTap: () => context.push(AppRoutes.workers),
+          prominent: true,
         ),
-        _ResourceCard(
-          qaKey: const Key('qa_resource_contractors'),
-          icon: Icons.handyman_outlined,
-          label: l10n.t('contractorsDirectory'),
-          color: context.tokens.accent,
-          onTap: () => context.push(AppRoutes.contractorsDirectory),
-        ),
-        _ResourceCard(
-          qaKey: const Key('qa_resource_equipment'),
-          icon: Icons.construction_outlined,
-          label: l10n.t('equipmentDirectory'),
-          color: context.tokens.income,
-          onTap: () => context.push(AppRoutes.equipmentDirectory),
-        ),
-        _ResourceCard(
-          qaKey: const Key('qa_resource_transport'),
-          icon: Icons.local_shipping_outlined,
-          label: l10n.t('transportDirectory'),
-          color: context.tokens.expense,
-          onTap: () => context.push(AppRoutes.transportProvidersDirectory),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _ResourceCard(
+                qaKey: const Key('qa_resource_contractors'),
+                icon: Icons.handyman_outlined,
+                label: l10n.t('contractorsDirectory'),
+                color: context.tokens.accent,
+                onTap: () => context.push(AppRoutes.contractorsDirectory),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ResourceCard(
+                qaKey: const Key('qa_resource_equipment'),
+                icon: Icons.construction_outlined,
+                label: l10n.t('equipmentDirectory'),
+                color: context.tokens.income,
+                onTap: () => context.push(AppRoutes.equipmentDirectory),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ResourceCard(
+                qaKey: const Key('qa_resource_transport'),
+                icon: Icons.local_shipping_outlined,
+                label: l10n.t('transportDirectory'),
+                color: context.tokens.expense,
+                onTap: () =>
+                    context.push(AppRoutes.transportProvidersDirectory),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -861,6 +892,7 @@ class _ResourceCard extends StatelessWidget {
     required this.label,
     required this.color,
     required this.onTap,
+    this.prominent = false,
   });
 
   final Key qaKey;
@@ -868,6 +900,7 @@ class _ResourceCard extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
+  final bool prominent;
 
   @override
   Widget build(BuildContext context) {
@@ -876,25 +909,29 @@ class _ResourceCard extends StatelessWidget {
       button: true,
       child: Material(
         key: qaKey,
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: prominent ? 0.16 : 0.1),
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: EdgeInsetsDirectional.symmetric(
+              horizontal: prominent ? 14 : 10,
+              vertical: prominent ? 14 : 8,
+            ),
             child: Row(
               children: [
-                Icon(icon, color: color, size: 18),
-                const SizedBox(width: 8),
+                Icon(icon, color: color, size: prominent ? 26 : 18),
+                SizedBox(width: prominent ? 12 : 8),
                 Expanded(
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                      fontSize: prominent ? 16 : 12,
+                      color: prominent ? color : null,
                     ),
                   ),
                 ),
