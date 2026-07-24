@@ -183,7 +183,12 @@ class ProjectTimeline extends StatelessWidget {
     final daysRemaining = endDate.difference(todayDate).inDays;
     final isComplete = project.status == 'completed';
     final overdue = daysRemaining < 0 && !isComplete;
-    final statusColor = overdue ? t.warning : t.accent;
+    // Deliberately not budgetProgressColor()'s income/warning/expense scale:
+    // the Timeline card sits directly above the budget-progress bar on the
+    // project detail screen, so reusing t.warning here would make an
+    // overdue-but-on-budget project look identical to a 70-90%-spent one.
+    // Accent stays constant; overdue is conveyed via icon + weight instead.
+    final statusColor = t.accent;
 
     final totalDays = endDate.difference(startDate).inDays;
     double? elapsedFraction;
@@ -220,42 +225,50 @@ class ProjectTimeline extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: statusColor,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  overdue
-                      ? l10n.t(
-                          'overdueByDays',
-                          params: {'value': '${-daysRemaining}'},
-                        )
-                      : l10n.t(
-                          'daysRemaining',
-                          params: {'value': '$daysRemaining'},
-                        ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: statusColor,
+          // Completed projects have no meaningful "days remaining"/"overdue"
+          // concept — the timeline is done, whether it finished early or
+          // late. Omit this line entirely rather than show a nonsensical
+          // negative day count, mirroring the null-date graceful omission
+          // above.
+          if (!isComplete)
+            Row(
+              children: [
+                Icon(
+                  overdue ? Icons.event_busy : Icons.calendar_today_outlined,
+                  size: 14,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    overdue
+                        ? l10n.t(
+                            'overdueByDays',
+                            params: {'value': '${-daysRemaining}'},
+                          )
+                        : l10n.t(
+                            'daysRemaining',
+                            params: {'value': '$daysRemaining'},
+                          ),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: overdue ? FontWeight.w900 : FontWeight.w700,
+                      color: statusColor,
+                    ),
                   ),
                 ),
-              ),
-              if (elapsedFraction != null && !overdue)
-                Text(
-                  l10n.t(
-                    'timelineElapsed',
-                    params: {'value': (elapsedFraction * 100).toStringAsFixed(0)},
+                if (elapsedFraction != null && !overdue)
+                  Text(
+                    l10n.t(
+                      'timelineElapsed',
+                      params: {
+                        'value': (elapsedFraction * 100).toStringAsFixed(0),
+                      },
+                    ),
+                    style: TextStyle(fontSize: 11, color: t.textMuted),
                   ),
-                  style: TextStyle(fontSize: 11, color: t.textMuted),
-                ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

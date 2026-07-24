@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -283,8 +282,8 @@ void main() {
   );
 
   testWidgets(
-    'does not show Overdue messaging for a completed project past its '
-    'expected end date',
+    'omits the days-remaining/overdue line for a completed project past '
+    'its expected end date',
     (tester) async {
       final controller = StreamController<Project?>();
       addTearDown(controller.close);
@@ -301,18 +300,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // The timeline concept is moot once a project is completed: no
+      // "Overdue by N Days" and no raw negative "N Days Remaining" either.
       expect(find.textContaining('Overdue'), findsNothing);
-      final daysRemainingFinder = find.textContaining('Days Remaining');
-      expect(daysRemainingFinder, findsOneWidget);
+      expect(find.textContaining('Days Remaining'), findsNothing);
 
-      // Accent (not warning/expense) styling since the project isn't overdue.
-      final icon = tester.widget<Icon>(
-        find.descendant(
-          of: find.byKey(const Key('qa_project_detail_timeline')),
-          matching: find.byIcon(Icons.calendar_today_outlined),
-        ),
+      // The card itself (with its elapsed-schedule progress bar) still
+      // renders — only the now-moot days-remaining/overdue line is gone.
+      expect(
+        find.byKey(const Key('qa_project_detail_timeline')),
+        findsOneWidget,
       );
-      expect(icon.color, BuildTokens.light.accent);
     },
   );
 }
