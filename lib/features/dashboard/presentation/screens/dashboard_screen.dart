@@ -197,6 +197,12 @@ class DashboardScreen extends ConsumerWidget {
                 workspaceId: workspaceId ?? '',
                 locale: locale,
               ),
+              const SizedBox(height: 12),
+              _PaymentStatusCard(
+                workspaceId: workspaceId ?? '',
+                currency: currency,
+                locale: locale,
+              ),
               const SizedBox(height: 24),
               subscriptionAsync.whenStale(
                 data: (subscription) => subscription.tier == PlanTier.free
@@ -951,6 +957,78 @@ class _WorkerAttendanceCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Compact "Cash Collected / Outstanding Payments" card (v2 UI audit Task
+/// B3, Construction-Specific Improvements: the dashboard should show what's
+/// actually been collected vs. what remains outstanding, not just a single
+/// net financial figure). Derived from the existing `payments` ledger's
+/// `paymentStatus` field via [dashboardPaymentStatusSummaryProvider] — see
+/// that provider's doc comment for exactly how `paid`/`partial`/`unpaid` map
+/// to "collected" vs. "outstanding". Workspace-scoped like
+/// [_WorkerAttendanceCard] above (shown regardless of the project filter),
+/// since collection status reflects the whole ledger, not one project's
+/// financial totals.
+///
+/// Outstanding uses `context.tokens.warning` rather than `context.tokens.
+/// expense`: an unpaid invoice isn't a loss (it's not money that left the
+/// business), it's an attention-needed/collections-risk signal — the same
+/// semantic `warning` already carries for the sync-queue banner and worker
+/// attendance icon above.
+class _PaymentStatusCard extends ConsumerWidget {
+  const _PaymentStatusCard({
+    required this.workspaceId,
+    required this.currency,
+    required this.locale,
+  });
+
+  final String workspaceId;
+  final String currency;
+  final String locale;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (workspaceId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final summary =
+        ref.watch(dashboardPaymentStatusSummaryProvider(workspaceId)).value ??
+        PaymentStatusSummary.empty;
+
+    return Row(
+      key: const Key('qa_dashboard_payment_status_row'),
+      children: [
+        Expanded(
+          child: MetricCard(
+            key: const Key('qa_dashboard_cash_collected'),
+            label: l10n.t('cashCollected'),
+            value: Formatters.money(
+              summary.collected,
+              currencyCode: currency,
+              locale: locale,
+            ),
+            color: context.tokens.income,
+            icon: Icons.payments_outlined,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: MetricCard(
+            key: const Key('qa_dashboard_outstanding_payments'),
+            label: l10n.t('outstandingPayments'),
+            value: Formatters.money(
+              summary.outstanding,
+              currencyCode: currency,
+              locale: locale,
+            ),
+            color: context.tokens.warning,
+            icon: Icons.pending_actions_outlined,
+          ),
+        ),
+      ],
     );
   }
 }

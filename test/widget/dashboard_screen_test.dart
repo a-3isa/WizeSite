@@ -487,6 +487,63 @@ void main() {
     },
   );
 
+  testWidgets(
+    'cash collected / outstanding payments card renders derived totals from '
+    'payment status (UI audit Task B3)',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+            // `paid` (12,000) + `partial` (3,000) count as collected;
+            // `unpaid` (5,000) counts as outstanding — mirrors what a real
+            // workspace-scoped `payments` query would derive client-side.
+            dashboardPaymentStatusSummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(
+                const PaymentStatusSummary(collected: 15000, outstanding: 5000),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('qa_dashboard_payment_status_row')),
+        findsOneWidget,
+      );
+      expect(find.text('Cash Collected'), findsOneWidget);
+      expect(find.text('Outstanding Payments'), findsOneWidget);
+      expect(find.text('15,000 EGP'), findsOneWidget);
+      expect(find.text('5,000 EGP'), findsOneWidget);
+      expect(find.byIcon(Icons.payments_outlined), findsWidgets);
+      expect(find.byIcon(Icons.pending_actions_outlined), findsOneWidget);
+    },
+  );
+
   testWidgets('Approach B: project selector scopes dashboard to one project '
       '(financials, 75% budget bar, recent list)', (tester) async {
     const project = Project(

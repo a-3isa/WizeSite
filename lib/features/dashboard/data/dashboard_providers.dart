@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -955,6 +956,114 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
       await queueSub.cancel();
     };
   });
+}
+
+/// Cash Collected vs. Outstanding Payments (v2 UI audit Task B3,
+/// Construction-Specific Improvements: the dashboard should show what's
+/// actually been collected vs. what remains outstanding, not just a single
+/// net financial figure). Derived entirely from the existing `payments`
+/// ledger's `paymentStatus` field (`lib/core/constants/payment_statuses.dart`)
+/// — no new Firestore fields or Cloud Functions.
+///
+/// Status semantics (confirmed by reading `add_payment_screen.dart` and
+/// `PaymentRecord`, not assumed): a payment record carries a single `amount`
+/// field — there is no separate "amount paid" vs. "amount still due" split
+/// like `WorkerAccountingRecord.paidAmount` has for worker wages. So for a
+/// client payment record, `amount` is simply the cash figure the user typed
+/// in for that entry, and `paymentStatus` tags its collection state:
+///   - `paid`: the full `amount` was received → counts as collected.
+///   - `partial`: the user is deliberately logging a partial receipt — the
+///     `amount` field IS what was actually received for this entry (there is
+///     no separate larger "invoice total" tracked anywhere), it just doesn't
+///     fully settle whatever is owed. That still means real cash changed
+///     hands, so it counts as collected too, same as `paid`.
+///   - `unpaid`: an expected/invoiced amount that has NOT been received yet
+///     → counts as outstanding.
+///   - `refunded` / `cancelled`: excluded from both buckets — refunded cash
+///     was collected and then given back (not currently held), and a
+///     cancelled record never happened.
+class PaymentStatusSummary {
+  const PaymentStatusSummary({
+    required this.collected,
+    required this.outstanding,
+  });
+
+  /// Sum of `amount` across `paid` + `partial` payments.
+  final double collected;
+
+  /// Sum of `amount` across `unpaid` payments.
+  final double outstanding;
+
+  static const empty = PaymentStatusSummary(collected: 0, outstanding: 0);
+}
+
+/// Workspace-scoped listener over the `payments` collection, grouped
+/// client-side by `paymentStatus`.
+///
+/// Cost note: unlike the rolling-7-day queries elsewhere in this file (or
+/// the flat `totalIncome` on the `workspace_metrics` aggregate doc used by
+/// [dashboardSnapshotProvider]), this has no date bound — it listens to
+/// EVERY non-archived payment ever recorded for the workspace. That's
+/// intentional: "outstanding" is inherently open-ended (an unpaid invoice
+/// from 6 months ago is still outstanding today), so a weekly window would
+/// silently hide it. The query is still workspace-scoped (never a cross-
+/// workspace scan), matching the [dashboardWorkerAttendanceProvider] pattern,
+/// but its read cost scales with a workspace's total historical payment
+/// count rather than being O(1) like the maintained aggregate doc. For a
+/// workspace with a very large payment history this is the one added cost of
+/// this feature — acceptable for a compact client-side derivation with no
+/// new schema/Cloud Function, but worth knowing if payment volume grows very
+/// large.
+///
+/// Does not reconcile pending offline-queue actions (unlike
+/// [dashboardWeeklySummaryProvider]/[dashboardSnapshotProvider]): a
+/// createPayment/updatePayment action's `paymentStatus` can change between
+/// queueing and sync without a tracked `previousPaymentStatus`, so a correct
+/// delta can't be computed client-side. This is a presentation-only
+/// simplification — the figures may lag by a few seconds until the pending
+/// write syncs to Firestore, same as any other listener-based read.
+final dashboardPaymentStatusSummaryProvider =
+    StreamProvider.family<PaymentStatusSummary, String>((ref, workspaceId) {
+      final firestore = ref.watch(firestoreProvider);
+      return _paymentStatusSummaryStream(
+        firestore: firestore,
+        workspaceId: workspaceId,
+      );
+    });
+
+Stream<PaymentStatusSummary> _paymentStatusSummaryStream({
+  required FirebaseFirestore firestore,
+  required String workspaceId,
+}) {
+  return firestore
+      .collection('payments')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .snapshots()
+      .map((snapshot) {
+        var collected = 0.0;
+        var outstanding = 0.0;
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final amount = ((data['amount'] as num?) ?? 0).toDouble();
+          final status = '${data['paymentStatus'] ?? PaymentStatuses.paid}';
+          switch (status) {
+            case PaymentStatuses.paid:
+            case PaymentStatuses.partial:
+              collected += amount;
+              break;
+            case PaymentStatuses.unpaid:
+              outstanding += amount;
+              break;
+            default:
+              break;
+          }
+        }
+        return PaymentStatusSummary(
+          collected: collected,
+          outstanding: outstanding,
+        );
+      });
 }
 
 ({num pendingExpenses, num pendingIncome}) _weeklyPendingDelta({

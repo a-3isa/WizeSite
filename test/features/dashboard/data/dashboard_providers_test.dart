@@ -385,4 +385,64 @@ void main() {
       expect(summary.manDays, 4);
     },
   );
+
+  test(
+    'payment status summary buckets paid+partial as collected, unpaid as '
+    'outstanding, and excludes refunded/cancelled/other workspaces '
+    '(UI audit Task B3)',
+    () async {
+      await firestore.collection('payments').doc('payment_paid').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 10000,
+        'paymentStatus': 'paid',
+      });
+      await firestore.collection('payments').doc('payment_partial').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 2000,
+        'paymentStatus': 'partial',
+      });
+      await firestore.collection('payments').doc('payment_unpaid').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 3000,
+        'paymentStatus': 'unpaid',
+      });
+      await firestore.collection('payments').doc('payment_refunded').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 500,
+        'paymentStatus': 'refunded',
+      });
+      await firestore.collection('payments').doc('payment_cancelled').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 750,
+        'paymentStatus': 'cancelled',
+      });
+      // Archived payments never count, regardless of status.
+      await firestore.collection('payments').doc('payment_archived').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': true,
+        'amount': 999999,
+        'paymentStatus': 'paid',
+      });
+      // A payment belonging to a different workspace never counts.
+      await firestore.collection('payments').doc('payment_other_ws').set({
+        'workspaceId': 'workspace_2',
+        'isArchived': false,
+        'amount': 999999,
+        'paymentStatus': 'unpaid',
+      });
+
+      final summary = await _readStreamProvider(
+        container,
+        dashboardPaymentStatusSummaryProvider('workspace_1'),
+      );
+
+      expect(summary.collected, 12000);
+      expect(summary.outstanding, 3000);
+    },
+  );
 }
