@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
+import 'package:buildtrack_app/core/widgets/ds/animated_counter.dart';
 import 'package:buildtrack_app/core/widgets/ds/build_card.dart';
 import 'package:flutter/material.dart';
 
@@ -46,7 +47,7 @@ class StatTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
+          AnimatedCounter(
             value,
             style: TextStyle(
               fontSize: 24,

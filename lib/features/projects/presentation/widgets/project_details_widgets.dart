@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/ds/animated_progress_bar.dart';
 import 'package:buildtrack_app/core/widgets/ds/build_card.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
@@ -139,14 +140,11 @@ class _CompletionProgress extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: percentage / 100,
-            minHeight: 8,
-            backgroundColor: context.tokens.accent.withValues(alpha: 0.1),
-            valueColor: AlwaysStoppedAnimation<Color>(context.tokens.accent),
-          ),
+        AnimatedProgressBar(
+          value: percentage / 100,
+          minHeight: 8,
+          backgroundColor: context.tokens.accent.withValues(alpha: 0.1),
+          color: context.tokens.accent,
         ),
       ],
     );
@@ -214,14 +212,11 @@ class ProjectTimeline extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (elapsedFraction != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: elapsedFraction,
-                minHeight: 8,
-                backgroundColor: t.surface3,
-                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-              ),
+            AnimatedProgressBar(
+              value: elapsedFraction,
+              minHeight: 8,
+              backgroundColor: t.surface3,
+              color: statusColor,
             ),
             const SizedBox(height: 8),
           ],

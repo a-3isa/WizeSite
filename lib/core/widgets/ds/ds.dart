@@ -3,6 +3,8 @@
 /// All widgets are token-driven (read `context.tokens`) and therefore dark-aware.
 library;
 
+export 'animated_counter.dart';
+export 'animated_progress_bar.dart';
 export 'avatar.dart';
 export 'build_button.dart';
 export 'build_card.dart';

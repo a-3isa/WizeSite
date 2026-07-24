@@ -868,14 +868,11 @@ class _BudgetBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: ratio.clamp(0.0, 1.0).toDouble(),
-            minHeight: 6,
-            backgroundColor: t.surface3,
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
+        AnimatedProgressBar(
+          value: ratio.clamp(0.0, 1.0).toDouble(),
+          minHeight: 6,
+          backgroundColor: t.surface3,
+          color: color,
         ),
         const SizedBox(height: 4),
         Row(

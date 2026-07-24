@@ -105,6 +105,9 @@ void main() {
           ),
         ),
       );
+      // Profit Margin's value is an AnimatedCounter (v2 UI audit Task D2) --
+      // let its count-up animation settle before asserting the final text.
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('qa_dashboard_profit_margin')), findsOneWidget);
       expect(find.text('Profit Margin'), findsOneWidget);

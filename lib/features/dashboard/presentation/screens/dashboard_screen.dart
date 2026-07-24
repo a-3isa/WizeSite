@@ -434,14 +434,11 @@ class ProjectFinancialSection extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 8,
-                    backgroundColor: context.tokens.surface3,
-                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-                  ),
+                AnimatedProgressBar(
+                  value: ratio,
+                  minHeight: 8,
+                  backgroundColor: context.tokens.surface3,
+                  color: progressColor,
                 ),
                 const SizedBox(height: 6),
                 Text(

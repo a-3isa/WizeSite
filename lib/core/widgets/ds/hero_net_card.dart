@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
+import 'package:buildtrack_app/core/widgets/ds/animated_counter.dart';
 import 'package:buildtrack_app/core/widgets/ds/build_card.dart';
 import 'package:buildtrack_app/core/widgets/ds/segmented_toggle.dart';
 import 'package:flutter/material.dart';
@@ -81,7 +82,7 @@ class HeroNetCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Flexible(
-                child: Text(
+                child: AnimatedCounter(
                   net,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -166,7 +167,7 @@ class _SplitBox extends StatelessWidget {
         children: [
           Text(label, style: TextStyle(fontSize: 12, color: mutedColor)),
           const SizedBox(height: 2),
-          Text(
+          AnimatedCounter(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
