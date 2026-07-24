@@ -93,7 +93,7 @@ void main() {
   test('arabic accounting labels are translated and not raw fallback text', () {
     final l10n = AppLocalizations(const Locale('ar'));
 
-    expect(l10n.t('weeklySummary'), 'ملخص أسبوعي');
+    expect(l10n.t('weeklySummary'), 'آخر 7 أيام');
     expect(l10n.t('purpose'), 'الغرض');
     expect(l10n.t('paymentStatus'), 'حالة الدفع');
     expect(l10n.t('entityNameOptional'), 'اسم الكيان (اختياري)');
