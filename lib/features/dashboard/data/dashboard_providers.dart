@@ -817,16 +817,29 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
     QuerySnapshot<Map<String, dynamic>>? latestEntries;
     List<OfflineAction> latestActions = const [];
 
+    bool inWindow(DateTime date) {
+      return !date.isBefore(startDate) && !date.isAfter(endDate);
+    }
+
     void emit() {
       final docs = latestEntries?.docs ?? const [];
-      final workerIds = <String>{};
+      // entryId -> workerId for every base (already in-window, per the
+      // Firestore query above) worker_entries doc. Kept keyed by entryId
+      // (rather than folded straight into a Set<String>) so a pending
+      // updateWorkerEntry/archiveWorkerEntry action that moves ITS entry out
+      // of the window can be excluded below without blindly dropping the
+      // worker from the distinct count — the worker may still have another
+      // entry (base or pending) that keeps them in-window.
+      final baseWorkerIdByEntryId = <String, String>{};
+      final removedEntryIds = <String>{};
+      final pendingCreatedWorkerIds = <String>{};
       var manDays = 0.0;
 
       for (final doc in docs) {
         final data = doc.data();
         final workerId = '${data['workerId'] ?? ''}';
         if (workerId.isNotEmpty) {
-          workerIds.add(workerId);
+          baseWorkerIdByEntryId[doc.id] = workerId;
         }
         manDays += ((data['daysWorked'] as num?) ?? 0).toDouble();
       }
@@ -839,35 +852,86 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
         if ('${payload['workspaceId'] ?? ''}' != workspaceId) {
           continue;
         }
-        final date = _parsePendingDate(payload['date']) ?? action.createdAt;
-        if (date.isBefore(startDate) || date.isAfter(endDate)) {
-          continue;
-        }
-        final workerId = '${payload['workerId'] ?? ''}';
-        final daysWorked = ((payload['daysWorked'] as num?) ?? 0).toDouble();
 
         switch (action.type) {
           case OfflineActionTypes.createWorkerEntry:
-            if (workerId.isNotEmpty) {
-              workerIds.add(workerId);
+            final date =
+                _parsePendingDate(payload['date']) ?? action.createdAt;
+            if (!inWindow(date)) {
+              break;
             }
-            manDays += daysWorked;
+            final workerId = '${payload['workerId'] ?? ''}';
+            if (workerId.isNotEmpty) {
+              pendingCreatedWorkerIds.add(workerId);
+            }
+            manDays += ((payload['daysWorked'] as num?) ?? 0).toDouble();
             break;
           case OfflineActionTypes.updateWorkerEntry:
+            // WorkspaceMutationService.updateWorkerEntry carries both the
+            // new `date` and the `previousDate`, so an offline edit can move
+            // an entry's date in or out of the rolling 7-day window before
+            // Firestore syncs it — meaning the base query above still
+            // reflects the entry's OLD date/daysWorked. Replicate the same
+            // four-case dateInWindow/previousInWindow handling that
+            // _weeklyPendingDelta already uses for expenses/payments instead
+            // of just skipping when the NEW date happens to fall outside
+            // the window.
+            final date =
+                _parsePendingDate(payload['date']) ?? action.createdAt;
+            final previousDate = _parsePendingDate(payload['previousDate']);
+            final daysWorked = ((payload['daysWorked'] as num?) ?? 0)
+                .toDouble();
             final previousDaysWorked =
                 ((payload['previousDaysWorked'] as num?) ?? 0).toDouble();
-            if (workerId.isNotEmpty) {
-              workerIds.add(workerId);
+            final dateInWindow = inWindow(date);
+            final previousInWindow =
+                previousDate != null && inWindow(previousDate);
+
+            if (dateInWindow && previousInWindow) {
+              manDays += daysWorked - previousDaysWorked;
+            } else if (dateInWindow && !previousInWindow) {
+              manDays += daysWorked;
+            } else if (!dateInWindow && previousInWindow) {
+              manDays -= previousDaysWorked;
             }
-            manDays += daysWorked - previousDaysWorked;
+            // else out+out: no-op, matches _weeklyPendingDelta.
+
+            // The worker assigned to an entry never changes on update (only
+            // project/days/wage/date/notes can) — the payload doesn't even
+            // carry a `workerId` — so distinct-worker membership for this
+            // entryId only needs revisiting when the edit moves it OUT of
+            // the window. Record that here; the final set is rebuilt below
+            // from whichever base entries survive.
+            if (!dateInWindow) {
+              final entryId = '${payload['entryId'] ?? ''}';
+              if (entryId.isNotEmpty) {
+                removedEntryIds.add(entryId);
+              }
+            }
             break;
           case OfflineActionTypes.archiveWorkerEntry:
-            manDays -= daysWorked;
+            final date =
+                _parsePendingDate(payload['date']) ?? action.createdAt;
+            if (inWindow(date)) {
+              manDays -= ((payload['daysWorked'] as num?) ?? 0).toDouble();
+            }
+            final entryId = '${payload['entryId'] ?? ''}';
+            if (entryId.isNotEmpty) {
+              removedEntryIds.add(entryId);
+            }
             break;
           default:
             break;
         }
       }
+
+      final workerIds = <String>{};
+      baseWorkerIdByEntryId.forEach((entryId, workerId) {
+        if (!removedEntryIds.contains(entryId)) {
+          workerIds.add(workerId);
+        }
+      });
+      workerIds.addAll(pendingCreatedWorkerIds);
 
       controller.add(
         WorkerAttendanceSummary(

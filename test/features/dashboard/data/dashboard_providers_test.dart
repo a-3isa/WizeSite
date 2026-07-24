@@ -26,6 +26,26 @@ Future<T> _readStreamProvider<T>(
   return container.read(provider.future);
 }
 
+/// Like [_readStreamProvider], but for providers whose `Stream.multi` merges
+/// two independently-listened sources (e.g. a base Firestore query + the
+/// offline queue) without gating the first emission on both having reported
+/// in. Reading `.future` immediately can otherwise race and capture a
+/// transient, partially-merged value. Pumping the event queue first lets
+/// both underlying listeners fire before we read the settled state.
+Future<T> _readSettledStreamProvider<T>(
+  ProviderContainer container,
+  StreamProvider<T> provider,
+) async {
+  final subscription = container.listen(
+    provider,
+    (_, _) {},
+    fireImmediately: true,
+  );
+  addTearDown(subscription.close);
+  await pumpEventQueue();
+  return container.read(provider).requireValue;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -231,4 +251,138 @@ void main() {
     expect(snapshot.net, 300);
     expect(snapshot.weeklyNet, 40);
   });
+
+  test(
+    'worker attendance excludes a pending update that moves an in-window '
+    'entry out of the window',
+    () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final movedOutDate = today.subtract(const Duration(days: 40));
+
+      // Base doc still reflects the OLD (in-window) date/daysWorked because
+      // Firestore hasn't synced the pending edit yet.
+      await firestore.collection('worker_entries').doc('entry_1').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'workerId': 'worker_1',
+        'projectId': 'project_1',
+        'daysWorked': 3,
+        'date': today,
+      });
+
+      await queue.enqueue(
+        type: OfflineActionTypes.updateWorkerEntry,
+        payload: {
+          'workspaceId': 'workspace_1',
+          'entryId': 'entry_1',
+          'projectId': 'project_1',
+          'daysWorked': 3,
+          'dailyWage': 100,
+          'date': movedOutDate.toIso8601String(),
+          'previousProjectId': 'project_1',
+          'previousDaysWorked': 3,
+          'previousDailyWage': 100,
+          'previousDate': today.toIso8601String(),
+        },
+      );
+
+      final summary = await _readSettledStreamProvider(
+        container,
+        dashboardWorkerAttendanceProvider('workspace_1'),
+      );
+
+      expect(summary.workerCount, 0);
+      expect(summary.manDays, 0);
+    },
+  );
+
+  test(
+    'worker attendance keeps counting a worker whose other entry stays '
+    'in-window after a sibling entry is pending-moved out',
+    () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final movedOutDate = today.subtract(const Duration(days: 40));
+
+      await firestore.collection('worker_entries').doc('entry_1').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'workerId': 'worker_1',
+        'projectId': 'project_1',
+        'daysWorked': 3,
+        'date': today,
+      });
+      await firestore.collection('worker_entries').doc('entry_2').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'workerId': 'worker_1',
+        'projectId': 'project_1',
+        'daysWorked': 2,
+        'date': today,
+      });
+
+      await queue.enqueue(
+        type: OfflineActionTypes.updateWorkerEntry,
+        payload: {
+          'workspaceId': 'workspace_1',
+          'entryId': 'entry_1',
+          'projectId': 'project_1',
+          'daysWorked': 3,
+          'dailyWage': 100,
+          'date': movedOutDate.toIso8601String(),
+          'previousProjectId': 'project_1',
+          'previousDaysWorked': 3,
+          'previousDailyWage': 100,
+          'previousDate': today.toIso8601String(),
+        },
+      );
+
+      final summary = await _readSettledStreamProvider(
+        container,
+        dashboardWorkerAttendanceProvider('workspace_1'),
+      );
+
+      // worker_1 is NOT blindly dropped from the distinct count just
+      // because entry_1 moved out of window — entry_2 still keeps them in.
+      expect(summary.workerCount, 1);
+      expect(summary.manDays, 2);
+    },
+  );
+
+  test(
+    'worker attendance adds the full day count (not a stale delta) when a '
+    'pending update moves an entry into the window',
+    () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final movedFromDate = today.subtract(const Duration(days: 40));
+
+      // No base doc: the entry's currently-stored (unsynced) date is still
+      // outside the window, so the base query correctly excludes it — the
+      // pending action is the only source of this contribution.
+      await queue.enqueue(
+        type: OfflineActionTypes.updateWorkerEntry,
+        payload: {
+          'workspaceId': 'workspace_1',
+          'entryId': 'entry_3',
+          'projectId': 'project_1',
+          'daysWorked': 4,
+          'dailyWage': 100,
+          'date': today.toIso8601String(),
+          'previousProjectId': 'project_1',
+          'previousDaysWorked': 4,
+          'previousDailyWage': 100,
+          'previousDate': movedFromDate.toIso8601String(),
+        },
+      );
+
+      final summary = await _readSettledStreamProvider(
+        container,
+        dashboardWorkerAttendanceProvider('workspace_1'),
+      );
+
+      expect(summary.manDays, 4);
+    },
+  );
 }
