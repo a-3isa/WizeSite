@@ -6,7 +6,8 @@
         android:label="Buildozer"
         android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher"
-        android:enableOnBackInvokedCallback="true">
+        android:enableOnBackInvokedCallback="true"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
