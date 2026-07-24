@@ -192,6 +192,11 @@ class DashboardScreen extends ConsumerWidget {
               SectionHeader(title: l10n.t('resources')),
               const SizedBox(height: 12),
               const _ResourceLinks(),
+              const SizedBox(height: 12),
+              _WorkerAttendanceCard(
+                workspaceId: workspaceId ?? '',
+                locale: locale,
+              ),
               const SizedBox(height: 24),
               subscriptionAsync.whenStale(
                 data: (subscription) => subscription.tier == PlanTier.free
@@ -881,6 +886,71 @@ class _ResourceLinks extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Compact "Workers this week" summary (v2 UI audit Task B2, Problem 6): the
+/// dashboard should surface who actually worked, not just financial totals.
+/// Derived from the existing `worker_entries` ledger — the same rolling
+/// 7-day window used by the Weekly Summary cards above — so it needs no new
+/// schema. Uses the same `Icons.engineering_outlined` glyph as the prominent
+/// Workers resource card above for visual consistency.
+class _WorkerAttendanceCard extends ConsumerWidget {
+  const _WorkerAttendanceCard({required this.workspaceId, required this.locale});
+
+  final String workspaceId;
+  final String locale;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (workspaceId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final summary = ref
+        .watch(dashboardWorkerAttendanceProvider(workspaceId))
+        .value;
+    if (summary == null) {
+      return const SizedBox.shrink();
+    }
+
+    final text = l10n.t(
+      'workerAttendanceSummary',
+      params: {
+        'workers': Formatters.count(summary.workerCount, locale: locale),
+        'manDays': Formatters.count(summary.manDays, locale: locale),
+      },
+    );
+
+    return Semantics(
+      label: text,
+      child: BuildCard(
+        key: const Key('qa_worker_attendance_summary'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.engineering_outlined,
+              size: 20,
+              color: context.tokens.warning,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: context.tokens.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

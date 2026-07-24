@@ -753,6 +753,146 @@ Stream<Map<String, num>> _previousWeekSummaryStream({
   });
 }
 
+/// Derived "Workers this week" summary (v2 UI audit Task B2, construction-
+/// specific improvements list + Problem 6: the dashboard should surface who
+/// actually worked, not just financial totals). Built entirely from the
+/// existing `worker_entries` ledger collection (the same manually-logged
+/// "worker worked N days on date X" records used for payroll/cost by
+/// add_worker_entry_screen.dart) — no new Firestore fields or Cloud
+/// Functions. Uses the SAME rolling 7-day window (`today - 6 days` through
+/// `today 23:59:59`) as [dashboardWeeklySummaryProvider] /
+/// [dashboardPreviousWeekSummaryProvider] for consistency.
+class WorkerAttendanceSummary {
+  const WorkerAttendanceSummary({required this.workerCount, required this.manDays});
+
+  /// Count of distinct workers with at least one entry in the window.
+  final int workerCount;
+
+  /// Sum of `daysWorked` across all entries in the window.
+  final double manDays;
+
+  static const empty = WorkerAttendanceSummary(workerCount: 0, manDays: 0);
+}
+
+/// Workspace + rolling-7-day-window scoped query against `worker_entries` —
+/// mirrors the shape of [_weeklySummaryStream] (same collection-query
+/// pattern as `expenses`/`payments`, just applied to `worker_entries`, which
+/// carries the same `workspaceId` + `isArchived` + `date` fields). This is a
+/// bounded read (one workspace, one week), not an unbounded all-time/all-
+/// workspace listener.
+final dashboardWorkerAttendanceProvider =
+    StreamProvider.family<WorkerAttendanceSummary, String>((ref, workspaceId) {
+      final firestore = ref.watch(firestoreProvider);
+      final queue = ref.watch(offlineActionQueueProvider);
+      return _workerAttendanceStream(
+        firestore: firestore,
+        queue: queue,
+        workspaceId: workspaceId,
+      );
+    });
+
+Stream<WorkerAttendanceSummary> _workerAttendanceStream({
+  required FirebaseFirestore firestore,
+  required OfflineActionQueue queue,
+  required String workspaceId,
+}) {
+  final now = DateTime.now();
+  final startDate = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).subtract(const Duration(days: 6));
+  final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+  final entriesStream = firestore
+      .collection('worker_entries')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .where('date', isGreaterThanOrEqualTo: startDate)
+      .where('date', isLessThanOrEqualTo: endDate)
+      .snapshots();
+  final queueStream = queue.watch(includeExpiredSynced: true);
+
+  return Stream.multi((controller) {
+    QuerySnapshot<Map<String, dynamic>>? latestEntries;
+    List<OfflineAction> latestActions = const [];
+
+    void emit() {
+      final docs = latestEntries?.docs ?? const [];
+      final workerIds = <String>{};
+      var manDays = 0.0;
+
+      for (final doc in docs) {
+        final data = doc.data();
+        final workerId = '${data['workerId'] ?? ''}';
+        if (workerId.isNotEmpty) {
+          workerIds.add(workerId);
+        }
+        manDays += ((data['daysWorked'] as num?) ?? 0).toDouble();
+      }
+
+      for (final action in latestActions) {
+        if (!_shouldApplyPendingWeeklyAction(action)) {
+          continue;
+        }
+        final payload = action.payload;
+        if ('${payload['workspaceId'] ?? ''}' != workspaceId) {
+          continue;
+        }
+        final date = _parsePendingDate(payload['date']) ?? action.createdAt;
+        if (date.isBefore(startDate) || date.isAfter(endDate)) {
+          continue;
+        }
+        final workerId = '${payload['workerId'] ?? ''}';
+        final daysWorked = ((payload['daysWorked'] as num?) ?? 0).toDouble();
+
+        switch (action.type) {
+          case OfflineActionTypes.createWorkerEntry:
+            if (workerId.isNotEmpty) {
+              workerIds.add(workerId);
+            }
+            manDays += daysWorked;
+            break;
+          case OfflineActionTypes.updateWorkerEntry:
+            final previousDaysWorked =
+                ((payload['previousDaysWorked'] as num?) ?? 0).toDouble();
+            if (workerId.isNotEmpty) {
+              workerIds.add(workerId);
+            }
+            manDays += daysWorked - previousDaysWorked;
+            break;
+          case OfflineActionTypes.archiveWorkerEntry:
+            manDays -= daysWorked;
+            break;
+          default:
+            break;
+        }
+      }
+
+      controller.add(
+        WorkerAttendanceSummary(
+          workerCount: workerIds.length,
+          manDays: manDays < 0 ? 0 : manDays,
+        ),
+      );
+    }
+
+    final entriesSub = entriesStream.listen((snapshot) {
+      latestEntries = snapshot;
+      emit();
+    }, onError: controller.addError);
+    final queueSub = queueStream.listen((actions) {
+      latestActions = actions;
+      emit();
+    }, onError: controller.addError);
+
+    controller.onCancel = () async {
+      await entriesSub.cancel();
+      await queueSub.cancel();
+    };
+  });
+}
+
 ({num pendingExpenses, num pendingIncome}) _weeklyPendingDelta({
   required List<OfflineAction> actions,
   required String workspaceId,

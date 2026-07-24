@@ -434,6 +434,59 @@ void main() {
     },
   );
 
+  testWidgets(
+    'worker attendance summary card renders distinct worker count and '
+    'man-days derived from worker_entries (UI audit Task B2)',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+            // 3 entries this week across 2 distinct workers, totaling 5.5
+            // man-days — mirrors what a real workspace + date-range scoped
+            // `worker_entries` query would derive client-side.
+            dashboardWorkerAttendanceProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(
+                const WorkerAttendanceSummary(workerCount: 2, manDays: 5.5),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('qa_worker_attendance_summary')),
+        findsOneWidget,
+      );
+      expect(find.text('2 Workers · 5.5 Man-Days This Week'), findsOneWidget);
+      expect(find.byIcon(Icons.engineering_outlined), findsWidgets);
+    },
+  );
+
   testWidgets('Approach B: project selector scopes dashboard to one project '
       '(financials, 75% budget bar, recent list)', (tester) async {
     const project = Project(
