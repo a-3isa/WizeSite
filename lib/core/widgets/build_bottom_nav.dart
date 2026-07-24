@@ -70,29 +70,34 @@ class BuildBottomNav extends StatelessWidget {
     final on = index == currentIndex;
     final color = on ? t.accent : t.textFaint;
     return Expanded(
-      child: InkWell(
-        onTap: () => onSelect(index),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              on ? item.activeIcon : item.icon,
-              size: 24,
-              color: color,
-              key: item.key,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: on ? FontWeight.w700 : FontWeight.w600,
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: item.label,
+        child: InkWell(
+          onTap: () => onSelect(index),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                on ? item.activeIcon : item.icon,
+                size: 24,
                 color: color,
+                key: item.key,
               ),
-            ),
-          ],
+              const SizedBox(height: 3),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: on ? FontWeight.w700 : FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

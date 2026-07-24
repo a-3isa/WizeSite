@@ -255,55 +255,59 @@ class _DashboardProjectSelector extends ConsumerWidget {
         ? selectedProject!.name.trim()
         : l10n.t('allProjects');
 
-    return Material(
-      key: const Key('qa_dashboard_project_selector'),
-      color: context.tokens.accent.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
+    return Semantics(
+      label: '${l10n.t('project')}: $label',
+      button: true,
+      child: Material(
+        key: const Key('qa_dashboard_project_selector'),
+        color: context.tokens.accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        onTap: () => showProjectSelectorSheet(
-          context,
-          ref,
-          projects: projects,
-          selectedProjectId: selectedProject?.id,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(
-            children: [
-              Icon(
-                Icons.work_outline,
-                size: 18,
-                color: context.tokens.accent,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      l10n.t('project').toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: context.tokens.accent,
-                      ),
-                    ),
-                    Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: context.tokens.text,
-                      ),
-                    ),
-                  ],
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => showProjectSelectorSheet(
+            context,
+            ref,
+            projects: projects,
+            selectedProjectId: selectedProject?.id,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.work_outline,
+                  size: 18,
+                  color: context.tokens.accent,
                 ),
-              ),
-              Icon(Icons.arrow_drop_down, color: context.tokens.accent),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        l10n.t('project').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: context.tokens.accent,
+                        ),
+                      ),
+                      Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: context.tokens.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: context.tokens.accent),
+              ],
+            ),
           ),
         ),
       ),
@@ -1333,9 +1337,13 @@ class _ResourceCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
+            // Vertical padding sized so even the compact (non-prominent)
+            // cards clear the 48dp minimum touch target (v2 UI audit
+            // Accessibility Improvements) without changing the icon/text
+            // sizing that gives them their compact visual weight.
             padding: EdgeInsetsDirectional.symmetric(
               horizontal: prominent ? 14 : 10,
-              vertical: prominent ? 14 : 8,
+              vertical: prominent ? 14 : 16,
             ),
             child: Row(
               children: [

@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
+import 'package:buildtrack_app/core/widgets/build_bottom_nav.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -114,6 +115,114 @@ void main() {
       expect(matchingSemantics.single.properties.button, isTrue);
     }
   });
+
+  testWidgets(
+    'dashboard project selector meets the 48dp touch target and exposes '
+    'button semantics',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_dashboardApp());
+      await tester.pumpAndSettle();
+
+      final selectorFinder = find.byKey(
+        const Key('qa_dashboard_project_selector'),
+      );
+      expect(tester.getSize(selectorFinder).height, greaterThanOrEqualTo(48));
+
+      final matchingSemantics = tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .where((widget) => widget.properties.label == 'Project: All Projects')
+          .toList();
+      expect(matchingSemantics, hasLength(1));
+      expect(matchingSemantics.single.properties.button, isTrue);
+
+      handle.dispose();
+    },
+  );
+
+  testWidgets(
+    'dashboard secondary resource cards meet the 48dp touch target minimum',
+    (tester) async {
+      await tester.pumpWidget(_dashboardApp());
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('qa_resource_workers')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      for (final key in [
+        'qa_resource_workers',
+        'qa_resource_contractors',
+        'qa_resource_equipment',
+        'qa_resource_transport',
+      ]) {
+        final size = tester.getSize(find.byKey(Key(key)));
+        expect(
+          size.height,
+          greaterThanOrEqualTo(48),
+          reason: '$key should meet the 48dp minimum touch target',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'bottom nav tabs expose selected state and button role via semantics',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: BuildBottomNav(
+              currentIndex: 1,
+              items: const [
+                BuildNavItem(
+                  icon: Icons.home_outlined,
+                  activeIcon: Icons.home,
+                  label: 'Home',
+                ),
+                BuildNavItem(
+                  icon: Icons.apartment_outlined,
+                  activeIcon: Icons.apartment,
+                  label: 'Projects',
+                ),
+                BuildNavItem(
+                  icon: Icons.receipt_long_outlined,
+                  activeIcon: Icons.receipt_long,
+                  label: 'Activity',
+                ),
+                BuildNavItem(
+                  icon: Icons.menu,
+                  activeIcon: Icons.menu,
+                  label: 'More',
+                ),
+              ],
+              onSelect: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final byLabel = {
+        for (final s in tester.widgetList<Semantics>(find.byType(Semantics)))
+          if (s.properties.label != null) s.properties.label!: s,
+      };
+
+      expect(byLabel['Projects']?.properties.button, isTrue);
+      expect(byLabel['Projects']?.properties.selected, isTrue);
+      expect(byLabel['Home']?.properties.button, isTrue);
+      expect(byLabel['Home']?.properties.selected, isFalse);
+
+      // The nav bar's fixed content height comfortably exceeds the 48dp
+      // minimum touch target (unaffected by this semantics-only change).
+      expect(kBuildBottomNavHeight, greaterThanOrEqualTo(48));
+
+      handle.dispose();
+    },
+  );
 
   testWidgets('reports export control has discoverable semantics', (
     tester,
