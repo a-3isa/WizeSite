@@ -47,6 +47,14 @@ class _FakeCallableClient implements CallableClient {
 }
 
 class _FakeTelemetry implements AppTelemetry {
+  _FakeTelemetry({this.throwOnLogEvent, this.throwOnRecordError = false});
+
+  /// When set, [log] throws a plain [Exception] the first time it's called
+  /// with this event name (simulating telemetry/Crashlytics plumbing that
+  /// isn't warm yet right after a fresh install).
+  final String? throwOnLogEvent;
+  final bool throwOnRecordError;
+
   final List<String> events = [];
   final List<String> errorReasons = [];
 
@@ -55,6 +63,9 @@ class _FakeTelemetry implements AppTelemetry {
     String event, [
     Map<String, Object?> details = const {},
   ]) async {
+    if (event == throwOnLogEvent) {
+      throw Exception('telemetry not ready');
+    }
     events.add(event);
   }
 
@@ -65,6 +76,9 @@ class _FakeTelemetry implements AppTelemetry {
     required String reason,
     bool fatal = false,
   }) async {
+    if (throwOnRecordError) {
+      throw Exception('telemetry not ready');
+    }
     errorReasons.add(reason);
   }
 
@@ -264,6 +278,79 @@ void main() {
 
         expect(result, isNull);
         verify(() => auth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'signs out and returns null (not an exception) when restore throws '
+      'before reaching the no-workspace branch, e.g. telemetry not ready '
+      'yet on a freshly (re)installed app',
+      () async {
+        final throwingTelemetry = _FakeTelemetry(
+          throwOnLogEvent: 'session_restore.start',
+        );
+        final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
+
+        final service = SessionRestoreService(
+          auth: auth,
+          firestore: firestore,
+          callableClient: callable,
+          telemetry: throwingTelemetry,
+        );
+
+        final result = await service.restore();
+
+        expect(result, isNull);
+        verify(() => auth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'still signs out and returns null even if recordError itself throws '
+      'while handling the original failure',
+      () async {
+        final throwingTelemetry = _FakeTelemetry(
+          throwOnLogEvent: 'session_restore.start',
+          throwOnRecordError: true,
+        );
+        final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
+
+        final service = SessionRestoreService(
+          auth: auth,
+          firestore: firestore,
+          callableClient: callable,
+          telemetry: throwingTelemetry,
+        );
+
+        final result = await service.restore();
+
+        expect(result, isNull);
+        verify(() => auth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'returns null (not an exception) even if the sign-out attempt itself '
+      'fails',
+      () async {
+        when(() => auth.signOut()).thenThrow(Exception('plugin unavailable'));
+        final callable = _FakeCallableClient(
+          error: const CallableClientException(
+            'Failed to restore your workspace.',
+            code: 'failed-precondition',
+          ),
+        );
+
+        final service = SessionRestoreService(
+          auth: auth,
+          firestore: firestore,
+          callableClient: callable,
+          telemetry: telemetry,
+        );
+
+        final result = await service.restore();
+
+        expect(result, isNull);
       },
     );
   });

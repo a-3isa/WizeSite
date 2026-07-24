@@ -40,31 +40,61 @@ class SessionRestoreService {
       return null;
     }
 
-    await _telemetry.log('session_restore.start', {'user_id': user.uid});
-    final workspace = await _resolveWorkspaceId(user);
-    if (workspace == null || workspace.workspaceId.isEmpty) {
-      await _telemetry.log('session_restore.no_workspace', {
+    try {
+      await _telemetry.log('session_restore.start', {'user_id': user.uid});
+      final workspace = await _resolveWorkspaceId(user);
+      if (workspace == null || workspace.workspaceId.isEmpty) {
+        await _telemetry.log('session_restore.no_workspace', {
+          'user_id': user.uid,
+        });
+        await _signOutToBreakStrandedSessionLoop();
+        return null;
+      }
+
+      await _telemetry.log('session_restore.success', {
         'user_id': user.uid,
+        'workspace_id': workspace.workspaceId,
       });
-      // A cached Firebase session with no resolvable workspace would
-      // otherwise strand the user: the router treats "signed in" as
-      // authoritative and bounces any visit to /login or /signup straight
-      // back to the splash screen to retry this same restore, which fails
-      // the same way forever with no path back to an actual login form.
-      // Signing out here breaks that loop.
-      await _auth.signOut();
+      return SessionRestoreResult(
+        userId: user.uid,
+        workspaceId: workspace.workspaceId,
+        setupCompleted: workspace.setupCompleted,
+      );
+    } catch (error, stackTrace) {
+      // Any unexpected failure here (e.g. telemetry/Crashlytics plumbing not
+      // yet warm on a freshly (re)installed app, a transient plugin-channel
+      // error) must still break the stranded-session loop the same way a
+      // clean "no workspace" result does. Left unguarded, such an exception
+      // bypasses the sign-out below entirely: it propagates out of restore(),
+      // the caller's catch swallows it, and the user is left signed in with
+      // no workspace forever, bouncing between splash and login with no path
+      // to an actual login form.
+      try {
+        await _telemetry.recordError(
+          error,
+          stackTrace,
+          reason: 'session_restore.unexpected',
+        );
+      } catch (_) {
+        // Telemetry itself may be what failed; don't let recording the
+        // failure become a second failure.
+      }
+      await _signOutToBreakStrandedSessionLoop();
       return null;
     }
+  }
 
-    await _telemetry.log('session_restore.success', {
-      'user_id': user.uid,
-      'workspace_id': workspace.workspaceId,
-    });
-    return SessionRestoreResult(
-      userId: user.uid,
-      workspaceId: workspace.workspaceId,
-      setupCompleted: workspace.setupCompleted,
-    );
+  // A cached Firebase session that can't be fully restored would otherwise
+  // strand the user: the router treats "signed in" as authoritative and
+  // bounces any visit to /login or /signup straight back to the splash
+  // screen to retry this same restore, which fails the same way forever
+  // with no path back to an actual login form. Signing out breaks that loop.
+  Future<void> _signOutToBreakStrandedSessionLoop() async {
+    try {
+      await _auth.signOut();
+    } catch (_) {
+      // Best effort; nothing more we can do if sign-out itself fails.
+    }
   }
 
   Future<WorkspaceBootstrapResult?> _resolveWorkspaceId(User user) async {
