@@ -7,6 +7,7 @@ class MetricCard extends StatelessWidget {
     required this.value,
     this.color,
     this.icon,
+    this.trend,
     super.key,
   });
 
@@ -16,6 +17,10 @@ class MetricCard extends StatelessWidget {
   /// Meaning color for the top bar + icon badge. Defaults to the theme text color.
   final Color? color;
   final IconData? icon;
+
+  /// Optional ▲/▼ week-over-week (or similar) trend indicator rendered just
+  /// below the value. Null renders nothing — trend is opt-in per card.
+  final Widget? trend;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +92,10 @@ class MetricCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (trend != null) ...[
+                  const SizedBox(height: 4),
+                  trend!,
+                ],
               ],
             ),
           ),

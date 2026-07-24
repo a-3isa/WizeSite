@@ -652,6 +652,107 @@ Stream<Map<String, num>> _weeklySummaryStream({
   });
 }
 
+/// Previous-week (the 7 days immediately before the current rolling window
+/// used by [dashboardWeeklySummaryProvider]) workspace-wide totals. Additive,
+/// read-only counterpart used to power the ▲/▼ week-over-week trend
+/// indicators on the dashboard's Weekly Summary cards (v2 UI audit Problem 7).
+final dashboardPreviousWeekSummaryProvider =
+    StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {
+      final firestore = ref.watch(firestoreProvider);
+      final queue = ref.watch(offlineActionQueueProvider);
+      return _previousWeekSummaryStream(
+        firestore: firestore,
+        queue: queue,
+        workspaceId: workspaceId,
+      );
+    });
+
+Stream<Map<String, num>> _previousWeekSummaryStream({
+  required FirebaseFirestore firestore,
+  required OfflineActionQueue queue,
+  required String workspaceId,
+}) {
+  final now = DateTime.now();
+  final currentWeekStart = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).subtract(const Duration(days: 6));
+  final startDate = currentWeekStart.subtract(const Duration(days: 7));
+  final endDate = currentWeekStart.subtract(const Duration(seconds: 1));
+
+  final expensesStream = firestore
+      .collection('expenses')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .where('date', isGreaterThanOrEqualTo: startDate)
+      .where('date', isLessThanOrEqualTo: endDate)
+      .snapshots();
+  final paymentsStream = firestore
+      .collection('payments')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .where('date', isGreaterThanOrEqualTo: startDate)
+      .where('date', isLessThanOrEqualTo: endDate)
+      .snapshots();
+  final queueStream = queue.watch(includeExpiredSynced: true);
+
+  return Stream.multi((controller) {
+    QuerySnapshot<Map<String, dynamic>>? latestExpenses;
+    QuerySnapshot<Map<String, dynamic>>? latestPayments;
+    List<OfflineAction> latestActions = const [];
+
+    void emit() {
+      var previousWeekExpenses = 0.0;
+      var previousWeekIncome = 0.0;
+
+      for (final doc in latestExpenses?.docs ?? const []) {
+        previousWeekExpenses += ((doc.data()['amount'] as num?) ?? 0)
+            .toDouble();
+      }
+      for (final doc in latestPayments?.docs ?? const []) {
+        previousWeekIncome += ((doc.data()['amount'] as num?) ?? 0).toDouble();
+      }
+
+      final pending = _weeklyPendingDelta(
+        actions: latestActions,
+        workspaceId: workspaceId,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      controller.add(<String, num>{
+        'previousWeekExpenses': previousWeekExpenses + pending.pendingExpenses,
+        'previousWeekIncome': previousWeekIncome + pending.pendingIncome,
+        'previousWeekNet':
+            previousWeekIncome +
+            pending.pendingIncome -
+            previousWeekExpenses -
+            pending.pendingExpenses,
+      });
+    }
+
+    final expenseSub = expensesStream.listen((snapshot) {
+      latestExpenses = snapshot;
+      emit();
+    }, onError: controller.addError);
+    final paymentSub = paymentsStream.listen((snapshot) {
+      latestPayments = snapshot;
+      emit();
+    }, onError: controller.addError);
+    final queueSub = queueStream.listen((actions) {
+      latestActions = actions;
+      emit();
+    }, onError: controller.addError);
+
+    controller.onCancel = () async {
+      await expenseSub.cancel();
+      await paymentSub.cancel();
+      await queueSub.cancel();
+    };
+  });
+}
+
 ({num pendingExpenses, num pendingIncome}) _weeklyPendingDelta({
   required List<OfflineAction> actions,
   required String workspaceId,

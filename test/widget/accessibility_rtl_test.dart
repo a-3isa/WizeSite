@@ -170,6 +170,9 @@ Widget _dashboardApp() {
           }),
         ),
       ),
+      dashboardPreviousWeekSummaryProvider.overrideWith(
+        (ref, workspaceId) => Stream.value(const <String, num>{}),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: const [

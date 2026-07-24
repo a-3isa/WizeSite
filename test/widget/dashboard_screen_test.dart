@@ -34,11 +34,14 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _app(
-        DashboardFinancialSection(
-          snapshot: DashboardSnapshot.restricted(),
-          currency: 'EGP',
-          locale: 'en',
+      ProviderScope(
+        child: _app(
+          DashboardFinancialSection(
+            snapshot: DashboardSnapshot.restricted(),
+            currency: 'EGP',
+            locale: 'en',
+            workspaceId: '',
+          ),
         ),
       ),
     );
@@ -60,11 +63,14 @@ void main() {
       'weeklyIncome': 50,
     });
     await tester.pumpWidget(
-      _app(
-        DashboardFinancialSection(
-          snapshot: snapshot,
-          currency: 'EGP',
-          locale: 'en',
+      ProviderScope(
+        child: _app(
+          DashboardFinancialSection(
+            snapshot: snapshot,
+            currency: 'EGP',
+            locale: 'en',
+            workspaceId: '',
+          ),
         ),
       ),
     );
@@ -72,6 +78,118 @@ void main() {
     expect(find.byIcon(Icons.trending_down), findsWidgets);
     expect(find.byKey(const Key('dashboard_net_loss')), findsOneWidget);
   });
+
+  testWidgets(
+    'weekly income up 50% vs last week shows a green up-arrow trend',
+    (tester) async {
+      final snapshot = DashboardSnapshot.fromMap({
+        'totalExpenses': 1000,
+        'totalIncome': 500,
+        'weeklyExpenses': 0,
+        'weeklyIncome': 150000,
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            dashboardPreviousWeekSummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'previousWeekExpenses': 0,
+                'previousWeekIncome': 100000,
+              }),
+            ),
+          ],
+          child: _app(
+            DashboardFinancialSection(
+              snapshot: snapshot,
+              currency: 'EGP',
+              locale: 'en',
+              workspaceId: 'workspace_1',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.trending_up_outlined), findsOneWidget);
+      expect(find.text('+50%'), findsOneWidget);
+      final percentText = tester.widget<Text>(find.text('+50%'));
+      expect(percentText.style?.color, BuildTokens.light.income);
+    },
+  );
+
+  testWidgets(
+    'weekly expenses up 50% vs last week shows a red (unfavorable) up-arrow trend',
+    (tester) async {
+      final snapshot = DashboardSnapshot.fromMap({
+        'totalExpenses': 1000,
+        'totalIncome': 500,
+        'weeklyExpenses': 150000,
+        'weeklyIncome': 0,
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            dashboardPreviousWeekSummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'previousWeekExpenses': 100000,
+                'previousWeekIncome': 0,
+              }),
+            ),
+          ],
+          child: _app(
+            DashboardFinancialSection(
+              snapshot: snapshot,
+              currency: 'EGP',
+              locale: 'en',
+              workspaceId: 'workspace_1',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.trending_up_outlined), findsOneWidget);
+      expect(find.text('+50%'), findsOneWidget);
+      final percentText = tester.widget<Text>(find.text('+50%'));
+      expect(percentText.style?.color, BuildTokens.light.expense);
+    },
+  );
+
+  testWidgets(
+    'no trend shown when this week and last week are both zero (divide-by-zero guard)',
+    (tester) async {
+      final snapshot = DashboardSnapshot.fromMap({
+        'totalExpenses': 1000,
+        'totalIncome': 500,
+        'weeklyExpenses': 0,
+        'weeklyIncome': 0,
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            dashboardPreviousWeekSummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'previousWeekExpenses': 0,
+                'previousWeekIncome': 0,
+              }),
+            ),
+          ],
+          child: _app(
+            DashboardFinancialSection(
+              snapshot: snapshot,
+              currency: 'EGP',
+              locale: 'en',
+              workspaceId: 'workspace_1',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.trending_up_outlined), findsNothing);
+      expect(find.byIcon(Icons.trending_down_outlined), findsNothing);
+    },
+  );
 
   testWidgets('workspace switcher persists selected workspace', (tester) async {
     final workspaceService = _MockWorkspaceMutationService();
@@ -384,6 +502,9 @@ void main() {
         dashboardSnapshotProvider.overrideWith(
           (ref, workspaceId) =>
               Stream.value(DashboardSnapshot.fromMap({'totalExpenses': 1000})),
+        ),
+        dashboardPreviousWeekSummaryProvider.overrideWith(
+          (ref, workspaceId) => Stream.value(const <String, num>{}),
         ),
         projectsProvider.overrideWith(
           (ref) => Stream.value(const <Project>[project]),

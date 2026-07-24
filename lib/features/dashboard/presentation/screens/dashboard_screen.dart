@@ -172,6 +172,7 @@ class DashboardScreen extends ConsumerWidget {
                     snapshot: snapshot,
                     currency: currency,
                     locale: locale,
+                    workspaceId: workspaceId ?? '',
                   ),
                   loading: () => AppLoadingSkeleton(
                     semanticsLabel: l10n.t('loadingContent'),
@@ -601,11 +602,12 @@ class WorkspaceSwitcher extends ConsumerWidget {
   }
 }
 
-class DashboardFinancialSection extends StatelessWidget {
+class DashboardFinancialSection extends ConsumerWidget {
   const DashboardFinancialSection({
     required this.snapshot,
     required this.currency,
     required this.locale,
+    required this.workspaceId,
     super.key,
   });
 
@@ -613,8 +615,13 @@ class DashboardFinancialSection extends StatelessWidget {
   final String currency;
   final String locale;
 
+  /// Used to fetch the previous-week comparison totals that power the
+  /// ▲/▼ trend indicators below. An empty id (e.g. no active workspace, or a
+  /// standalone widget test) skips that lookup entirely — no trend is shown.
+  final String workspaceId;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     if (!snapshot.hasFinancialAccess) {
       return AppEmptyState(
@@ -623,6 +630,28 @@ class DashboardFinancialSection extends StatelessWidget {
         message: l10n.t('reportAccessDenied'),
       );
     }
+    final previousWeek = workspaceId.isEmpty
+        ? const AsyncValue<Map<String, num>>.data(<String, num>{})
+        : ref.watch(dashboardPreviousWeekSummaryProvider(workspaceId));
+    final previousWeekData = previousWeek.value ?? const <String, num>{};
+    final previousWeekExpenses =
+        (previousWeekData['previousWeekExpenses'] ?? 0).toDouble();
+    final previousWeekIncome =
+        (previousWeekData['previousWeekIncome'] ?? 0).toDouble();
+    final expenseTrend = _weeklyTrendIndicator(
+      context: context,
+      l10n: l10n,
+      thisWeek: snapshot.weeklyExpenses,
+      lastWeek: previousWeekExpenses,
+      increaseIsGood: false,
+    );
+    final incomeTrend = _weeklyTrendIndicator(
+      context: context,
+      l10n: l10n,
+      thisWeek: snapshot.weeklyIncome,
+      lastWeek: previousWeekIncome,
+      increaseIsGood: true,
+    );
     final isProfit = snapshot.net >= 0;
     final numberFormat = NumberFormat.decimalPattern(locale);
     final netText =
@@ -681,6 +710,7 @@ class DashboardFinancialSection extends StatelessWidget {
                 ),
                 color: context.tokens.expense,
                 icon: Icons.trending_down,
+                trend: expenseTrend,
               ),
             ),
             const SizedBox(width: 12),
@@ -694,6 +724,7 @@ class DashboardFinancialSection extends StatelessWidget {
                 ),
                 color: context.tokens.income,
                 icon: Icons.trending_up,
+                trend: incomeTrend,
               ),
             ),
           ],
@@ -722,6 +753,58 @@ class DashboardFinancialSection extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Builds the compact ▲/▼ week-over-week trend badge for a single financial
+/// figure (v2 UI audit Problem 7: "Every financial card should optionally
+/// display: ▲ 12% / ▼ 8% — Compared to last week"). Returns null when there's
+/// no meaningful baseline to compare against (last week's total is zero, or
+/// the two weeks are identical), rather than showing a nonsensical or
+/// no-op indicator.
+///
+/// [increaseIsGood] flips the color mapping: for income/net an increase is
+/// favorable (green), while for expenses an increase is unfavorable (red)
+/// even though the arrow still points up — the arrow direction always
+/// reflects the raw number, only the color reflects whether that's good news.
+Widget? _weeklyTrendIndicator({
+  required BuildContext context,
+  required AppLocalizations l10n,
+  required double thisWeek,
+  required double lastWeek,
+  required bool increaseIsGood,
+}) {
+  if (lastWeek == 0) return null;
+  final percentChange = (thisWeek - lastWeek) / lastWeek * 100;
+  if (percentChange == 0) return null;
+
+  final isIncrease = percentChange > 0;
+  final isFavorable = isIncrease == increaseIsGood;
+  final color = isFavorable ? context.tokens.income : context.tokens.expense;
+  final icon = isIncrease
+      ? Icons.trending_up_outlined
+      : Icons.trending_down_outlined;
+  final sign = isIncrease ? '+' : '-';
+  final percentText = '$sign${percentChange.abs().round()}%';
+
+  return Semantics(
+    label: '$percentText ${l10n.t('vsLastWeek')}',
+    excludeSemantics: true,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 2),
+        Text(
+          percentText,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ResourceLinks extends StatelessWidget {
