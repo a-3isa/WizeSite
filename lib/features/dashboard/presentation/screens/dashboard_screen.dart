@@ -167,6 +167,12 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               if (deadLetterCount > 0 || pendingSyncCount > 0)
                 const SizedBox(height: 16),
+              _AlertsCard(
+                workspaceId: workspaceId ?? '',
+                projects: projects,
+                currency: currency,
+                locale: locale,
+              ),
               SectionHeader(title: l10n.t('overview')),
               const SizedBox(height: 12),
               if (selectedProject != null)
@@ -1004,6 +1010,187 @@ class _WorkerAttendanceCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Compact "Alerts" strip (v2 UI audit Task B5, Problem 16: the dashboard
+/// should surface risk signals such as budget overruns and overdue
+/// invoices). Presentation + light derivation only, over data already
+/// fetched for the dashboard — no new Firestore queries.
+///
+/// Of the audit's five example warning types, only two are honestly
+/// derivable from data that exists in this app today:
+///  * "Budget exceeded" — a project where `totalExpenses > budgetLimit`,
+///    the same budget fields [ProjectFinancialSection]'s progress bar
+///    already uses (v2 UI audit Task A3).
+///  * "Invoice overdue" — this app has no due-date concept on payments
+///    (see `PaymentRecord`/`PaymentStatuses` — a payment only tracks
+///    `amount` + `paymentStatus`, never a due date), so a fabricated
+///    "overdue by N days" claim would not be honest. The closest genuine
+///    signal is reused as-is from Task B3's
+///    [dashboardOutstandingPaymentsProvider] (the live "unpaid payments"
+///    total), surfaced here as an attention item rather than invented.
+/// "Worker shortage" (no staffing-target data anywhere in this app),
+/// "Delayed milestone" (no milestones subsystem — that's Phase C, net-new),
+/// and "Upcoming payment" (same missing-due-date problem as overdue) are
+/// skipped entirely rather than fabricated.
+///
+/// Renders nothing at all when there is nothing to flag — no empty "0
+/// alerts" clutter.
+class _AlertsCard extends ConsumerWidget {
+  const _AlertsCard({
+    required this.workspaceId,
+    required this.projects,
+    required this.currency,
+    required this.locale,
+  });
+
+  final String workspaceId;
+  final List<Project> projects;
+  final String currency;
+  final String locale;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (workspaceId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+
+    // Same budget-exceeded rule as ProjectFinancialSection's progress bar:
+    // a project only counts once it has a real budget to exceed.
+    final overBudgetProjects = projects
+        .where(
+          (project) =>
+              project.budgetLimit != null &&
+              project.budgetLimit! > 0 &&
+              project.totalExpenses > project.budgetLimit!,
+        )
+        .toList(growable: false);
+
+    // Reuse Task B3's provider outright rather than issuing a second
+    // payments query — the outstanding total already reflects the
+    // workspace's live unpaid-payments state.
+    final outstanding =
+        ref.watch(dashboardOutstandingPaymentsProvider(workspaceId)).value ??
+        0;
+
+    if (overBudgetProjects.isEmpty && outstanding <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    // A single over-budget project is named directly (specific and short
+    // enough to read at a glance). Two or more are aggregated into one
+    // count instead of rendering a wall of chips — the same "few vs many"
+    // collapse-to-a-count idiom the Workers resource tile already uses.
+    final budgetRows = overBudgetProjects.length == 1
+        ? [
+            _AlertRow(
+              key: const Key('qa_dashboard_alert_project_over_budget'),
+              icon: Icons.warning_amber_outlined,
+              color: t.expense,
+              text: l10n.t(
+                'alertsProjectOverBudget',
+                params: {'project': overBudgetProjects.first.name},
+              ),
+            ),
+          ]
+        : [
+            _AlertRow(
+              key: const Key('qa_dashboard_alert_projects_over_budget'),
+              icon: Icons.warning_amber_outlined,
+              color: t.expense,
+              text: l10n.t(
+                'alertsProjectsOverBudget',
+                params: {'count': '${overBudgetProjects.length}'},
+              ),
+            ),
+          ];
+
+    return Container(
+      key: const Key('qa_dashboard_alerts_card'),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: t.border),
+        boxShadow: t.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_outlined, size: 16, color: t.warning),
+              const SizedBox(width: 8),
+              Text(
+                l10n.t('alerts'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: t.textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (overBudgetProjects.isNotEmpty)
+            for (final row in budgetRows) ...[row, const SizedBox(height: 8)],
+          if (outstanding > 0)
+            _AlertRow(
+              key: const Key('qa_dashboard_alert_unpaid_payments'),
+              icon: Icons.receipt_long_outlined,
+              color: t.warning,
+              text: l10n.t(
+                'alertsUnpaidPayments',
+                params: {
+                  'amount': Formatters.money(
+                    outstanding,
+                    currencyCode: currency,
+                    locale: locale,
+                  ),
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Single icon + text row within [_AlertsCard].
+class _AlertRow extends StatelessWidget {
+  const _AlertRow({
+    required this.icon,
+    required this.color,
+    required this.text,
+    super.key,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.tokens.text,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

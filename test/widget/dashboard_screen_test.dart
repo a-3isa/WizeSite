@@ -611,6 +611,305 @@ void main() {
     },
   );
 
+  testWidgets(
+    'alerts strip shows an aggregate count when 2 of 3 projects are over '
+    'budget (UI audit Task B5)',
+    (tester) async {
+      const overBudgetA = Project(
+        id: 'project_a',
+        workspaceId: 'workspace_1',
+        name: 'Villa Project',
+        clientName: 'Owner A',
+        contractValue: 100000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 60000,
+        totalPayments: 40000,
+        netProfit: -20000,
+        isArchived: false,
+        budgetLimit: 50000,
+      );
+      const overBudgetB = Project(
+        id: 'project_b',
+        workspaceId: 'workspace_1',
+        name: 'Tower Project',
+        clientName: 'Owner B',
+        contractValue: 200000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 120000,
+        totalPayments: 90000,
+        netProfit: -30000,
+        isArchived: false,
+        budgetLimit: 100000,
+      );
+      const onBudgetC = Project(
+        id: 'project_c',
+        workspaceId: 'workspace_1',
+        name: 'Warehouse Project',
+        clientName: 'Owner C',
+        contractValue: 80000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 20000,
+        totalPayments: 30000,
+        netProfit: 10000,
+        isArchived: false,
+        budgetLimit: 80000,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[
+                overBudgetA,
+                overBudgetB,
+                onBudgetC,
+              ]),
+            ),
+            dashboardCashCollectedProvider.overrideWith(
+              (ref, workspaceId) async => 0,
+            ),
+            dashboardOutstandingPaymentsProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(0),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('qa_dashboard_alerts_card')), findsOneWidget);
+      expect(find.text('2 Projects Over Budget'), findsOneWidget);
+      expect(find.byIcon(Icons.warning_amber_outlined), findsWidgets);
+      // The on-budget project and the outstanding-payments row are not
+      // named/rendered — only the over-budget aggregate shows.
+      expect(find.textContaining('Unpaid Payments'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'alerts strip names a single over-budget project directly (UI audit '
+    'Task B5)',
+    (tester) async {
+      const overBudget = Project(
+        id: 'project_a',
+        workspaceId: 'workspace_1',
+        name: 'Villa Project',
+        clientName: 'Owner A',
+        contractValue: 100000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 60000,
+        totalPayments: 40000,
+        netProfit: -20000,
+        isArchived: false,
+        budgetLimit: 50000,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[overBudget]),
+            ),
+            dashboardCashCollectedProvider.overrideWith(
+              (ref, workspaceId) async => 0,
+            ),
+            dashboardOutstandingPaymentsProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(0),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('qa_dashboard_alerts_card')), findsOneWidget);
+      expect(find.text('Villa Project: Over Budget'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'alerts strip shows an unpaid-payments attention item derived from '
+    "Task B3's outstanding-payments provider (UI audit Task B5)",
+    (tester) async {
+      const onBudget = Project(
+        id: 'project_a',
+        workspaceId: 'workspace_1',
+        name: 'Villa Project',
+        clientName: 'Owner A',
+        contractValue: 100000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 10000,
+        totalPayments: 40000,
+        netProfit: 30000,
+        isArchived: false,
+        budgetLimit: 50000,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[onBudget]),
+            ),
+            dashboardCashCollectedProvider.overrideWith(
+              (ref, workspaceId) async => 15000,
+            ),
+            dashboardOutstandingPaymentsProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(5000),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('qa_dashboard_alerts_card')), findsOneWidget);
+      expect(find.text('Unpaid Payments: 5,000 EGP'), findsOneWidget);
+      expect(find.byIcon(Icons.receipt_long_outlined), findsOneWidget);
+      // No over-budget project in this scenario, so no budget alert row.
+      expect(find.textContaining('Over Budget'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "alerts strip is omitted entirely when there's nothing to flag (no "
+    'empty "0 alerts" clutter) (UI audit Task B5)',
+    (tester) async {
+      const onBudget = Project(
+        id: 'project_a',
+        workspaceId: 'workspace_1',
+        name: 'Villa Project',
+        clientName: 'Owner A',
+        contractValue: 100000,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 10000,
+        totalPayments: 40000,
+        netProfit: 30000,
+        isArchived: false,
+        budgetLimit: 50000,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[onBudget]),
+            ),
+            dashboardCashCollectedProvider.overrideWith(
+              (ref, workspaceId) async => 0,
+            ),
+            dashboardOutstandingPaymentsProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(0),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('qa_dashboard_alerts_card')), findsNothing);
+      expect(find.text('Alerts'), findsNothing);
+    },
+  );
+
   testWidgets('Approach B: project selector scopes dashboard to one project '
       '(financials, 75% budget bar, recent list)', (tester) async {
     const project = Project(
