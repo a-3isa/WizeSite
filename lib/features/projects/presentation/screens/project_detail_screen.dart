@@ -272,6 +272,14 @@ class _ProjectFinancialHero extends StatelessWidget {
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
     final progressColor = budgetProgressColor(t, rawRatio);
     final remaining = budgetBase - project.totalExpenses;
+    // Profit Margin KPI (v2 UI audit Task B4): net ÷ income for this
+    // project, surfaced as a first-class stat next to the Net Profit hero.
+    // `null` when income is zero — shown as an em dash rather than a
+    // NaN/Infinity percentage.
+    final profitMarginText = Formatters.profitMargin(
+      project.netProfit,
+      project.totalPayments,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -285,6 +293,16 @@ class _ProjectFinancialHero extends StatelessWidget {
           expense: numberFormat.format(project.totalExpenses),
           incomeLabel: l10n.t('totalIncome'),
           expenseLabel: l10n.t('totalExpenses'),
+        ),
+        const SizedBox(height: 12),
+        StatTile(
+          key: const Key('qa_project_detail_profit_margin'),
+          icon: Icons.percent,
+          label: l10n.t('profitMargin'),
+          value: profitMarginText ?? '—',
+          valueColor: profitMarginText == null
+              ? null
+              : (isProfit ? t.income : t.expense),
         ),
         if (hasBudget) ...[
           const SizedBox(height: 16),

@@ -108,6 +108,7 @@ Project _project({
   required String clientName,
   required double totalExpenses,
   double? budgetLimit,
+  double totalPayments = 8000,
 }) {
   return Project(
     id: 'project_1',
@@ -118,7 +119,7 @@ Project _project({
     status: 'active',
     completionPercentage: 40,
     totalExpenses: totalExpenses,
-    totalPayments: 8000,
+    totalPayments: totalPayments,
     netProfit: 2000 - totalExpenses,
     isArchived: false,
     budgetLimit: budgetLimit,
@@ -311,6 +312,100 @@ void main() {
           .dy;
       final contractValueDy = tester.getTopLeft(contractValueRow).dy;
       expect(contractValueDy, greaterThan(heroDy));
+    },
+  );
+
+  testWidgets(
+    'profit margin KPI shows net/income as a percentage next to the hero',
+    (tester) async {
+      final controller = StreamController<Project?>();
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectRepositoryProvider.overrideWithValue(
+              _RealtimeProjectRepository(controller),
+            ),
+            projectRecentTransactionsProvider.overrideWith(
+              (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      // totalPayments (income) = 8000 (default), totalExpenses = 0 ->
+      // netProfit = 2000 -> margin = 2000 / 8000 * 100 = 25.0%.
+      controller.add(
+        _project(
+          name: 'Project Alpha',
+          clientName: 'Client One',
+          totalExpenses: 0,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          const Key('qa_project_detail_profit_margin'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('25.0%', skipOffstage: false), findsOneWidget);
+      final marginText = tester.widget<Text>(
+        find.text('25.0%', skipOffstage: false),
+      );
+      expect(marginText.style?.color, BuildTokens.light.income);
+    },
+  );
+
+  testWidgets(
+    'profit margin KPI shows an em dash (not NaN/Infinity) when income is zero',
+    (tester) async {
+      final controller = StreamController<Project?>();
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectRepositoryProvider.overrideWithValue(
+              _RealtimeProjectRepository(controller),
+            ),
+            projectRecentTransactionsProvider.overrideWith(
+              (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+
+      controller.add(
+        _project(
+          name: 'Project Alpha',
+          clientName: 'Client One',
+          totalExpenses: 100,
+          totalPayments: 0,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final marginTile = find.byKey(
+        const Key('qa_project_detail_profit_margin'),
+        skipOffstage: false,
+      );
+      expect(marginTile, findsOneWidget);
+      expect(
+        find.descendant(
+          of: marginTile,
+          matching: find.text('—'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('NaN'), findsNothing);
+      expect(find.textContaining('Infinity'), findsNothing);
     },
   );
 }

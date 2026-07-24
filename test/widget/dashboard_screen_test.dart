@@ -83,6 +83,71 @@ void main() {
   });
 
   testWidgets(
+    'profit margin KPI shows net/income as a percentage alongside the '
+    'other dashboard stat tiles',
+    (tester) async {
+      // net = 230,000, income = 750,000 -> 230,000 / 750,000 * 100 = 30.7%.
+      final snapshot = DashboardSnapshot.fromMap({
+        'totalExpenses': 520000,
+        'totalIncome': 750000,
+        'weeklyExpenses': 0,
+        'weeklyIncome': 0,
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _app(
+            DashboardFinancialSection(
+              snapshot: snapshot,
+              currency: 'EGP',
+              locale: 'en',
+              workspaceId: '',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('qa_dashboard_profit_margin')), findsOneWidget);
+      expect(find.text('Profit Margin'), findsOneWidget);
+      expect(find.text('30.7%'), findsOneWidget);
+      final marginValue = tester.widget<Text>(find.text('30.7%'));
+      expect(marginValue.style?.color, BuildTokens.light.income);
+    },
+  );
+
+  testWidgets(
+    'profit margin KPI shows an em dash (not NaN/Infinity) when income is zero',
+    (tester) async {
+      final snapshot = DashboardSnapshot.fromMap({
+        'totalExpenses': 0,
+        'totalIncome': 0,
+        'weeklyExpenses': 0,
+        'weeklyIncome': 0,
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _app(
+            DashboardFinancialSection(
+              snapshot: snapshot,
+              currency: 'EGP',
+              locale: 'en',
+              workspaceId: '',
+            ),
+          ),
+        ),
+      );
+
+      final marginTile = find.byKey(const Key('qa_dashboard_profit_margin'));
+      expect(marginTile, findsOneWidget);
+      expect(
+        find.descendant(of: marginTile, matching: find.text('—')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('NaN'), findsNothing);
+      expect(find.textContaining('Infinity'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'weekly income up 50% vs last week shows a green up-arrow trend',
     (tester) async {
       final snapshot = DashboardSnapshot.fromMap({
@@ -696,6 +761,26 @@ void main() {
         .dy;
     final contractValueDy = tester.getTopLeft(contractValueRow).dy;
     expect(contractValueDy, greaterThan(heroDy));
+
+    // Profit Margin KPI (v2 UI audit Task B4): 84,500 / 220,000 * 100 =
+    // 38.4%, shown as its own stat tile next to the Net Profit hero.
+    expect(
+      find.byKey(
+        const Key('qa_dashboard_project_profit_margin'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('38.4%', skipOffstage: false), findsOneWidget);
+    final marginDy = tester
+        .getTopLeft(
+          find.byKey(
+            const Key('qa_dashboard_project_profit_margin'),
+            skipOffstage: false,
+          ),
+        )
+        .dy;
+    expect(marginDy, greaterThan(heroDy));
   });
 
   testWidgets('project selector can switch back to All Projects', (

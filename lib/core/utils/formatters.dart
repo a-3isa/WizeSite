@@ -39,6 +39,19 @@ class Formatters {
     return DateFormat.yMMMd(locale).format(value);
   }
 
+  /// Profit margin as a percentage of income (net ÷ totalIncome × 100),
+  /// formatted for display with one decimal place (e.g. `30.7%`).
+  ///
+  /// Returns `null` when income is zero or negative — margin is undefined
+  /// without revenue, so callers should render an em dash rather than a
+  /// NaN/Infinity percentage.
+  static String? profitMargin(num net, num income) {
+    if (income <= 0) return null;
+    final margin = net / income * 100;
+    final sign = margin < 0 ? '-' : '';
+    return '$sign${margin.abs().toStringAsFixed(1)}%';
+  }
+
   static String _localizeNumber(String value, String locale) {
     final language = locale.split(RegExp('[-_]')).first.toLowerCase();
     if (language != 'ar') {

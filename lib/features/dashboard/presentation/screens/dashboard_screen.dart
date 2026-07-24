@@ -350,6 +350,14 @@ class ProjectFinancialSection extends ConsumerWidget {
     final isProfit = project.netProfit >= 0;
     final netText =
         '${isProfit ? '' : '−'}${numberFormat.format(project.netProfit.abs())}';
+    // Profit Margin KPI (v2 UI audit Task B4): net ÷ income for this project,
+    // surfaced as a first-class stat next to the Net Profit hero. `null`
+    // when income is zero — shown as an em dash rather than a NaN/Infinity
+    // percentage.
+    final profitMarginText = Formatters.profitMargin(
+      project.netProfit,
+      project.totalPayments,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -373,6 +381,16 @@ class ProjectFinancialSection extends ConsumerWidget {
           expense: numberFormat.format(project.totalExpenses),
           incomeLabel: l10n.t('totalIncome'),
           expenseLabel: l10n.t('totalExpenses'),
+        ),
+        const SizedBox(height: 12),
+        StatTile(
+          key: const Key('qa_dashboard_project_profit_margin'),
+          icon: Icons.percent,
+          label: l10n.t('profitMargin'),
+          value: profitMarginText ?? '—',
+          valueColor: profitMarginText == null
+              ? null
+              : (isProfit ? context.tokens.income : context.tokens.expense),
         ),
         if (hasBudget) ...[
           const SizedBox(height: 16),
@@ -676,6 +694,16 @@ class DashboardFinancialSection extends ConsumerWidget {
     final numberFormat = NumberFormat.decimalPattern(locale);
     final netText =
         '${isProfit ? '' : '−'}${numberFormat.format(snapshot.net.abs())}';
+    // Profit Margin KPI (v2 UI audit Task B4): net ÷ income as a percentage,
+    // surfaced as a first-class stat alongside Active Projects / Projects
+    // rather than requiring readers to do the division themselves from the
+    // hero card's income/expense split. `null` when income is zero — margin
+    // is undefined without revenue, so the tile shows an em dash instead of
+    // a NaN/Infinity percentage.
+    final profitMarginText = Formatters.profitMargin(
+      snapshot.net,
+      snapshot.totalIncome,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -711,6 +739,18 @@ class DashboardFinancialSection extends ConsumerWidget {
                 label: l10n.t('projects'),
                 value: '${snapshot.totalProjects}',
                 iconColor: context.tokens.income,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: StatTile(
+                key: const Key('qa_dashboard_profit_margin'),
+                icon: Icons.percent,
+                label: l10n.t('profitMargin'),
+                value: profitMarginText ?? '—',
+                valueColor: profitMarginText == null
+                    ? null
+                    : (isProfit ? context.tokens.income : context.tokens.expense),
               ),
             ),
           ],
