@@ -386,11 +386,13 @@ void main() {
     },
   );
 
-  test(
-    'payment status summary buckets paid+partial as collected, unpaid as '
-    'outstanding, and excludes refunded/cancelled/other workspaces '
-    '(UI audit Task B3)',
-    () async {
+  group('cash collected / outstanding payments (UI audit Task B3 fix)', () {
+    /// Every payment used across this group's tests, tagged with which
+    /// bucket (if any) it's expected to land in. Shared so the
+    /// no-double-counting test below can assert against the exact same
+    /// fixture the collected/outstanding tests use, rather than a
+    /// hand-rolled subset that could drift out of sync.
+    Future<void> seedPayments() async {
       await firestore.collection('payments').doc('payment_paid').set({
         'workspaceId': 'workspace_1',
         'isArchived': false,
@@ -421,6 +423,14 @@ void main() {
         'amount': 750,
         'paymentStatus': 'cancelled',
       });
+      // A legacy doc predating the paymentStatus field: defaults to `paid`
+      // client-side (matches Payment.fromMap's fallback), so it must still
+      // land in collected — never silently dropped from both buckets.
+      await firestore.collection('payments').doc('payment_legacy').set({
+        'workspaceId': 'workspace_1',
+        'isArchived': false,
+        'amount': 1500,
+      });
       // Archived payments never count, regardless of status.
       await firestore.collection('payments').doc('payment_archived').set({
         'workspaceId': 'workspace_1',
@@ -435,14 +445,77 @@ void main() {
         'amount': 999999,
         'paymentStatus': 'unpaid',
       });
+    }
 
-      final summary = await _readStreamProvider(
-        container,
-        dashboardPaymentStatusSummaryProvider('workspace_1'),
-      );
+    test(
+      'dashboardCashCollectedProvider is a one-time fetch summing '
+      'paid + partial (+ legacy missing-status docs), excluding '
+      'unpaid/refunded/cancelled/archived/other workspaces',
+      () async {
+        await seedPayments();
 
-      expect(summary.collected, 12000);
-      expect(summary.outstanding, 3000);
-    },
-  );
+        final collected = await container.read(
+          dashboardCashCollectedProvider('workspace_1').future,
+        );
+
+        expect(collected, 10000 + 2000 + 1500);
+      },
+    );
+
+    test(
+      'dashboardOutstandingPaymentsProvider is a live listener bounded to '
+      'paymentStatus == unpaid, excluding paid/partial/refunded/cancelled/'
+      'archived/other workspaces',
+      () async {
+        await seedPayments();
+
+        final outstanding = await _readStreamProvider(
+          container,
+          dashboardOutstandingPaymentsProvider('workspace_1'),
+        );
+
+        expect(outstanding, 3000);
+
+        // Live: marking the outstanding payment as paid removes it from the
+        // listener without needing to re-fetch/invalidate anything.
+        await firestore.collection('payments').doc('payment_unpaid').update({
+          'paymentStatus': 'paid',
+        });
+        await pumpEventQueue();
+
+        expect(
+          container.read(dashboardOutstandingPaymentsProvider('workspace_1')),
+          const AsyncData<double>(0),
+        );
+      },
+    );
+
+    test(
+      'no payment is ever double-counted or silently dropped: each '
+      'workspace_1, non-archived payment is in exactly one of collected/'
+      'outstanding, or explicitly neither (refunded/cancelled)',
+      () async {
+        await seedPayments();
+
+        final collected = await container.read(
+          dashboardCashCollectedProvider('workspace_1').future,
+        );
+        final outstanding = await _readStreamProvider(
+          container,
+          dashboardOutstandingPaymentsProvider('workspace_1'),
+        );
+
+        // paid (10000) + partial (2000) + legacy (1500) = collected.
+        expect(collected, 13500);
+        // unpaid (3000) = outstanding.
+        expect(outstanding, 3000);
+        // refunded (500) + cancelled (750) = 1250, deliberately in neither
+        // bucket. Confirm the two buckets together account for exactly the
+        // workspace's collectible total (paid+partial+legacy+unpaid) and no
+        // more — i.e. refunded/cancelled amounts never leak into either sum,
+        // and nothing from collected leaks into outstanding or vice versa.
+        expect(collected + outstanding, 13500 + 3000);
+      },
+    );
+  });
 }

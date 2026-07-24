@@ -513,13 +513,15 @@ void main() {
             currentUserSettingsProvider.overrideWith(
               (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
             ),
-            // `paid` (12,000) + `partial` (3,000) count as collected;
-            // `unpaid` (5,000) counts as outstanding — mirrors what a real
-            // workspace-scoped `payments` query would derive client-side.
-            dashboardPaymentStatusSummaryProvider.overrideWith(
-              (ref, workspaceId) => Stream.value(
-                const PaymentStatusSummary(collected: 15000, outstanding: 5000),
-              ),
+            // `paid` + `partial` (15,000) count as collected — a one-time
+            // fetch (FutureProvider); `unpaid` (5,000) counts as outstanding
+            // — a status-filtered live listener (StreamProvider). Mirrors
+            // what the real split Firestore reads would derive client-side.
+            dashboardCashCollectedProvider.overrideWith(
+              (ref, workspaceId) async => 15000,
+            ),
+            dashboardOutstandingPaymentsProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(5000),
             ),
           ],
           child: MaterialApp(

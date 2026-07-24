@@ -83,12 +83,19 @@ class DashboardScreen extends ConsumerWidget {
     Future<void> refresh() async {
       if (workspaceId != null && workspaceId.isNotEmpty) {
         ref.invalidate(dashboardSnapshotProvider(workspaceId));
+        // Cash Collected is a one-time `.get()` (FutureProvider), not a live
+        // listener (see dashboardCashCollectedProvider's doc comment) — it
+        // only re-runs on mount or when explicitly invalidated here, so
+        // pull-to-refresh is the mechanism that keeps it from going stale.
+        ref.invalidate(dashboardCashCollectedProvider(workspaceId));
       }
       ref.invalidate(notificationItemsProvider);
       ref.invalidate(currentSubscriptionStreamProvider);
       await Future.wait([
-        if (workspaceId != null && workspaceId.isNotEmpty)
+        if (workspaceId != null && workspaceId.isNotEmpty) ...[
           ref.read(dashboardSnapshotProvider(workspaceId).future),
+          ref.read(dashboardCashCollectedProvider(workspaceId).future),
+        ],
         ref.read(notificationItemsProvider.future),
       ]);
     }
@@ -965,9 +972,11 @@ class _WorkerAttendanceCard extends ConsumerWidget {
 /// B3, Construction-Specific Improvements: the dashboard should show what's
 /// actually been collected vs. what remains outstanding, not just a single
 /// net financial figure). Derived from the existing `payments` ledger's
-/// `paymentStatus` field via [dashboardPaymentStatusSummaryProvider] — see
-/// that provider's doc comment for exactly how `paid`/`partial`/`unpaid` map
-/// to "collected" vs. "outstanding". Workspace-scoped like
+/// `paymentStatus` field via two independently-shaped sources — see the doc
+/// comment above [dashboardCashCollectedProvider] for exactly how
+/// `paid`/`partial`/`unpaid` map to "collected" vs. "outstanding", and why
+/// this card reads from a one-time fetch + a status-filtered live listener
+/// instead of a single unbounded stream. Workspace-scoped like
 /// [_WorkerAttendanceCard] above (shown regardless of the project filter),
 /// since collection status reflects the whole ledger, not one project's
 /// financial totals.
@@ -994,9 +1003,43 @@ class _PaymentStatusCard extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final l10n = AppLocalizations.of(context);
-    final summary =
-        ref.watch(dashboardPaymentStatusSummaryProvider(workspaceId)).value ??
-        PaymentStatusSummary.empty;
+    final collectedAsync = ref.watch(
+      dashboardCashCollectedProvider(workspaceId),
+    );
+    final outstandingAsync = ref.watch(
+      dashboardOutstandingPaymentsProvider(workspaceId),
+    );
+
+    // Show a skeleton until BOTH sources have resolved at least once — same
+    // "no janky partial card" convention as the rest of this screen (see
+    // AsyncContentX.whenStale), just applied across two AsyncValues instead
+    // of one. Once each has a first value, `hasValue` stays true through
+    // subsequent reloads/refreshes/errors, so a transient refresh failure on
+    // one side doesn't blank out already-shown figures.
+    if (!collectedAsync.hasValue || !outstandingAsync.hasValue) {
+      final firstLoadError =
+          (!collectedAsync.hasValue && collectedAsync.hasError) ||
+          (!outstandingAsync.hasValue && outstandingAsync.hasError);
+      if (firstLoadError) {
+        final error = collectedAsync.hasError
+            ? collectedAsync.error!
+            : outstandingAsync.error!;
+        return AppRecoverableError(
+          message: appErrorMessage(l10n, error),
+          onRetry: () {
+            ref.invalidate(dashboardCashCollectedProvider(workspaceId));
+            ref.invalidate(dashboardOutstandingPaymentsProvider(workspaceId));
+          },
+        );
+      }
+      return AppLoadingSkeleton(
+        lineCount: 2,
+        semanticsLabel: l10n.t('loadingContent'),
+      );
+    }
+
+    final collected = collectedAsync.value ?? 0;
+    final outstanding = outstandingAsync.value ?? 0;
 
     return Row(
       key: const Key('qa_dashboard_payment_status_row'),
@@ -1006,7 +1049,7 @@ class _PaymentStatusCard extends ConsumerWidget {
             key: const Key('qa_dashboard_cash_collected'),
             label: l10n.t('cashCollected'),
             value: Formatters.money(
-              summary.collected,
+              collected,
               currencyCode: currency,
               locale: locale,
             ),
@@ -1020,7 +1063,7 @@ class _PaymentStatusCard extends ConsumerWidget {
             key: const Key('qa_dashboard_outstanding_payments'),
             label: l10n.t('outstandingPayments'),
             value: Formatters.money(
-              summary.outstanding,
+              outstanding,
               currencyCode: currency,
               locale: locale,
             ),

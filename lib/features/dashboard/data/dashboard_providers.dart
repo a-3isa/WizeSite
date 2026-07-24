@@ -982,56 +982,85 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
 ///   - `refunded` / `cancelled`: excluded from both buckets — refunded cash
 ///     was collected and then given back (not currently held), and a
 ///     cancelled record never happened.
-class PaymentStatusSummary {
-  const PaymentStatusSummary({
-    required this.collected,
-    required this.outstanding,
-  });
+///
+/// Split (post-launch audit fix) into two independently-shaped reads instead
+/// of one unbounded live listener over the entire `payments` collection:
+///
+///  * [dashboardCashCollectedProvider] — `paid` + `partial` sums need to scan
+///    the whole workspace ledger (collection status is open-ended, so there's
+///    no date bound to apply), but don't need to be *live*: a fresh figure on
+///    screen load / pull-to-refresh is enough, same tradeoff already made for
+///    other one-time dashboard reads. A `FutureProvider.family` doing a single
+///    `.get()` (matching the convention already used by
+///    `expenseDetailsProvider`/`paymentDetailsProvider`/
+///    `reportScopedRowsProvider`) replaces the old `.snapshots()` listener, so
+///    a mature workspace's full historical payment count is read once per
+///    mount/refresh instead of being held open as a live subscription for as
+///    long as the dashboard — the app's highest-traffic, longest-dwell
+///    screen — stays mounted.
+///  * [dashboardOutstandingPaymentsProvider] — genuinely wants to stay live
+///    (a collections-risk signal), but the query is now filtered
+///    server-side to `paymentStatus == unpaid`, so the listener's document
+///    count is bounded by the currently-outstanding subset rather than the
+///    workspace's entire payment history. `paid`/`partial`/`refunded`/
+///    `cancelled` docs (which only grow over time) never enter this
+///    listener at all; the set shrinks as outstanding payments get marked
+///    paid.
+///
+/// No double-counting: a payment's `paymentStatus` puts it in exactly one of
+/// three buckets — collected (`paid`/`partial`/missing-field legacy docs,
+/// which default to `paid` the same way `Payment.fromMap` does), outstanding
+/// (`unpaid`), or neither (`refunded`/`cancelled`, unchanged from before this
+/// split) — never both, and never silently dropped from a bucket it should
+/// be in.
+final dashboardCashCollectedProvider = FutureProvider.family<double, String>((
+  ref,
+  workspaceId,
+) async {
+  final firestore = ref.watch(firestoreProvider);
+  return _fetchCashCollected(firestore: firestore, workspaceId: workspaceId);
+});
 
-  /// Sum of `amount` across `paid` + `partial` payments.
-  final double collected;
+Future<double> _fetchCashCollected({
+  required FirebaseFirestore firestore,
+  required String workspaceId,
+}) async {
+  final snapshot = await firestore
+      .collection('payments')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .where('isArchived', isEqualTo: false)
+      .get();
 
-  /// Sum of `amount` across `unpaid` payments.
-  final double outstanding;
-
-  static const empty = PaymentStatusSummary(collected: 0, outstanding: 0);
+  var collected = 0.0;
+  for (final doc in snapshot.docs) {
+    final data = doc.data();
+    final amount = ((data['amount'] as num?) ?? 0).toDouble();
+    final status = '${data['paymentStatus'] ?? PaymentStatuses.paid}';
+    switch (status) {
+      case PaymentStatuses.paid:
+      case PaymentStatuses.partial:
+        collected += amount;
+        break;
+      default:
+        break;
+    }
+  }
+  return collected;
 }
 
-/// Workspace-scoped listener over the `payments` collection, grouped
-/// client-side by `paymentStatus`.
-///
-/// Cost note: unlike the rolling-7-day queries elsewhere in this file (or
-/// the flat `totalIncome` on the `workspace_metrics` aggregate doc used by
-/// [dashboardSnapshotProvider]), this has no date bound — it listens to
-/// EVERY non-archived payment ever recorded for the workspace. That's
-/// intentional: "outstanding" is inherently open-ended (an unpaid invoice
-/// from 6 months ago is still outstanding today), so a weekly window would
-/// silently hide it. The query is still workspace-scoped (never a cross-
-/// workspace scan), matching the [dashboardWorkerAttendanceProvider] pattern,
-/// but its read cost scales with a workspace's total historical payment
-/// count rather than being O(1) like the maintained aggregate doc. For a
-/// workspace with a very large payment history this is the one added cost of
-/// this feature — acceptable for a compact client-side derivation with no
-/// new schema/Cloud Function, but worth knowing if payment volume grows very
-/// large.
-///
-/// Does not reconcile pending offline-queue actions (unlike
-/// [dashboardWeeklySummaryProvider]/[dashboardSnapshotProvider]): a
-/// createPayment/updatePayment action's `paymentStatus` can change between
-/// queueing and sync without a tracked `previousPaymentStatus`, so a correct
-/// delta can't be computed client-side. This is a presentation-only
-/// simplification — the figures may lag by a few seconds until the pending
-/// write syncs to Firestore, same as any other listener-based read.
-final dashboardPaymentStatusSummaryProvider =
-    StreamProvider.family<PaymentStatusSummary, String>((ref, workspaceId) {
+/// Workspace-scoped listener over the `payments` collection, bounded
+/// server-side to `paymentStatus == unpaid` — see the doc comment above
+/// [dashboardCashCollectedProvider] for the full cost rationale.
+final dashboardOutstandingPaymentsProvider =
+    StreamProvider.family<double, String>((ref, workspaceId) {
       final firestore = ref.watch(firestoreProvider);
-      return _paymentStatusSummaryStream(
+      return _outstandingPaymentsStream(
         firestore: firestore,
         workspaceId: workspaceId,
       );
     });
 
-Stream<PaymentStatusSummary> _paymentStatusSummaryStream({
+Stream<double> _outstandingPaymentsStream({
   required FirebaseFirestore firestore,
   required String workspaceId,
 }) {
@@ -1039,30 +1068,14 @@ Stream<PaymentStatusSummary> _paymentStatusSummaryStream({
       .collection('payments')
       .where('workspaceId', isEqualTo: workspaceId)
       .where('isArchived', isEqualTo: false)
+      .where('paymentStatus', isEqualTo: PaymentStatuses.unpaid)
       .snapshots()
       .map((snapshot) {
-        var collected = 0.0;
         var outstanding = 0.0;
         for (final doc in snapshot.docs) {
-          final data = doc.data();
-          final amount = ((data['amount'] as num?) ?? 0).toDouble();
-          final status = '${data['paymentStatus'] ?? PaymentStatuses.paid}';
-          switch (status) {
-            case PaymentStatuses.paid:
-            case PaymentStatuses.partial:
-              collected += amount;
-              break;
-            case PaymentStatuses.unpaid:
-              outstanding += amount;
-              break;
-            default:
-              break;
-          }
+          outstanding += ((doc.data()['amount'] as num?) ?? 0).toDouble();
         }
-        return PaymentStatusSummary(
-          collected: collected,
-          outstanding: outstanding,
-        );
+        return outstanding;
       });
 }
 
