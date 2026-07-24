@@ -18,7 +18,6 @@ import 'package:buildtrack_app/features/dashboard/presentation/widgets/project_s
 import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
-import 'package:buildtrack_app/features/projects/presentation/widgets/project_details_widgets.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/presentation/widgets/workspace_switcher_sheet.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
@@ -285,8 +284,12 @@ class _DashboardProjectSelector extends ConsumerWidget {
   }
 }
 
-/// Financial overview scoped to a single project: reuses the project
-/// [FinancialGrid] and adds a budget-used bar.
+/// Financial overview scoped to a single project: leads with the net-profit
+/// hero, followed by the remaining-budget progress card, then a compact,
+/// secondary contract-value line. Mirrors the project detail screen's hero
+/// treatment so the visual language matches across screens (per the v2 UI
+/// audit: Contract Value is a fixed, rarely-changing number and should not
+/// compete with Net Profit / Remaining Budget for visual weight).
 class ProjectFinancialSection extends ConsumerWidget {
   const ProjectFinancialSection({
     required this.project,
@@ -322,6 +325,10 @@ class ProjectFinancialSection extends ConsumerWidget {
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
     final progressColor = budgetProgressColor(context.tokens, rawRatio);
     final remaining = budgetBase - project.totalExpenses;
+    final numberFormat = NumberFormat.decimalPattern(locale);
+    final isProfit = project.netProfit >= 0;
+    final netText =
+        '${isProfit ? '' : '−'}${numberFormat.format(project.netProfit.abs())}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -336,9 +343,18 @@ class ProjectFinancialSection extends ConsumerWidget {
             ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
           ),
         ),
-        FinancialGrid(project: project, currency: currency),
+        HeroNetCard(
+          title: l10n.t('netProfit'),
+          net: netText,
+          negative: !isProfit,
+          currency: currency,
+          income: numberFormat.format(project.totalPayments),
+          expense: numberFormat.format(project.totalExpenses),
+          incomeLabel: l10n.t('totalIncome'),
+          expenseLabel: l10n.t('totalExpenses'),
+        ),
         if (hasBudget) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -404,6 +420,35 @@ class ProjectFinancialSection extends ConsumerWidget {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        Row(
+          key: const Key('qa_dashboard_project_contract_value'),
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 14,
+              color: context.tokens.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              l10n.t('contractValue'),
+              style: TextStyle(fontSize: 12, color: context.tokens.textMuted),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              Formatters.money(
+                project.contractValue,
+                currencyCode: currency,
+                locale: locale,
+              ),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: context.tokens.textMuted,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
         Row(
           children: [

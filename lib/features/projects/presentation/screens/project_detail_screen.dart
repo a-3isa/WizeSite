@@ -233,8 +233,11 @@ class ProjectDetailScreen extends ConsumerWidget {
 
 /// Hero net figure + funds-in/spent split for a single project, followed by a
 /// budget-used progress bar (falls back to contract value when no explicit
-/// budget limit is set). Mirrors the dashboard's project-scoped financial
-/// section so the visual language matches across screens.
+/// budget limit is set), then a compact, secondary contract-value line.
+/// Mirrors the dashboard's project-scoped financial section so the visual
+/// language matches across screens. Per the v2 UI audit, Contract Value is a
+/// fixed, rarely-changing number and should read as secondary reference info
+/// rather than competing with Net Profit / Remaining Budget for emphasis.
 class _ProjectFinancialHero extends StatelessWidget {
   const _ProjectFinancialHero({
     required this.project,
@@ -340,6 +343,31 @@ class _ProjectFinancialHero extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        Row(
+          key: const Key('qa_project_detail_contract_value'),
+          children: [
+            Icon(Icons.assignment_outlined, size: 14, color: t.textMuted),
+            const SizedBox(width: 6),
+            Text(
+              l10n.t('contractValue'),
+              style: TextStyle(fontSize: 12, color: t.textMuted),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              Formatters.money(
+                project.contractValue,
+                currencyCode: currency,
+                locale: locale,
+              ),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: t.textMuted,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
