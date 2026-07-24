@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
+import 'package:buildtrack_app/core/widgets/ds/build_card.dart';
 import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
@@ -148,6 +149,115 @@ class _CompletionProgress extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Derived timeline indicator (days remaining / overdue / % of schedule
+/// elapsed) for the project detail hero. Purely a presentation-layer
+/// derivation from [Project.startDate] and [Project.expectedEndDate] — no
+/// new schema. Renders nothing when either date is missing, rather than a
+/// confusing "N/A" placeholder, since a partial date range can't produce a
+/// meaningful duration.
+class ProjectTimeline extends StatelessWidget {
+  const ProjectTimeline({required this.project, super.key});
+
+  final Project project;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = project.startDate;
+    final end = project.expectedEndDate;
+    if (start == null || end == null) {
+      return const SizedBox.shrink();
+    }
+
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final startDate = DateTime(start.year, start.month, start.day);
+    final endDate = DateTime(end.year, end.month, end.day);
+
+    final daysRemaining = endDate.difference(todayDate).inDays;
+    final isComplete = project.status == 'completed';
+    final overdue = daysRemaining < 0 && !isComplete;
+    final statusColor = overdue ? t.warning : t.accent;
+
+    final totalDays = endDate.difference(startDate).inDays;
+    double? elapsedFraction;
+    if (totalDays > 0) {
+      final elapsedDays = todayDate.difference(startDate).inDays;
+      elapsedFraction = (elapsedDays / totalDays).clamp(0.0, 1.0);
+    }
+
+    return BuildCard(
+      key: const Key('qa_project_detail_timeline'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule_outlined, size: 16, color: t.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                l10n.t('timeline'),
+                style: TextStyle(fontWeight: FontWeight.w700, color: t.text),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (elapsedFraction != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: elapsedFraction,
+                minHeight: 8,
+                backgroundColor: t.surface3,
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: statusColor,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  overdue
+                      ? l10n.t(
+                          'overdueByDays',
+                          params: {'value': '${-daysRemaining}'},
+                        )
+                      : l10n.t(
+                          'daysRemaining',
+                          params: {'value': '$daysRemaining'},
+                        ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+              if (elapsedFraction != null && !overdue)
+                Text(
+                  l10n.t(
+                    'timelineElapsed',
+                    params: {'value': (elapsedFraction * 100).toStringAsFixed(0)},
+                  ),
+                  style: TextStyle(fontSize: 11, color: t.textMuted),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

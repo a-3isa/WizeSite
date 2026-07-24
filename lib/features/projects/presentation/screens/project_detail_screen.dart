@@ -57,6 +57,11 @@ class ProjectDetailScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               children: [
                 ProjectHeader(project: project),
+                if (project.startDate != null &&
+                    project.expectedEndDate != null) ...[
+                  const SizedBox(height: 16),
+                  ProjectTimeline(project: project),
+                ],
                 const SizedBox(height: 24),
                 _ProjectFinancialHero(
                   project: project,
