@@ -110,19 +110,22 @@ class BuildAddFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
+    // ~12% smaller than the original 58px diameter (UI audit problems 9/29:
+    // the raised FAB was oversized and dominated the nav). Still comfortably
+    // above Android's 48dp minimum touch target.
     return SizedBox(
-      width: 58,
-      height: 58,
+      width: 52,
+      height: 52,
       child: Material(
         color: t.accent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         elevation: 6,
         shadowColor: t.accent.withValues(alpha: 0.45),
         child: InkWell(
           key: const Key('qa_nav_add'),
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(20),
-          child: Icon(Icons.add, size: 30, color: t.onAccent),
+          borderRadius: BorderRadius.circular(18),
+          child: Icon(Icons.add, size: 27, color: t.onAccent),
         ),
       ),
     );
