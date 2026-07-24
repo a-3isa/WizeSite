@@ -35,8 +35,15 @@ if (hasReleaseKeystore) {
 // the bundle is actually produced — if the build fails afterwards, the
 // version has still been consumed (rare in practice, but re-running after a
 // genuine failure will skip a patch number rather than reuse one).
-val isBundleBuild = gradle.startParameter.taskNames.any {
-    it.contains("bundle", ignoreCase = true)
+// Only a real Play Store release App Bundle build (`flutter build appbundle`,
+// which Gradle runs as the task `bundleRelease`) should auto-bump the version.
+// The previous `contains("bundle")` check was too loose: it also matched
+// `bundleDebug`/`bundleProfile` (so a debug/profile bundle would wrongly
+// consume a release version number) and any incidental task whose name merely
+// contains "bundle". Match the release bundle task exactly, ignoring any
+// `:module:` prefix Gradle may include.
+val isBundleBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.substringAfterLast(":").equals("bundleRelease", ignoreCase = true)
 }
 val pubspecFile = rootDir.parentFile.resolve("pubspec.yaml")
 val pubspecVersionLine = Regex("""(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)""")
