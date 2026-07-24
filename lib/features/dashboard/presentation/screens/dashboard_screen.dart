@@ -14,6 +14,7 @@ import 'package:buildtrack_app/core/widgets/metric_card.dart';
 import 'package:buildtrack_app/core/widgets/section_header.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
+import 'package:buildtrack_app/features/dashboard/presentation/widgets/project_selector_sheet.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_providers.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
@@ -229,53 +230,17 @@ class _DashboardProjectSelector extends ConsumerWidget {
         : l10n.t('allProjects');
 
     return Material(
+      key: const Key('qa_dashboard_project_selector'),
       color: context.tokens.accent.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(12),
-      child: PopupMenuButton<String>(
-        key: const Key('qa_dashboard_project_selector'),
-        position: PopupMenuPosition.under,
-        tooltip: l10n.t('selectProject'),
-        // Empty string is the "All Projects" sentinel. A null value would be
-        // swallowed by PopupMenuButton as a cancel, making it impossible to
-        // switch back to the workspace-wide view.
-        onSelected: (value) =>
-            ref.read(selectedDashboardProjectIdProvider.notifier).state =
-                value.isEmpty ? null : value,
-        itemBuilder: (context) => [
-          PopupMenuItem<String>(
-            value: '',
-            child: Row(
-              children: [
-                Icon(
-                  selectedProject == null ? Icons.check : Icons.public_outlined,
-                  size: 18,
-                  color: context.tokens.accent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: Text(l10n.t('allProjects'))),
-              ],
-            ),
-          ),
-          for (final project in projects)
-            PopupMenuItem<String>(
-              value: project.id,
-              child: Row(
-                children: [
-                  Icon(
-                    project.id == selectedProject?.id
-                        ? Icons.check
-                        : Icons.work_outline,
-                    size: 18,
-                    color: context.tokens.accent,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(project.name, overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-            ),
-        ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showProjectSelectorSheet(
+          context,
+          ref,
+          projects: projects,
+          selectedProjectId: selectedProject?.id,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
