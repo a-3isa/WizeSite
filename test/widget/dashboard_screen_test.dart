@@ -2,6 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/ds/hero_net_card.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -475,6 +476,31 @@ void main() {
     // MoneyRow renders a proper minus sign (U+2212) with the currency shown
     // separately.
     expect(find.textContaining('−45,000', skipOffstage: false), findsOneWidget);
+
+    // Contract Value is demoted to a compact, muted secondary row (per the
+    // v2 UI audit) — guard against it being re-inflated back to prominent
+    // styling.
+    final contractValueRow = find.byKey(
+      const Key('qa_dashboard_project_contract_value'),
+      skipOffstage: false,
+    );
+    expect(contractValueRow, findsOneWidget);
+    final contractValueText = tester.widget<Text>(
+      find
+          .descendant(of: contractValueRow, matching: find.byType(Text))
+          .last,
+    );
+    expect(contractValueText.style?.fontSize, 12);
+    expect(contractValueText.style?.fontWeight, FontWeight.w700);
+    expect(contractValueText.style?.color, BuildTokens.light.textMuted);
+
+    // Ordering: the demoted Contract Value row must render after the Net
+    // Profit hero card, never re-promoted above it.
+    final heroDy = tester
+        .getTopLeft(find.byType(HeroNetCard, skipOffstage: false))
+        .dy;
+    final contractValueDy = tester.getTopLeft(contractValueRow).dy;
+    expect(contractValueDy, greaterThan(heroDy));
   });
 
   testWidgets('project selector can switch back to All Projects', (

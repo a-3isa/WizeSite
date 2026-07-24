@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/widgets/ds/hero_net_card.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -285,6 +286,31 @@ void main() {
         find.textContaining('Remaining', skipOffstage: false),
       );
       expect(remainingText.style?.color, BuildTokens.light.expense);
+
+      // Contract Value is demoted to a compact, muted secondary row (per
+      // the v2 UI audit) — guard against it being re-inflated back to
+      // prominent styling.
+      final contractValueRow = find.byKey(
+        const Key('qa_project_detail_contract_value'),
+        skipOffstage: false,
+      );
+      expect(contractValueRow, findsOneWidget);
+      final contractValueText = tester.widget<Text>(
+        find
+            .descendant(of: contractValueRow, matching: find.byType(Text))
+            .last,
+      );
+      expect(contractValueText.style?.fontSize, 12);
+      expect(contractValueText.style?.fontWeight, FontWeight.w700);
+      expect(contractValueText.style?.color, BuildTokens.light.textMuted);
+
+      // Ordering: the demoted Contract Value row must render after the Net
+      // Profit hero card, never re-promoted above it.
+      final heroDy = tester
+          .getTopLeft(find.byType(HeroNetCard, skipOffstage: false))
+          .dy;
+      final contractValueDy = tester.getTopLeft(contractValueRow).dy;
+      expect(contractValueDy, greaterThan(heroDy));
     },
   );
 }
