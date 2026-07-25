@@ -1,0 +1,124 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet"><style>
+:root{
+  --accent:#ff6d00;--accent2:#ff8a33;--onacc:#16130f;
+  --income:#35d08a;--expense:#ff6b6b;--warn:#fbbf24;
+  --bg:#0e1116;--surface:#171c23;--surface2:#1e242d;--surface3:#262d38;
+  --border:#262d38;--borderS:#333c49;--text:#edf0f4;--muted:#949fad;--faint:#6a7482;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1}
+img{display:block;max-width:100%}
+
+  html,body{width:1200px;height:1920px;overflow:hidden}
+  
+.frame{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;
+  background:radial-gradient(120% 60% at 50% 0%,rgba(255,109,0,.18),transparent 60%),var(--bg);
+  padding:70px 0 0;position:relative}
+.frame::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:radial-gradient(ellipse 90% 50% at 50% 0,#000 40%,transparent 100%);pointer-events:none}
+.cap{text-align:center;padding:0 60px 46px;position:relative;z-index:2}
+.cap .kick{color:var(--accent);font-weight:800;letter-spacing:3px;font-size:26px;text-transform:uppercase}
+.cap h2{font-size:58px;font-weight:900;letter-spacing:-2px;margin-top:14px;line-height:1.05}
+.device{width:520px;flex:1;background:#05070a;border-radius:56px 56px 0 0;padding:16px 16px 0;border:2px solid var(--borderS);border-bottom:0;box-shadow:0 -10px 80px rgba(0,0,0,.5);position:relative;z-index:2}
+.screen{width:100%;height:100%;background:var(--bg);border-radius:44px 44px 0 0;overflow:hidden;padding:34px 22px 0;position:relative}
+/* app screen internals */
+.scr{display:flex;flex-direction:column;gap:16px;height:100%}
+.scr.center{align-items:center;text-align:center}
+.topbar{display:flex;align-items:center;justify-content:space-between}
+.ws{font-weight:800;font-size:24px;display:flex;align-items:center;gap:2px}
+.ws .material-symbols-outlined{font-size:26px;color:var(--muted)}
+.muted{color:var(--muted);font-size:28px}
+.pill{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:rgba(255,125,31,.16);color:var(--accent);font-weight:700;font-size:18px;padding:9px 16px;border-radius:999px}
+.pill .material-symbols-outlined{font-size:20px}
+.htitle{font-size:40px;font-weight:900;letter-spacing:-1px}
+.net{background:var(--surface);border:1px solid var(--border);border-radius:28px;padding:24px}
+.nl{color:var(--muted);font-size:18px;font-weight:600}
+.nv{display:flex;align-items:center;gap:8px;font-size:52px;font-weight:900;letter-spacing:-2px;margin:6px 0 20px}
+.nv .up{color:var(--income);font-size:40px}.nv .cur{font-size:20px;color:var(--muted);font-weight:700;margin-left:4px}
+.nsplit{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sp{border-radius:16px;padding:12px 16px}.sp span{display:block;font-size:16px;color:var(--muted)}.sp b{font-size:24px}
+.sp.in{background:rgba(53,208,138,.15)}.sp.in b{color:var(--income)}
+.sp.out{background:rgba(255,107,107,.15)}.sp.out b{color:var(--expense)}
+.statrow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.st{background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:18px}
+.st .material-symbols-outlined{font-size:26px;color:var(--accent)}.st small{display:block;color:var(--muted);font-size:16px;margin:8px 0 4px}.st b{font-size:28px}
+.rh{font-size:24px;font-weight:750;margin-top:4px}
+.mrow{display:flex;align-items:center;gap:16px;padding:6px 0}
+.mic{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;flex-shrink:0}
+.mic .material-symbols-outlined{font-size:28px}
+.mic.in{background:rgba(53,208,138,.15);color:var(--income)}.mic.out{background:rgba(255,107,107,.15);color:var(--expense)}
+.mb{flex:1;min-width:0}.mb b{display:block;font-size:22px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mb small{font-size:17px;color:var(--muted)}
+.ma{font-weight:750;font-size:22px;text-align:right}.ma small{display:block;font-size:14px;color:var(--faint);font-weight:500}
+.ma.in{color:var(--income)}.ma.out{color:var(--expense)}
+.anav{align-self:stretch;display:flex;align-items:center;justify-content:space-around;background:var(--surface);border-top:1px solid var(--border);padding:22px 0 40px;margin:auto -22px 0}
+.an{color:var(--faint);font-size:38px}.an.active{color:var(--accent)}
+.fab{width:72px;height:72px;border-radius:22px;background:linear-gradient(180deg,var(--accent2),var(--accent));color:var(--onacc);display:grid;place-items:center;font-size:40px;box-shadow:0 10px 26px rgba(255,109,0,.45);transform:translateY(-22px)}
+/* voice */
+.vtitle{font-size:30px;font-weight:800;color:var(--accent);margin-top:20px}
+.vmic{position:relative;width:150px;height:150px;border-radius:999px;background:rgba(255,125,31,.16);color:var(--accent);display:grid;place-items:center;margin:36px 0}
+.vmic .material-symbols-outlined{font-size:76px}
+.vmic .ring{position:absolute;inset:0;border-radius:999px;border:3px solid var(--accent);opacity:.5;transform:scale(1.25)}
+.vt{font-size:28px;font-style:italic;color:var(--text);max-width:520px;line-height:1.4;margin-bottom:34px}
+.vchips{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-bottom:34px}
+.vc{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:12px 18px;text-align:left}
+.vc small{display:block;font-size:14px;color:var(--faint);letter-spacing:1px}.vc b{font-size:22px}.vc b.warn{color:var(--warn)}
+.vbtn,.save{margin-top:6px;background:linear-gradient(180deg,var(--accent2),var(--accent));color:var(--onacc);font-weight:800;font-size:24px;padding:22px;border-radius:18px;display:flex;align-items:center;justify-content:center;gap:10px}
+.save{margin-top:auto;margin-bottom:0}
+.vbtn .material-symbols-outlined,.save .material-symbols-outlined{font-size:28px}
+/* projects */
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:22px}
+.pc-top{display:flex;align-items:center;gap:16px}
+.pc-ic{width:56px;height:56px;border-radius:16px;background:rgba(255,125,31,.16);color:var(--accent);display:grid;place-items:center}
+.pc-ic .material-symbols-outlined{font-size:30px}
+.pc-h{flex:1}.pc-h b{display:block;font-size:24px}.pc-h small{color:var(--muted);font-size:17px}
+.pc-net{font-weight:800;font-size:22px;text-align:right}.pc-net small{display:block;font-size:14px;color:var(--faint)}
+.pc-net.in{color:var(--income)}.pc-net.out{color:var(--expense)}
+.bar{height:12px;background:var(--surface3);border-radius:999px;overflow:hidden;margin:16px 0 10px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.pc-foot{display:flex;justify-content:space-between;color:var(--muted);font-size:16px}
+/* add */
+.amount{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:24px;text-align:center}
+.amount small{color:var(--muted);font-size:18px}
+.amt-v{font-size:56px;font-weight:900;letter-spacing:-2px;margin-top:6px}.amt-v span{font-size:24px;color:var(--muted)}
+.fld small{color:var(--muted);font-size:18px;font-weight:600}
+.fv{margin-top:8px;background:var(--surface);border:1.5px solid var(--borderS);border-radius:18px;padding:20px;font-size:22px;font-weight:650;display:flex;align-items:center;gap:12px}
+.fv .material-symbols-outlined{color:var(--accent);font-size:26px}.fv .chev{margin-left:auto;color:var(--muted)}
+/* activity */
+.search{background:var(--surface);border:1.5px solid var(--borderS);border-radius:18px;padding:18px;color:var(--muted);font-size:20px;display:flex;align-items:center;gap:12px}
+.chipsrow{display:flex;gap:12px}
+.fchip{border:1.5px solid var(--border);border-radius:999px;padding:12px 22px;font-size:18px;font-weight:600}
+.fchip.active{background:rgba(255,125,31,.16);border-color:var(--accent);color:var(--accent)}
+.tframe{padding:0;justify-content:center;gap:38px}
+     .tframe .cap{padding:0 60px}
+     .tdevice{width:1056px;background:#05070a;border-radius:40px;padding:22px;border:2px solid var(--borderS);box-shadow:0 40px 120px rgba(0,0,0,.6)}
+     .tscreen{width:100%;background:var(--bg);border-radius:28px;overflow:hidden;padding:40px}
+     .tscr{display:flex;flex-direction:column;gap:28px}
+     .ttop{display:flex;align-items:center;gap:20px}.ttop .pill{margin:0 auto 0 8px}
+     .tcols{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+     .tcol{display:flex;flex-direction:column;gap:18px}
+     .tcol .mrow{padding:4px 0}</style></head><body><div class="frame tframe"><div class="cap"><div class="kick">Built for the field</div><h2>Your whole site, one screen</h2></div><div class="tdevice"><div class="tscreen"><div class="tscr">
+    <div class="ttop"><div class="ws">Cairo Co. <span class="material-symbols-outlined">expand_more</span></div><div class="pill"><span class="material-symbols-outlined">work</span> All projects</div><span class="material-symbols-outlined muted">notifications</span></div>
+    <div class="tcols">
+      <div class="tcol">
+        <div class="net">
+          <div class="nl">Net this month</div>
+          <div class="nv"><span class="material-symbols-outlined up">trending_up</span>1,649,000<span class="cur">EGP</span></div>
+          <div class="nsplit"><div class="sp in"><span>Income</span><b>2,500,000</b></div><div class="sp out"><span>Expenses</span><b>851,000</b></div></div>
+        </div>
+        <div class="statrow"><div class="st"><span class="material-symbols-outlined">apartment</span><small>Active projects</small><b>3</b></div><div class="st"><span class="material-symbols-outlined">savings</span><small>Budget health</small><b>Healthy</b></div></div>
+        <div class="rh">Recent activity</div>
+        <div class="mrow"><div class="mic in"><span class="material-symbols-outlined">south_west</span></div><div class="mb"><b>Owner deposit</b><small>Villa October · Bank</small></div><div class="ma in">+800,000<small>EGP</small></div></div>
+        <div class="mrow"><div class="mic out"><span class="material-symbols-outlined">category</span></div><div class="mb"><b>El-Nasr Supplies</b><small>Materials · Unpaid</small></div><div class="ma out">−145,000<small>EGP</small></div></div>
+        <div class="mrow"><div class="mic in"><span class="material-symbols-outlined">account_balance</span></div><div class="mb"><b>Progress payment</b><small>Tower B · Bank</small></div><div class="ma in">+500,000<small>EGP</small></div></div>
+        <div class="mrow"><div class="mic out"><span class="material-symbols-outlined">engineering</span></div><div class="mb"><b>Worker wages</b><small>Site crew · 3 weeks</small></div><div class="ma out">−62,000<small>EGP</small></div></div>
+        <div class="mrow"><div class="mic out"><span class="material-symbols-outlined">construction</span></div><div class="mb"><b>Crane rental</b><small>Equipment · Paid</small></div><div class="ma out">−38,500<small>EGP</small></div></div>
+      </div>
+      <div class="tcol">
+        <div class="rh">Projects</div>
+        <div class="pcard"><div class="pc-top"><div class="pc-ic"><span class="material-symbols-outlined">apartment</span></div><div class="pc-h"><b>Villa October</b><small>Hassan Group</small></div><div class="pc-net in">+918,000<small>EGP</small></div></div><div class="bar"><i style="width:40%"></i></div></div>
+        <div class="pcard"><div class="pc-top"><div class="pc-ic"><span class="material-symbols-outlined">apartment</span></div><div class="pc-h"><b>Tower B Renovation</b><small>Nile Properties</small></div><div class="pc-net out">−12,000<small>EGP</small></div></div><div class="bar"><i style="width:86%"></i></div></div>
+        <div class="pcard"><div class="pc-top"><div class="pc-ic"><span class="material-symbols-outlined">apartment</span></div><div class="pc-h"><b>Warehouse Fit-out</b><small>Delta Logistics</small></div><div class="pc-net in">+553,000<small>EGP</small></div></div><div class="bar"><i style="width:62%"></i></div></div>
+        <div class="pcard"><div class="pc-top"><div class="pc-ic"><span class="material-symbols-outlined">apartment</span></div><div class="pc-h"><b>Road Works — Ph.2</b><small>Cairo Gov.</small></div><div class="pc-net in">+6,200<small>EGP</small></div></div><div class="bar"><i style="width:54%"></i></div></div>
+      </div>
+    </div>
+  </div></div></div></div></body></html>
