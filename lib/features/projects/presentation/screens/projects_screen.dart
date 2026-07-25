@@ -20,12 +20,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+/// Active (non-archived) projects with project_metrics merged in, so consumers
+/// see real totalExpenses/totalPayments/netProfit rather than the bare project
+/// doc's zero defaults. The dashboard reads this for its per-project financial
+/// section, profit margin, and the over-budget alerts strip — all of which were
+/// stuck at 0 when this used the non-merging `watchProjects`, even though the
+/// metrics-merged Projects browse list showed the correct values.
 final projectsProvider = StreamProvider<List<Project>>((ref) {
   final workspaceId = ref.watch(activeWorkspaceIdProvider);
   if (workspaceId == null || workspaceId.isEmpty) {
     return const Stream.empty();
   }
-  return ref.watch(projectRepositoryProvider).watchProjects(workspaceId);
+  return ref
+      .watch(projectRepositoryProvider)
+      .watchAllProjects(workspaceId)
+      .map(
+        (projects) =>
+            projects.where((project) => !project.isArchived).toList(),
+      );
 });
 
 final allProjectsProvider = StreamProvider<List<Project>>((ref) {
@@ -397,6 +409,12 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       appBar: AppBar(
         title: Text(l10n.t('projects')),
         actions: [
+          IconButton(
+            key: const Key('qa_projects_new'),
+            tooltip: l10n.t('newProject'),
+            onPressed: _openCreateProject,
+            icon: const Icon(Icons.add),
+          ),
           if (_canAccessFinancial)
             IconButton(
               tooltip: l10n.t('reports'),
@@ -404,18 +422,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               icon: const Icon(Icons.assessment_outlined),
             ),
           IconButton(
+            tooltip: l10n.t('archivedProjects'),
             onPressed: () => context.push(AppRoutes.archivedProjects),
             icon: const Icon(Icons.archive_outlined),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateProject,
-        icon: const Icon(Icons.add),
-        label: Text(
-          l10n.t('newProject'),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
       ),
       body: SafeArea(
         child: Column(
@@ -601,9 +612,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: isActiveStatus
-                                  ? t.incomeSoft
-                                  : t.surface2,
+                              color: isActiveStatus ? t.incomeSoft : t.surface2,
                               borderRadius: t.radiusSm,
                             ),
                             child: Text(
@@ -611,52 +620,13 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: isActiveStatus
-                                    ? t.income
-                                    : t.textMuted,
+                                color: isActiveStatus ? t.income : t.textMuted,
                               ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    if (_canAccessFinancial) ...[
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                positiveProfit
-                                    ? Icons.trending_up
-                                    : Icons.trending_down,
-                                size: 16,
-                                color: profitColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                netAmountText,
-                                style: TextStyle(
-                                  color: profitColor,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            positiveProfit ? l10n.t('profit') : l10n.t('loss'),
-                            style: TextStyle(
-                              color: t.textMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                     PopupMenuButton<String>(
                       onSelected: (value) async {
                         if (value == 'delete') {
@@ -697,6 +667,37 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                     ),
                   ],
                 ),
+                if (_canAccessFinancial) ...[
+                  const SizedBox(height: 12),
+                  // Profit on its own line so the project name (above) keeps the
+                  // full card width instead of being squeezed to a few
+                  // characters by a long money value sharing its row.
+                  Row(
+                    children: [
+                      Icon(
+                        positiveProfit
+                            ? Icons.trending_up
+                            : Icons.trending_down,
+                        size: 18,
+                        color: profitColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        netAmountText,
+                        style: TextStyle(
+                          color: profitColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        positiveProfit ? l10n.t('profit') : l10n.t('loss'),
+                        style: TextStyle(color: t.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
                 if (_canAccessFinancial &&
                     project.budgetLimit != null &&
                     project.budgetLimit! > 0) ...[

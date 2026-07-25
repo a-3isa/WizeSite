@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/theme_provider.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
+import 'package:buildtrack_app/core/widgets/resource_directory_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -69,18 +70,19 @@ class MoreScreen extends ConsumerWidget {
               onTap: () => context.push(AppRoutes.subscriptionPlans),
             ),
             const SizedBox(height: 16),
-            BuildCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  _MoreRow(
-                    icon: Icons.inventory_2_outlined,
-                    label: l10n.t('resources'),
-                    onTap: () => context.push(AppRoutes.workers),
-                  ),
-                ],
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
+              child: Text(
+                l10n.t('resources').toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: t.textMuted,
+                ),
               ),
             ),
+            const ResourceDirectoryLinks(),
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsetsDirectional.only(start: 4, bottom: 6),

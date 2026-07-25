@@ -91,31 +91,6 @@ void main() {
     }
   });
 
-  testWidgets('dashboard resources expose button semantics', (tester) async {
-    await tester.pumpWidget(_dashboardApp());
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('qa_resource_workers')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-
-    for (final label in [
-      'Workers',
-      'Contractors',
-      'Equipment providers',
-      'Transport providers',
-    ]) {
-      final matchingSemantics = tester
-          .widgetList<Semantics>(find.byType(Semantics))
-          .where((widget) => widget.properties.label == label)
-          .toList();
-      expect(matchingSemantics, hasLength(1));
-      expect(matchingSemantics.single.properties.button, isTrue);
-    }
-  });
-
   testWidgets(
     'dashboard project selector meets the 48dp touch target and exposes '
     'button semantics',
@@ -137,34 +112,6 @@ void main() {
       expect(matchingSemantics.single.properties.button, isTrue);
 
       handle.dispose();
-    },
-  );
-
-  testWidgets(
-    'dashboard secondary resource cards meet the 48dp touch target minimum',
-    (tester) async {
-      await tester.pumpWidget(_dashboardApp());
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('qa_resource_workers')),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-
-      for (final key in [
-        'qa_resource_workers',
-        'qa_resource_contractors',
-        'qa_resource_equipment',
-        'qa_resource_transport',
-      ]) {
-        final size = tester.getSize(find.byKey(Key(key)));
-        expect(
-          size.height,
-          greaterThanOrEqualTo(48),
-          reason: '$key should meet the 48dp minimum touch target',
-        );
-      }
     },
   );
 

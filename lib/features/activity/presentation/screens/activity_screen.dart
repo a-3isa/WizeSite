@@ -4,7 +4,8 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
-import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
+import 'package:buildtrack_app/features/activity/data/activity_providers.dart';
+import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -37,9 +38,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final t = context.tokens;
     final locale = Localizations.localeOf(context).languageCode;
     final workspaceId = ref.watch(activeWorkspaceIdProvider) ?? '';
-    final insightsAsync = workspaceId.isEmpty
-        ? const AsyncValue<DashboardWeeklyInsights?>.data(null)
-        : ref.watch(dashboardWeeklyInsightsProvider(workspaceId));
+    final activityAsync = workspaceId.isEmpty
+        ? const AsyncValue<List<DashboardTransactionRef>>.data(
+            <DashboardTransactionRef>[],
+          )
+        : ref.watch(workspaceActivityProvider(workspaceId));
 
     return Scaffold(
       body: SafeArea(
@@ -61,7 +64,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               AppSearchField(
                 controller: _searchController,
                 labelText: l10n.t('searchActivity'),
-                onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+                onChanged: (v) =>
+                    setState(() => _query = v.trim().toLowerCase()),
               ),
               const SizedBox(height: 14),
               Row(
@@ -75,7 +79,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: insightsAsync.when(
+                child: activityAsync.when(
                   loading: () => AppLoadingSkeleton(
                     semanticsLabel: l10n.t('loadingContent'),
                   ),
@@ -85,9 +89,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       style: TextStyle(color: t.textMuted),
                     ),
                   ),
-                  data: (insights) {
-                    final all = insights?.recentTransactions ??
-                        const <WeeklyDashboardTransaction>[];
+                  data: (all) {
                     final rows = all.where((tx) {
                       final isIncome = tx.type == 'payment';
                       final matchesFilter = switch (_filter) {
@@ -95,7 +97,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                         _ActivityFilter.income => isIncome,
                         _ActivityFilter.expense => !isIncome,
                       };
-                      final matchesQuery = _query.isEmpty ||
+                      final matchesQuery =
+                          _query.isEmpty ||
                           tx.title.toLowerCase().contains(_query);
                       return matchesFilter && matchesQuery;
                     }).toList();
@@ -120,10 +123,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: MoneyRow(
                             title: tx.title,
-                            subtitle: DateFormat.MMMd(locale).format(tx.date),
-                            amount: NumberFormat.decimalPattern(locale)
-                                .format(tx.amount.abs()),
-                            kind: isIncome ? MoneyKind.income : MoneyKind.expense,
+                            subtitle: tx.date == null
+                                ? ''
+                                : DateFormat.MMMd(locale).format(tx.date!),
+                            amount: NumberFormat.decimalPattern(
+                              locale,
+                            ).format(tx.amount.abs()),
+                            kind: isIncome
+                                ? MoneyKind.income
+                                : MoneyKind.expense,
                             showDivider: false,
                           ),
                         );

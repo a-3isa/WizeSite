@@ -22,8 +22,6 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/presentation/widgets/workspace_switcher_sheet.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart'
-    show workersProvider;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -126,9 +124,9 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: const Size.fromHeight(52),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 4),
             child: _DashboardProjectSelector(
               projects: projects,
               selectedProject: selectedProject,
@@ -202,10 +200,11 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(height: 24),
-              SectionHeader(title: l10n.t('resources')),
-              const SizedBox(height: 12),
-              const _ResourceLinks(),
-              const SizedBox(height: 12),
+              // The resource directory (Workers/Contractors/Equipment/
+              // Transport) lives on the More tab, not here — Home stays focused
+              // on financial/operational stats. The worker-attendance and
+              // payment-status cards below are derived stats, not directory
+              // navigation, so they remain.
               _WorkerAttendanceCard(
                 workspaceId: workspaceId ?? '',
                 locale: locale,
@@ -255,58 +254,56 @@ class _DashboardProjectSelector extends ConsumerWidget {
         ? selectedProject!.name.trim()
         : l10n.t('allProjects');
 
-    return Semantics(
-      label: '${l10n.t('project')}: $label',
-      button: true,
-      child: Material(
-        key: const Key('qa_dashboard_project_selector'),
-        color: context.tokens.accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => showProjectSelectorSheet(
-            context,
-            ref,
-            projects: projects,
-            selectedProjectId: selectedProject?.id,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.work_outline,
-                  size: 18,
-                  color: context.tokens.accent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.t('project').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: context.tokens.accent,
-                        ),
-                      ),
-                      Text(
+    final t = context.tokens;
+    // Compact left-aligned pill rather than a full-width card: the project
+    // scope is a filter, not a primary content block, so it should not consume
+    // a whole dashboard row. Sizes to its content and opens the same
+    // bottom-sheet picker.
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Semantics(
+        label: '${l10n.t('project')}: $label',
+        button: true,
+        child: Material(
+          key: const Key('qa_dashboard_project_selector'),
+          color: t.accent.withValues(alpha: 0.12),
+          borderRadius: t.radiusPill,
+          child: InkWell(
+            borderRadius: t.radiusPill,
+            onTap: () => showProjectSelectorSheet(
+              context,
+              ref,
+              projects: projects,
+              selectedProjectId: selectedProject?.id,
+            ),
+            child: ConstrainedBox(
+              // Stays a small, subtle chip visually, but the tap area still
+              // clears the 48dp minimum touch target.
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 8, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.work_outline, size: 16, color: t.accent),
+                    const SizedBox(width: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 200),
+                      child: Text(
                         label,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: context.tokens.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: t.text,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    Icon(Icons.arrow_drop_down, size: 20, color: t.accent),
+                  ],
                 ),
-                Icon(Icons.arrow_drop_down, color: context.tokens.accent),
-              ],
+              ),
             ),
           ),
         ),
@@ -679,10 +676,10 @@ class DashboardFinancialSection extends ConsumerWidget {
         ? const AsyncValue<Map<String, num>>.data(<String, num>{})
         : ref.watch(dashboardPreviousWeekSummaryProvider(workspaceId));
     final previousWeekData = previousWeek.value ?? const <String, num>{};
-    final previousWeekExpenses =
-        (previousWeekData['previousWeekExpenses'] ?? 0).toDouble();
-    final previousWeekIncome =
-        (previousWeekData['previousWeekIncome'] ?? 0).toDouble();
+    final previousWeekExpenses = (previousWeekData['previousWeekExpenses'] ?? 0)
+        .toDouble();
+    final previousWeekIncome = (previousWeekData['previousWeekIncome'] ?? 0)
+        .toDouble();
     final expenseTrend = _weeklyTrendIndicator(
       context: context,
       l10n: l10n,
@@ -757,7 +754,9 @@ class DashboardFinancialSection extends ConsumerWidget {
                 value: profitMarginText ?? '—',
                 valueColor: profitMarginText == null
                     ? null
-                    : (isProfit ? context.tokens.income : context.tokens.expense),
+                    : (isProfit
+                          ? context.tokens.income
+                          : context.tokens.expense),
               ),
             ),
           ],
@@ -874,82 +873,6 @@ Widget? _weeklyTrendIndicator({
   );
 }
 
-/// Resources quick-links. Workers is surfaced as the most-used resource and
-/// gets a larger, bolder tile of its own; Contractors/Equipment/Transport
-/// remain grouped as a visually secondary row beneath it.
-class _ResourceLinks extends ConsumerWidget {
-  const _ResourceLinks();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    // Workers already has a cheap, unlimited live count via the same
-    // `workersProvider` stream used by add_expense_screen.dart and the
-    // workers screen itself, so it can carry a real count. Contractors,
-    // Equipment and Transport route through the shared entity-directory
-    // system (resource_directory_screen.dart), which only exposes paginated
-    // fetches — there is no existing unlimited count stream for those types,
-    // so their labels are intentionally left without a count rather than
-    // showing a number capped by a page size.
-    final workersCount = ref.watch(workersProvider).value?.length;
-    final workersLabel = workersCount != null
-        ? l10n.t(
-            'resourceCountLabel',
-            params: {'label': l10n.t('workers'), 'count': '$workersCount'},
-          )
-        : l10n.t('workers');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _ResourceCard(
-          qaKey: const Key('qa_resource_workers'),
-          icon: Icons.engineering_outlined,
-          label: workersLabel,
-          color: context.tokens.warning,
-          onTap: () => context.push(AppRoutes.workers),
-          prominent: true,
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _ResourceCard(
-                qaKey: const Key('qa_resource_contractors'),
-                icon: Icons.handyman_outlined,
-                label: l10n.t('contractorsDirectory'),
-                color: context.tokens.accent,
-                onTap: () => context.push(AppRoutes.contractorsDirectory),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ResourceCard(
-                qaKey: const Key('qa_resource_equipment'),
-                icon: Icons.construction_outlined,
-                label: l10n.t('equipmentDirectory'),
-                color: context.tokens.income,
-                onTap: () => context.push(AppRoutes.equipmentDirectory),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ResourceCard(
-                qaKey: const Key('qa_resource_transport'),
-                icon: Icons.local_shipping_outlined,
-                label: l10n.t('transportDirectory'),
-                color: context.tokens.expense,
-                onTap: () =>
-                    context.push(AppRoutes.transportProvidersDirectory),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 /// Compact "Workers this week" summary (v2 UI audit Task B2, Problem 6): the
 /// dashboard should surface who actually worked, not just financial totals.
 /// Derived from the existing `worker_entries` ledger — the same rolling
@@ -957,7 +880,10 @@ class _ResourceLinks extends ConsumerWidget {
 /// schema. Uses the same `Icons.engineering_outlined` glyph as the prominent
 /// Workers resource card above for visual consistency.
 class _WorkerAttendanceCard extends ConsumerWidget {
-  const _WorkerAttendanceCard({required this.workspaceId, required this.locale});
+  const _WorkerAttendanceCard({
+    required this.workspaceId,
+    required this.locale,
+  });
 
   final String workspaceId;
   final String locale;
@@ -1075,8 +1001,7 @@ class _AlertsCard extends ConsumerWidget {
     // payments query — the outstanding total already reflects the
     // workspace's live unpaid-payments state.
     final outstanding =
-        ref.watch(dashboardOutstandingPaymentsProvider(workspaceId)).value ??
-        0;
+        ref.watch(dashboardOutstandingPaymentsProvider(workspaceId)).value ?? 0;
 
     if (overBudgetProjects.isEmpty && outstanding <= 0) {
       return const SizedBox.shrink();
@@ -1300,69 +1225,6 @@ class _PaymentStatusCard extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({
-    required this.qaKey,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.prominent = false,
-  });
-
-  final Key qaKey;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  final bool prominent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      button: true,
-      child: Material(
-        key: qaKey,
-        color: color.withValues(alpha: prominent ? 0.16 : 0.1),
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            // Vertical padding sized so even the compact (non-prominent)
-            // cards clear the 48dp minimum touch target (v2 UI audit
-            // Accessibility Improvements) without changing the icon/text
-            // sizing that gives them their compact visual weight.
-            padding: EdgeInsetsDirectional.symmetric(
-              horizontal: prominent ? 14 : 10,
-              vertical: prominent ? 14 : 16,
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: prominent ? 26 : 18),
-                SizedBox(width: prominent ? 12 : 8),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: prominent ? 16 : 12,
-                      color: prominent ? color : null,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
