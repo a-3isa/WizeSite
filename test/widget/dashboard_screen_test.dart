@@ -30,6 +30,26 @@ Widget _app(Widget child) => MaterialApp(
   home: Scaffold(body: SingleChildScrollView(child: child)),
 );
 
+/// The dashboard's "All Projects" overview is summed live from the project
+/// list, so tests seed projects whose totals produce the expected aggregate.
+Project _proj({
+  required double income,
+  required double expenses,
+  String status = 'active',
+}) => Project(
+  id: 'p_${income}_$expenses',
+  workspaceId: 'workspace_1',
+  name: 'Project',
+  clientName: 'Client',
+  contractValue: 0,
+  status: status,
+  completionPercentage: 0,
+  totalExpenses: expenses,
+  totalPayments: income,
+  netProfit: income - expenses,
+  isArchived: false,
+);
+
 void main() {
   testWidgets('restricted dashboard never renders financial totals', (
     tester,
@@ -39,6 +59,7 @@ void main() {
         child: _app(
           DashboardFinancialSection(
             snapshot: DashboardSnapshot.restricted(),
+            projects: const <Project>[],
             currency: 'EGP',
             locale: 'en',
             workspaceId: '',
@@ -68,6 +89,7 @@ void main() {
         child: _app(
           DashboardFinancialSection(
             snapshot: snapshot,
+            projects: [_proj(income: 500, expenses: 1000)],
             currency: 'EGP',
             locale: 'en',
             workspaceId: '',
@@ -96,6 +118,7 @@ void main() {
           child: _app(
             DashboardFinancialSection(
               snapshot: snapshot,
+              projects: [_proj(income: 750000, expenses: 520000)],
               currency: 'EGP',
               locale: 'en',
               workspaceId: '',
@@ -107,7 +130,10 @@ void main() {
       // let its count-up animation settle before asserting the final text.
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('qa_dashboard_profit_margin')), findsOneWidget);
+      expect(
+        find.byKey(const Key('qa_dashboard_profit_margin')),
+        findsOneWidget,
+      );
       expect(find.text('Profit Margin'), findsOneWidget);
       expect(find.text('30.7%'), findsOneWidget);
       final marginValue = tester.widget<Text>(find.text('30.7%'));
@@ -129,6 +155,7 @@ void main() {
           child: _app(
             DashboardFinancialSection(
               snapshot: snapshot,
+              projects: const <Project>[],
               currency: 'EGP',
               locale: 'en',
               workspaceId: '',
@@ -160,6 +187,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            dashboardWeeklySummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'weeklyExpenses': 0,
+                'weeklyIncome': 150000,
+              }),
+            ),
             dashboardPreviousWeekSummaryProvider.overrideWith(
               (ref, workspaceId) => Stream.value(const <String, num>{
                 'previousWeekExpenses': 0,
@@ -170,6 +203,7 @@ void main() {
           child: _app(
             DashboardFinancialSection(
               snapshot: snapshot,
+              projects: const <Project>[],
               currency: 'EGP',
               locale: 'en',
               workspaceId: 'workspace_1',
@@ -198,6 +232,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            dashboardWeeklySummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'weeklyExpenses': 150000,
+                'weeklyIncome': 0,
+              }),
+            ),
             dashboardPreviousWeekSummaryProvider.overrideWith(
               (ref, workspaceId) => Stream.value(const <String, num>{
                 'previousWeekExpenses': 100000,
@@ -208,6 +248,7 @@ void main() {
           child: _app(
             DashboardFinancialSection(
               snapshot: snapshot,
+              projects: const <Project>[],
               currency: 'EGP',
               locale: 'en',
               workspaceId: 'workspace_1',
@@ -236,6 +277,12 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            dashboardWeeklySummaryProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(const <String, num>{
+                'weeklyExpenses': 0,
+                'weeklyIncome': 0,
+              }),
+            ),
             dashboardPreviousWeekSummaryProvider.overrideWith(
               (ref, workspaceId) => Stream.value(const <String, num>{
                 'previousWeekExpenses': 0,
@@ -246,6 +293,7 @@ void main() {
           child: _app(
             DashboardFinancialSection(
               snapshot: snapshot,
+              projects: const <Project>[],
               currency: 'EGP',
               locale: 'en',
               workspaceId: 'workspace_1',
@@ -378,47 +426,49 @@ void main() {
     expect(container.read(activeWorkspaceIdProvider), 'personal_ws');
   });
 
-  testWidgets('dashboard no longer shows the resources section (moved to More)', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-          dashboardSnapshotProvider.overrideWith(
-            (ref, workspaceId) => Stream.value(DashboardSnapshot.restricted()),
+  testWidgets(
+    'dashboard no longer shows the resources section (moved to More)',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) =>
+                  Stream.value(DashboardSnapshot.restricted()),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
           ),
-          notificationItemsProvider.overrideWith(
-            (ref) => Stream.value(const []),
-          ),
-          unreadNotificationCountProvider.overrideWith((ref) => 0),
-          currentUsageProvider.overrideWith(
-            (ref) =>
-                Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
-          ),
-          currentSubscriptionStreamProvider.overrideWith(
-            (ref) => Stream.value(SubscriptionState.free()),
-          ),
-          currentUserSettingsProvider.overrideWith(
-            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
-          ),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: const [AppLocalizations.delegate],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: const DashboardScreen(),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    // The resource directory now lives on the More tab, not Home.
-    expect(find.text('Resources'), findsNothing);
-    expect(find.byKey(const Key('qa_resource_workers')), findsNothing);
-    expect(find.byKey(const Key('qa_resource_contractors')), findsNothing);
-    expect(find.byKey(const Key('qa_add_expense')), findsNothing);
-    expect(find.text('Monthly Usage'), findsNothing);
-  });
+      // The resource directory now lives on the More tab, not Home.
+      expect(find.text('Resources'), findsNothing);
+      expect(find.byKey(const Key('qa_resource_workers')), findsNothing);
+      expect(find.byKey(const Key('qa_resource_contractors')), findsNothing);
+      expect(find.byKey(const Key('qa_add_expense')), findsNothing);
+      expect(find.text('Monthly Usage'), findsNothing);
+    },
+  );
 
   testWidgets(
     'worker attendance summary card renders distinct worker count and '
@@ -930,10 +980,7 @@ void main() {
     expect(find.text('75%', skipOffstage: false), findsOneWidget);
     // 75% used sits in the warning band (70-90%): remaining amount is shown
     // (180,000 - 135,500 = 44,500) and color-graded to match.
-    expect(
-      find.textContaining('44,500', skipOffstage: false),
-      findsOneWidget,
-    );
+    expect(find.textContaining('44,500', skipOffstage: false), findsOneWidget);
     expect(
       find.textContaining('Remaining', skipOffstage: false),
       findsOneWidget,
@@ -966,9 +1013,7 @@ void main() {
     );
     expect(contractValueRow, findsOneWidget);
     final contractValueText = tester.widget<Text>(
-      find
-          .descendant(of: contractValueRow, matching: find.byType(Text))
-          .last,
+      find.descendant(of: contractValueRow, matching: find.byType(Text)).last,
     );
     expect(contractValueText.style?.fontSize, 12);
     expect(contractValueText.style?.fontWeight, FontWeight.w700);

@@ -183,6 +183,7 @@ class DashboardScreen extends ConsumerWidget {
                 snapshotAsync.whenStale(
                   data: (snapshot) => DashboardFinancialSection(
                     snapshot: snapshot,
+                    projects: projects,
                     currency: currency,
                     locale: locale,
                     workspaceId: workspaceId ?? '',
@@ -647,19 +648,32 @@ class WorkspaceSwitcher extends ConsumerWidget {
 class DashboardFinancialSection extends ConsumerWidget {
   const DashboardFinancialSection({
     required this.snapshot,
+    required this.projects,
     required this.currency,
     required this.locale,
     required this.workspaceId,
     super.key,
   });
 
+  /// Only its `hasFinancialAccess` flag is used, to gate the whole section.
+  /// The financial figures below are derived live from [projects] and the
+  /// weekly providers instead of the `workspace_metrics` aggregate doc this
+  /// snapshot carries — that doc can lag behind (e.g. reflect only some
+  /// projects), which made the "All Projects" overview show stale totals and
+  /// a project count of 1 even with three active projects.
   final DashboardSnapshot snapshot;
+
+  /// Active (non-archived), metrics-merged projects. The workspace-wide
+  /// overview (net / income / expenses / counts / margin) is summed from these
+  /// so it always agrees with the Projects list and self-heals if the
+  /// aggregate doc is stale.
+  final List<Project> projects;
   final String currency;
   final String locale;
 
-  /// Used to fetch the previous-week comparison totals that power the
-  /// ▲/▼ trend indicators below. An empty id (e.g. no active workspace, or a
-  /// standalone widget test) skips that lookup entirely — no trend is shown.
+  /// Used to fetch the current- and previous-week comparison totals that power
+  /// the weekly summary + ▲/▼ trend indicators below. An empty id (e.g. no
+  /// active workspace, or a standalone widget test) skips those lookups.
   final String workspaceId;
 
   @override
@@ -672,6 +686,32 @@ class DashboardFinancialSection extends ConsumerWidget {
         message: l10n.t('reportAccessDenied'),
       );
     }
+
+    // Workspace-wide totals derived live from the (metrics-merged) project
+    // list rather than the stale workspace_metrics aggregate doc.
+    final totalIncome = projects.fold<double>(
+      0,
+      (sum, p) => sum + p.totalPayments,
+    );
+    final totalExpenses = projects.fold<double>(
+      0,
+      (sum, p) => sum + p.totalExpenses,
+    );
+    final net = totalIncome - totalExpenses;
+    final totalProjects = projects.length;
+    final activeProjects = projects
+        .where((p) => p.status.trim().toLowerCase() == 'active')
+        .length;
+
+    // Current-week totals from the live weekly stream (not the aggregate doc),
+    // so the "Last 7 Days" figures and their trends are accurate too.
+    final thisWeek = workspaceId.isEmpty
+        ? const AsyncValue<Map<String, num>>.data(<String, num>{})
+        : ref.watch(dashboardWeeklySummaryProvider(workspaceId));
+    final thisWeekData = thisWeek.value ?? const <String, num>{};
+    final weeklyExpenses = (thisWeekData['weeklyExpenses'] ?? 0).toDouble();
+    final weeklyIncome = (thisWeekData['weeklyIncome'] ?? 0).toDouble();
+
     final previousWeek = workspaceId.isEmpty
         ? const AsyncValue<Map<String, num>>.data(<String, num>{})
         : ref.watch(dashboardPreviousWeekSummaryProvider(workspaceId));
@@ -683,31 +723,28 @@ class DashboardFinancialSection extends ConsumerWidget {
     final expenseTrend = _weeklyTrendIndicator(
       context: context,
       l10n: l10n,
-      thisWeek: snapshot.weeklyExpenses,
+      thisWeek: weeklyExpenses,
       lastWeek: previousWeekExpenses,
       increaseIsGood: false,
     );
     final incomeTrend = _weeklyTrendIndicator(
       context: context,
       l10n: l10n,
-      thisWeek: snapshot.weeklyIncome,
+      thisWeek: weeklyIncome,
       lastWeek: previousWeekIncome,
       increaseIsGood: true,
     );
-    final isProfit = snapshot.net >= 0;
+    final isProfit = net >= 0;
     final numberFormat = NumberFormat.decimalPattern(locale);
     final netText =
-        '${isProfit ? '' : '−'}${numberFormat.format(snapshot.net.abs())}';
+        '${isProfit ? '' : '−'}${numberFormat.format(net.abs())}';
     // Profit Margin KPI (v2 UI audit Task B4): net ÷ income as a percentage,
     // surfaced as a first-class stat alongside Active Projects / Projects
     // rather than requiring readers to do the division themselves from the
     // hero card's income/expense split. `null` when income is zero — margin
     // is undefined without revenue, so the tile shows an em dash instead of
     // a NaN/Infinity percentage.
-    final profitMarginText = Formatters.profitMargin(
-      snapshot.net,
-      snapshot.totalIncome,
-    );
+    final profitMarginText = Formatters.profitMargin(net, totalIncome);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -720,8 +757,8 @@ class DashboardFinancialSection extends ConsumerWidget {
             net: netText,
             negative: !isProfit,
             currency: currency,
-            income: numberFormat.format(snapshot.totalIncome),
-            expense: numberFormat.format(snapshot.totalExpenses),
+            income: numberFormat.format(totalIncome),
+            expense: numberFormat.format(totalExpenses),
             incomeLabel: l10n.t('totalIncome'),
             expenseLabel: l10n.t('totalExpenses'),
           ),
@@ -733,7 +770,7 @@ class DashboardFinancialSection extends ConsumerWidget {
               child: StatTile(
                 icon: Icons.apartment_outlined,
                 label: l10n.t('activeProjects'),
-                value: '${snapshot.activeProjects}',
+                value: '$activeProjects',
               ),
             ),
             const SizedBox(width: 12),
@@ -741,7 +778,7 @@ class DashboardFinancialSection extends ConsumerWidget {
               child: StatTile(
                 icon: Icons.work_outline,
                 label: l10n.t('projects'),
-                value: '${snapshot.totalProjects}',
+                value: '$totalProjects',
                 iconColor: context.tokens.income,
               ),
             ),
@@ -770,7 +807,7 @@ class DashboardFinancialSection extends ConsumerWidget {
               child: MetricCard(
                 label: l10n.t('totalExpenses'),
                 value: Formatters.money(
-                  snapshot.weeklyExpenses,
+                  weeklyExpenses,
                   currencyCode: currency,
                   locale: locale,
                 ),
@@ -784,7 +821,7 @@ class DashboardFinancialSection extends ConsumerWidget {
               child: MetricCard(
                 label: l10n.t('totalIncome'),
                 value: Formatters.money(
-                  snapshot.weeklyIncome,
+                  weeklyIncome,
                   currencyCode: currency,
                   locale: locale,
                 ),
