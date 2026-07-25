@@ -3,7 +3,6 @@ import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:intl/intl.dart';
-import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
@@ -100,7 +99,16 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const WorkspaceSwitcher(),
+        toolbarHeight: 72,
+        titleSpacing: 16,
+        // Premium two-line header: the workspace is a small tappable eyebrow,
+        // the current project scope is the bold primary title — both open their
+        // respective bottom sheets. Settings lives on the More tab, so the app
+        // bar keeps only the notifications action for a clean, uncluttered look.
+        title: DashboardHeader(
+          projects: projects,
+          selectedProject: selectedProject,
+        ),
         actions: [
           Badge(
             isLabelVisible: unreadCount > 0,
@@ -112,27 +120,8 @@ class DashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.notifications_outlined),
             ),
           ),
-          IconButton(
-            key: const Key('qa_dashboard_settings'),
-            tooltip: l10n.t('settings'),
-            onPressed: () {
-              ref.read(appPrefetcherProvider).warmSettings();
-              context.push(AppRoutes.settings);
-            },
-            icon: const Icon(Icons.settings_outlined),
-          ),
           const SizedBox(width: 8),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 4),
-            child: _DashboardProjectSelector(
-              projects: projects,
-              selectedProject: selectedProject,
-            ),
-          ),
-        ),
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -239,10 +228,15 @@ class DashboardScreen extends ConsumerWidget {
 
 /// Project filter shown under the dashboard AppBar. Scopes all financial data
 /// to a single project, or to "All Projects" (workspace aggregate) when null.
-class _DashboardProjectSelector extends ConsumerWidget {
-  const _DashboardProjectSelector({
+/// Premium dashboard header: a small tappable workspace eyebrow stacked over
+/// the bold current-project title. The workspace opens the workspace switcher
+/// sheet; the project opens the project selector sheet. Both live in the app
+/// bar so Home's body starts straight at the financial overview.
+class DashboardHeader extends ConsumerWidget {
+  const DashboardHeader({
     required this.projects,
     required this.selectedProject,
+    super.key,
   });
 
   final List<Project> projects;
@@ -251,26 +245,79 @@ class _DashboardProjectSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final label = selectedProject?.name.trim().isNotEmpty == true
+    final t = context.tokens;
+
+    // --- Workspace name (same resolution as the old WorkspaceSwitcher) ---
+    final activeWorkspaceId = ref.watch(activeWorkspaceIdProvider);
+    final workspaces =
+        ref.watch(userWorkspaceSummariesProvider).value ??
+        const <WorkspaceSummary>[];
+    final activeWorkspaceName =
+        ref.watch(activeWorkspaceNameProvider).value?.trim() ?? '';
+    WorkspaceSummary? current;
+    for (final workspace in workspaces) {
+      if (workspace.id == activeWorkspaceId) {
+        current = workspace;
+        break;
+      }
+    }
+    final workspaceName = (current?.name.trim().isNotEmpty ?? false)
+        ? current!.name.trim()
+        : activeWorkspaceName.isNotEmpty
+        ? activeWorkspaceName
+        : l10n.t('home');
+
+    final projectLabel = selectedProject?.name.trim().isNotEmpty == true
         ? selectedProject!.name.trim()
         : l10n.t('allProjects');
 
-    final t = context.tokens;
-    // Compact left-aligned pill rather than a full-width card: the project
-    // scope is a filter, not a primary content block, so it should not consume
-    // a whole dashboard row. Sizes to its content and opens the same
-    // bottom-sheet picker.
-    return Align(
-      alignment: AlignmentDirectional.centerStart,
-      child: Semantics(
-        label: '${l10n.t('project')}: $label',
-        button: true,
-        child: Material(
-          key: const Key('qa_dashboard_project_selector'),
-          color: t.accent.withValues(alpha: 0.12),
-          borderRadius: t.radiusPill,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Workspace eyebrow — small, muted, secondary.
+        Semantics(
+          button: true,
+          label: '${l10n.t('workspace')}: $workspaceName',
           child: InkWell(
-            borderRadius: t.radiusPill,
+            key: const Key('qa_workspace_dropdown'),
+            borderRadius: BorderRadius.circular(BuildTokens.pill),
+            onTap: () => showWorkspaceSwitcherSheet(context),
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(2, 2, 4, 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.workspaces_outline, size: 13, color: t.textMuted),
+                  const SizedBox(width: 4),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      workspaceName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                        color: t.textMuted,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.keyboard_arrow_down, size: 15, color: t.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Project scope — the bold primary title.
+        Semantics(
+          button: true,
+          label: '${l10n.t('project')}: $projectLabel',
+          child: InkWell(
+            key: const Key('qa_dashboard_project_selector'),
+            borderRadius: BorderRadius.circular(BuildTokens.pill),
             onTap: () => showProjectSelectorSheet(
               context,
               ref,
@@ -278,37 +325,36 @@ class _DashboardProjectSelector extends ConsumerWidget {
               selectedProjectId: selectedProject?.id,
             ),
             child: ConstrainedBox(
-              // Stays a small, subtle chip visually, but the tap area still
-              // clears the 48dp minimum touch target.
+              // Keeps the primary tap target at/above the 48dp minimum.
               constraints: const BoxConstraints(minHeight: 48),
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 8, 0),
+                padding: const EdgeInsetsDirectional.fromSTEB(0, 2, 4, 2),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.work_outline, size: 16, color: t.accent),
-                    const SizedBox(width: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
+                    Icon(Icons.work_outline, size: 20, color: t.accent),
+                    const SizedBox(width: 8),
+                    Flexible(
                       child: Text(
-                        label,
+                        projectLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
                           color: t.text,
                         ),
                       ),
                     ),
-                    Icon(Icons.arrow_drop_down, size: 20, color: t.accent),
+                    Icon(Icons.arrow_drop_down, size: 24, color: t.accent),
                   ],
                 ),
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -535,30 +581,6 @@ class ProjectFinancialSection extends ConsumerWidget {
               AppLoadingSkeleton(semanticsLabel: l10n.t('loadingContent')),
           error: (_, _) => const SizedBox.shrink(),
         ),
-        const SizedBox(height: 20),
-        SectionHeader(title: l10n.t('quickAdd')),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            BuildChip(
-              label: l10n.t('addExpense'),
-              icon: Icons.north_east,
-              onTap: () => context.push(AppRoutes.addExpense),
-            ),
-            BuildChip(
-              label: l10n.t('addPayment'),
-              icon: Icons.south_west,
-              onTap: () => context.push(AppRoutes.addPayment),
-            ),
-            BuildChip(
-              label: l10n.t('voiceExpense'),
-              icon: Icons.mic,
-              onTap: () => context.push(AppRoutes.voiceExpense),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -590,56 +612,6 @@ class _ProjectRecentRow extends StatelessWidget {
         currency: currency,
         kind: isPayment ? MoneyKind.income : MoneyKind.expense,
         showDivider: !isLast,
-      ),
-    );
-  }
-}
-
-/// Compact workspace control rendered as the dashboard AppBar title.
-///
-/// Shows the active workspace name instantly from the cached summaries (no
-/// loading skeleton). Always tappable — even with a single workspace — so
-/// "create another workspace" stays reachable regardless of how many the
-/// user already has. Opens the premium [showWorkspaceSwitcherSheet].
-class WorkspaceSwitcher extends ConsumerWidget {
-  const WorkspaceSwitcher({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final activeWorkspaceId = ref.watch(activeWorkspaceIdProvider);
-    final workspaces =
-        ref.watch(userWorkspaceSummariesProvider).value ??
-        const <WorkspaceSummary>[];
-    final activeWorkspaceName =
-        ref.watch(activeWorkspaceNameProvider).value?.trim() ?? '';
-
-    WorkspaceSummary? current;
-    for (final workspace in workspaces) {
-      if (workspace.id == activeWorkspaceId) {
-        current = workspace;
-        break;
-      }
-    }
-    final title = (current?.name.trim().isNotEmpty ?? false)
-        ? current!.name.trim()
-        : activeWorkspaceName.isNotEmpty
-        ? activeWorkspaceName
-        : l10n.t('home');
-
-    return InkWell(
-      key: const Key('qa_workspace_dropdown'),
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => showWorkspaceSwitcherSheet(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
-            const Icon(Icons.arrow_drop_down),
-          ],
-        ),
       ),
     );
   }
@@ -736,8 +708,7 @@ class DashboardFinancialSection extends ConsumerWidget {
     );
     final isProfit = net >= 0;
     final numberFormat = NumberFormat.decimalPattern(locale);
-    final netText =
-        '${isProfit ? '' : '−'}${numberFormat.format(net.abs())}';
+    final netText = '${isProfit ? '' : '−'}${numberFormat.format(net.abs())}';
     // Profit Margin KPI (v2 UI audit Task B4): net ÷ income as a percentage,
     // surfaced as a first-class stat alongside Active Projects / Projects
     // rather than requiring readers to do the division themselves from the

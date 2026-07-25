@@ -31,34 +31,54 @@ Future<void> pickOption<T>(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
           ),
-          child: ListView(
-            shrinkWrap: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: t.text,
-                  ),
+              // Drag handle — signals the sheet is dismissable and visually
+              // caps the header off from the option rows below.
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: t.borderStrong,
+                  borderRadius: BorderRadius.circular(BuildTokens.pill),
                 ),
               ),
-              for (final option in options)
-                ListTile(
-                  title: Text(
-                    option.label,
+              // Header: deliberately styled unlike the option rows (larger,
+              // heavier, muted-uppercase eyebrow context, and a divider under
+              // it) so the sheet title never reads as a selectable option.
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 2, 20, 12),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    title,
                     style: TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
                       color: t.text,
                     ),
                   ),
-                  trailing: option.value == selected
-                      ? Icon(Icons.check, color: t.accent)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(option.value),
                 ),
+              ),
+              Divider(height: 1, thickness: 1, color: t.border),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  children: [
+                    for (final option in options)
+                      _OptionTile<T>(
+                        label: option.label,
+                        selected: option.value == selected,
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop(option.value),
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -68,5 +88,49 @@ Future<void> pickOption<T>(
   );
   if (result != null) {
     onSelected(result);
+  }
+}
+
+/// A single selectable row in the [pickOption] sheet. The selected row is
+/// tinted and accent-colored with a check, so options read clearly as choices
+/// distinct from the bold sheet header above.
+class _OptionTile<T> extends StatelessWidget {
+  const _OptionTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Material(
+      color: selected ? t.accentSoft : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 20, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? t.accent : t.text,
+                  ),
+                ),
+              ),
+              if (selected) Icon(Icons.check, size: 20, color: t.accent),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

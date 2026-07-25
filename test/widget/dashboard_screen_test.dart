@@ -336,7 +336,9 @@ void main() {
           ),
           workspaceMutationServiceProvider.overrideWithValue(workspaceService),
         ],
-        child: _app(const WorkspaceSwitcher()),
+        child: _app(
+          const DashboardHeader(projects: <Project>[], selectedProject: null),
+        ),
       ),
     );
     await tester.pump();
@@ -368,7 +370,9 @@ void main() {
               (ref) => Stream.value(const <WorkspaceSummary>[]),
             ),
           ],
-          child: _app(const WorkspaceSwitcher()),
+          child: _app(
+            const DashboardHeader(projects: <Project>[], selectedProject: null),
+          ),
         ),
       );
       await tester.pump();
@@ -413,7 +417,9 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: _app(const WorkspaceSwitcher()),
+        child: _app(
+          const DashboardHeader(projects: <Project>[], selectedProject: null),
+        ),
       ),
     );
     await tester.pump();
