@@ -86,7 +86,9 @@ void main() {
               (ref) => Stream.value(SubscriptionState.free()),
             ),
           ],
-          child: _app(const WorkspaceSwitcher()),
+          child: _app(
+            const DashboardHeader(projects: [], selectedProject: null),
+          ),
         ),
       );
       await tester.pump();
@@ -121,7 +123,9 @@ void main() {
               (ref) => Stream.value(_proSubscription),
             ),
           ],
-          child: _app(const WorkspaceSwitcher()),
+          child: _app(
+            const DashboardHeader(projects: [], selectedProject: null),
+          ),
         ),
       );
       await tester.pump();
@@ -160,7 +164,7 @@ void main() {
             (ref) => Stream.value(SubscriptionState.free()),
           ),
         ],
-        child: _app(const WorkspaceSwitcher()),
+        child: _app(const DashboardHeader(projects: [], selectedProject: null)),
       ),
     );
     await tester.pump();
@@ -211,7 +215,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: _app(const WorkspaceSwitcher()),
+        child: _app(const DashboardHeader(projects: [], selectedProject: null)),
       ),
     );
     await tester.pump();
