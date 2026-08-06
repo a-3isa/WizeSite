@@ -11,6 +11,7 @@ void main() {
       title: 'Expenses by category',
       categoryTotals: const {'Materials': 1200, 'Labor': 800},
       currency: 'EGP',
+      emptyLabel: 'No data',
     );
 
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
@@ -23,6 +24,9 @@ void main() {
       expenses: 900,
       income: 1500,
       currency: 'EGP',
+      emptyLabel: 'No data',
+      expensesLabel: 'Expenses',
+      incomeLabel: 'Income',
     );
 
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
@@ -45,6 +49,9 @@ void main() {
         ),
       ],
       currency: 'EGP',
+      emptyLabel: 'No data',
+      expensesLabel: 'Expenses',
+      incomeLabel: 'Income',
     );
 
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');

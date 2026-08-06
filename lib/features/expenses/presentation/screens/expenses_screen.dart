@@ -232,7 +232,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         ActiveFilter(
           id: 'date',
           label:
-              '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} – ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
+              '${_startDateFilter?.toIso8601String().split('T').first ?? l10n.t('anyDate')} – ${_endDateFilter?.toIso8601String().split('T').first ?? l10n.t('anyDate')}',
         ),
       );
     }
@@ -240,7 +240,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       filters.add(
         ActiveFilter(
           id: 'search',
-          label: 'Search: ${_searchController.text.trim()}',
+          label: l10n.t(
+            'searchFilterLabel',
+            params: {'query': _searchController.text.trim()},
+          ),
         ),
       );
     }
@@ -273,7 +276,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                       label: l10n.t('category'),
                       value: _categoryFilter ?? '',
                       entries: [
-                        const DropdownMenuEntry(value: '', label: 'All'),
+                        DropdownMenuEntry(value: '', label: l10n.t('all')),
                         DropdownMenuEntry(
                           value: 'materials',
                           label: l10n.expenseCategoryLabel('materials'),
@@ -300,7 +303,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                       label: l10n.t('paymentMethod'),
                       value: _paymentMethodFilter ?? '',
                       entries: [
-                        const DropdownMenuEntry(value: '', label: 'All'),
+                        DropdownMenuEntry(value: '', label: l10n.t('all')),
                         DropdownMenuEntry(
                           value: 'cash',
                           label: l10n.paymentMethodLabel('cash'),
@@ -325,7 +328,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                       label: l10n.t('paymentStatus'),
                       value: _paymentStatusFilter ?? '',
                       entries: [
-                        const DropdownMenuEntry(value: '', label: 'All'),
+                        DropdownMenuEntry(value: '', label: l10n.t('all')),
                         for (final status in PaymentStatuses.values)
                           DropdownMenuEntry(
                             value: status,
@@ -459,14 +462,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                               _clearExpenseFilters();
                               Navigator.of(context).pop();
                             }),
-                            child: const Text('Clear filters'),
+                            child: Text(l10n.t('clearFilters')),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Apply'),
+                            child: Text(l10n.t('apply')),
                           ),
                         ),
                       ],
@@ -1258,11 +1261,25 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   }
 
   ExpenseGroup _localizedGroup(ExpenseGroup group, AppLocalizations l10n) {
-    final title = switch (_groupBy) {
-      ExpenseGroupMode.category => l10n.expenseCategoryLabel(group.title),
-      ExpenseGroupMode.paymentMethod => l10n.paymentMethodLabel(group.title),
-      _ => group.title,
+    // Static group titles are matched on the stable group id, never on the
+    // English text, so they translate in every locale.
+    const idKeys = <String, String>{
+      'list': 'allExpenses',
+      'today': 'today',
+      'yesterday': 'yesterday',
+      'current_week': 'thisWeek',
+      'current_month': 'thisMonth',
     };
+    final idKey = idKeys[group.id];
+    final title = idKey != null
+        ? l10n.t(idKey)
+        : switch (_groupBy) {
+            ExpenseGroupMode.category => l10n.expenseCategoryLabel(group.title),
+            ExpenseGroupMode.paymentMethod => l10n.paymentMethodLabel(
+              group.title,
+            ),
+            _ => group.title,
+          };
     return ExpenseGroup(
       id: group.id,
       title: title == 'Unassigned' ? l10n.t('unassigned') : title,

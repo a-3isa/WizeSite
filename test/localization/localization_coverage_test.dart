@@ -70,7 +70,48 @@ const Map<String, List<String>> _reviewPackKeyGroups = {
   ],
 };
 
+/// Keys whose Arabic value is legitimately identical to the English one:
+/// brand names, symbols, and pure placeholder format strings.
+const Set<String> _arabicIdenticalAllowlist = {
+  'appName', // brand name
+  'loadingShort', // '...'
+  'none', // '-'
+  'projectDateWithValue', // '{project} | {date}'
+  'resourceCountLabel', // '{label} ({count})'
+};
+
 void main() {
+  test('every Arabic value is actually translated, not English text', () {
+    final en = AppLocalizations.localizedValues['en']!;
+    final ar = AppLocalizations.localizedValues['ar']!;
+
+    // Strip placeholders like {count} before judging whether text is English.
+    final placeholder = RegExp(r'\{[a-zA-Z0-9_]+\}');
+    final arabicScript = RegExp(r'[؀-ۿ]');
+    final latinWord = RegExp(r'[A-Za-z]{2,}');
+
+    final untranslated = <String>[];
+    for (final entry in ar.entries) {
+      if (_arabicIdenticalAllowlist.contains(entry.key)) continue;
+      final value = entry.value.replaceAll(placeholder, ' ');
+      if (arabicScript.hasMatch(value)) continue;
+      if (!latinWord.hasMatch(value)) continue;
+      untranslated.add('${entry.key} = "${entry.value}"');
+    }
+
+    expect(
+      untranslated,
+      isEmpty,
+      reason:
+          'These Arabic entries still hold English text, so the app shows '
+          'English while the locale is ar:\n  ${untranslated.join('\n  ')}',
+    );
+    // Guard the guard: the allowlist must not accumulate stale entries.
+    for (final key in _arabicIdenticalAllowlist) {
+      expect(en, contains(key), reason: 'Stale allowlist entry "$key"');
+    }
+  });
+
   test('all supported locales contain the full key set', () {
     final values = AppLocalizations.localizedValues;
     final enKeys = values['en']!.keys.toSet();

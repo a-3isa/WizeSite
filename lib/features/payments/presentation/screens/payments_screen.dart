@@ -136,12 +136,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
         ActiveFilter(
           id: 'date',
           label:
-              '${_startDateFilter?.toIso8601String().split('T').first ?? 'Any'} - ${_endDateFilter?.toIso8601String().split('T').first ?? 'Any'}',
+              '${_startDateFilter?.toIso8601String().split('T').first ?? l10n.t('anyDate')} - ${_endDateFilter?.toIso8601String().split('T').first ?? l10n.t('anyDate')}',
         ),
       if (_searchController.text.trim().isNotEmpty)
         ActiveFilter(
           id: 'search',
-          label: 'Search: ${_searchController.text.trim()}',
+          label: l10n.t(
+            'searchFilterLabel',
+            params: {'query': _searchController.text.trim()},
+          ),
         ),
     ];
   }
@@ -172,7 +175,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                       label: l10n.t('paymentMethod'),
                       value: _paymentMethodFilter ?? '',
                       entries: [
-                        const DropdownMenuEntry(value: '', label: 'All'),
+                        DropdownMenuEntry(value: '', label: l10n.t('all')),
                         DropdownMenuEntry(
                           value: 'cash',
                           label: l10n.paymentMethodLabel('cash'),
@@ -197,7 +200,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                       label: l10n.t('paymentStatus'),
                       value: _paymentStatusFilter ?? '',
                       entries: [
-                        const DropdownMenuEntry(value: '', label: 'All'),
+                        DropdownMenuEntry(value: '', label: l10n.t('all')),
                         for (final status in PaymentStatuses.values)
                           DropdownMenuEntry(
                             value: status,
@@ -318,14 +321,14 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                               _clearPaymentFilters();
                               Navigator.of(context).pop();
                             },
-                            child: const Text('Clear filters'),
+                            child: Text(l10n.t('clearFilters')),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Apply'),
+                            child: Text(l10n.t('apply')),
                           ),
                         ),
                       ],
@@ -878,7 +881,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
                     child: FilledButton.icon(
                       onPressed: _openPaymentFilterSheet,
                       icon: const Icon(Icons.filter_list),
-                      label: const Text('Filters'),
+                      label: Text(l10n.t('filters')),
                     ),
                   ),
                   const SizedBox(width: 12),

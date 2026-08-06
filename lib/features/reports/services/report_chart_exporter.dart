@@ -12,6 +12,7 @@ class ReportChartExporter {
     required String title,
     required Map<String, double> categoryTotals,
     required String currency,
+    required String emptyLabel,
   }) {
     return _buildBarDocument(
       title: title,
@@ -20,6 +21,7 @@ class ReportChartExporter {
           .toList(growable: false),
       currency: currency,
       color: PdfColors.orange700,
+      emptyLabel: emptyLabel,
     );
   }
 
@@ -28,15 +30,19 @@ class ReportChartExporter {
     required double expenses,
     required double income,
     required String currency,
+    required String emptyLabel,
+    required String expensesLabel,
+    required String incomeLabel,
   }) {
     return _buildBarDocument(
       title: title,
       series: [
-        _ChartValue('Expenses', expenses),
-        _ChartValue('Income', income),
+        _ChartValue(expensesLabel, expenses),
+        _ChartValue(incomeLabel, income),
       ],
       currency: currency,
       color: PdfColors.blue700,
+      emptyLabel: emptyLabel,
     );
   }
 
@@ -44,20 +50,24 @@ class ReportChartExporter {
     required String title,
     required List<MonthlyFlowData> points,
     required String currency,
+    required String emptyLabel,
+    required String expensesLabel,
+    required String incomeLabel,
   }) {
     final series = <_ChartValue>[];
     for (final point in points) {
       final month =
           '${point.month.year}-${point.month.month.toString().padLeft(2, '0')}';
       series
-        ..add(_ChartValue('$month expenses', point.expenses))
-        ..add(_ChartValue('$month income', point.income));
+        ..add(_ChartValue('$month $expensesLabel', point.expenses))
+        ..add(_ChartValue('$month $incomeLabel', point.income));
     }
     return _buildBarDocument(
       title: title,
       series: series,
       currency: currency,
       color: PdfColors.teal700,
+      emptyLabel: emptyLabel,
     );
   }
 
@@ -66,6 +76,7 @@ class ReportChartExporter {
     required List<_ChartValue> series,
     required String currency,
     required PdfColor color,
+    required String emptyLabel,
   }) async {
     final document = pw.Document();
     final font = await PdfGoogleFonts.cairoRegular();
@@ -84,7 +95,7 @@ class ReportChartExporter {
           pw.Text(title, style: pw.TextStyle(font: boldFont, fontSize: 20)),
           pw.SizedBox(height: 24),
           if (series.isEmpty)
-            pw.Text('No data')
+            pw.Text(emptyLabel)
           else
             ...series.map(
               (item) => pw.Padding(

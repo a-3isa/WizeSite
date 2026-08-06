@@ -188,7 +188,7 @@ class AttachmentTile extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: onRemove,
-              tooltip: 'Remove attachment',
+              tooltip: l10n.t('removeAttachment'),
             ),
         ],
       ),

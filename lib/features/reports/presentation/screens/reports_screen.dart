@@ -788,6 +788,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                         title: l10n.t('expenseBreakdown'),
                                         categoryTotals: data,
                                         currency: currency,
+                                        emptyLabel: l10n.t('noData'),
                                       ),
                                 )
                               : null,
@@ -818,6 +819,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                         title: l10n.t('monthlyCashFlow'),
                                         points: data,
                                         currency: currency,
+                                        emptyLabel: l10n.t('noData'),
+                                        expensesLabel: l10n.t('expenses'),
+                                        incomeLabel: l10n.t('income'),
                                       ),
                                 )
                               : null,
@@ -855,6 +859,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           (sum, item) => sum + item.income,
                                         ),
                                         currency: currency,
+                                        emptyLabel: l10n.t('noData'),
+                                        expensesLabel: l10n.t('expenses'),
+                                        incomeLabel: l10n.t('income'),
                                       ),
                                 )
                               : null,

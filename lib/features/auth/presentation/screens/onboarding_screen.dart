@@ -42,6 +42,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _selectedLanguageCode ??= currentLocale.languageCode;
     final totalPages = _slides.length + 1;
 
+    // Onboarding paging is pinned to LTR so the swipe/advance direction is the
+    // same in every language. Page *content* still renders in the ambient
+    // direction, restored inside the builders below.
+    final contentDirection = Directionality.of(context);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -54,59 +59,74 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
             Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: totalPages,
-                onPageChanged: (value) => setState(() => _index = value),
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return _LanguageStep(
-                      selectedLanguageCode: _selectedLanguageCode!,
-                      onLanguageChanged: (languageCode) {
-                        setState(() => _selectedLanguageCode = languageCode);
-                      },
-                    );
-                  }
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: PageView.builder(
+                  controller: _controller,
+                  itemCount: totalPages,
+                  onPageChanged: (value) => setState(() => _index = value),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Directionality(
+                        textDirection: contentDirection,
+                        child: _LanguageStep(
+                          selectedLanguageCode: _selectedLanguageCode!,
+                          onLanguageChanged: (languageCode) {
+                            setState(
+                              () => _selectedLanguageCode = languageCode,
+                            );
+                          },
+                        ),
+                      );
+                    }
 
-                  final slide = _slides[index - 1];
-                  return Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          slide.$1,
-                          size: 88,
-                          color: const Color(0xFFFF7A00),
+                    final slide = _slides[index - 1];
+                    return Directionality(
+                      textDirection: contentDirection,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              slide.$1,
+                              size: 88,
+                              color: const Color(0xFFFF7A00),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              l10n.t(slide.$2),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(l10n.t(slide.$3), textAlign: TextAlign.center),
+                          ],
                         ),
-                        const SizedBox(height: 24),
-                        Text(
-                          l10n.t(slide.$2),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(l10n.t(slide.$3), textAlign: TextAlign.center),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                totalPages,
-                (idx) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: _index == idx ? 20 : 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: _index == idx
-                        ? const Color(0xFFFF7A00)
-                        : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
+            // Dots follow the page order, so they are pinned to LTR too.
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  totalPages,
+                  (idx) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: _index == idx ? 20 : 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: _index == idx
+                          ? const Color(0xFFFF7A00)
+                          : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),

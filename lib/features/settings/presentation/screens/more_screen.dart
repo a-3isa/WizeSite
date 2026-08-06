@@ -42,7 +42,7 @@ class MoreScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Avatar(label: 'Site Eng', size: 56),
+                Avatar(label: l10n.t('siteEngineer'), size: 56),
                 const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
