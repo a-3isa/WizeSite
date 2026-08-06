@@ -125,3 +125,6 @@ wize-site-firebase-adminsdk-fbsvc-59e5c56971.json
 firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log
+
+# graphify knowledge-graph output (regenerable: `graphify . --update`)
+graphify-out/
