@@ -58,7 +58,12 @@ class SyncErrorClassifier {
         normalizedCode == 'limit_reached') {
       if (normalizedMessage.contains('archived') ||
           normalizedMessage.contains('no longer accept') ||
-          normalizedMessage.contains('no longer valid')) {
+          normalizedMessage.contains('no longer valid') ||
+          // Contract-and-payment invariant rejections. Without these two the
+          // messages fall through to `quota` below and the user is told they
+          // hit a plan limit, which is simply untrue.
+          normalizedMessage.contains('contract value') ||
+          normalizedMessage.contains('before recording payments')) {
         return SyncFailureCategory.invalidTarget;
       }
       return SyncFailureCategory.quota;

@@ -21,6 +21,9 @@ class _RealtimeProjectRepository implements ProjectRepository {
   final StreamController<Project?> controller;
 
   @override
+  Future<bool> hasAnyPayment(String projectId) async => false;
+
+  @override
   Future<void> archiveProject(String projectId) async {}
 
   @override
@@ -29,7 +32,7 @@ class _RealtimeProjectRepository implements ProjectRepository {
     required String userId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -74,7 +77,7 @@ class _RealtimeProjectRepository implements ProjectRepository {
     required String projectId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,

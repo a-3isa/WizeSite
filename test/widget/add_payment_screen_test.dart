@@ -142,13 +142,17 @@ class _FakeUsageQuotaRepository implements UsageQuotaRepository {
   }
 }
 
-Project _project() {
-  return const Project(
-    id: 'project_1',
+Project _project({
+  String id = 'project_1',
+  String name = 'Project One',
+  double? contractValue = 1000,
+}) {
+  return Project(
+    id: id,
     workspaceId: 'workspace_1',
-    name: 'Project One',
+    name: name,
     clientName: 'Client',
-    contractValue: 1000,
+    contractValue: contractValue,
     status: 'active',
     completionPercentage: 0,
     totalExpenses: 0,
@@ -184,6 +188,61 @@ GoRouter _router() {
 }
 
 void main() {
+  testWidgets('contract-less projects are absent from the payment picker', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          activeUserIdProvider.overrideWith((ref) => 'user_1'),
+          paymentRepositoryProvider.overrideWithValue(_FakePaymentRepository()),
+          projectsProvider.overrideWith(
+            (ref) => Stream.value([
+              _project(),
+              _project(
+                id: 'project_ledger',
+                name: 'Ledger Only',
+                contractValue: null,
+              ),
+            ]),
+          ),
+          entitlementGuardProvider.overrideWithValue(
+            EntitlementGuardService(
+              subscriptionRepository: _FakeSubscriptionRepository(),
+              usageQuotaRepository: _FakeUsageQuotaRepository(),
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          routerConfig: _router(),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('qa_add_payment_project')));
+    await tester.pumpAndSettle();
+
+    // Core invariant: a project with no Contract Value cannot hold payments,
+    // so the invalid combination is unreachable rather than merely refused on
+    // submit.
+    expect(find.text('Project One'), findsWidgets);
+    expect(find.text('Ledger Only'), findsNothing);
+  });
+
   testWidgets(
     'AddPaymentScreen exposes description and payment status controls',
     (tester) async {

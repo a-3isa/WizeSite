@@ -294,6 +294,81 @@ function requireNumber(data: Record<string, unknown>, key: string): number {
   return value;
 }
 
+/**
+ * Parses an optional money field such as `contractValue` or `budgetLimit`.
+ *
+ * Absent, null, empty and zero all mean "not set" and collapse to `null`, so a
+ * placeholder zero can never be mistaken for a real agreed amount. Negative and
+ * non-numeric values are rejected outright rather than silently coerced.
+ */
+function optionalPositiveNumber(
+  data: Record<string, unknown>,
+  key: string,
+): number | null {
+  const raw = data[key];
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") {
+    return null;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new HttpsError("invalid-argument", `Invalid number: ${key}`);
+  }
+  if (value < 0) {
+    throw new HttpsError("invalid-argument", `${key} must not be negative`);
+  }
+  return value === 0 ? null : value;
+}
+
+/**
+ * Whether a project document carries a real contract amount.
+ *
+ * Single definition of the invariant's precondition, shared by every callable
+ * that enforces it — createPayment, updatePayment, and updateProject. Zero and
+ * absent both mean "not set".
+ */
+function hasContractValue(project: TriggerDocData): boolean {
+  const raw = project.contractValue;
+  if (raw === null || raw === undefined) {
+    return false;
+  }
+  return Number(raw) > 0;
+}
+
+export interface ProjectRiskVerdict {
+  riskLevel: string | null;
+  healthStatus: string | null;
+}
+
+/**
+ * Classifies a project's financial risk.
+ *
+ * Returns a null verdict when there is no contract amount to measure against.
+ * BOTH rules are skipped in that case, not just the contract comparison:
+ * `netProfit < 0` holds for any expense-only project, so suppressing one rule
+ * alone would flag every such project as "losing" on its very first expense.
+ *
+ * Exported so the rule can be unit-tested without a Firestore emulator — it is
+ * the highest-consequence branch in this file, since a wrong verdict pushes a
+ * notification to every member with risk alerts enabled.
+ */
+export function classifyProjectRisk(input: {
+  contractValue: number | null;
+  netProfit: number;
+  expectedFinalCost: number;
+}): ProjectRiskVerdict {
+  const { contractValue, netProfit, expectedFinalCost } = input;
+  if (contractValue === null) {
+    return { riskLevel: null, healthStatus: null };
+  }
+  if (netProfit < 0 || expectedFinalCost > contractValue) {
+    return { riskLevel: "high", healthStatus: "losing" };
+  }
+  if (expectedFinalCost >= contractValue * 0.9) {
+    return { riskLevel: "medium", healthStatus: "warning" };
+  }
+  return { riskLevel: "low", healthStatus: "healthy" };
+}
+
 function payloadFrom(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object") {
     return {};
@@ -1481,7 +1556,7 @@ function buildProjectMetricsPayload(input: {
   workspaceId: string;
   projectId: string;
   project: TriggerDocData;
-  contractValue: number;
+  contractValue: number | null;
   completionPercentage: number;
   budgetLimit: number | null;
   budgetExceeded: boolean;
@@ -1489,10 +1564,10 @@ function buildProjectMetricsPayload(input: {
   laborExpenses: number;
   totalPayments: number;
   netProfit: number;
-  remainingBalance: number;
+  remainingBalance: number | null;
   expectedFinalCost: number;
-  riskLevel: string;
-  healthStatus: string;
+  riskLevel: string | null;
+  healthStatus: string | null;
   categoryTotals: Record<string, number>;
   entityTotals: Record<string, number>;
   paymentMethodTotals: Record<string, number>;
@@ -1786,7 +1861,7 @@ export const checkLimit = onCall(async (request) => {
   };
 });
 
-async function createProjectWithQuotaForUser(
+export async function createProjectWithQuotaForUser(
   uid: string,
   data: Record<string, unknown>,
 ): Promise<{ id: string; clientMutationId?: string }> {
@@ -1798,14 +1873,14 @@ async function createProjectWithQuotaForUser(
 
   const name = requireString(data, "name");
   const clientName = `${data.clientName ?? ""}`.trim();
-  const contractValue = requireNumber(data, "contractValue");
+  const contractValue = optionalPositiveNumber(data, "contractValue");
   const startDate =
     parseTimestamp(data.startDate) ?? Timestamp.now();
   const expectedEndDate = parseTimestamp(data.expectedEndDate);
   const location = `${data.location ?? ""}`.trim();
   const description = `${data.description ?? ""}`.trim();
   const completionPercentage = Number(data.completionPercentage ?? 0);
-  const budgetLimit = Number(data.budgetLimit ?? 0) || null;
+  const budgetLimit = optionalPositiveNumber(data, "budgetLimit");
 
   const subscription = await getSubscription(workspaceId);
   if (!hasUnlimitedQuota(subscription)) {
@@ -1918,10 +1993,23 @@ export const updateProject = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
+  return updateProjectForUser(
+    request.auth.uid,
+    request.data as Record<string, unknown>,
+  );
+});
 
-  const data = request.data as Record<string, unknown>;
+/**
+ * Body of the {@link updateProject} callable, split out so it can be exercised
+ * against the emulator — matching how the expense and payment creators in this
+ * file are already structured. Holds the contract-and-payment invariant.
+ */
+export async function updateProjectForUser(
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertMember(workspaceId, uid);
   const projectId = requireString(data, "projectId");
   const projectRef = db.collection("projects").doc(projectId);
   const projectSnap = await projectRef.get();
@@ -1942,23 +2030,55 @@ export const updateProject = onCall(async (request) => {
     );
   }
 
+  const contractValue = optionalPositiveNumber(data, "contractValue");
+  const hadContractValue =
+    project.contractValue !== null &&
+    project.contractValue !== undefined &&
+    Number(project.contractValue) > 0;
+
+  // Core invariant: a project with no Contract Value cannot hold payments.
+  // Enforced here rather than in security rules because rules cannot see the
+  // offline queue, and a cross-document check would bill a read per payment
+  // write. Existence of a payment record is what blocks — not the payment
+  // total, since a zero-amount or refunded payment still leaves a record that
+  // would otherwise be orphaned.
+  if (hadContractValue && contractValue === null) {
+    // Archived payments are excluded deliberately. Payments carry
+    // `allow create, delete: if false`, so archiving is the ONLY removal this
+    // app offers. Counting archived records would make the refusal message
+    // ("remove this project's payments first") impossible to satisfy — once a
+    // project had ever taken a payment, its contract could never be cleared.
+    const existingPayment = await db
+      .collection("payments")
+      .where("projectId", "==", projectId)
+      .where("isArchived", "==", false)
+      .limit(1)
+      .get();
+    if (!existingPayment.empty) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Remove this project's payments before clearing its contract value.",
+      );
+    }
+  }
+
   await projectRef.update({
     name: requireString(data, "name"),
     clientName: `${data.clientName ?? ""}`.trim(),
-    contractValue: requireNumber(data, "contractValue"),
+    contractValue,
     startDate:
       parseTimestamp(data.startDate) ?? Timestamp.now(),
     expectedEndDate: parseTimestamp(data.expectedEndDate),
     location: `${data.location ?? ""}`.trim(),
     description: `${data.description ?? ""}`.trim(),
-    budgetLimit: Number(data.budgetLimit ?? 0) || null,
+    budgetLimit: optionalPositiveNumber(data, "budgetLimit"),
     completionPercentage: Number(data.completionPercentage ?? 0),
     status: `${data.status ?? "active"}`.trim() || "active",
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: FieldValue.serverTimestamp(),
   });
-});
+}
 
 export const archiveProject = onCall(async (request) => {
   if (!request.auth) {
@@ -2239,6 +2359,15 @@ export async function createPaymentWithQuotaForUser(
     throw new HttpsError(
       "permission-denied",
       "Project is archived and can no longer accept payments.",
+    );
+  }
+  // Core invariant: payments require a contract to be paid against. Rejected
+  // here, before any quota is consumed, so a refused payment never costs the
+  // workspace part of its monthly allowance.
+  if (!hasContractValue(projectData)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Set a contract value on this project before recording payments.",
     );
   }
   const subscription = await getSubscription(workspaceId);
@@ -2992,10 +3121,23 @@ export const updatePayment = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
+  return updatePaymentForUser(
+    request.auth.uid,
+    request.data as Record<string, unknown>,
+  );
+});
 
-  const data = request.data as Record<string, unknown>;
+/**
+ * Body of the {@link updatePayment} callable, split out so the
+ * contract-and-payment invariant can be exercised against the emulator. This
+ * callable can reassign `projectId`, which is the far side of the invariant.
+ */
+export async function updatePaymentForUser(
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertMember(workspaceId, uid);
   const paymentId = requireString(data, "paymentId");
   const projectId = requireString(data, "projectId");
   const amount = requireNumber(data, "amount");
@@ -3039,6 +3181,15 @@ export const updatePayment = onCall(async (request) => {
       "Project is not available in this workspace",
     );
   }
+  // Core invariant, same guard as createPayment. This callable can REASSIGN a
+  // payment to a different project, so without it a payment could be moved
+  // onto a contract-less project and breach the invariant from the far side.
+  if (!hasContractValue(project)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Set a contract value on this project before recording payments.",
+    );
+  }
 
   const oldAmount = Number(payment.amount ?? 0);
   const oldProjectId = `${payment.projectId ?? ""}`;
@@ -3071,7 +3222,7 @@ export const updatePayment = onCall(async (request) => {
     applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount);
   }
   await batch.commit();
-});
+}
 
 export const createWorker = onCall(async (request) => {
   if (!request.auth) {
@@ -4294,7 +4445,10 @@ async function recomputeProjectSummary(
     return;
   }
   const project = projectSnap.data() ?? {};
-  const contractValue = Number(project.contractValue ?? 0);
+  const contractValue =
+    project.contractValue === null || project.contractValue === undefined
+      ? null
+      : Number(project.contractValue) || null;
   const completionPercentage = Math.max(
     0,
     Number(project.completionPercentage ?? 0),
@@ -4318,22 +4472,23 @@ async function recomputeProjectSummary(
     0,
   );
   const netProfit = totalPayments - totalExpenses;
-  const remainingBalance = contractValue - totalPayments;
+  // Contract-derived: meaningless without a contract to invoice against. This
+  // is NOT the per-supplier/per-client `remainingBalance` in the accounting
+  // summaries below, which compares expenses against payments for an entity
+  // and must stay untouched.
+  const remainingBalance =
+    contractValue === null ? null : contractValue - totalPayments;
 
   const expectedFinalCost =
     completionPercentage > 0
       ? totalExpenses / (completionPercentage / 100)
       : totalExpenses;
 
-  let riskLevel = "low";
-  let healthStatus = "healthy";
-  if (netProfit < 0 || expectedFinalCost > contractValue) {
-    riskLevel = "high";
-    healthStatus = "losing";
-  } else if (expectedFinalCost >= contractValue * 0.9) {
-    riskLevel = "medium";
-    healthStatus = "warning";
-  }
+  const { riskLevel, healthStatus } = classifyProjectRisk({
+    contractValue,
+    netProfit,
+    expectedFinalCost,
+  });
   const budgetExceeded = budgetLimit != null && totalExpenses > budgetLimit;
 
   const categoryTotals = expensesSnap.docs.reduce<Record<string, number>>(
@@ -4559,24 +4714,34 @@ async function recomputeProjectSummary(
     await deleteNotificationForUsers("budget_exceeded", projectId, memberIds);
   }
 
-  const riskWorsened =
-    compareRisk(riskLevel) > compareRisk(previousRiskLevel) ||
-    (previousHealthStatus === "healthy" && healthStatus !== "healthy");
-  if (riskWorsened && riskLevel !== "low") {
-    await upsertNotificationForUsers({
-      workspaceId,
-      userIds: riskAlertRecipients,
-      type: "project_risk_alert",
-      projectId,
-      title: "Project Risk Alert",
-      message: `Project ${project.name ?? "project"} is now ${riskLevel.toUpperCase()} risk (${healthStatus}).`,
-    });
-  } else if (riskLevel === "low" && healthStatus === "healthy") {
+  if (riskLevel === null) {
+    // No contract, no verdict — and any alert raised while the project still
+    // had a contract is now stale, so clear it rather than leaving it stranded.
     await deleteNotificationForUsers(
       "project_risk_alert",
       projectId,
       memberIds,
     );
+  } else {
+    const riskWorsened =
+      compareRisk(riskLevel) > compareRisk(previousRiskLevel) ||
+      (previousHealthStatus === "healthy" && healthStatus !== "healthy");
+    if (riskWorsened && riskLevel !== "low") {
+      await upsertNotificationForUsers({
+        workspaceId,
+        userIds: riskAlertRecipients,
+        type: "project_risk_alert",
+        projectId,
+        title: "Project Risk Alert",
+        message: `Project ${project.name ?? "project"} is now ${riskLevel.toUpperCase()} risk (${healthStatus}).`,
+      });
+    } else if (riskLevel === "low" && healthStatus === "healthy") {
+      await deleteNotificationForUsers(
+        "project_risk_alert",
+        projectId,
+        memberIds,
+      );
+    }
   }
 
   const expectedEndDate = parseTimestamp(project.expectedEndDate)?.toDate();

@@ -261,6 +261,9 @@ else {
     let createExpenseWithQuotaForUser;
     let createPaymentWithQuotaForUser;
     let createWorkerEntryWithQuotaForUser;
+    let createProjectWithQuotaForUser;
+    let updateProjectForUser;
+    let updatePaymentForUser;
     const workspaceId = "workspace_1";
     const now = new Date();
     const currentMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 10));
@@ -358,6 +361,9 @@ else {
         createPaymentWithQuotaForUser = indexModule.createPaymentWithQuotaForUser;
         createWorkerEntryWithQuotaForUser =
             indexModule.createWorkerEntryWithQuotaForUser;
+        createProjectWithQuotaForUser = indexModule.createProjectWithQuotaForUser;
+        updateProjectForUser = indexModule.updateProjectForUser;
+        updatePaymentForUser = indexModule.updatePaymentForUser;
         db = (0, firestore_1.getFirestore)();
     });
     node_test_1.default.after(async () => {
@@ -868,6 +874,325 @@ else {
                 handled.code === "permission-denied" &&
                 handled.message.includes("Worker is archived"));
         });
+    });
+    // ---------------------------------------------------------------------
+    // Optional project budget: contract-less projects
+    // ---------------------------------------------------------------------
+    async function seedContractLessProject(overrides = {}) {
+        await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+            workspaceId,
+            userId: "user_1",
+            role: "owner",
+        });
+        await db.collection("users").doc("user_1").set({
+            id: "user_1",
+            workspaceId,
+            riskAlertsEnabled: true,
+        });
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .set({
+            id: "project_1",
+            workspaceId,
+            name: "Expense Only Job",
+            contractValue: null,
+            completionPercentage: 50,
+            status: "active",
+            isArchived: false,
+            startDate: firestore_1.Timestamp.fromDate(currentMonthDate),
+            ...overrides,
+        });
+        await db
+            .collection("expenses")
+            .doc("expense_1")
+            .set({
+            id: "expense_1",
+            workspaceId,
+            projectId: "project_1",
+            category: "materials",
+            amount: 5000,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            isArchived: false,
+        });
+    }
+    (0, node_test_1.default)("contract-less project metrics carry no risk verdict", async () => {
+        await seedContractLessProject();
+        await handleProjectWriteRecompute(projectWriteEvent(undefined, { workspaceId, name: "Expense Only Job" }));
+        const metrics = (await db.collection("project_metrics").doc("project_1").get()).data();
+        strict_1.default.ok(metrics);
+        // Null, not "low": the project is unrated, not certified healthy.
+        strict_1.default.equal(metrics.riskLevel, null);
+        strict_1.default.equal(metrics.healthStatus, null);
+        // Contract-derived remaining balance is meaningless without a contract.
+        strict_1.default.equal(metrics.remainingBalance, null);
+        strict_1.default.equal(metrics.contractValue, null);
+        // Expense totals are unaffected — this project exists to track them.
+        strict_1.default.equal(metrics.totalExpenses, 5000);
+    });
+    (0, node_test_1.default)("expenses on a contract-less project raise no risk notification", async () => {
+        await seedContractLessProject();
+        await handleProjectWriteRecompute(projectWriteEvent(undefined, { workspaceId, name: "Expense Only Job" }));
+        const alerts = await db
+            .collection("notifications")
+            .where("type", "==", "project_risk_alert")
+            .get();
+        // The whole point of suppressing both rules: an expense-only project would
+        // otherwise notify every member with risk alerts enabled on its first
+        // expense, forever.
+        strict_1.default.equal(alerts.size, 0);
+    });
+    (0, node_test_1.default)("clearing a contract value clears the stale risk alert", async () => {
+        // Start contract-bearing and deep in the red so a risk alert is raised.
+        await seedContractLessProject({ contractValue: 1000 });
+        await handleProjectWriteRecompute(projectWriteEvent(undefined, { workspaceId, name: "Expense Only Job" }));
+        const raised = await db
+            .collection("notifications")
+            .where("type", "==", "project_risk_alert")
+            .get();
+        strict_1.default.ok(raised.size > 0, "expected a risk alert while under contract");
+        // Now clear the contract; the previous verdict is no longer meaningful.
+        await db
+            .collection("projects")
+            .doc("project_1")
+            .update({ contractValue: null });
+        await handleProjectWriteRecompute(projectWriteEvent({ workspaceId, contractValue: 1000 }, { workspaceId, contractValue: null }));
+        const remaining = await db
+            .collection("notifications")
+            .where("type", "==", "project_risk_alert")
+            .get();
+        strict_1.default.equal(remaining.size, 0);
+    });
+    (0, node_test_1.default)("budget-exceeded still fires for a budget-limit-only project", async () => {
+        await seedContractLessProject({ budgetLimit: 1000 });
+        await handleProjectWriteRecompute(projectWriteEvent(undefined, { workspaceId, name: "Expense Only Job" }));
+        const metrics = (await db.collection("project_metrics").doc("project_1").get()).data();
+        // Risk suppression must be scoped to the contract rules only — the budget
+        // limit is an independent signal and keeps working without a contract.
+        strict_1.default.equal(metrics.riskLevel, null);
+        strict_1.default.equal(metrics.budgetExceeded, true);
+        const alerts = await db
+            .collection("notifications")
+            .where("type", "==", "budget_exceeded")
+            .get();
+        strict_1.default.ok(alerts.size > 0);
+    });
+    (0, node_test_1.default)("payments are refused against a contract-less project", async () => {
+        await seedContractLessProject();
+        await strict_1.default.rejects(() => createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        }), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError &&
+                handled.code === "failed-precondition" &&
+                handled.message.includes("contract value"));
+        });
+        // Nothing written, and no quota consumed.
+        const payments = await db.collection("payments").get();
+        strict_1.default.equal(payments.size, 0);
+    });
+    (0, node_test_1.default)("payments still succeed against a contract-bearing project", async () => {
+        await seedContractLessProject({ contractValue: 50000 });
+        const created = await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        strict_1.default.ok(created.id);
+        const payments = await db.collection("payments").get();
+        strict_1.default.equal(payments.size, 1);
+    });
+    // ---- createProject: contract value is optional (contract C1) ----
+    async function seedMembership() {
+        await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+            workspaceId,
+            userId: "user_1",
+            role: "owner",
+        });
+    }
+    function createProjectPayload(extra = {}) {
+        return {
+            workspaceId,
+            name: "New Project",
+            clientName: "Client",
+            startDate: firestore_1.Timestamp.fromDate(currentMonthDate),
+            ...extra,
+        };
+    }
+    (0, node_test_1.default)("a project can be created with no contract value at all", async () => {
+        await seedMembership();
+        const created = await createProjectWithQuotaForUser("user_1", createProjectPayload());
+        const stored = (await db.collection("projects").doc(created.id).get()).data();
+        strict_1.default.equal(stored.contractValue, null);
+    });
+    (0, node_test_1.default)("a zero contract value is stored as null, not zero", async () => {
+        await seedMembership();
+        const created = await createProjectWithQuotaForUser("user_1", createProjectPayload({ contractValue: 0 }));
+        const stored = (await db.collection("projects").doc(created.id).get()).data();
+        // Zero and absent must be indistinguishable downstream — otherwise a
+        // placeholder zero reads as a real agreed amount.
+        strict_1.default.equal(stored.contractValue, null);
+    });
+    (0, node_test_1.default)("a negative contract value is rejected on create", async () => {
+        await seedMembership();
+        await strict_1.default.rejects(() => createProjectWithQuotaForUser("user_1", createProjectPayload({ contractValue: -500 })), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError && handled.code === "invalid-argument");
+        });
+    });
+    (0, node_test_1.default)("a real contract value is stored unchanged on create", async () => {
+        await seedMembership();
+        const created = await createProjectWithQuotaForUser("user_1", createProjectPayload({ contractValue: 50000 }));
+        const stored = (await db.collection("projects").doc(created.id).get()).data();
+        strict_1.default.equal(stored.contractValue, 50000);
+    });
+    // ---- updateProject: the contract-and-payment invariant (contract C2) ----
+    function updatePayload(extra = {}) {
+        return {
+            workspaceId,
+            projectId: "project_1",
+            name: "Expense Only Job",
+            clientName: "Client",
+            startDate: firestore_1.Timestamp.fromDate(currentMonthDate),
+            completionPercentage: 50,
+            status: "active",
+            ...extra,
+        };
+    }
+    (0, node_test_1.default)("a contract value can be cleared when the project has no payments", async () => {
+        await seedContractLessProject({ contractValue: 50000 });
+        await updateProjectForUser("user_1", updatePayload());
+        const stored = (await db.collection("projects").doc("project_1").get()).data();
+        strict_1.default.equal(stored.contractValue, null);
+    });
+    (0, node_test_1.default)("clearing a contract value is refused while a payment exists", async () => {
+        await seedContractLessProject({ contractValue: 50000 });
+        await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        await strict_1.default.rejects(() => updateProjectForUser("user_1", updatePayload()), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError &&
+                handled.code === "failed-precondition" &&
+                handled.message.includes("payments"));
+        });
+        // A refused save must leave the project completely unaltered.
+        const stored = (await db.collection("projects").doc("project_1").get()).data();
+        strict_1.default.equal(stored.contractValue, 50000);
+        const payments = await db.collection("payments").get();
+        strict_1.default.equal(payments.size, 1);
+    });
+    (0, node_test_1.default)("a zero-amount payment record still blocks clearing", async () => {
+        await seedContractLessProject({ contractValue: 50000 });
+        // createPayment refuses amount <= 0, so a zero-amount record can only
+        // arrive from legacy data or a later edit. The guard keys on record
+        // existence rather than the payment total precisely so this still blocks.
+        await db.collection("payments").doc("payment_zero").set({
+            id: "payment_zero",
+            workspaceId,
+            projectId: "project_1",
+            amount: 0,
+            isArchived: false,
+        });
+        await strict_1.default.rejects(() => updateProjectForUser("user_1", updatePayload()), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError &&
+                handled.code === "failed-precondition");
+        });
+    });
+    (0, node_test_1.default)("editing other fields is unaffected when payments exist", async () => {
+        await seedContractLessProject({ contractValue: 50000 });
+        await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        // The guard must fire only on a clear, never on an ordinary edit.
+        await updateProjectForUser("user_1", updatePayload({ contractValue: 50000, name: "Renamed Job" }));
+        const stored = (await db.collection("projects").doc("project_1").get()).data();
+        strict_1.default.equal(stored.name, "Renamed Job");
+        strict_1.default.equal(stored.contractValue, 50000);
+    });
+    (0, node_test_1.default)("a payment cannot be moved onto a contract-less project", async () => {
+        // Regression: updatePayment can REASSIGN projectId, so guarding only
+        // createPayment left the invariant breachable from the far side —
+        // create on a contract-bearing project, then edit and move it.
+        await seedContractLessProject({ contractValue: 50000 });
+        await db.collection("projects").doc("project_ledger").set({
+            id: "project_ledger",
+            workspaceId,
+            name: "Ledger Only",
+            contractValue: null,
+            status: "active",
+            isArchived: false,
+        });
+        const created = await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        await strict_1.default.rejects(() => updatePaymentForUser("user_1", {
+            workspaceId,
+            paymentId: created.id,
+            projectId: "project_ledger",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        }), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError &&
+                handled.code === "failed-precondition" &&
+                handled.message.includes("contract value"));
+        });
+        const stored = (await db.collection("payments").doc(created.id).get()).data();
+        strict_1.default.equal(stored.projectId, "project_1");
+    });
+    (0, node_test_1.default)("archiving the last payment unblocks clearing the contract", async () => {
+        // Regression: payments cannot be hard-deleted (`allow delete: if false`),
+        // so archiving is the only removal this app offers. Counting archived
+        // records made the refusal message impossible to satisfy — the contract
+        // could never be cleared once a payment had ever existed.
+        await seedContractLessProject({ contractValue: 50000 });
+        const created = await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        await strict_1.default.rejects(() => updateProjectForUser("user_1", updatePayload()));
+        await db
+            .collection("payments")
+            .doc(created.id)
+            .update({ isArchived: true });
+        await updateProjectForUser("user_1", updatePayload());
+        const stored = (await db.collection("projects").doc("project_1").get()).data();
+        strict_1.default.equal(stored.contractValue, null);
+        // The archived payment is still on record — unblocking is not deletion.
+        const payments = await db.collection("payments").get();
+        strict_1.default.equal(payments.size, 1);
+    });
+    (0, node_test_1.default)("a budget limit can be cleared even while payments exist", async () => {
+        await seedContractLessProject({ contractValue: 50000, budgetLimit: 1000 });
+        await createPaymentWithQuotaForUser("user_1", {
+            workspaceId,
+            projectId: "project_1",
+            amount: 500,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+        });
+        // Only the Contract Value participates in the invariant. The Budget Limit
+        // is free to come and go regardless of payments.
+        await updateProjectForUser("user_1", updatePayload({ contractValue: 50000 }));
+        const stored = (await db.collection("projects").doc("project_1").get()).data();
+        strict_1.default.equal(stored.budgetLimit, null);
+        strict_1.default.equal(stored.contractValue, 50000);
     });
 }
 //# sourceMappingURL=project_recompute_trigger.test.js.map

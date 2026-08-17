@@ -28,13 +28,14 @@ Project _project(
   String status = 'active',
   double? budgetLimit,
   double totalExpenses = 500,
+  double? contractValue = 1000,
 }) {
   return Project(
     id: id,
     workspaceId: 'workspace_1',
     name: 'Project $id',
     clientName: 'Client',
-    contractValue: 1000,
+    contractValue: contractValue,
     status: status,
     completionPercentage: 50,
     totalExpenses: totalExpenses,
@@ -67,6 +68,9 @@ class _FakeProjectRepository
   }
 
   @override
+  Future<bool> hasAnyPayment(String projectId) async => false;
+
+  @override
   Future<void> archiveProject(String projectId) async {
     archivedIds.add(projectId);
   }
@@ -77,7 +81,7 @@ class _FakeProjectRepository
     required String userId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -114,7 +118,7 @@ class _FakeProjectRepository
     required String projectId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -293,6 +297,72 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.queries.last.status, 'completed');
   });
+
+  testWidgets(
+    'a contract-less card shows expenses and never profit or loss wording',
+    (tester) async {
+      final repository = _FakeProjectRepository(
+        firstPage: FirestorePage(
+          items: [
+            _project('ledger', -400, contractValue: null, totalExpenses: 400),
+          ],
+          hasMore: false,
+        ),
+        secondPage: const FirestorePage(items: [], hasMore: false),
+      );
+
+      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Project ledger'), findsOneWidget);
+      // "Loss" would be the wrong frame entirely: the project has no income to
+      // have lost. The card states the expense total instead.
+      expect(find.text('Loss'), findsNothing);
+      expect(find.text('Profit'), findsNothing);
+      expect(find.text('Total Expenses'), findsOneWidget);
+      // No budget bar and no contract figure — nothing rendered as a zero.
+      expect(find.text('Budget used'), findsNothing);
+    },
+  );
+
+  testWidgets('a contract-bearing card is unchanged by this feature', (
+    tester,
+  ) async {
+    final repository = _FakeProjectRepository(
+      firstPage: FirestorePage(
+        items: [_project('normal', 250)],
+        hasMore: false,
+      ),
+      secondPage: const FirestorePage(items: [], hasMore: false),
+    );
+
+    await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profit'), findsOneWidget);
+    expect(find.text('Total Expenses'), findsNothing);
+  });
+
+  testWidgets(
+    'a contract-only project still shows no budget bar on its card',
+    (tester) async {
+      final repository = _FakeProjectRepository(
+        firstPage: FirestorePage(
+          items: [_project('contract_only', 250)],
+          hasMore: false,
+        ),
+        secondPage: const FirestorePage(items: [], hasMore: false),
+      );
+
+      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+      await tester.pumpAndSettle();
+
+      // The card has always required an explicit Budget Limit. Switching it to
+      // the shared budget baseline would make contract-only projects sprout a
+      // bar they never had, breaking FR-018.
+      expect(find.text('Budget used'), findsNothing);
+    },
+  );
 
   testWidgets('member sees recent/name browse without financial values', (
     tester,

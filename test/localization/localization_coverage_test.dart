@@ -30,6 +30,16 @@ const Map<String, List<String>> _reviewPackKeyGroups = {
     'voiceProcessing',
   ],
   'filter removal': ['removeFilter', 'clearAllFilters', 'activeFilters'],
+  // Optional project budget. The localization system falls back to English
+  // silently, so a missing Arabic entry produces no error — it just ships
+  // English to Arabic users. This group is the only thing that catches it.
+  'optional project budget': [
+    'noContractValueTitle',
+    'noContractValueBody',
+    'setContractValue',
+    'contractValueRequiredForPayments',
+    'removePaymentsBeforeClearingContract',
+  ],
   'bulk archive': [
     'selectionMode',
     'archiveSelected',

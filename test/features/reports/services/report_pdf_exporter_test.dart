@@ -8,6 +8,7 @@ import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
+import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,62 @@ void main() {
     totalPayments: 0,
     netProfit: 0,
     isArchived: false,
+  );
+
+  test(
+    'project report omits the revenue rows for a contract-less project',
+    () async {
+      const metrics = ReportMetrics(
+        projectId: 'project_1',
+        projectName: 'Tower A',
+        status: 'active',
+        isArchived: false,
+        totalExpenses: 1500,
+        totalIncome: 0,
+        net: -1500,
+        categoryTotals: {'materials': 1500},
+        monthlyFlow: [],
+        topWorkers: [],
+        recentExpenses: [],
+        recentPayments: [],
+      );
+
+      const exporter = ReportPdfExporter();
+      final withContract = await exporter.buildProjectReportPdf(
+        l10n: l10n,
+        project: project,
+        metrics: metrics,
+        currency: 'EGP',
+      );
+      final contractLess = await exporter.buildProjectReportPdf(
+        l10n: l10n,
+        project: Project(
+          id: project.id,
+          workspaceId: project.workspaceId,
+          name: project.name,
+          clientName: project.clientName,
+          contractValue: null,
+          status: project.status,
+          completionPercentage: project.completionPercentage,
+          totalExpenses: project.totalExpenses,
+          totalPayments: project.totalPayments,
+          netProfit: project.netProfit,
+          isArchived: project.isArchived,
+        ),
+        metrics: metrics,
+        currency: 'EGP',
+      );
+
+      expect(ascii.decode(withContract.take(4).toList()), '%PDF');
+      expect(ascii.decode(contractLess.take(4).toList()), '%PDF');
+
+      // PDF bytes are compressed, so the rendered text cannot be asserted
+      // directly — the established pattern in this suite is header + size.
+      // Dropping the Total Income and Net Profit rows must make the
+      // contract-less document strictly smaller; if the rows were still being
+      // emitted, the two would be identical in length.
+      expect(contractLess.length, lessThan(withContract.length));
+    },
   );
 
   test(

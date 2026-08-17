@@ -391,10 +391,11 @@ class ProjectFinancialSection extends ConsumerWidget {
               projectId: project.id,
             )),
           );
-    final budgetBase = (project.budgetLimit != null && project.budgetLimit! > 0)
-        ? project.budgetLimit!
-        : project.contractValue;
-    final hasBudget = budgetBase > 0;
+    // Single source of truth — previously a verbatim duplicate of the rule in
+    // project_detail_screen.dart, which is exactly how the two could drift.
+    final hasBudget = project.hasBudget;
+    final budgetBase = project.budgetBase ?? 0;
+    final isExpenseLedger = project.isExpenseLedger;
     final rawRatio = hasBudget ? project.totalExpenses / budgetBase : 0.0;
     final ratio = hasBudget ? rawRatio.clamp(0.0, 1.0) : 0.0;
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
@@ -426,26 +427,42 @@ class ProjectFinancialSection extends ConsumerWidget {
             ).textTheme.bodySmall?.copyWith(color: context.tokens.textMuted),
           ),
         ),
-        HeroNetCard(
-          title: l10n.t('netProfit'),
-          net: netText,
-          negative: !isProfit,
-          currency: currency,
-          income: numberFormat.format(project.totalPayments),
-          expense: numberFormat.format(project.totalExpenses),
-          incomeLabel: l10n.t('totalIncome'),
-          expenseLabel: l10n.t('totalExpenses'),
-        ),
-        const SizedBox(height: 12),
-        StatTile(
-          key: const Key('qa_dashboard_project_profit_margin'),
-          icon: Icons.percent,
-          label: l10n.t('profitMargin'),
-          value: profitMarginText ?? '—',
-          valueColor: profitMarginText == null
-              ? null
-              : (isProfit ? context.tokens.income : context.tokens.expense),
-        ),
+        // Mirrors the project detail screen: without a contract there is no
+        // revenue side, so the headline is the expense total.
+        if (isExpenseLedger)
+          StatTile(
+            key: const Key('qa_dashboard_project_expense_total'),
+            icon: Icons.trending_down,
+            label: l10n.t('totalExpenses'),
+            value: Formatters.money(
+              project.totalExpenses,
+              currencyCode: currency,
+              locale: locale,
+            ),
+            valueColor: context.tokens.expense,
+          )
+        else ...[
+          HeroNetCard(
+            title: l10n.t('netProfit'),
+            net: netText,
+            negative: !isProfit,
+            currency: currency,
+            income: numberFormat.format(project.totalPayments),
+            expense: numberFormat.format(project.totalExpenses),
+            incomeLabel: l10n.t('totalIncome'),
+            expenseLabel: l10n.t('totalExpenses'),
+          ),
+          const SizedBox(height: 12),
+          StatTile(
+            key: const Key('qa_dashboard_project_profit_margin'),
+            icon: Icons.percent,
+            label: l10n.t('profitMargin'),
+            value: profitMarginText ?? '—',
+            valueColor: profitMarginText == null
+                ? null
+                : (isProfit ? context.tokens.income : context.tokens.expense),
+          ),
+        ],
         if (hasBudget) ...[
           const SizedBox(height: 16),
           Container(
@@ -510,35 +527,37 @@ class ProjectFinancialSection extends ConsumerWidget {
             ),
           ),
         ],
-        const SizedBox(height: 12),
-        Row(
-          key: const Key('qa_dashboard_project_contract_value'),
-          children: [
-            Icon(
-              Icons.assignment_outlined,
-              size: 14,
-              color: context.tokens.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              l10n.t('contractValue'),
-              style: TextStyle(fontSize: 12, color: context.tokens.textMuted),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              Formatters.money(
-                project.contractValue,
-                currencyCode: currency,
-                locale: locale,
-              ),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+        if (project.hasContractValue) ...[
+          const SizedBox(height: 12),
+          Row(
+            key: const Key('qa_dashboard_project_contract_value'),
+            children: [
+              Icon(
+                Icons.assignment_outlined,
+                size: 14,
                 color: context.tokens.textMuted,
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 6),
+              Text(
+                l10n.t('contractValue'),
+                style: TextStyle(fontSize: 12, color: context.tokens.textMuted),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                Formatters.money(
+                  project.contractValue!,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: context.tokens.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 20),
         Row(
           children: [

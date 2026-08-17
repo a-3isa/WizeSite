@@ -100,15 +100,19 @@ class ReportPdfExporter {
             [l10n.t('generated'), dateFormat.format(DateTime.now())],
           ]),
           sectionTitle(l10n.t('currentSnapshot')),
+          // Expense-ledger mode: the project has no contract and therefore no
+          // revenue side. Income and net are omitted rather than printed as
+          // zeroes — this document may be sent to a client.
           twoColumnTable([
-            [
-              l10n.t('totalIncome'),
-              Formatters.money(
-                metrics.totalIncome,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
+            if (!project.isExpenseLedger)
+              [
+                l10n.t('totalIncome'),
+                Formatters.money(
+                  metrics.totalIncome,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+              ],
             [
               l10n.t('totalExpenses'),
               Formatters.money(
@@ -117,14 +121,15 @@ class ReportPdfExporter {
                 locale: locale,
               ),
             ],
-            [
-              l10n.t('netProfit'),
-              Formatters.money(
-                metrics.net,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
+            if (!project.isExpenseLedger)
+              [
+                l10n.t('netProfit'),
+                Formatters.money(
+                  metrics.net,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+              ],
           ]),
           sectionTitle(l10n.t('expenseBreakdown')),
           twoColumnTable(
@@ -975,15 +980,18 @@ class ReportPdfExporter {
             [l10n.t('generated'), dateFormat.format(DateTime.now())],
           ]),
           sectionTitle(l10n.t('currentSnapshot')),
+          // Same omission rule as the project report above — the two documents
+          // must not disagree about whether this project has a revenue side.
           twoColumnTable([
-            [
-              l10n.t('totalIncome'),
-              Formatters.money(
-                metrics.totalIncome,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
+            if (!project.isExpenseLedger)
+              [
+                l10n.t('totalIncome'),
+                Formatters.money(
+                  metrics.totalIncome,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+              ],
             [
               l10n.t('totalExpenses'),
               Formatters.money(
@@ -992,14 +1000,15 @@ class ReportPdfExporter {
                 locale: locale,
               ),
             ],
-            [
-              l10n.t('netProfit'),
-              Formatters.money(
-                metrics.net,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
+            if (!project.isExpenseLedger)
+              [
+                l10n.t('netProfit'),
+                Formatters.money(
+                  metrics.net,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+              ],
           ]),
           sectionTitle(l10n.t('weeklyInsights')),
           twoColumnTable([

@@ -68,10 +68,14 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
         setState(() {
           _nameController.text = project.name;
           _clientController.text = project.clientName;
-          _contractController.text =
-              ThousandsSeparatorInputFormatter.formatInitial(
-                project.contractValue.toStringAsFixed(2),
-              );
+          // Left blank when absent — prefilling `0.00` would look like a real
+          // agreed amount and would be saved back as one.
+          if (project.hasContractValue) {
+            _contractController.text =
+                ThousandsSeparatorInputFormatter.formatInitial(
+                  project.contractValue!.toStringAsFixed(2),
+                );
+          }
           _locationController.text = project.location;
           _descriptionController.text = project.description;
           if (project.budgetLimit != null) {
@@ -119,13 +123,44 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       return;
     }
 
-    final contract = NumberParser.parseDouble(_contractController.text);
-    if (_nameController.text.trim().isEmpty ||
-        contract == null ||
-        contract < 0) {
+    // Contract Value is optional. Empty and zero both mean "not set", matching
+    // the server's own coercion, so a placeholder zero can never masquerade as
+    // a real agreed amount.
+    final contractRaw = NumberParser.parseDouble(_contractController.text);
+    final budgetRaw = NumberParser.parseDouble(_budgetController.text);
+    if (_nameController.text.trim().isEmpty) {
       setState(() => _error = l10n.t('fillRequiredFields'));
       return;
     }
+    if ((contractRaw != null && contractRaw < 0) ||
+        (budgetRaw != null && budgetRaw < 0)) {
+      setState(() => _error = l10n.t('fillRequiredFields'));
+      return;
+    }
+    final contract = (contractRaw == null || contractRaw == 0)
+        ? null
+        : contractRaw;
+    final budget = (budgetRaw == null || budgetRaw == 0) ? null : budgetRaw;
+
+    // Core invariant: a project with no Contract Value cannot hold payments.
+    // The server is authoritative, but checking here turns a round-trip
+    // rejection into immediate feedback. Only runs when a contract is actually
+    // being cleared, so the ordinary edit path costs no extra reads.
+    if (widget.projectId != null && contract == null) {
+      final repository = ref.read(projectRepositoryProvider);
+      final existing = await repository.getProject(widget.projectId!);
+      if (existing != null && existing.hasContractValue) {
+        final hasPayments = await repository.hasAnyPayment(widget.projectId!);
+        if (hasPayments) {
+          if (!mounted) return;
+          setState(
+            () => _error = l10n.t('removePaymentsBeforeClearingContract'),
+          );
+          return;
+        }
+      }
+    }
+    if (!mounted) return;
 
     setState(() {
       _loading = true;
@@ -147,7 +182,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: NumberParser.parseDouble(_budgetController.text),
+              budgetLimit: budget,
               completionPercentage: _completion,
             );
         queued = result.queued;
@@ -163,7 +198,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               expectedEndDate: _endDate,
               location: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              budgetLimit: NumberParser.parseDouble(_budgetController.text),
+              budgetLimit: budget,
               completionPercentage: _completion,
               status: _status,
             );
@@ -310,7 +345,6 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                             ],
                             decoration: _inputDecoration(
                               l10n.t('contractValue'),
-                              required: true,
                             ),
                             textInputAction: TextInputAction.next,
                           ),

@@ -672,35 +672,71 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                   // Profit on its own line so the project name (above) keeps the
                   // full card width instead of being squeezed to a few
                   // characters by a long money value sharing its row.
-                  Row(
-                    children: [
-                      Icon(
-                        positiveProfit
-                            ? Icons.trending_up
-                            : Icons.trending_down,
-                        size: 18,
-                        color: profitColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        netAmountText,
-                        style: TextStyle(
-                          color: profitColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
+                  //
+                  // In expense-ledger mode "profit"/"loss" is the wrong frame
+                  // entirely — the project has no income to profit from — so
+                  // the card states the expense total instead.
+                  if (project.isExpenseLedger)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.trending_down,
+                          size: 18,
+                          color: t.expense,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        positiveProfit ? l10n.t('profit') : l10n.t('loss'),
-                        style: TextStyle(color: t.textMuted, fontSize: 12),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 6),
+                        Text(
+                          Formatters.money(
+                            project.totalExpenses,
+                            currencyCode: currency,
+                            locale: locale,
+                          ),
+                          style: TextStyle(
+                            color: t.expense,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          l10n.t('totalExpenses'),
+                          style: TextStyle(color: t.textMuted, fontSize: 12),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Icon(
+                          positiveProfit
+                              ? Icons.trending_up
+                              : Icons.trending_down,
+                          size: 18,
+                          color: profitColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          netAmountText,
+                          style: TextStyle(
+                            color: profitColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          positiveProfit ? l10n.t('profit') : l10n.t('loss'),
+                          style: TextStyle(color: t.textMuted, fontSize: 12),
+                        ),
+                      ],
+                    ),
                 ],
-                if (_canAccessFinancial &&
-                    project.budgetLimit != null &&
-                    project.budgetLimit! > 0) ...[
+                // Deliberately hasBudgetLimit, not hasBudget: the card has
+                // always required an explicit Budget Limit, and FR-018 forbids
+                // changing how contract-bearing projects render. The rule now
+                // lives on the model rather than inline, so it is still stated
+                // once, but its narrower meaning is preserved.
+                if (_canAccessFinancial && project.hasBudgetLimit) ...[
                   const SizedBox(height: 14),
                   _BudgetBar(
                     spent: project.totalExpenses,

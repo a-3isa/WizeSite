@@ -341,7 +341,19 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                     const SizedBox(height: 16),
                   ],
                   projectsAsync.whenStale(
-                    data: (projects) {
+                    data: (allProjects) {
+                      // Core invariant: a project with no Contract Value cannot
+                      // hold payments. Excluded from the picker so the invalid
+                      // combination is unreachable, rather than accepted here
+                      // and rejected by the server on submit.
+                      //
+                      // A project already selected (e.g. an existing payment
+                      // being edited) stays listed so its name still resolves.
+                      final projects = allProjects
+                          .where(
+                            (p) => p.hasContractValue || p.id == _projectId,
+                          )
+                          .toList(growable: false);
                       final selected = projects.where(
                         (p) => p.id == _projectId,
                       );

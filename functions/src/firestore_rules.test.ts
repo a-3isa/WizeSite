@@ -535,6 +535,128 @@ if (!emulatorHost) {
     );
   });
 
+  // -----------------------------------------------------------------------
+  // Optional project budget: contractValue may be null, but never <= 0.
+  //
+  // Only updates are exercised, deliberately: projects carry
+  // `allow create: if false`, so client-side creation is impossible and the
+  // "create with a null contract" cases would pass vacuously.
+  // -----------------------------------------------------------------------
+
+  const projectCreatedAt = new Date("2026-01-01T00:00:00Z");
+
+  async function seedUpdatableProject(contractValue: number | null) {
+    await seedBaseData();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "projects", "project_editable"), {
+        id: "project_editable",
+        workspaceId: "workspace_owner",
+        ownerId: "owner_1",
+        createdBy: "owner_1",
+        createdAt: projectCreatedAt,
+        name: "Editable Project",
+        clientName: "Client",
+        contractValue,
+        startDate: projectCreatedAt,
+        expectedEndDate: null,
+        location: "",
+        description: "",
+        budgetLimit: null,
+        completionPercentage: 10,
+        status: "active",
+        isArchived: false,
+        updatedAt: projectCreatedAt,
+      });
+    });
+  }
+
+  function projectUpdate(contractValue: number | null) {
+    return {
+      contractValue,
+      updatedAt: new Date(),
+    };
+  }
+
+  test("a direct client write cannot clear a contract value", async () => {
+    await seedUpdatableProject(1200);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    // Clearing is reserved for the updateProject callable, which enforces the
+    // contract-and-payment invariant. Allowing it here would let a client
+    // bypass that check entirely and strand payments on a contract-less
+    // project. The callable uses the admin SDK and is unaffected by this rule.
+    await assertFails(
+      updateDoc(
+        doc(ownerDb, "projects", "project_editable"),
+        projectUpdate(null),
+      ),
+    );
+  });
+
+  test("a contract value that was already null may stay null", async () => {
+    await seedUpdatableProject(null);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    // The rule forbids the non-null -> null transition, not the null state
+    // itself, so ordinary edits to a contract-less project still go through.
+    await assertSucceeds(
+      updateDoc(doc(ownerDb, "projects", "project_editable"), {
+        name: "Renamed Ledger",
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test("a positive contract value is still accepted", async () => {
+    await seedUpdatableProject(1200);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    await assertSucceeds(
+      updateDoc(
+        doc(ownerDb, "projects", "project_editable"),
+        projectUpdate(50000),
+      ),
+    );
+  });
+
+  test("a zero contract value is denied", async () => {
+    await seedUpdatableProject(1200);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    // Zero means "not set" everywhere else in the stack; the client normalizes
+    // it to null before writing, so the rules keep rejecting a literal 0
+    // rather than silently accepting a second representation of absence.
+    await assertFails(
+      updateDoc(doc(ownerDb, "projects", "project_editable"), projectUpdate(0)),
+    );
+  });
+
+  test("a negative contract value is denied", async () => {
+    await seedUpdatableProject(1200);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    await assertFails(
+      updateDoc(
+        doc(ownerDb, "projects", "project_editable"),
+        projectUpdate(-500),
+      ),
+    );
+  });
+
+  test("a contract value can be set on a previously contract-less project", async () => {
+    await seedUpdatableProject(null);
+    const ownerDb = env.authenticatedContext("owner_1").firestore();
+
+    // The route out of expense-ledger mode must not be blocked at the rules
+    // layer. The payments invariant is enforced in the callable, not here.
+    await assertSucceeds(
+      updateDoc(
+        doc(ownerDb, "projects", "project_editable"),
+        projectUpdate(25000),
+      ),
+    );
+  });
+
   test("direct expense create is denied", async () => {
     await seedBaseData();
     const memberDb = env.authenticatedContext("member_1").firestore();

@@ -321,6 +321,15 @@ class AppLocalizations {
     'downloadAttachment': 'Download attachment',
     'closePreview': 'Close preview',
     'budgetLimit': 'Budget Limit',
+    'noContractValueTitle': 'No contract value set',
+    'noContractValueBody':
+        'This project tracks expenses only. Set a contract value to record '
+        'payments and see income, profit and budget progress.',
+    'setContractValue': 'Set contract value',
+    'contractValueRequiredForPayments':
+        'Set a contract value on this project before recording payments.',
+    'removePaymentsBeforeClearingContract':
+        'Remove this project\'s payments before clearing its contract value.',
     'filters': 'Filters',
     'clearFilters': 'Clear filters',
     'supplierName': 'Supplier name',
@@ -1068,6 +1077,15 @@ class AppLocalizations {
     'downloadAttachment': 'تحميل المرفق',
     'closePreview': 'إغلاق المعاينة',
     'budgetLimit': 'حد الميزانية',
+    'noContractValueTitle': 'لم يتم تحديد قيمة العقد',
+    'noContractValueBody':
+        'هذا المشروع يسجل المصروفات فقط. حدد قيمة العقد لتسجيل الدفعات '
+        'ولعرض الإيرادات والأرباح وتقدم الميزانية.',
+    'setContractValue': 'تحديد قيمة العقد',
+    'contractValueRequiredForPayments':
+        'حدد قيمة العقد لهذا المشروع قبل تسجيل الدفعات.',
+    'removePaymentsBeforeClearingContract':
+        'احذف دفعات هذا المشروع قبل إزالة قيمة العقد.',
     'filters': 'عوامل التصفية',
     'clearFilters': 'مسح عوامل التصفية',
     'supplierName': 'اسم المورد',

@@ -66,7 +66,7 @@ abstract interface class ProjectRepository {
     required String userId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -81,7 +81,7 @@ abstract interface class ProjectRepository {
     required String projectId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -94,6 +94,16 @@ abstract interface class ProjectRepository {
   Future<void> archiveProject(String projectId);
   Future<void> unarchiveProject(String projectId);
   Future<void> deleteProject(String projectId);
+
+  /// Whether any payment record exists against [projectId].
+  ///
+  /// Backs the core invariant: a project with no Contract Value cannot hold
+  /// payments, so clearing a Contract Value is refused while one exists.
+  ///
+  /// Keyed on record *existence*, never on the payment total — a zero-amount
+  /// or refunded payment still leaves a record that would otherwise be
+  /// orphaned. Counts payments still queued offline for the same reason.
+  Future<bool> hasAnyPayment(String projectId);
 }
 
 class FirebaseProjectRepository
@@ -107,6 +117,34 @@ class FirebaseProjectRepository
   final FirebaseFirestore _firestore;
   final WorkspaceMutationService _mutationService;
   final OfflineActionQueue _queue;
+
+  @override
+  Future<bool> hasAnyPayment(String projectId) async {
+    // limit(1) existence probe — O(1), and no new index: two equality filters
+    // are served by merging single-field indexes.
+    //
+    // Archived payments are excluded deliberately, matching the server guard:
+    // archiving is the only removal this app offers, so counting archived
+    // records would leave the user permanently unable to clear a contract they
+    // were told to clear by removing payments.
+    final synced = await _firestore
+        .collection('payments')
+        .where('projectId', isEqualTo: projectId)
+        .where('isArchived', isEqualTo: false)
+        .limit(1)
+        .get();
+    if (synced.docs.isNotEmpty) {
+      return true;
+    }
+    // A payment still waiting to sync counts too, otherwise a user could clear
+    // the contract offline and strand the queued payment on sync.
+    final pending = await _queue.list();
+    return pending.any(
+      (action) =>
+          action.type == OfflineActionTypes.createPayment &&
+          '${action.payload['projectId'] ?? ''}' == projectId,
+    );
+  }
 
   @override
   Stream<List<Project>> watchProjects(String workspaceId) {
@@ -596,7 +634,7 @@ class FirebaseProjectRepository
     required String userId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -643,7 +681,7 @@ class FirebaseProjectRepository
     required String projectId,
     required String name,
     required String clientName,
-    required double contractValue,
+    double? contractValue,
     required DateTime startDate,
     DateTime? expectedEndDate,
     String? location,
@@ -1059,7 +1097,9 @@ class FirebaseProjectRepository
       workspaceId: '${action.payload['workspaceId'] ?? ''}',
       name: '${action.payload['name'] ?? ''}',
       clientName: '${action.payload['clientName'] ?? ''}',
-      contractValue: (action.payload['contractValue'] as num?)?.toDouble() ?? 0,
+      // No `?? 0`: an optimistic placeholder must not invent a contract amount
+      // the user never entered.
+      contractValue: (action.payload['contractValue'] as num?)?.toDouble(),
       status: 'active',
       completionPercentage:
           (action.payload['completionPercentage'] as num?)?.toDouble() ?? 0,

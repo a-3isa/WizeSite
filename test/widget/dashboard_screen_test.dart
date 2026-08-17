@@ -887,6 +887,101 @@ void main() {
     },
   );
 
+  testWidgets(
+    'project-scoped dashboard hides budget, contract and revenue widgets for '
+    'a contract-less project',
+    (tester) async {
+      const project = Project(
+        id: 'project_1',
+        workspaceId: 'workspace_1',
+        name: 'Expense Only Job',
+        clientName: 'Owner',
+        contractValue: null,
+        status: 'active',
+        completionPercentage: 0,
+        totalExpenses: 1500,
+        totalPayments: 0,
+        netProfit: -1500,
+        isArchived: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            selectedDashboardProjectIdProvider.overrideWith(
+              (ref) => 'project_1',
+            ),
+            dashboardSnapshotProvider.overrideWith(
+              (ref, workspaceId) => Stream.value(
+                DashboardSnapshot.fromMap({
+                  'totalExpenses': 1500,
+                  'totalIncome': 0,
+                  'activeProjects': 1,
+                }),
+              ),
+            ),
+            projectsProvider.overrideWith(
+              (ref) => Stream.value(const <Project>[project]),
+            ),
+            projectRecentTransactionsProvider.overrideWith(
+              (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+            ),
+            notificationItemsProvider.overrideWith(
+              (ref) => Stream.value(const []),
+            ),
+            unreadNotificationCountProvider.overrideWith((ref) => 0),
+            currentUsageProvider.overrideWith(
+              (ref) =>
+                  Stream.value(UsageSnapshot.empty(limits: PlanLimits.free())),
+            ),
+            currentSubscriptionStreamProvider.overrideWith(
+              (ref) => Stream.value(SubscriptionState.free()),
+            ),
+            currentUserSettingsProvider.overrideWith(
+              (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [AppLocalizations.delegate],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const DashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Contract row omitted rather than rendered as a zero amount.
+      expect(
+        find.byKey(
+          const Key('qa_dashboard_project_contract_value'),
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
+      // No budget baseline, so no budget-usage card and no 0% indicator.
+      expect(find.text('Budget used', skipOffstage: false), findsNothing);
+      expect(find.text('0%', skipOffstage: false), findsNothing);
+      // Revenue side hidden: the headline states expenses instead of a net
+      // profit built from zero income.
+      expect(find.byType(HeroNetCard, skipOffstage: false), findsNothing);
+      expect(
+        find.byKey(
+          const Key('qa_dashboard_project_profit_margin'),
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const Key('qa_dashboard_project_expense_total'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('Approach B: project selector scopes dashboard to one project '
       '(financials, 75% budget bar, recent list)', (tester) async {
     const project = Project(

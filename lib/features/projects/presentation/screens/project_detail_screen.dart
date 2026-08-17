@@ -68,6 +68,8 @@ class ProjectDetailScreen extends ConsumerWidget {
                   currency: currency,
                   locale: locale,
                   l10n: l10n,
+                  onSetContractValue: () =>
+                      context.push(AppRoutes.projectEditPath(project.id)),
                 ),
                 const SizedBox(height: 24),
                 SectionHeader(title: l10n.t('recentTransactions')),
@@ -81,6 +83,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 32),
                 ActionGrid(
+                  showPaymentActions: !project.isExpenseLedger,
                   onEdit: () =>
                       context.push(AppRoutes.projectEditPath(project.id)),
                   onArchive: () async {
@@ -249,7 +252,13 @@ class _ProjectFinancialHero extends StatelessWidget {
     required this.currency,
     required this.locale,
     required this.l10n,
+    required this.onSetContractValue,
   });
+
+  /// Route out of expense-ledger mode: opens the edit form so the user can
+  /// enter a Contract Value. This is the only way back, so it must stay
+  /// reachable from the empty-state.
+  final VoidCallback onSetContractValue;
 
   final Project project;
   final String currency;
@@ -263,10 +272,10 @@ class _ProjectFinancialHero extends StatelessWidget {
     final isProfit = project.netProfit >= 0;
     final netText =
         '${isProfit ? '' : '−'}${numberFormat.format(project.netProfit.abs())}';
-    final budgetBase = (project.budgetLimit != null && project.budgetLimit! > 0)
-        ? project.budgetLimit!
-        : project.contractValue;
-    final hasBudget = budgetBase > 0;
+    // Single source of truth for both switches — see Project's derived getters.
+    final hasBudget = project.hasBudget;
+    final budgetBase = project.budgetBase ?? 0;
+    final isExpenseLedger = project.isExpenseLedger;
     final rawRatio = hasBudget ? project.totalExpenses / budgetBase : 0.0;
     final ratio = hasBudget ? rawRatio.clamp(0.0, 1.0) : 0.0;
     final overBudget = hasBudget && project.totalExpenses > budgetBase;
@@ -284,26 +293,85 @@ class _ProjectFinancialHero extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        HeroNetCard(
-          title: l10n.t('netProfit'),
-          net: netText,
-          negative: !isProfit,
-          currency: currency,
-          income: numberFormat.format(project.totalPayments),
-          expense: numberFormat.format(project.totalExpenses),
-          incomeLabel: l10n.t('totalIncome'),
-          expenseLabel: l10n.t('totalExpenses'),
-        ),
-        const SizedBox(height: 12),
-        StatTile(
-          key: const Key('qa_project_detail_profit_margin'),
-          icon: Icons.percent,
-          label: l10n.t('profitMargin'),
-          value: profitMarginText ?? '—',
-          valueColor: profitMarginText == null
-              ? null
-              : (isProfit ? t.income : t.expense),
-        ),
+        // Expense-ledger mode: no contract means no revenue side. A net-profit
+        // hero built from zero income would read as a permanent loss, so the
+        // headline becomes the expense total instead.
+        if (isExpenseLedger) ...[
+          StatTile(
+            key: const Key('qa_project_detail_expense_total'),
+            icon: Icons.trending_down,
+            label: l10n.t('totalExpenses'),
+            value: Formatters.money(
+              project.totalExpenses,
+              currencyCode: currency,
+              locale: locale,
+            ),
+            valueColor: t.expense,
+          ),
+          const SizedBox(height: 12),
+          BuildCard(
+            key: const Key('qa_project_detail_no_contract_empty_state'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 16,
+                      color: t.textMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        l10n.t('noContractValueTitle'),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: t.text,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.t('noContractValueBody'),
+                  style: TextStyle(fontSize: 12, color: t.textMuted),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    key: const Key('qa_project_detail_set_contract_value'),
+                    onPressed: onSetContractValue,
+                    child: Text(l10n.t('setContractValue')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          HeroNetCard(
+            title: l10n.t('netProfit'),
+            net: netText,
+            negative: !isProfit,
+            currency: currency,
+            income: numberFormat.format(project.totalPayments),
+            expense: numberFormat.format(project.totalExpenses),
+            incomeLabel: l10n.t('totalIncome'),
+            expenseLabel: l10n.t('totalExpenses'),
+          ),
+          const SizedBox(height: 12),
+          StatTile(
+            key: const Key('qa_project_detail_profit_margin'),
+            icon: Icons.percent,
+            label: l10n.t('profitMargin'),
+            value: profitMarginText ?? '—',
+            valueColor: profitMarginText == null
+                ? null
+                : (isProfit ? t.income : t.expense),
+          ),
+        ],
         if (hasBudget) ...[
           const SizedBox(height: 16),
           BuildCard(
@@ -363,31 +431,35 @@ class _ProjectFinancialHero extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 12),
-        Row(
-          key: const Key('qa_project_detail_contract_value'),
-          children: [
-            Icon(Icons.assignment_outlined, size: 14, color: t.textMuted),
-            const SizedBox(width: 6),
-            Text(
-              l10n.t('contractValue'),
-              style: TextStyle(fontSize: 12, color: t.textMuted),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              Formatters.money(
-                project.contractValue,
-                currencyCode: currency,
-                locale: locale,
+        // Omitted rather than rendered as zero when no contract is agreed —
+        // a `0` here reads as a real agreed amount.
+        if (project.hasContractValue) ...[
+          const SizedBox(height: 12),
+          Row(
+            key: const Key('qa_project_detail_contract_value'),
+            children: [
+              Icon(Icons.assignment_outlined, size: 14, color: t.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                l10n.t('contractValue'),
+                style: TextStyle(fontSize: 12, color: t.textMuted),
               ),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: t.textMuted,
+              const SizedBox(width: 6),
+              Text(
+                Formatters.money(
+                  project.contractValue!,
+                  currencyCode: currency,
+                  locale: locale,
+                ),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: t.textMuted,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }

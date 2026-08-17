@@ -136,8 +136,22 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.clientName is string
-        && request.resource.data.contractValue is number
-        && request.resource.data.contractValue > 0
+        && (
+          request.resource.data.contractValue == null
+          || (
+            request.resource.data.contractValue is number
+            && request.resource.data.contractValue > 0
+          )
+        )
+        // Clearing a contract value is reserved for the updateProject callable,
+        // which also enforces the contract-and-payment invariant. Rules cannot
+        // see the offline queue and a cross-document payment check would bill a
+        // read per write, so a direct client clear is refused outright instead.
+        // Setting or changing a value stays permitted.
+        && (
+          request.resource.data.contractValue != null
+          || resource.data.contractValue == null
+        )
         && request.resource.data.startDate is timestamp
         && (
           request.resource.data.expectedEndDate == null

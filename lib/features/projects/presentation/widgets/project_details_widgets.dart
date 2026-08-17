@@ -283,34 +283,34 @@ class FinancialGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
-    return GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.4,
-      children: [
+
+    // Contract, income and net all disappear together in expense-ledger mode,
+    // leaving the expense card alone. A single child in a two-column grid
+    // renders at half width with a dead column beside it, so the card is laid
+    // out on its own instead (FR-012: removing a widget must leave no artefact).
+    final cards = <Widget>[
+      if (project.hasContractValue)
         MetricCard(
           label: l10n.t('contractValue'),
           value: Formatters.money(
-            project.contractValue,
+            project.contractValue!,
             currencyCode: currency,
             locale: locale,
           ),
           color: context.tokens.accent,
           icon: Icons.assignment_outlined,
         ),
-        MetricCard(
-          label: l10n.t('totalExpenses'),
-          value: Formatters.money(
-            project.totalExpenses,
-            currencyCode: currency,
-            locale: locale,
-          ),
-          color: context.tokens.expense,
-          icon: Icons.trending_down,
+      MetricCard(
+        label: l10n.t('totalExpenses'),
+        value: Formatters.money(
+          project.totalExpenses,
+          currencyCode: currency,
+          locale: locale,
         ),
+        color: context.tokens.expense,
+        icon: Icons.trending_down,
+      ),
+      if (!project.isExpenseLedger) ...[
         MetricCard(
           label: l10n.t('totalIncome'),
           value: Formatters.money(
@@ -334,6 +334,23 @@ class FinancialGrid extends StatelessWidget {
           icon: Icons.account_balance_wallet_outlined,
         ),
       ],
+    ];
+
+    if (cards.length == 1) {
+      return SizedBox(
+        key: const Key('qa_project_financial_grid_single'),
+        child: cards.first,
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 1.4,
+      children: cards,
     );
   }
 }
@@ -350,8 +367,13 @@ class ActionGrid extends StatelessWidget {
     required this.onViewWorkers,
     required this.onGenerateReport,
     required this.onDelete,
+    this.showPaymentActions = true,
     super.key,
   });
+
+  /// False in expense-ledger mode, where the project cannot hold payments at
+  /// all, so offering to add or view them would lead nowhere.
+  final bool showPaymentActions;
 
   final VoidCallback onEdit;
   final VoidCallback onArchive;
@@ -387,13 +409,14 @@ class ActionGrid extends StatelessWidget {
               color: context.tokens.expense,
               onTap: onAddExpense,
             ),
-            _ActionCard(
-              qaKey: const Key('qa_project_add_payment'),
-              icon: Icons.payments_outlined,
-              label: l10n.t('addPayment'),
-              color: context.tokens.income,
-              onTap: onAddPayment,
-            ),
+            if (showPaymentActions)
+              _ActionCard(
+                qaKey: const Key('qa_project_add_payment'),
+                icon: Icons.payments_outlined,
+                label: l10n.t('addPayment'),
+                color: context.tokens.income,
+                onTap: onAddPayment,
+              ),
             _ActionCard(
               qaKey: const Key('qa_project_add_worker_entry'),
               icon: Icons.engineering_outlined,
@@ -422,13 +445,14 @@ class ActionGrid extends StatelessWidget {
               color: context.tokens.textMuted,
               onTap: onViewExpenses,
             ),
-            _ActionCard(
-              qaKey: const Key('qa_project_payments'),
-              icon: Icons.list_alt_outlined,
-              label: l10n.t('paymentList'),
-              color: context.tokens.textMuted,
-              onTap: onViewPayments,
-            ),
+            if (showPaymentActions)
+              _ActionCard(
+                qaKey: const Key('qa_project_payments'),
+                icon: Icons.list_alt_outlined,
+                label: l10n.t('paymentList'),
+                color: context.tokens.textMuted,
+                onTap: onViewPayments,
+              ),
             _ActionCard(
               qaKey: const Key('qa_project_edit'),
               icon: Icons.edit_outlined,

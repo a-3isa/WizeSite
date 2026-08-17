@@ -31,6 +31,120 @@ void main() {
     }
   });
 
+  test('an offline-queued create with no contract shows no fabricated zero', () async {
+    final firestore = FakeFirebaseFirestore();
+    await queue.enqueue(
+      type: OfflineActionTypes.createProject,
+      payload: {
+        'workspaceId': 'workspace_1',
+        'name': 'Expense Only Job',
+        'clientName': '',
+        'contractValue': null,
+        'completionPercentage': 0,
+      },
+    );
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    // The stream merges two sources (Firestore + the offline queue) and emits
+    // on each, so the first emission can precede the queue listener firing.
+    final projects = await repository
+        .watchProjects('workspace_1')
+        .firstWhere((items) => items.isNotEmpty)
+        .timeout(const Duration(seconds: 5));
+
+    expect(projects, hasLength(1));
+    final optimistic = projects.single;
+    expect(optimistic.name, 'Expense Only Job');
+    // A `?? 0` on the optimistic placeholder would show the user a contract
+    // amount they never entered, for as long as the action stays queued.
+    expect(optimistic.contractValue, isNull);
+    expect(optimistic.hasContractValue, isFalse);
+    expect(optimistic.isExpenseLedger, isTrue);
+  });
+
+  test('hasAnyPayment ignores archived payments', () async {
+    final firestore = FakeFirebaseFirestore();
+    await firestore.collection('payments').doc('payment_1').set({
+      'workspaceId': 'workspace_1',
+      'projectId': 'project_1',
+      'amount': 500,
+      'isArchived': true,
+    });
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    // Archiving is the only removal this app offers, so an archived payment
+    // must not keep the contract value permanently locked.
+    expect(await repository.hasAnyPayment('project_1'), isFalse);
+  });
+
+  test('hasAnyPayment sees an active payment', () async {
+    final firestore = FakeFirebaseFirestore();
+    await firestore.collection('payments').doc('payment_1').set({
+      'workspaceId': 'workspace_1',
+      'projectId': 'project_1',
+      'amount': 500,
+      'isArchived': false,
+    });
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    expect(await repository.hasAnyPayment('project_1'), isTrue);
+  });
+
+  test('hasAnyPayment counts a payment still queued offline', () async {
+    final firestore = FakeFirebaseFirestore();
+    await queue.enqueue(
+      type: OfflineActionTypes.createPayment,
+      payload: {
+        'workspaceId': 'workspace_1',
+        'projectId': 'project_1',
+        'amount': 500,
+      },
+    );
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    // Otherwise a user could clear the contract offline and strand the queued
+    // payment on sync.
+    expect(await repository.hasAnyPayment('project_1'), isTrue);
+  });
+
+  test('hasAnyPayment ignores payments belonging to another project', () async {
+    final firestore = FakeFirebaseFirestore();
+    await firestore.collection('payments').doc('payment_1').set({
+      'workspaceId': 'workspace_1',
+      'projectId': 'project_other',
+      'amount': 500,
+      'isArchived': false,
+    });
+
+    final repository = FirebaseProjectRepository(
+      firestore,
+      _MockWorkspaceMutationService(),
+      queue,
+    );
+
+    expect(await repository.hasAnyPayment('project_1'), isFalse);
+  });
+
   test('project reads include visible optimistic finance deltas', () async {
     final firestore = FakeFirebaseFirestore();
     await firestore.collection('projects').doc('project_1').set({
