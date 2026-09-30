@@ -4,8 +4,11 @@ import 'dart:typed_data';
 
 import 'package:buildtrack_app/core/services/attachment_file_types.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 String _extensionOf(String path) {
   final dotIndex = path.lastIndexOf('.');
@@ -60,9 +63,51 @@ class UploadedVoiceFile {
 }
 
 class StorageUploadService {
-  const StorageUploadService(this._storage);
+  const StorageUploadService(
+    this._storage, {
+    SelfHostedRpcTransport? selfHostedTransport,
+  }) : _selfHosted = selfHostedTransport;
 
   final FirebaseStorage _storage;
+
+  /// Set in self-hosted builds (spec 004): files go to `POST /v1/files` and are
+  /// read later through `getAttachmentDownloadUrl`, so no download URL is
+  /// returned (empty string).
+  final SelfHostedRpcTransport? _selfHosted;
+
+  Future<({String storagePath, int size})> _uploadSelfHosted({
+    required SelfHostedRpcTransport transport,
+    required String kind,
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+    required String idempotencyKey,
+  }) async {
+    try {
+      final result = await transport.uploadFile(
+        kind: kind,
+        bytes: bytes,
+        fileName: fileName,
+        contentType: contentType,
+        idempotencyKey: idempotencyKey,
+      );
+      return (
+        storagePath: '${result['storagePath']}',
+        size: (result['sizeBytes'] as num?)?.toInt() ?? bytes.length,
+      );
+    } on CallableClientException catch (error) {
+      final code = error.code ?? 'upload-failed';
+      throw StorageUploadException(
+        error.message,
+        code: code,
+        retryable: !const {
+          'invalid-argument',
+          'permission-denied',
+          'unauthenticated',
+        }.contains(code),
+      );
+    }
+  }
 
   static String contentTypeForAttachmentPath(String path) {
     return AttachmentFileTypes.contentTypeForPath(path) ??
@@ -73,6 +118,7 @@ class StorageUploadService {
     required String userId,
     required String localFilePath,
     void Function(double progress)? onProgress,
+    String? idempotencyKey,
   }) async {
     final source = File(localFilePath);
     final exists = await source.exists();
@@ -85,8 +131,24 @@ class StorageUploadService {
         ? '.m4a'
         : _extensionOf(localFilePath);
     final storagePath = 'voice-expenses/$userId/$timestamp$extension';
-    final ref = _storage.ref(storagePath);
     final bytes = await source.readAsBytes();
+    final selfHosted = _selfHosted;
+    if (selfHosted != null) {
+      final uploaded = await _uploadSelfHosted(
+        transport: selfHosted,
+        kind: 'voice-expenses',
+        bytes: bytes,
+        fileName: '$timestamp$extension',
+        contentType: _contentTypeForAudioExtension(extension),
+        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
+      );
+      onProgress?.call(1);
+      return UploadedVoiceFile(
+        storagePath: uploaded.storagePath,
+        downloadUrl: '',
+      );
+    }
+    final ref = _storage.ref(storagePath);
     final uploadTask = ref.putData(
       bytes,
       SettableMetadata(
@@ -130,6 +192,7 @@ class StorageUploadService {
     required String localFilePath,
     String? fileName,
     void Function(double progress)? onProgress,
+    String? idempotencyKey,
   }) async {
     final validationError = await AttachmentValidationService.validateLocalFile(
       localFilePath,
@@ -158,9 +221,28 @@ class StorageUploadService {
         : _extensionOf(localFilePath);
     final resolvedName = fileName ?? source.uri.pathSegments.last;
     final storagePath = 'attachments/$userId/$timestamp$extension';
-    final ref = _storage.ref(storagePath);
     final bytes = await source.readAsBytes();
     final contentType = contentTypeForAttachmentPath(localFilePath);
+    final selfHosted = _selfHosted;
+    if (selfHosted != null) {
+      final uploaded = await _uploadSelfHosted(
+        transport: selfHosted,
+        kind: 'attachments',
+        bytes: bytes,
+        fileName: resolvedName,
+        contentType: contentType,
+        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
+      );
+      onProgress?.call(1);
+      return UploadedAttachment(
+        storagePath: uploaded.storagePath,
+        downloadUrl: '',
+        fileName: resolvedName,
+        contentType: contentType,
+        size: uploaded.size,
+      );
+    }
+    final ref = _storage.ref(storagePath);
     final uploadTask = ref.putData(
       bytes,
       SettableMetadata(
@@ -262,5 +344,8 @@ class StorageUploadException implements Exception {
 }
 
 final storageUploadServiceProvider = Provider<StorageUploadService>((ref) {
-  return StorageUploadService(FirebaseStorage.instance);
+  return StorageUploadService(
+    FirebaseStorage.instance,
+    selfHostedTransport: ref.watch(selfHostedRpcTransportProvider),
+  );
 });

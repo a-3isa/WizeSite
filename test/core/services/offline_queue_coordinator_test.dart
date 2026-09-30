@@ -88,6 +88,7 @@ void main() {
         userId: 'user_1',
         localFilePath: file.path,
         fileName: 'receipt.pdf',
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenAnswer(
       (_) async => const UploadedAttachment(
@@ -109,6 +110,7 @@ void main() {
         userId: 'user_1',
         localFilePath: file.path,
         fileName: 'receipt.pdf',
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).called(1);
   });
@@ -126,6 +128,7 @@ void main() {
         userId: 'user_1',
         localFilePath: path,
         fileName: 'receipt.pdf',
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenThrow(
       const StorageUploadException(

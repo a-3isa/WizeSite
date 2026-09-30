@@ -78,6 +78,8 @@ class OfflineQueueCoordinator {
           userId: user.uid,
           localFilePath: record.attachment.localPath ?? '',
           fileName: record.attachment.fileName,
+          // Stable across retries: a re-sent upload returns the first file.
+          idempotencyKey: record.id,
         );
         await pendingService.markUploadedAndRemove(
           id: record.id,

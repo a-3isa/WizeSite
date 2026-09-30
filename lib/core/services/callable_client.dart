@@ -341,22 +341,29 @@ class CallableClientException implements Exception {
   String toString() => message;
 }
 
-final callableClientProvider = Provider<CallableClient>((ref) {
-  final auth = ref.watch(firebaseAuthProvider);
+/// The self-hosted API transport (RPCs and file uploads); null in Firebase
+/// builds (no `--dart-define=API_BASE_URL`).
+final selfHostedRpcTransportProvider = Provider<SelfHostedRpcTransport?>((ref) {
   const backend = BackendConfig.fromEnvironment;
+  if (!backend.useSelfHostedBackend) {
+    return null;
+  }
+  final auth = ref.watch(firebaseAuthProvider);
+  return SelfHostedRpcTransport(
+    config: backend,
+    httpClient: http.Client(),
+    idToken: ({required bool forceRefresh}) async =>
+        auth.currentUser?.getIdToken(forceRefresh),
+    appCheckToken: () => FirebaseAppCheck.instance.getToken(),
+  );
+});
+
+final callableClientProvider = Provider<CallableClient>((ref) {
   return CallableClient(
     ref.watch(functionsProvider),
-    auth,
+    ref.watch(firebaseAuthProvider),
     FirebaseAppCheck.instance,
     ref.watch(appTelemetryProvider),
-    selfHostedTransport: backend.useSelfHostedBackend
-        ? SelfHostedRpcTransport(
-            config: backend,
-            httpClient: http.Client(),
-            idToken: ({required bool forceRefresh}) async =>
-                auth.currentUser?.getIdToken(forceRefresh),
-            appCheckToken: () => FirebaseAppCheck.instance.getToken(),
-          )
-        : null,
+    selfHostedTransport: ref.watch(selfHostedRpcTransportProvider),
   );
 });

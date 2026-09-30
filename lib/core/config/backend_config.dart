@@ -24,8 +24,10 @@ class BackendConfig {
   /// True when this build talks to the self-hosted backend instead of Firebase.
   bool get useSelfHostedBackend => apiBaseUrl.trim().isNotEmpty;
 
-  Uri rpcUri(String functionName) {
-    final base = apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
-    return Uri.parse('$base/v1/rpc/$functionName');
-  }
+  String get _base => apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+
+  Uri rpcUri(String functionName) => Uri.parse('$_base/v1/rpc/$functionName');
+
+  /// File uploads (contracts/files-api.md).
+  Uri get filesUri => Uri.parse('$_base/v1/files');
 }
