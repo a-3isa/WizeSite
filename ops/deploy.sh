@@ -34,6 +34,10 @@ else
   dc pull api
 fi
 
+# The API (and the migrator, same image) write attachments here as the image's non-root user.
+APP_IDS="$(docker run --rm --entrypoint sh "$API_IMAGE" -c 'echo "$(id -u app):$(id -g app)"')"
+chown "$APP_IDS" "$ROOT/files"
+
 echo "==> postgres"
 dc up -d postgres
 for _ in $(seq 1 45); do
