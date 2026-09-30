@@ -1,4 +1,6 @@
 import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/json_safe.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
@@ -6,6 +8,7 @@ import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:powersync/powersync.dart';
 
 class WorkerAccountingRepository {
@@ -72,9 +75,32 @@ class WorkerAccountingRepository {
 /// firestore.rules. [save] is still the inherited direct write until US2 moves
 /// it behind an RPC.
 class LocalWorkerAccountingRepository extends WorkerAccountingRepository {
-  LocalWorkerAccountingRepository(super.firestore, this._db);
+  LocalWorkerAccountingRepository(
+    super.firestore,
+    this._db, {
+    WorkspaceMutationService? mutations,
+  }) : _mutations = mutations;
 
   final Future<PowerSyncDatabase> _db;
+
+  /// Writes go through the offline queue to the RPC API (spec 004, T082);
+  /// without it (tests) [save] keeps the inherited Firestore write.
+  final WorkspaceMutationService? _mutations;
+
+  @override
+  Future<void> save(WorkerAccountingRecord record) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.save(record);
+    }
+    await mutations.upsertAccountingRecord(
+      kind: 'worker',
+      record: {
+        ...jsonSafeMap(record.toMap()),
+        'id': record.id.isEmpty ? const Uuid().v4() : record.id,
+      },
+    );
+  }
 
   @override
   Future<WorkerAccountingSummary?> fetchSummary({
@@ -122,6 +148,7 @@ final workerAccountingRepositoryProvider = Provider<WorkerAccountingRepository>(
       ? LocalWorkerAccountingRepository(
           ref.watch(firestoreProvider),
           ref.watch(localDatabaseProvider),
+          mutations: ref.watch(workspaceMutationServiceProvider),
         )
       : WorkerAccountingRepository(ref.watch(firestoreProvider)),
 );

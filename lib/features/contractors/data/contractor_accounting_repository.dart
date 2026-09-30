@@ -1,4 +1,6 @@
 import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/json_safe.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
@@ -45,9 +47,29 @@ class ContractorAccountingRepository {
 /// write until US2 moves it behind an RPC.
 class LocalContractorAccountingRepository
     extends ContractorAccountingRepository {
-  LocalContractorAccountingRepository(super.firestore, this._db);
+  LocalContractorAccountingRepository(
+    super.firestore,
+    this._db, {
+    WorkspaceMutationService? mutations,
+  }) : _mutations = mutations;
 
   final Future<PowerSyncDatabase> _db;
+
+  /// Writes go through the offline queue to the RPC API (spec 004, T082);
+  /// without it (tests) [save] keeps the inherited Firestore write.
+  final WorkspaceMutationService? _mutations;
+
+  @override
+  Future<void> save(ContractorAccountingRecord record) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.save(record);
+    }
+    await mutations.upsertAccountingRecord(
+      kind: 'contractor',
+      record: {...jsonSafeMap(record.toMap()), 'id': record.id},
+    );
+  }
 
   @override
   Future<List<ContractorAccountingRecord>> fetchForContractor({
@@ -77,6 +99,7 @@ final contractorAccountingRepositoryProvider =
           ? LocalContractorAccountingRepository(
               ref.watch(firestoreProvider),
               ref.watch(localDatabaseProvider),
+              mutations: ref.watch(workspaceMutationServiceProvider),
             )
           : ContractorAccountingRepository(ref.watch(firestoreProvider)),
     );

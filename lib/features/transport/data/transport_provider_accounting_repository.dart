@@ -1,4 +1,6 @@
 import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/json_safe.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
@@ -48,9 +50,29 @@ class TransportProviderAccountingRepository {
 /// write until US2 moves it behind an RPC.
 class LocalTransportProviderAccountingRepository
     extends TransportProviderAccountingRepository {
-  LocalTransportProviderAccountingRepository(super.firestore, this._db);
+  LocalTransportProviderAccountingRepository(
+    super.firestore,
+    this._db, {
+    WorkspaceMutationService? mutations,
+  }) : _mutations = mutations;
 
   final Future<PowerSyncDatabase> _db;
+
+  /// Writes go through the offline queue to the RPC API (spec 004, T082);
+  /// without it (tests) [save] keeps the inherited Firestore write.
+  final WorkspaceMutationService? _mutations;
+
+  @override
+  Future<void> save(TransportProviderAccountingRecord record) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.save(record);
+    }
+    await mutations.upsertAccountingRecord(
+      kind: 'transport',
+      record: {...jsonSafeMap(record.toMap()), 'id': record.id},
+    );
+  }
 
   @override
   Future<List<TransportProviderAccountingRecord>> fetchForProvider({
@@ -80,6 +102,7 @@ final transportProviderAccountingRepositoryProvider =
           ? LocalTransportProviderAccountingRepository(
               ref.watch(firestoreProvider),
               ref.watch(localDatabaseProvider),
+              mutations: ref.watch(workspaceMutationServiceProvider),
             )
           : TransportProviderAccountingRepository(ref.watch(firestoreProvider)),
     );

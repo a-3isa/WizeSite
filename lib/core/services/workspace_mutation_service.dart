@@ -58,7 +58,31 @@ abstract final class OfflineActionTypes {
   static const archiveWorkerEntry = 'archive_worker_entry';
   static const updateUserProfile = 'update_user_profile';
   static const updateUserSettings = 'update_user_settings';
+
+  // Self-hosted backend only (spec 004, T080/T082): writes the app made
+  // directly against Firestore now go through the queue to RPCs.
+  static const upsertEntity = 'upsert_entity';
+  static const touchEntityLastUsed = 'touch_entity_last_used';
+  static const deleteEntity = 'delete_entity';
+  static const upsertAccountingRecord = 'upsert_accounting_record';
+  static const markNotificationsRead = 'mark_notifications_read';
 }
+
+/// Accounting-record family → the RPC that upserts it (contracts/rpc-api.md).
+const accountingRecordRpcs = <String, String>{
+  'worker': 'upsertWorkerAccountingRecord',
+  'contractor': 'upsertContractorAccountingRecord',
+  'equipment': 'upsertEquipmentAccountingRecord',
+  'transport': 'upsertTransportProviderAccountingRecord',
+};
+
+/// Firestore collection → accounting-record family.
+const accountingRecordKinds = <String, String>{
+  'worker_accounting_records': 'worker',
+  'contractor_accounting_records': 'contractor',
+  'equipment_accounting_records': 'equipment',
+  'transport_provider_accounting_records': 'transport',
+};
 
 class WorkspaceMutationService {
   const WorkspaceMutationService(this._client, this._queue, this._telemetry);
@@ -908,6 +932,60 @@ class WorkspaceMutationService {
           defaultErrorMessage: 'Failed to update settings.',
         );
         return;
+      case OfflineActionTypes.upsertEntity:
+        await _client.call<void>(
+          functionName: 'upsertEntity',
+          idempotencyKey: action.id,
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to save contact.',
+        );
+        return;
+      case OfflineActionTypes.touchEntityLastUsed:
+        await _client.call<void>(
+          functionName: 'touchEntityLastUsed',
+          idempotencyKey: action.id,
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to update contact.',
+        );
+        return;
+      case OfflineActionTypes.deleteEntity:
+        await _client.call<void>(
+          functionName: 'deleteEntity',
+          idempotencyKey: action.id,
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to delete contact.',
+        );
+        return;
+      case OfflineActionTypes.upsertAccountingRecord:
+        final kind = '${action.payload['kind'] ?? ''}';
+        final functionName = accountingRecordRpcs[kind];
+        final record = action.payload['record'];
+        if (functionName == null || record is! Map) {
+          throw CallableClientException(
+            'Unknown accounting record kind: $kind',
+            code: 'invalid-argument',
+          );
+        }
+        await _client.call<void>(
+          functionName: functionName,
+          idempotencyKey: action.id,
+          payload: Map<String, dynamic>.from(record),
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to save accounting record.',
+        );
+        return;
+      case OfflineActionTypes.markNotificationsRead:
+        await _client.call<void>(
+          functionName: 'markNotificationsRead',
+          idempotencyKey: action.id,
+          payload: action.payload,
+          parseResult: (_) {},
+          defaultErrorMessage: 'Failed to update notifications.',
+        );
+        return;
       case OfflineActionQueueTypes.attachmentUpload:
         final rawAttachment = action.payload['attachment'];
         if (rawAttachment is Map) {
@@ -926,6 +1004,51 @@ class WorkspaceMutationService {
         throw UnsupportedError('Unsupported offline action: ${action.type}');
     }
   }
+
+  /// Queues a contact create/edit (`upsertEntity`). [payload] must be JSON-safe
+  /// and carry the entity `id` the app already shows.
+  Future<MutationResult> upsertEntity(Map<String, dynamic> payload) =>
+      _enqueueForBackgroundSync(
+        type: OfflineActionTypes.upsertEntity,
+        payload: payload,
+      );
+
+  Future<MutationResult> touchEntityLastUsed({
+    required String workspaceId,
+    required String entityId,
+  }) => _enqueueForBackgroundSync(
+    type: OfflineActionTypes.touchEntityLastUsed,
+    payload: {'workspaceId': workspaceId, 'entityId': entityId},
+  );
+
+  Future<MutationResult> deleteEntity({
+    required String workspaceId,
+    required String entityId,
+  }) => _enqueueForBackgroundSync(
+    type: OfflineActionTypes.deleteEntity,
+    payload: {'workspaceId': workspaceId, 'entityId': entityId},
+  );
+
+  /// Queues an accounting-record upsert. [kind] is a key of
+  /// [accountingRecordRpcs]; [record] must be JSON-safe (ISO dates).
+  Future<MutationResult> upsertAccountingRecord({
+    required String kind,
+    required Map<String, dynamic> record,
+  }) {
+    if (!accountingRecordRpcs.containsKey(kind)) {
+      throw ArgumentError.value(kind, 'kind', 'Unknown accounting record kind');
+    }
+    return _enqueueForBackgroundSync(
+      type: OfflineActionTypes.upsertAccountingRecord,
+      payload: {'kind': kind, 'record': record},
+    );
+  }
+
+  Future<MutationResult> markNotificationsRead(Iterable<String> ids) =>
+      _enqueueForBackgroundSync(
+        type: OfflineActionTypes.markNotificationsRead,
+        payload: {'notificationIds': ids.toList(growable: false)},
+      );
 
   Future<MutationResult> _enqueueForBackgroundSync({
     required String type,
