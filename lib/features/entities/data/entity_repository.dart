@@ -5,10 +5,13 @@ import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/json_safe.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
+import 'package:uuid/uuid.dart';
 
 part 'local_entity_repository.dart';
 
@@ -387,6 +390,7 @@ final entityRepositoryProvider = Provider<EntityRepository>((ref) {
     return LocalEntityRepository(
       ref.watch(firestoreProvider),
       ref.watch(localDatabaseProvider),
+      mutations: ref.watch(workspaceMutationServiceProvider),
     );
   }
   return FirebaseEntityRepository(ref.watch(firestoreProvider));

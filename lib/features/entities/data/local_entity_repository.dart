@@ -4,12 +4,204 @@ part of 'entity_repository.dart';
 ///
 /// Mirrors Firestore semantics exactly, including one subtlety: ordering by a
 /// field excludes documents that lack it, so the `lastUsedAt` / `normalizedName`
-/// orderings filter `IS NOT NULL`. Writes are the inherited direct writes
-/// until US2 moves them behind RPCs.
+/// orderings filter `IS NOT NULL`.
+///
+/// Writes (T082) are queued for the contact RPCs when [WorkspaceMutationService]
+/// is given, so they work offline; the new or changed contact is returned at
+/// once and reaches the lists when it syncs. Without it (tests) the inherited
+/// Firestore writes remain.
 class LocalEntityRepository extends FirebaseEntityRepository {
-  LocalEntityRepository(super.firestore, this._db);
+  LocalEntityRepository(
+    super.firestore,
+    this._db, {
+    WorkspaceMutationService? mutations,
+  }) : _mutations = mutations;
 
   final Future<PowerSyncDatabase> _db;
+  final WorkspaceMutationService? _mutations;
+
+  static String? _trimmedOrNull(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// The payload `upsertEntity` expects; the server sets every field from it.
+  static Map<String, dynamic> _upsertPayload(AppEntity entity) => {
+    'id': entity.id,
+    'workspaceId': entity.workspaceId,
+    'name': entity.name,
+    'type': entity.type,
+    'defaultRate': ?entity.defaultRate,
+    if (entity.rateUnit.isNotEmpty) 'rateUnit': entity.rateUnit,
+    if (entity.phoneNumber.isNotEmpty) 'phoneNumber': entity.phoneNumber,
+    if (entity.notes.isNotEmpty) 'notes': entity.notes,
+    'attachments': [
+      for (final attachment in entity.attachments) attachment.toMap(),
+    ],
+  };
+
+  Future<AppEntity> _existing(String entityId) async {
+    final entity = await getEntityById(entityId);
+    if (entity == null) {
+      throw ArgumentError.value(entityId, 'entityId', 'Entity not found');
+    }
+    return entity;
+  }
+
+  @override
+  Future<AppEntity?> ensureEntity({
+    required String workspaceId,
+    required String name,
+    String? type,
+  }) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.ensureEntity(
+        workspaceId: workspaceId,
+        name: name,
+        type: type,
+      );
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final existing = await getEntityByName(workspaceId, trimmed, type: type);
+    if (existing != null) {
+      await mutations.touchEntityLastUsed(
+        workspaceId: workspaceId,
+        entityId: existing.id,
+      );
+      return existing;
+    }
+    return createEntity(
+      workspaceId: workspaceId,
+      name: trimmed,
+      type: type ?? 'supplier',
+    );
+  }
+
+  @override
+  Future<AppEntity> createEntity({
+    required String workspaceId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.createEntity(
+        workspaceId: workspaceId,
+        name: name,
+        type: type,
+        defaultRate: defaultRate,
+        rateUnit: rateUnit,
+        phoneNumber: phoneNumber,
+        notes: notes,
+      );
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
+    }
+    final now = DateTime.now().toUtc();
+    final entity = AppEntity(
+      id: const Uuid().v4(),
+      workspaceId: workspaceId,
+      name: trimmed,
+      normalizedName: FirebaseEntityRepository.normalizeName(trimmed),
+      type: type,
+      createdAt: now,
+      lastUsedAt: now,
+      defaultRate: defaultRate,
+      rateUnit: _trimmedOrNull(rateUnit) ?? '',
+      phoneNumber: _trimmedOrNull(phoneNumber) ?? '',
+      notes: _trimmedOrNull(notes) ?? '',
+    );
+    await mutations.upsertEntity(_upsertPayload(entity));
+    return entity;
+  }
+
+  @override
+  Future<AppEntity> updateEntity({
+    required String entityId,
+    required String name,
+    required String type,
+    double? defaultRate,
+    String? rateUnit,
+    String? phoneNumber,
+    String? notes,
+  }) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.updateEntity(
+        entityId: entityId,
+        name: name,
+        type: type,
+        defaultRate: defaultRate,
+        rateUnit: rateUnit,
+        phoneNumber: phoneNumber,
+        notes: notes,
+      );
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
+    }
+    final existing = await _existing(entityId);
+    final updated = AppEntity(
+      id: existing.id,
+      workspaceId: existing.workspaceId,
+      name: trimmed,
+      normalizedName: FirebaseEntityRepository.normalizeName(trimmed),
+      type: type,
+      createdAt: existing.createdAt,
+      attachments: existing.attachments,
+      lastUsedAt: DateTime.now().toUtc(),
+      clientMutationId: existing.clientMutationId,
+      defaultRate: defaultRate,
+      rateUnit: _trimmedOrNull(rateUnit) ?? '',
+      phoneNumber: _trimmedOrNull(phoneNumber) ?? '',
+      notes: _trimmedOrNull(notes) ?? '',
+    );
+    await mutations.upsertEntity(_upsertPayload(updated));
+    return updated;
+  }
+
+  @override
+  Future<void> deleteEntity(String entityId) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.deleteEntity(entityId);
+    }
+    final existing = await _existing(entityId);
+    await mutations.deleteEntity(
+      workspaceId: existing.workspaceId,
+      entityId: entityId,
+    );
+  }
+
+  @override
+  Future<void> saveAttachments({
+    required String entityId,
+    required List<Map<String, dynamic>> attachments,
+  }) async {
+    final mutations = _mutations;
+    if (mutations == null) {
+      return super.saveAttachments(
+        entityId: entityId,
+        attachments: attachments,
+      );
+    }
+    final existing = await _existing(entityId);
+    await mutations.upsertEntity({
+      ..._upsertPayload(existing),
+      'attachments': jsonSafe(attachments),
+    });
+  }
 
   AppEntity _fromRow(LocalRow row) =>
       AppEntity.fromMap('${row['id']}', localRowToMap('entities', row));

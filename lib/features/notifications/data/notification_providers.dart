@@ -1,3 +1,5 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -9,6 +11,9 @@ final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   return NotificationRepository.withSource(
     ref.watch(firestoreProvider),
     ref.watch(docSourceProvider),
+    mutations: BackendConfig.fromEnvironment.useSelfHostedBackend
+        ? ref.watch(workspaceMutationServiceProvider)
+        : null,
   );
 });
 
