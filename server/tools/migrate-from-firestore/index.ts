@@ -61,8 +61,10 @@ function projectTotals(
   return totalsFrom(projectMetrics);
 }
 
+/** Source documents, minus duplicate saves the transform dropped (they are the same record). */
+let droppedDuplicateIds = new Set<string>();
 const docsOf = (exported: ExportedCollections, name: string): TriggerDocData[] =>
-  (exported[name] ?? []).map((d) => ({ id: d.id, ...d.data }));
+  (exported[name] ?? []).filter((d) => !droppedDuplicateIds.has(d.id)).map((d) => ({ id: d.id, ...d.data }));
 
 async function main(): Promise<void> {
   const target = arg("target") ?? "unspecified";
@@ -94,6 +96,7 @@ async function main(): Promise<void> {
 
     const columns = await readTableColumns(sql);
     const transformed = transformExport(exported, columns, liveUids);
+    droppedDuplicateIds = new Set(transformed.duplicateSaves.flatMap((d) => d.dropped));
     const orphans = findOrphans(transformed.rows);
 
     let files: FileCheck[] = [];
@@ -168,6 +171,12 @@ async function main(): Promise<void> {
     const report = buildReport(verifyInput);
     for (const orphan of orphans) report.mismatches.push(`orphan: ${orphan}`);
     for (const conflict of transformed.uniqueConflicts) report.mismatches.push(conflict);
+    for (const d of transformed.duplicateSaves) {
+      report.warnings.push(
+        `${d.table}: saved ${d.dropped.length + 1} times (client_mutation_id ${d.clientMutationId}); ` +
+          `kept earliest ${d.kept}, dropped ${d.dropped.join(", ")}`,
+      );
+    }
     for (const d of transformed.duplicates) {
       const line =
         `memberships: ${d.dropped.length + 1} docs for workspace ${d.workspaceId} / user ${d.userId}; ` +

@@ -148,15 +148,36 @@ test("blank client_mutation_id loads as NULL so the (workspace, id) unique key a
   assert.deepEqual(uniqueConflicts, []);
 });
 
-test("a repeated non-blank client_mutation_id in one workspace is a conflict, never dropped", () => {
+test("a record saved twice (same client_mutation_id, identical content) keeps the earliest save", () => {
+  const data = exported();
+  const saved = (seconds: number) => new Timestamp(1_780_000_000 + seconds, 0);
+  data.projects = [
+    ...data.projects!,
+    { id: "p_late", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1", createdAt: saved(2000) } },
+    { id: "p_early", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1", createdAt: saved(1000) } },
+  ];
+  const { rows, skipped, duplicateSaves, uniqueConflicts } = transformExport(data, columns, liveUids);
+  assert.deepEqual(
+    rows.get("projects")!.filter((r) => r.client_mutation_id === "m1").map((r) => r.id),
+    ["p_early"],
+  );
+  assert.equal(skipped.get("projects"), 2, "1 dead-workspace project + 1 duplicate save");
+  assert.deepEqual(duplicateSaves, [
+    { table: "projects", workspaceId: "ws_1", clientMutationId: "m1", kept: "p_early", dropped: ["p_late"] },
+  ]);
+  assert.deepEqual(uniqueConflicts, []);
+});
+
+test("different records sharing a client_mutation_id are a conflict, never dropped", () => {
   const data = exported();
   data.projects = [
     ...data.projects!,
     { id: "p2", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1" } },
-    { id: "p3", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1" } },
+    { id: "p3", data: { workspaceId: "ws_1", name: "B", clientMutationId: "m1" } },
   ];
-  const { rows, uniqueConflicts } = transformExport(data, columns, liveUids);
+  const { rows, uniqueConflicts, duplicateSaves } = transformExport(data, columns, liveUids);
   assert.equal(rows.get("projects")!.filter((r) => r.client_mutation_id === "m1").length, 2);
+  assert.deepEqual(duplicateSaves, []);
   assert.deepEqual(uniqueConflicts, ["projects: client_mutation_id m1 repeated in workspace ws_1 (p2, p3)"]);
 });
 

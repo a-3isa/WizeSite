@@ -43,11 +43,22 @@ export interface TransformResult {
    */
   skipped: Map<string, number>;
   duplicates: DuplicateMembership[];
+  /** Records saved twice by a client retry; only the earliest save is loaded. */
+  duplicateSaves: DuplicateSave[];
   /**
-   * Rows that would violate a (workspace_id, client_mutation_id) unique key. A human must decide
-   * which record is real, so these block the load.
+   * Different records that would violate a (workspace_id, client_mutation_id) unique key. A human
+   * must decide which is real, so these block the load.
    */
   uniqueConflicts: string[];
+}
+
+/** One client mutation stored as several identical documents (an offline retry). */
+export interface DuplicateSave {
+  table: string;
+  workspaceId: string;
+  clientMutationId: string;
+  kept: string;
+  dropped: string[];
 }
 
 /** Firestore collection → table. Collections not listed here are not migrated. */
@@ -244,26 +255,59 @@ export function transformExport(
     rows.set(table, out);
   }
   const duplicates = dedupeMemberships(rows, skipped);
-  return { rows, precisionFlags, skipped, duplicates, uniqueConflicts: findMutationIdConflicts(rows) };
+  const { duplicateSaves, uniqueConflicts } = dedupeMutationIds(rows, skipped);
+  return { rows, precisionFlags, skipped, duplicates, duplicateSaves, uniqueConflicts };
 }
 
-function findMutationIdConflicts(rows: Map<string, Row[]>): string[] {
-  const conflicts: string[] = [];
+/** Row content without the fields a retry changes (server id and save times), keys sorted. */
+function contentOf(row: Row): string {
+  const content: Row = {};
+  for (const key of Object.keys(row).sort()) {
+    if (key === "id" || key === "created_at" || key === "updated_at") continue;
+    content[key] = row[key];
+  }
+  return JSON.stringify(content);
+}
+
+/**
+ * The legacy offline queue could store one mutation twice. Identical copies are the same record:
+ * keep the earliest save. Different records sharing an id are reported as conflicts.
+ */
+function dedupeMutationIds(
+  rows: Map<string, Row[]>,
+  skipped: Map<string, number>,
+): { duplicateSaves: DuplicateSave[]; uniqueConflicts: string[] } {
+  const collectionOf = new Map(Object.entries(COLLECTION_TABLES).map(([c, t]) => [t, c]));
+  const duplicateSaves: DuplicateSave[] = [];
+  const uniqueConflicts: string[] = [];
   for (const [table, list] of rows) {
-    const byKey = new Map<string, string[]>();
+    const byKey = new Map<string, Row[]>();
     for (const row of list) {
       const mutationId = row.client_mutation_id;
       if (typeof mutationId !== "string" || mutationId === "") continue;
       const key = `${row.workspace_id ?? ""}|${mutationId}`;
-      byKey.set(key, [...(byKey.get(key) ?? []), `${row.id}`]);
+      byKey.set(key, [...(byKey.get(key) ?? []), row]);
     }
-    for (const [key, ids] of byKey) {
-      if (ids.length < 2) continue;
-      const [workspaceId, mutationId] = key.split("|");
-      conflicts.push(`${table}: client_mutation_id ${mutationId} repeated in workspace ${workspaceId} (${ids.join(", ")})`);
+    const drop = new Set<Row>();
+    for (const [key, group] of byKey) {
+      if (group.length < 2) continue;
+      const [workspaceId, clientMutationId] = key.split("|");
+      if (new Set(group.map(contentOf)).size > 1) {
+        uniqueConflicts.push(
+          `${table}: client_mutation_id ${clientMutationId} repeated in workspace ${workspaceId} ` +
+            `(${group.map((r) => r.id).join(", ")})`,
+        );
+        continue;
+      }
+      const [kept, ...rest] = [...group].sort((a, b) => timeOf(a.created_at) - timeOf(b.created_at));
+      rest.forEach((r) => drop.add(r));
+      duplicateSaves.push({ table, workspaceId, clientMutationId, kept: `${kept.id}`, dropped: rest.map((r) => `${r.id}`) });
+      const collection = collectionOf.get(table) ?? table;
+      skipped.set(collection, (skipped.get(collection) ?? 0) + rest.length);
     }
+    if (drop.size > 0) rows.set(table, list.filter((r) => !drop.has(r)));
   }
-  return conflicts;
+  return { duplicateSaves, uniqueConflicts };
 }
 
 function timeOf(value: unknown): number {
