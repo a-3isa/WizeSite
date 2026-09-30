@@ -43,6 +43,11 @@ export interface TransformResult {
    */
   skipped: Map<string, number>;
   duplicates: DuplicateMembership[];
+  /**
+   * Rows that would violate a (workspace_id, client_mutation_id) unique key. A human must decide
+   * which record is real, so these block the load.
+   */
+  uniqueConflicts: string[];
 }
 
 /** Firestore collection → table. Collections not listed here are not migrated. */
@@ -157,7 +162,10 @@ function toRow(
       legacy[field] = jsonSafe(value);
       continue;
     }
-    if (FLOAT_COLUMNS.has(column)) {
+    if (column === "client_mutation_id" && (value === "" || value === null)) {
+      // Blank means "none"; NULL keeps the (workspace_id, client_mutation_id) key satisfiable.
+      row[column] = null;
+    } else if (FLOAT_COLUMNS.has(column)) {
       const n = value === null || value === undefined || value === "" ? null : Number(value);
       row[column] = n !== null && Number.isFinite(n) ? n : null;
     } else if (NUMERIC_COLUMNS.has(column)) {
@@ -236,7 +244,26 @@ export function transformExport(
     rows.set(table, out);
   }
   const duplicates = dedupeMemberships(rows, skipped);
-  return { rows, precisionFlags, skipped, duplicates };
+  return { rows, precisionFlags, skipped, duplicates, uniqueConflicts: findMutationIdConflicts(rows) };
+}
+
+function findMutationIdConflicts(rows: Map<string, Row[]>): string[] {
+  const conflicts: string[] = [];
+  for (const [table, list] of rows) {
+    const byKey = new Map<string, string[]>();
+    for (const row of list) {
+      const mutationId = row.client_mutation_id;
+      if (typeof mutationId !== "string" || mutationId === "") continue;
+      const key = `${row.workspace_id ?? ""}|${mutationId}`;
+      byKey.set(key, [...(byKey.get(key) ?? []), `${row.id}`]);
+    }
+    for (const [key, ids] of byKey) {
+      if (ids.length < 2) continue;
+      const [workspaceId, mutationId] = key.split("|");
+      conflicts.push(`${table}: client_mutation_id ${mutationId} repeated in workspace ${workspaceId} (${ids.join(", ")})`);
+    }
+  }
+  return conflicts;
 }
 
 function timeOf(value: unknown): number {

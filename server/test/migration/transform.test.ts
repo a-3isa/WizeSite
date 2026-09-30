@@ -16,7 +16,7 @@ const columns: TableColumns = new Map(
     memberships: ["id", "workspace_id", "user_uid", "role", "status", "invited_by", "created_at", "updated_at", "legacy"],
     user_profiles: ["uid", "email", "full_name", "photo_url", "active_workspace_id", "default_currency",
       "risk_alerts_enabled", "setup_completed", "created_at", "updated_at", "legacy"],
-    projects: ["id", "workspace_id", "name", "contract_value", "completion_percentage", "is_archived", "created_at", "updated_at", "legacy"],
+    projects: ["id", "workspace_id", "name", "contract_value", "completion_percentage", "is_archived", "client_mutation_id", "created_at", "updated_at", "legacy"],
     expenses: ["id", "workspace_id", "project_id", "amount", "date", "category", "notes", "attachments",
       "is_archived", "created_at", "updated_at", "legacy"],
     usage_counters: ["id", "workspace_id", "period", "expenses_count", "active_projects", "updated_at", "legacy"],
@@ -133,6 +133,31 @@ test("duplicate memberships that disagree on role are flagged as conflicting", (
   ];
   const { duplicates } = transformExport(data, columns, liveUids);
   assert.equal(duplicates[0].conflicting, true);
+});
+
+test("blank client_mutation_id loads as NULL so the (workspace, id) unique key allows many", () => {
+  const data = exported();
+  data.projects = [
+    ...data.projects!,
+    { id: "p2", data: { workspaceId: "ws_1", name: "A", clientMutationId: "" } },
+    { id: "p3", data: { workspaceId: "ws_1", name: "B", clientMutationId: "" } },
+  ];
+  const { rows, uniqueConflicts } = transformExport(data, columns, liveUids);
+  const loaded = rows.get("projects")!.filter((r) => r.id === "p2" || r.id === "p3");
+  assert.deepEqual(loaded.map((r) => r.client_mutation_id), [null, null]);
+  assert.deepEqual(uniqueConflicts, []);
+});
+
+test("a repeated non-blank client_mutation_id in one workspace is a conflict, never dropped", () => {
+  const data = exported();
+  data.projects = [
+    ...data.projects!,
+    { id: "p2", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1" } },
+    { id: "p3", data: { workspaceId: "ws_1", name: "A", clientMutationId: "m1" } },
+  ];
+  const { rows, uniqueConflicts } = transformExport(data, columns, liveUids);
+  assert.equal(rows.get("projects")!.filter((r) => r.client_mutation_id === "m1").length, 2);
+  assert.deepEqual(uniqueConflicts, ["projects: client_mutation_id m1 repeated in workspace ws_1 (p2, p3)"]);
 });
 
 test("embedded attachments stay a JSON array; Timestamps inside become ISO strings; non-ASCII names intact", () => {

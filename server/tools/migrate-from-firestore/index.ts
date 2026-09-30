@@ -101,7 +101,8 @@ async function main(): Promise<void> {
     let storedMetrics = new Map<string, Record<string, unknown>>();
 
     const conflicts = transformed.duplicates.filter((d) => d.conflicting);
-    if (!dryRun && transformed.precisionFlags.length === 0 && orphans.length === 0 && conflicts.length === 0) {
+    if (!dryRun && transformed.precisionFlags.length === 0 && orphans.length === 0 && conflicts.length === 0 &&
+      transformed.uniqueConflicts.length === 0) {
       console.log(`[${target}] loading into Postgres...`);
       await loadMigration(sql, transformed.rows, { reset: arg("reset") === "true" });
       if (arg("skip-files") !== "true") {
@@ -166,6 +167,7 @@ async function main(): Promise<void> {
     };
     const report = buildReport(verifyInput);
     for (const orphan of orphans) report.mismatches.push(`orphan: ${orphan}`);
+    for (const conflict of transformed.uniqueConflicts) report.mismatches.push(conflict);
     for (const d of transformed.duplicates) {
       const line =
         `memberships: ${d.dropped.length + 1} docs for workspace ${d.workspaceId} / user ${d.userId}; ` +
