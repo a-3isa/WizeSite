@@ -23,11 +23,26 @@ export interface PrecisionFlag {
   value: number;
 }
 
+/** Several membership docs for one (workspace, user); Postgres allows exactly one. */
+export interface DuplicateMembership {
+  workspaceId: string;
+  userId: string;
+  /** Doc kept: the canonical `${workspaceId}_${userId}` id when present, else the newest. */
+  kept: string;
+  dropped: string[];
+  /** The docs disagree on role or status: a human must decide, so the load is blocked. */
+  conflicting: boolean;
+}
+
 export interface TransformResult {
   rows: Map<string, Row[]>;
   precisionFlags: PrecisionFlag[];
-  /** Source collection → documents skipped because their owner account no longer exists. */
+  /**
+   * Source collection → documents not loaded: owner account no longer exists, or a merged
+   * duplicate membership (see [duplicates]).
+   */
   skipped: Map<string, number>;
+  duplicates: DuplicateMembership[];
 }
 
 /** Firestore collection → table. Collections not listed here are not migrated. */
@@ -220,5 +235,53 @@ export function transformExport(
     }
     rows.set(table, out);
   }
-  return { rows, precisionFlags, skipped };
+  const duplicates = dedupeMemberships(rows, skipped);
+  return { rows, precisionFlags, skipped, duplicates };
+}
+
+function timeOf(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  return 0;
+}
+
+/**
+ * Legacy clients created owner memberships under random ids before the canonical
+ * `${workspaceId}_${userId}` id existed, so one pair can have two docs. Keep one row per pair.
+ */
+function dedupeMemberships(rows: Map<string, Row[]>, skipped: Map<string, number>): DuplicateMembership[] {
+  const memberships = rows.get("memberships");
+  if (!memberships) return [];
+  const groups = new Map<string, Row[]>();
+  for (const row of memberships) {
+    const key = `${row.workspace_id ?? ""}|${row.user_uid ?? ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const duplicates: DuplicateMembership[] = [];
+  const keep: Row[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      keep.push(group[0]);
+      continue;
+    }
+    const workspaceId = `${group[0].workspace_id ?? ""}`;
+    const userId = `${group[0].user_uid ?? ""}`;
+    const canonical = group.find((r) => r.id === `${workspaceId}_${userId}`);
+    const kept =
+      canonical ??
+      [...group].sort(
+        (a, b) => timeOf(b.updated_at ?? b.created_at) - timeOf(a.updated_at ?? a.created_at),
+      )[0];
+    const signature = (r: Row) => `${r.role ?? ""}|${r.status ?? ""}`;
+    duplicates.push({
+      workspaceId,
+      userId,
+      kept: `${kept.id}`,
+      dropped: group.filter((r) => r !== kept).map((r) => `${r.id}`),
+      conflicting: new Set(group.map(signature)).size > 1,
+    });
+    keep.push(kept);
+    skipped.set("memberships", (skipped.get("memberships") ?? 0) + group.length - 1);
+  }
+  rows.set("memberships", keep);
+  return duplicates;
 }

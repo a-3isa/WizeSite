@@ -109,6 +109,32 @@ test("completion percentage is not money: stored exactly as a float, never flagg
   assert.equal(rows.get("projects")!.find((r) => r.id === "p1")!.completion_percentage, 32.80725319006043);
 });
 
+test("duplicate memberships for one (workspace, user) merge into the canonical doc and are counted", () => {
+  const data = exported();
+  data.memberships = [
+    ...data.memberships!,
+    // Legacy random-id twin of ws_1_owner_1 (seen in production data).
+    { id: "QIQdh2LZD244vdjh7lxU", data: { workspaceId: "ws_1", userId: "owner_1", role: "owner" } },
+  ];
+  const { rows, skipped, duplicates } = transformExport(data, columns, liveUids);
+  const kept = rows.get("memberships")!.filter((r) => r.workspace_id === "ws_1" && r.user_uid === "owner_1");
+  assert.deepEqual(kept.map((r) => r.id), ["ws_1_owner_1"]);
+  assert.equal(skipped.get("memberships"), 2, "1 dead-account membership + 1 merged duplicate");
+  assert.deepEqual(duplicates, [
+    { workspaceId: "ws_1", userId: "owner_1", kept: "ws_1_owner_1", dropped: ["QIQdh2LZD244vdjh7lxU"], conflicting: false },
+  ]);
+});
+
+test("duplicate memberships that disagree on role are flagged as conflicting", () => {
+  const data = exported();
+  data.memberships = [
+    ...data.memberships!,
+    { id: "rnd", data: { workspaceId: "ws_1", userId: "owner_1", role: "member" } },
+  ];
+  const { duplicates } = transformExport(data, columns, liveUids);
+  assert.equal(duplicates[0].conflicting, true);
+});
+
 test("embedded attachments stay a JSON array; Timestamps inside become ISO strings; non-ASCII names intact", () => {
   const { rows } = transformExport(exported(), columns, liveUids);
   const attachments = rows.get("expenses")!.find((r) => r.id === "e1")!.attachments as Array<Record<string, unknown>>;

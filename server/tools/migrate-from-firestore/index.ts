@@ -100,7 +100,8 @@ async function main(): Promise<void> {
     let migratedDocs = new Map<string, TriggerDocData[]>();
     let storedMetrics = new Map<string, Record<string, unknown>>();
 
-    if (!dryRun && transformed.precisionFlags.length === 0 && orphans.length === 0) {
+    const conflicts = transformed.duplicates.filter((d) => d.conflicting);
+    if (!dryRun && transformed.precisionFlags.length === 0 && orphans.length === 0 && conflicts.length === 0) {
       console.log(`[${target}] loading into Postgres...`);
       await loadMigration(sql, transformed.rows, { reset: arg("reset") === "true" });
       if (arg("skip-files") !== "true") {
@@ -165,6 +166,13 @@ async function main(): Promise<void> {
     };
     const report = buildReport(verifyInput);
     for (const orphan of orphans) report.mismatches.push(`orphan: ${orphan}`);
+    for (const d of transformed.duplicates) {
+      const line =
+        `memberships: ${d.dropped.length + 1} docs for workspace ${d.workspaceId} / user ${d.userId}; ` +
+        `kept ${d.kept}, dropped ${d.dropped.join(", ")}`;
+      if (d.conflicting) report.mismatches.push(`${line} (role/status differ: resolve in Firestore)`);
+      else report.warnings.push(line);
+    }
     report.ok = report.mismatches.length === 0;
 
     await mkdir(path.dirname(reportPath), { recursive: true });
