@@ -1,5 +1,6 @@
 import { fileRpcs } from "../files/download";
 import { expenseRpcs } from "./expenses";
+import { memberRpcs } from "./members";
 import { paymentRpcs } from "./payments";
 import { projectRpcs } from "./projects";
 import { workerRpcs } from "./workers";
@@ -19,6 +20,7 @@ export interface RegistryDeps {
 export function buildRegistry(deps: RegistryDeps): RpcRegistry {
   return {
     ...workspaceRpcs,
+    ...memberRpcs,
     ...projectRpcs(deps.files),
     ...expenseRpcs,
     ...paymentRpcs,
