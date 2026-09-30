@@ -1,0 +1,39 @@
+# Local development stack: Postgres (logical replication on) + PowerSync.
+# Usage: docker compose -f compose.dev.yml up -d
+# PowerSync image flags and config layout are verified by the spike (tasks.md T012).
+services:
+  postgres:
+    image: postgres:17
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
+    environment:
+      POSTGRES_USER: wizesite
+      POSTGRES_PASSWORD: wizesite-dev
+      POSTGRES_DB: wizesite
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-powersync-storage.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wizesite -d wizesite"]
+      interval: 5s
+      retries: 10
+
+  powersync:
+    image: journeyapps/powersync-service:latest
+    command: ["start", "-r", "unified"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+      PS_DATA_SOURCE_URI: postgres://wizesite:wizesite-dev@postgres:5432/wizesite
+      PS_STORAGE_SOURCE_URI: postgres://wizesite:wizesite-dev@postgres:5432/powersync_storage
+      PS_PORT: "8080"
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./powersync:/config:ro
+
+volumes:
+  pgdata-dev:

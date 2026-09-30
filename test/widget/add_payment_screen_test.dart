@@ -15,7 +15,6 @@ import 'package:buildtrack_app/features/subscription/domain/subscription_reposit
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_quota_repository.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +38,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -63,7 +63,7 @@ class _FakePaymentRepository implements PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage(items: [], hasMore: false);
@@ -339,7 +339,7 @@ void main() {
     expect(find.text('Select attachments'), findsNothing);
   });
 
-  testWidgets('AddPaymentScreen bypasses quota while limits are disabled', (
+  testWidgets('AddPaymentScreen blocks create when monthly payment quota is hit', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1200);
@@ -390,7 +390,7 @@ void main() {
     await tester.tap(find.byKey(const Key('qa_add_payment_save')));
     await tester.pumpAndSettle();
 
-    expect(paymentRepository.createCalls, 1);
-    expect(find.text('limit:paymentsPerMonth'), findsNothing);
+    expect(paymentRepository.createCalls, 0);
+    expect(find.text('limit:paymentsPerMonth'), findsOneWidget);
   });
 }

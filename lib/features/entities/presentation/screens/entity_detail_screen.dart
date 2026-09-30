@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -126,7 +127,10 @@ class _EntityDetailScreenState extends ConsumerState<EntityDetailScreen> {
               Text(entity.type),
               const SizedBox(height: 16),
               if (_error != null) ...[
-                Text(_error!, style: const TextStyle(color: Colors.red)),
+                Text(
+                  _error!,
+                  style: TextStyle(color: context.tokens.expense),
+                ),
                 const SizedBox(height: 12),
               ],
               FilledButton.icon(

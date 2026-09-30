@@ -71,7 +71,7 @@ List<WorkspaceSummary> _decodeWorkspaceSummaries(String? json, String userId) {
       return const <WorkspaceSummary>[];
     }
     return items
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map(
           (item) => WorkspaceSummary.fromJson(Map<String, dynamic>.from(item)),
         )

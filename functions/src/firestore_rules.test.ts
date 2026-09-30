@@ -452,6 +452,17 @@ if (!emulatorHost) {
     await assertSucceeds(getDoc(doc(adminDb, "project_metrics", "project_owner")));
   });
 
+  test("entryOnly can read expenses but not payments", async () => {
+    await seedBaseData();
+    const entryDb = env.authenticatedContext("entry_1").firestore();
+    const accountingDb = env.authenticatedContext("accounting_1").firestore();
+
+    await assertSucceeds(getDoc(doc(entryDb, "expenses", "expense_owner")));
+    await assertFails(getDoc(doc(entryDb, "payments", "payment_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "expenses", "expense_owner")));
+    await assertSucceeds(getDoc(doc(accountingDb, "payments", "payment_owner")));
+  });
+
   test("domain accounting records and worker summaries are accounting-role restricted", async () => {
     await seedBaseData();
     const memberDb = env.authenticatedContext("member_1").firestore();
@@ -502,12 +513,12 @@ if (!emulatorHost) {
     );
   });
 
-  test("workspace owner can add members", async () => {
+  test("workspace owner cannot add members via client writes", async () => {
     await seedBaseData();
     const ownerDb = env.authenticatedContext("owner_1").firestore();
     const membershipDoc = doc(ownerDb, "memberships", "workspace_owner_member_2");
 
-    await assertSucceeds(
+    await assertFails(
       setDoc(membershipDoc, {
         workspaceId: "workspace_owner",
         userId: "member_2",
@@ -1142,6 +1153,12 @@ if (!emulatorHost) {
         userId: "owner_1",
         role: "owner",
       });
+      // Pro workspace: the free team quota (owner only) is enforced separately.
+      await setDoc(doc(db, "subscriptions", "owner_ws"), {
+        workspaceId: "owner_ws",
+        tier: "pro",
+        status: "active",
+      });
     });
 
     const result = await inviteMemberByEmailForUser({
@@ -1168,7 +1185,7 @@ if (!emulatorHost) {
     });
   });
 
-  test("email invite bypasses team quota while testing but remains owner only", async () => {
+  test("email invite enforces the free team quota and remains owner only", async () => {
     await env.clearFirestore();
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
@@ -1214,13 +1231,33 @@ if (!emulatorHost) {
       });
     });
 
-    const result = await inviteMemberByEmailForUser({
-      ownerUid: "owner_1",
-      workspaceId: "owner_ws",
-      email: "invitee@example.com",
-      role: "member",
-    });
-    assert.equal(result.userId, "invitee_1");
+    const assertLimitReached = (error: unknown) => {
+      assert.equal((error as {code?: string}).code, "failed-precondition");
+      assert.equal(
+        (error as {details?: {code?: string}}).details?.code,
+        "LIMIT_REACHED",
+      );
+      return true;
+    };
+
+    await assert.rejects(
+      inviteMemberByEmailForUser({
+        ownerUid: "owner_1",
+        workspaceId: "owner_ws",
+        email: "invitee@example.com",
+        role: "member",
+      }),
+      assertLimitReached,
+    );
+    await assert.rejects(
+      inviteMemberWithQuotaForUser({
+        ownerUid: "owner_1",
+        workspaceId: "owner_ws",
+        userId: "invitee_2",
+        role: "entryOnly",
+      }),
+      assertLimitReached,
+    );
 
     await assert.rejects(
       inviteMemberByEmailForUser({
@@ -1234,6 +1271,17 @@ if (!emulatorHost) {
         return true;
       },
     );
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const rejected = await getDoc(doc(db, "memberships", "owner_ws_invitee_1"));
+      assert.equal(rejected.exists(), false);
+      await setDoc(doc(db, "subscriptions", "owner_ws"), {
+        workspaceId: "owner_ws",
+        tier: "pro",
+        status: "active",
+      });
+    });
 
     const legacyResult = await inviteMemberWithQuotaForUser({
       ownerUid: "owner_1",
@@ -1270,6 +1318,68 @@ if (!emulatorHost) {
       assert.equal(notificationSnap.data()?.workspaceId, "owner_ws");
       assert.equal(notificationSnap.data()?.targetUserId, "invitee_2");
     });
+  });
+
+  test("email invite hides whether the user exists or is already a member", async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "owner_1"), {
+        id: "owner_1",
+        email: "owner@example.com",
+        workspaceId: "owner_ws",
+      });
+      await setDoc(doc(db, "users", "invitee_1"), {
+        id: "invitee_1",
+        email: "invitee@example.com",
+        workspaceId: "personal_ws",
+      });
+      await setDoc(doc(db, "workspaces", "owner_ws"), {
+        id: "owner_ws",
+        ownerId: "owner_1",
+        name: "Owner Workspace",
+      });
+      await setDoc(doc(db, "memberships", "owner_ws_owner_1"), {
+        workspaceId: "owner_ws",
+        userId: "owner_1",
+        role: "owner",
+      });
+      await setDoc(doc(db, "memberships", "owner_ws_invitee_1"), {
+        workspaceId: "owner_ws",
+        userId: "invitee_1",
+        role: "member",
+      });
+    });
+
+    await assert.rejects(
+      inviteMemberByEmailForUser({
+        ownerUid: "owner_1",
+        workspaceId: "owner_ws",
+        email: "nobody@example.com",
+        role: "member",
+      }),
+      (error: unknown) => {
+        const typed = error as {code?: string; message?: string};
+        assert.equal(typed.code, "not-found");
+        assert.match(`${typed.message ?? ""}`, /INVITE_UNAVAILABLE/);
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      inviteMemberByEmailForUser({
+        ownerUid: "owner_1",
+        workspaceId: "owner_ws",
+        email: "invitee@example.com",
+        role: "member",
+      }),
+      (error: unknown) => {
+        const typed = error as {code?: string; message?: string};
+        assert.equal(typed.code, "not-found");
+        assert.match(`${typed.message ?? ""}`, /INVITE_UNAVAILABLE/);
+        return true;
+      },
+    );
   });
 
   test("workspace member role updates and removals protect the last owner", async () => {

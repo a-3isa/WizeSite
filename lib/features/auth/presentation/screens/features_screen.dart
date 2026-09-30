@@ -56,82 +56,60 @@ class FeaturesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
     final isRTL = Directionality.of(context) == TextDirection.rtl;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE85D04), Color(0xFFFF7A00), Color(0xFFFF9E33)],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Hero
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(24, 32, 24, 20),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.construction_rounded,
-                        color: Colors.white,
-                        size: 48,
-                      ),
+      backgroundColor: t.accent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(24, 32, 24, 20),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: t.onAccent.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      l10n.t('appName'),
-                      style: theme.textTheme.headlineLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
+                    child: Icon(
+                      Icons.construction_rounded,
+                      color: t.onAccent,
+                      size: 48,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      l10n.t('tagline'),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.95),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              // Content card
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(28),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
                   ),
+                  const SizedBox(height: 20),
+                  Text(
+                    l10n.t('appName'),
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      color: t.onAccent,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.t('tagline'),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: t.onAccent.withValues(alpha: 0.92),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: t.surface,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(t.rXl),
+                  ),
+                  boxShadow: t.shadowMd,
+                ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -189,11 +167,12 @@ class FeaturesScreen extends StatelessWidget {
                             });
                           },
                           style: FilledButton.styleFrom(
-                            backgroundColor: context.tokens.accent,
-                            foregroundColor: Colors.white,
+                            backgroundColor: t.accent,
+                            foregroundColor: t.onAccent,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            minimumSize: const Size.fromHeight(48),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(t.rMd),
                             ),
                             elevation: 0,
                           ),
@@ -227,7 +206,6 @@ class FeaturesScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -267,8 +245,8 @@ class _FeatureCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: iconColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),

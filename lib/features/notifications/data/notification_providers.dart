@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_repository.dart';
@@ -5,7 +6,10 @@ import 'package:buildtrack_app/features/notifications/domain/notification_item.d
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
-  return NotificationRepository(ref.watch(firestoreProvider));
+  return NotificationRepository.withSource(
+    ref.watch(firestoreProvider),
+    ref.watch(docSourceProvider),
+  );
 });
 
 final notificationItemsProvider = StreamProvider<List<NotificationItem>>((ref) {

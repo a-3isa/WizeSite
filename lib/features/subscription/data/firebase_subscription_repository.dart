@@ -1,37 +1,33 @@
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Reads the workspace subscription through [DocSource], so it serves both
+/// Firebase builds and the local replica (spec 004, tasks.md T051).
 class FirebaseSubscriptionRepository implements SubscriptionRepository {
-  FirebaseSubscriptionRepository(this._firestore);
+  FirebaseSubscriptionRepository(FirebaseFirestore firestore)
+    : _source = FirestoreDocSource(firestore);
 
-  final FirebaseFirestore _firestore;
+  FirebaseSubscriptionRepository.withSource(this._source);
+
+  final DocSource _source;
 
   @override
   Stream<SubscriptionState> watchSubscription(String workspaceId) {
-    return _firestore
-        .collection('subscriptions')
-        .doc(workspaceId)
-        .snapshots()
+    return _source
+        .watchDoc('subscriptions', workspaceId)
         .map(
-          (snap) => snap.exists
-              ? _fromDocument(snap.data() ?? const {})
-              : SubscriptionState.free(),
+          (doc) =>
+              doc == null ? SubscriptionState.free() : _fromDocument(doc.data),
         );
   }
 
   @override
   Future<SubscriptionState> getSubscription(String workspaceId) async {
-    final snap = await _firestore
-        .collection('subscriptions')
-        .doc(workspaceId)
-        .get();
-    if (!snap.exists) {
-      return SubscriptionState.free();
-    }
-    return _fromDocument(snap.data() ?? const {});
+    final doc = await _source.getDoc('subscriptions', workspaceId);
+    return doc == null ? SubscriptionState.free() : _fromDocument(doc.data);
   }
 
   SubscriptionState _fromDocument(Map<String, dynamic> data) {
@@ -72,6 +68,7 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
 }
 
 final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  return FirebaseSubscriptionRepository(firestore);
+  return FirebaseSubscriptionRepository.withSource(
+    ref.watch(docSourceProvider),
+  );
 });

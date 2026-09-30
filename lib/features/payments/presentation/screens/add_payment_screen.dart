@@ -13,6 +13,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -275,7 +276,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on CallableClientException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=paymentsPerMonth');
         }

@@ -61,7 +61,7 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) async {
     queries.add(request);
     return cursor == null ? firstPage : secondPage;
@@ -96,14 +96,14 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => const FirestorePage(items: [], hasMore: false);
 
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => cursor == null ? firstPage : secondPage;
 
@@ -499,7 +499,7 @@ class _PendingProjectRepository extends _FakeProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) {
     queries.add(request);
     if (cursor != null) {
@@ -522,7 +522,7 @@ class _RefreshHoldProjectRepository extends _FakeProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) {
     queries.add(request);
     if (_holdNextFetch && cursor == null) {
@@ -548,7 +548,7 @@ class _PendingArchivedProjectRepository extends _FakeProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) {
     if (cursor != null) {

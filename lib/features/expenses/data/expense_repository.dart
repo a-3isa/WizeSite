@@ -1,3 +1,8 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/pagination/local_page.dart';
+import 'package:buildtrack_app/core/sync/local_queries.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
@@ -7,6 +12,9 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
+
+part 'local_expense_repository.dart';
 
 abstract interface class ExpenseRepository {
   Stream<List<Expense>> watchExpenses(String workspaceId, String projectId);
@@ -22,7 +30,7 @@ abstract interface class ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   });
   Future<Expense?> getExpense(String expenseId);
@@ -87,6 +95,7 @@ class FirebaseExpenseRepository implements ExpenseRepository {
         .where('projectId', isEqualTo: projectId)
         .where('isArchived', isEqualTo: false)
         .orderBy('date', descending: true)
+        .limit(24)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -139,9 +148,10 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     var query = _firestore
         .collection('expenses')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -175,7 +185,7 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     query = query.orderBy('date', descending: true).limit(pageSize);
 
     if (cursor != null) {
-      query = query.startAfterDocument(cursor);
+      query = query.startAfterDocument(firestoreCursor!);
     }
 
     final snap = await query.get();
@@ -565,6 +575,14 @@ class FirebaseExpenseRepository implements ExpenseRepository {
 }
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalExpenseRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(workspaceMutationServiceProvider),
+      ref.watch(offlineActionQueueProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebaseExpenseRepository(
     ref.watch(firestoreProvider),
     ref.watch(workspaceMutationServiceProvider),

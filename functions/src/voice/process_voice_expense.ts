@@ -1,5 +1,6 @@
 import {getAppCheck} from "firebase-admin/app-check";
 import {getAuth} from "firebase-admin/auth";
+import {getFirestore} from "firebase-admin/firestore";
 import {defineSecret} from "firebase-functions/params";
 import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
 import {applyCorsHeaders} from "../http_cors";
@@ -12,26 +13,6 @@ export const openRouterModelSecret = defineSecret("OPENROUTER_MODEL");
 export const openRouterTranscriptionModelSecret = defineSecret("OPENROUTER_TRANSCRIPTION_MODEL");
 
 const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-audio-mini";
-
-function parseProjects(input: unknown): VoiceProjectInput[] {
-  if (!Array.isArray(input)) {
-    return [];
-  }
-  return input
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-      const candidate = item as Record<string, unknown>;
-      const id = `${candidate.id ?? ""}`.trim();
-      const name = `${candidate.name ?? ""}`.trim();
-      if (!id || !name) {
-        return null;
-      }
-      return {id, name};
-    })
-    .filter((item): item is VoiceProjectInput => item != null);
-}
 
 function parseCurrency(input: unknown): CurrencyCode {
   const value = `${input ?? ""}`.trim().toUpperCase();
@@ -140,6 +121,32 @@ export async function verifyVoiceHttpAppCheck(
   }
 }
 
+async function loadWorkspaceProjectsForUser(
+  uid: string,
+): Promise<VoiceProjectInput[]> {
+  const db = getFirestore();
+  const userSnap = await db.collection("users").doc(uid).get();
+  const workspaceId = `${userSnap.data()?.workspaceId ?? ""}`.trim();
+  if (!workspaceId) {
+    return [];
+  }
+  const snap = await db
+    .collection("projects")
+    .where("workspaceId", "==", workspaceId)
+    .where("isArchived", "==", false)
+    .limit(100)
+    .get();
+  return snap.docs
+    .map((doc) => {
+      const name = `${doc.data().name ?? ""}`.trim();
+      if (!name) {
+        return null;
+      }
+      return {id: doc.id, name};
+    })
+    .filter((item): item is VoiceProjectInput => item != null);
+}
+
 async function processVoiceExpenseForUser(
   uid: string,
   payload: VoiceExpensePayload,
@@ -151,7 +158,7 @@ async function processVoiceExpenseForUser(
 
   assertVoicePathOwnedByUser(storagePath, uid);
 
-  const projects = parseProjects(payload.projects);
+  const projects = await loadWorkspaceProjectsForUser(uid);
   const currency = parseCurrency(payload.currency);
   const languageHint = parseLanguageHint(payload.languageHint);
 
@@ -200,6 +207,7 @@ async function processVoiceExpenseForUser(
 
 export const processVoiceExpense = onCall(
   {
+    enforceAppCheck: true,
     timeoutSeconds: 120,
     memory: "1GiB",
     secrets: [

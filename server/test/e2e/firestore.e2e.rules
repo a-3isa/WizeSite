@@ -1,0 +1,9 @@
+rules_version = '2';
+// E2E harness only: the migrator uses the Admin SDK, which bypasses rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

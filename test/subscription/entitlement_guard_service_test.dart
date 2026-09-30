@@ -82,7 +82,7 @@ void main() {
       expect(result.max, 999999);
     });
 
-    test('allows quota while usage limits are disabled', () async {
+    test('denies quota for free expired users when limits are enabled', () async {
       final subRepo = _FakeSubscriptionRepository(
         SubscriptionState(
           tier: PlanTier.free,
@@ -110,7 +110,7 @@ void main() {
         type: LimitType.expensesPerMonth,
       );
 
-      expect(result.allowed, isTrue);
+      expect(result.allowed, isFalse);
     });
   });
 }

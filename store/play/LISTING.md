@@ -30,6 +30,8 @@ Site money lives in pockets, texts, and memory. By the time it reaches a spreads
 LOG EXPENSES BY VOICE
 Record on site → transcribe → parse → confirm → save. Speak a cost while your hands are full and Buildozer files it in the right project and category. No typing on a dusty screen, no receipts lost in a truck.
 
+Voice notes are sent to a third-party AI provider (on our servers) to transcribe and suggest expense fields. You review and confirm every result before anything is saved. Do not record conversations you do not intend to store.
+
 REAL-TIME PROFIT
 Every expense and payment updates net profit, budget health, and expected final cost instantly — for each project and across your whole workspace. The number you opened the app for is the first thing you see.
 

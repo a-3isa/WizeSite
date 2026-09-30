@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/contractors/domain/contractor_accounting_record.dart';
@@ -14,10 +12,60 @@ import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_sections.dart';
 import 'package:buildtrack_app/features/transport/domain/transport_provider_accounting_record.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
+/// Builds a labeled-rows PDF on a background isolate. Fonts load inside
+/// the isolate so the UI thread is not blocked on byte encoding.
+Future<Uint8List> buildLabeledRowsPdfInIsolate(Map<String, Object> dto) {
+  return compute(_buildLabeledRowsPdf, dto);
+}
+
+Future<Uint8List> _buildLabeledRowsPdf(Map<String, Object> dto) async {
+  final font = await PdfGoogleFonts.cairoRegular();
+  final fontBold = await PdfGoogleFonts.cairoBold();
+  final locale = '${dto['locale'] ?? 'en'}';
+  final title = '${dto['title'] ?? ''}';
+  final rows = (dto['rows'] as List<dynamic>? ?? const [])
+      .map((row) => (row as List<dynamic>).map((cell) => '$cell').toList())
+      .toList();
+  final document = pw.Document();
+  document.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      textDirection: locale == 'ar'
+          ? pw.TextDirection.rtl
+          : pw.TextDirection.ltr,
+      build: (context) => [
+        pw.Text(title, style: pw.TextStyle(font: fontBold, fontSize: 18)),
+        pw.SizedBox(height: 12),
+        pw.Table(
+          children: rows
+              .map(
+                (row) => pw.TableRow(
+                  children: row
+                      .map(
+                        (cell) => pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text(
+                            cell,
+                            style: pw.TextStyle(font: font, fontSize: 11),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    ),
+  );
+  return document.save();
+}
 
 class ReportPdfExporter {
   const ReportPdfExporter();
@@ -28,200 +76,65 @@ class ReportPdfExporter {
     required ReportMetrics metrics,
     required String currency,
   }) async {
-    final font = await PdfGoogleFonts.cairoRegular();
-    final fontBold = await PdfGoogleFonts.cairoBold();
-    final document = pw.Document();
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
     final locale = l10n.locale.languageCode;
-
-    pw.Widget sectionTitle(String text) {
-      return pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 8, top: 18),
-        child: pw.Text(
-          text,
-          style: pw.TextStyle(
-            font: fontBold,
-            fontSize: 16,
-            color: PdfColor.fromHex('#0F172A'),
-          ),
-        ),
-      );
-    }
-
-    pw.Widget twoColumnTable(List<List<String>> rows) {
-      return pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey300),
-        columnWidths: const {
-          0: pw.FlexColumnWidth(2),
-          1: pw.FlexColumnWidth(1),
-        },
-        children: rows
-            .map(
-              (row) => pw.TableRow(
-                children: row
-                    .map(
-                      (cell) => pw.Padding(
-                        padding: const pw.EdgeInsets.all(10),
-                        child: pw.Text(
-                          cell,
-                          style: pw.TextStyle(font: font, fontSize: 11),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
-      );
-    }
-
-    document.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => [
-          pw.Text(
-            l10n.t('buildozerFinancialReport'),
-            style: pw.TextStyle(
-              font: fontBold,
-              fontSize: 24,
-              color: PdfColor.fromHex('#F59E0B'),
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            l10n.t('projectReport'),
-            style: pw.TextStyle(font: font, fontSize: 12),
-          ),
-          pw.SizedBox(height: 12),
-          twoColumnTable([
-            [l10n.t('project'), project.name],
-            [l10n.t('status'), l10n.projectStatusLabel(project.status)],
-            [l10n.t('generated'), dateFormat.format(DateTime.now())],
-          ]),
-          sectionTitle(l10n.t('currentSnapshot')),
-          // Expense-ledger mode: the project has no contract and therefore no
-          // revenue side. Income and net are omitted rather than printed as
-          // zeroes — this document may be sent to a client.
-          twoColumnTable([
-            if (!project.isExpenseLedger)
-              [
-                l10n.t('totalIncome'),
-                Formatters.money(
-                  metrics.totalIncome,
-                  currencyCode: currency,
-                  locale: locale,
-                ),
-              ],
-            [
-              l10n.t('totalExpenses'),
-              Formatters.money(
-                metrics.totalExpenses,
-                currencyCode: currency,
-                locale: locale,
-              ),
-            ],
-            if (!project.isExpenseLedger)
-              [
-                l10n.t('netProfit'),
-                Formatters.money(
-                  metrics.net,
-                  currencyCode: currency,
-                  locale: locale,
-                ),
-              ],
-          ]),
-          sectionTitle(l10n.t('expenseBreakdown')),
-          twoColumnTable(
-            metrics.categoryTotals.entries
-                .map(
-                  (entry) => [
-                    l10n.expenseCategoryLabel(entry.key),
-                    Formatters.money(
-                      entry.value,
-                      currencyCode: currency,
-                      locale: locale,
-                    ),
-                  ],
-                )
-                .toList(),
-          ),
-          sectionTitle(l10n.t('monthlyCashFlow')),
-          twoColumnTable(
-            metrics.monthlyFlow
-                .map(
-                  (entry) => [
-                    DateFormat('yyyy-MM').format(entry.month),
-                    '${Formatters.money(entry.income, currencyCode: currency, locale: locale)} / ${Formatters.money(entry.expenses, currencyCode: currency, locale: locale)}',
-                  ],
-                )
-                .toList(),
-          ),
-          sectionTitle(l10n.t('topWorkers')),
-          twoColumnTable(
-            metrics.topWorkers.isEmpty
-                ? [
-                    [l10n.t('workerName'), l10n.t('noDataYet')],
-                  ]
-                : metrics.topWorkers
-                      .map(
-                        (worker) => [
-                          worker.name,
-                          '${worker.totalDays.toStringAsFixed(1)} d / ${Formatters.money(worker.totalCost, currencyCode: currency, locale: locale)}',
-                        ],
-                      )
-                      .toList(),
-          ),
-          sectionTitle(l10n.t('recentExpenses')),
-          twoColumnTable(
-            metrics.recentExpenses.isEmpty
-                ? [
-                    [l10n.t('expenses'), l10n.t('noDataYet')],
-                  ]
-                : metrics.recentExpenses
-                      .map(
-                        (expense) => [
-                          '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
-                          Formatters.money(
-                            expense.amount,
-                            currencyCode: currency,
-                            locale: locale,
-                          ),
-                        ],
-                      )
-                      .toList(),
-          ),
-          sectionTitle(l10n.t('recentPayments')),
-          twoColumnTable(
-            metrics.recentPayments.isEmpty
-                ? [
-                    [l10n.t('payments'), l10n.t('noDataYet')],
-                  ]
-                : metrics.recentPayments
-                      .map(
-                        (payment) => [
-                          '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
-                          Formatters.money(
-                            payment.amount,
-                            currencyCode: currency,
-                            locale: locale,
-                          ),
-                        ],
-                      )
-                      .toList(),
-          ),
-          pw.SizedBox(height: 18),
-          pw.Center(
-            child: pw.Text(
-              l10n.t('generatedByBuildozer'),
-              style: pw.TextStyle(font: font, fontSize: 10),
-            ),
-          ),
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    String money(num value) => Formatters.money(
+      value.toDouble(),
+      currencyCode: currency,
+      locale: locale,
+    );
+    final rows = <List<String>>[
+      [l10n.t('project'), project.name],
+      [l10n.t('status'), l10n.projectStatusLabel(project.status)],
+      [l10n.t('generated'), dateFormat.format(DateTime.now())],
+      if (!project.isExpenseLedger)
+        [l10n.t('totalIncome'), money(metrics.totalIncome)],
+      [l10n.t('totalExpenses'), money(metrics.totalExpenses)],
+      if (!project.isExpenseLedger) [l10n.t('netProfit'), money(metrics.net)],
+      ...metrics.categoryTotals.entries.map(
+        (entry) => [l10n.expenseCategoryLabel(entry.key), money(entry.value)],
+      ),
+      ...metrics.monthlyFlow.map(
+        (entry) => [
+          DateFormat('yyyy-MM').format(entry.month),
+          project.isExpenseLedger
+              ? money(entry.expenses)
+              : '${money(entry.income)} / ${money(entry.expenses)}',
         ],
       ),
-    );
-
-    return document.save();
+      if (metrics.topWorkers.isEmpty)
+        [l10n.t('workerName'), l10n.t('noDataYet')]
+      else
+        ...metrics.topWorkers.map(
+          (worker) => [
+            worker.name,
+            '${worker.totalDays.toStringAsFixed(1)} d / ${money(worker.totalCost)}',
+          ],
+        ),
+      if (metrics.recentExpenses.isEmpty)
+        [l10n.t('expenses'), l10n.t('noDataYet')]
+      else
+        ...metrics.recentExpenses.map(
+          (expense) => [
+            '${DateFormat('yyyy-MM-dd').format(expense.date)} ${l10n.expenseCategoryLabel(expense.category)}',
+            money(expense.amount),
+          ],
+        ),
+      if (metrics.recentPayments.isEmpty)
+        [l10n.t('payments'), l10n.t('noDataYet')]
+      else
+        ...metrics.recentPayments.map(
+          (payment) => [
+            '${DateFormat('yyyy-MM-dd').format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
+            money(payment.cashCollected),
+          ],
+        ),
+    ];
+    return buildLabeledRowsPdfInIsolate({
+      'locale': locale,
+      'title': l10n.t('buildozerFinancialReport'),
+      'rows': rows,
+    });
   }
 
   Future<Uint8List> buildExpensesListPdf({
@@ -321,6 +234,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             l10n.t('exportExpenses'),
@@ -528,6 +444,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             l10n.t('exportPayments'),
@@ -675,6 +594,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) {
           final totalExpenses = filtered.fold<double>(
             0,
@@ -819,6 +741,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             l10n.t('weeklyInsights'),
@@ -959,6 +884,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             l10n.t('buildozerFinancialReport'),
@@ -980,7 +908,7 @@ class ReportPdfExporter {
             [l10n.t('generated'), dateFormat.format(DateTime.now())],
           ]),
           sectionTitle(l10n.t('currentSnapshot')),
-          // Same omission rule as the project report above — the two documents
+          // Same omission rule as the project report above â€” the two documents
           // must not disagree about whether this project has a revenue side.
           twoColumnTable([
             if (!project.isExpenseLedger)
@@ -1256,7 +1184,7 @@ class ReportPdfExporter {
                       (payment) => [
                         '${dateFormat.format(payment.date)} ${l10n.paymentMethodLabel(payment.paymentMethod)}',
                         Formatters.money(
-                          payment.amount,
+                          payment.cashCollected,
                           currencyCode: currency,
                           locale: locale,
                         ),
@@ -1356,6 +1284,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => content,
       ),
     );
@@ -1507,6 +1438,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             l10n.t('dailyBreakdown'),
@@ -1623,6 +1557,9 @@ class ReportPdfExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        textDirection: locale == 'ar'
+            ? pw.TextDirection.rtl
+            : pw.TextDirection.ltr,
         build: (context) => [
           pw.Text(
             title,

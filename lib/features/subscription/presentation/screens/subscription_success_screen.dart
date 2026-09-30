@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,11 @@ class SubscriptionSuccessScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, size: 72, color: Colors.green),
+                Icon(
+                  Icons.check_circle,
+                  size: 72,
+                  color: context.tokens.income,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   l10n.t('subscriptionActivated'),

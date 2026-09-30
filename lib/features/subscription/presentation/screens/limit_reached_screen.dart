@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';
@@ -85,7 +86,7 @@ class _LimitReachedScreenState extends ConsumerState<LimitReachedScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock, size: 64, color: Colors.orange),
+                Icon(Icons.lock, size: 64, color: context.tokens.accent),
                 const SizedBox(height: 16),
                 Text(
                   l10n.limitTitle(widget.limitType),

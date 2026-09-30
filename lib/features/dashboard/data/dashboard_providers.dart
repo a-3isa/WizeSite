@@ -1,11 +1,15 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'dart:async';
 
+import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/utils/cash_collected.dart';
+import 'package:buildtrack_app/core/utils/expense_category.dart';
+import 'package:buildtrack_app/core/utils/utc_calendar.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
@@ -18,14 +22,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final dashboardSnapshotProvider =
     StreamProvider.family<DashboardSnapshot, String>((ref, workspaceId) {
       final roleFuture = ref.watch(currentAccountingRoleProvider.future);
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return Stream.fromFuture(roleFuture).asyncExpand((role) {
         if (role?.canAccessAccounting != true) {
           return Stream.value(DashboardSnapshot.restricted());
         }
         return _dashboardSnapshotStream(
-          firestore: firestore,
+          source: source,
           queue: queue,
           workspaceId: workspaceId,
         );
@@ -33,14 +37,11 @@ final dashboardSnapshotProvider =
     });
 
 Stream<DashboardSnapshot> _dashboardSnapshotStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final metricsStream = firestore
-      .collection('workspace_metrics')
-      .doc(workspaceId)
-      .snapshots();
+  final metricsStream = source.watchDoc('workspace_metrics', workspaceId);
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
@@ -73,13 +74,22 @@ Stream<DashboardSnapshot> _dashboardSnapshotStream({
             pendingExpenses -= amount;
             break;
           case OfflineActionTypes.createPayment:
-            pendingIncome += amount;
+            pendingIncome += _cashInFromMap(action.payload);
             break;
           case OfflineActionTypes.updatePayment:
-            pendingIncome += amount - previous;
+            pendingIncome +=
+                _cashInFromMap(action.payload) -
+                cashCollectedAmount(
+                  amount: previous,
+                  paymentStatus:
+                      (action.payload['previousPaymentStatus'] as String?) ??
+                      (action.payload['paymentStatus'] as String?),
+                  paidAmount: (action.payload['previousPaidAmount'] as num?)
+                      ?.toDouble(),
+                );
             break;
           case OfflineActionTypes.archivePayment:
-            pendingIncome -= amount;
+            pendingIncome -= _cashInFromMap(action.payload);
             break;
           default:
             break;
@@ -93,7 +103,7 @@ Stream<DashboardSnapshot> _dashboardSnapshotStream({
     }
 
     final metricsSub = metricsStream.listen((snapshot) {
-      metrics = snapshot.data() ?? const <String, dynamic>{};
+      metrics = snapshot?.data ?? const <String, dynamic>{};
       emit();
     }, onError: controller.addError);
     final queueSub = queueStream.listen((next) {
@@ -182,10 +192,10 @@ final projectRecentTransactionsProvider =
 
 final dashboardSummaryProvider =
     StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return _projectsSummaryStream(
-        firestore: firestore,
+        source: source,
         queue: queue,
         workspaceId: workspaceId,
       );
@@ -193,10 +203,10 @@ final dashboardSummaryProvider =
 
 final dashboardWeeklySummaryProvider =
     StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return _weeklySummaryStream(
-        firestore: firestore,
+        source: source,
         queue: queue,
         workspaceId: workspaceId,
       );
@@ -204,10 +214,10 @@ final dashboardWeeklySummaryProvider =
 
 final dashboardWeeklyInsightsProvider =
     StreamProvider.family<DashboardWeeklyInsights, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return _weeklyInsightsStream(
-        firestore: firestore,
+        source: source,
         queue: queue,
         workspaceId: workspaceId,
       );
@@ -246,42 +256,53 @@ class WeeklyDashboardTransaction {
 }
 
 Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final now = DateTime.now();
-  final startDate = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(const Duration(days: 6));
-  final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  final week = utcIsoWeekBounds();
+  final startDate = week.start;
+  final endDate = week.end;
 
-  final expensesStream = firestore
-      .collection('expenses')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
-  final paymentsStream = firestore
-      .collection('payments')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
+  final expensesStream = source.watch(
+    DocQuery(
+      'expenses',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final paymentsStream = source.watch(
+    DocQuery(
+      'payments',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final workerEntriesStream = source.watch(
+    DocQuery(
+      'worker_entries',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
-    QuerySnapshot<Map<String, dynamic>>? latestExpenses;
-    QuerySnapshot<Map<String, dynamic>>? latestPayments;
+    List<Doc>? latestExpenses;
+    List<Doc>? latestPayments;
+    List<Doc>? latestWorkerEntries;
     List<OfflineAction> latestActions = const [];
 
     void emit() {
-      final expenses = latestExpenses?.docs ?? const [];
-      final payments = latestPayments?.docs ?? const [];
+      final expenses = latestExpenses ?? const [];
+      final payments = latestPayments ?? const [];
+      final workerEntries = latestWorkerEntries ?? const [];
 
       final categoryTotals = <String, double>{};
       final entityTotals = <String, double>{};
@@ -298,9 +319,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       }
 
       for (final doc in expenses) {
-        final data = doc.data();
+        final data = doc.data;
         final amount = ((data['amount'] as num?) ?? 0).toDouble();
-        final category = '${data['category'] ?? ''}'.trim();
+        final category = normalizeExpenseCategory('${data['category'] ?? ''}');
         final entityName = _normalizedEntityName(
           data['entityName'] ?? data['supplierName'],
         );
@@ -309,10 +330,10 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
 
         categoryTotals[category] = (categoryTotals[category] ?? 0) + amount;
         entityTotals[entityName] = (entityTotals[entityName] ?? 0) + amount;
-        if (category == 'labor') {
+        if (category == AccountingCategories.worker) {
           laborTotal += amount;
         }
-        if (category == 'equipment') {
+        if (category == AccountingCategories.equipment) {
           equipmentTotal += amount;
         }
         paymentTotals[paymentMethod] =
@@ -331,7 +352,7 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       }
 
       for (final doc in payments) {
-        final data = doc.data();
+        final data = doc.data;
         final amount = ((data['amount'] as num?) ?? 0).toDouble();
         final entityName = _normalizedEntityName(
           data['entityName'] ?? data['supplierName'],
@@ -355,6 +376,29 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
         }
       }
 
+      for (final doc in workerEntries) {
+        final data = doc.data;
+        final amount = _workerEntryCost(data);
+        final entityName = _normalizedEntityName(
+          data['entityName'] ?? data['workerName'],
+        );
+        final date = parseDate(data['date']);
+        categoryTotals[AccountingCategories.worker] =
+            (categoryTotals[AccountingCategories.worker] ?? 0) + amount;
+        entityTotals[entityName] = (entityTotals[entityName] ?? 0) + amount;
+        laborTotal += amount;
+        if (date != null) {
+          recent.add(
+            WeeklyDashboardTransaction(
+              title: entityName,
+              amount: amount,
+              date: date,
+              type: 'expense',
+            ),
+          );
+        }
+      }
+
       for (final action in latestActions) {
         if (!_shouldApplyPendingWeeklyAction(action)) {
           continue;
@@ -367,7 +411,9 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
           continue;
         }
         final amount = ((payload['amount'] as num?) ?? 0).toDouble();
-        final category = '${payload['category'] ?? ''}'.trim();
+        final category = normalizeExpenseCategory(
+          '${payload['category'] ?? ''}',
+        );
         final entityName = _normalizedEntityName(
           payload['entityName'] ?? payload['supplierName'],
         );
@@ -376,10 +422,10 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
         if (action.type == OfflineActionTypes.createExpense) {
           categoryTotals[category] = (categoryTotals[category] ?? 0) + amount;
           entityTotals[entityName] = (entityTotals[entityName] ?? 0) + amount;
-          if (category == 'labor') {
+          if (category == AccountingCategories.worker) {
             laborTotal += amount;
           }
-          if (category == 'equipment') {
+          if (category == AccountingCategories.equipment) {
             equipmentTotal += amount;
           }
           paymentTotals[paymentMethod] =
@@ -402,6 +448,23 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
               amount: amount,
               date: actionDate,
               type: 'payment',
+            ),
+          );
+        } else if (action.type == OfflineActionTypes.createWorkerEntry) {
+          final cost = _workerEntryCost(payload);
+          final workerName = _normalizedEntityName(
+            payload['entityName'] ?? payload['workerName'],
+          );
+          categoryTotals[AccountingCategories.worker] =
+              (categoryTotals[AccountingCategories.worker] ?? 0) + cost;
+          entityTotals[workerName] = (entityTotals[workerName] ?? 0) + cost;
+          laborTotal += cost;
+          recent.add(
+            WeeklyDashboardTransaction(
+              title: workerName,
+              amount: cost,
+              date: actionDate,
+              type: 'expense',
             ),
           );
         }
@@ -453,6 +516,10 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
       latestPayments = snapshot;
       emit();
     }, onError: controller.addError);
+    final workerEntrySub = workerEntriesStream.listen((snapshot) {
+      latestWorkerEntries = snapshot;
+      emit();
+    }, onError: controller.addError);
     final queueSub = queueStream.listen((actions) {
       latestActions = actions;
       emit();
@@ -461,6 +528,7 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
     controller.onCancel = () async {
       await expenseSub.cancel();
       await paymentSub.cancel();
+      await workerEntrySub.cancel();
       await queueSub.cancel();
     };
   });
@@ -475,31 +543,37 @@ String _normalizedEntityName(Object? value) {
 }
 
 Stream<Map<String, num>> _projectsSummaryStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final projectsStream = firestore
-      .collection('projects')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .snapshots();
-  final metricsStream = firestore
-      .collection('project_metrics')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .snapshots();
+  final projectsStream = source.watch(
+    DocQuery(
+      'projects',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+    ),
+  );
+  // Cap keeps the all-projects overview correct for typical workspaces.
+  final metricsStream = source.watch(
+    DocQuery(
+      'project_metrics',
+      equals: {'workspaceId': workspaceId},
+      limit: 200,
+    ),
+  );
 
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
-    QuerySnapshot<Map<String, dynamic>>? latestProjects;
-    QuerySnapshot<Map<String, dynamic>>? latestMetrics;
+    List<Doc>? latestProjects;
+    List<Doc>? latestMetrics;
     List<OfflineAction> latestActions = const [];
 
     void emit() {
-      final projects = latestProjects?.docs ?? const [];
+      const emptyDocs = <Doc>[];
+      final projects = latestProjects ?? emptyDocs;
       final metricsByProjectId = {
-        for (final doc in latestMetrics?.docs ?? const []) doc.id: doc.data(),
+        for (final doc in latestMetrics ?? emptyDocs) doc.id: doc.data,
       };
       num totalExpenses = 0;
       num totalIncome = 0;
@@ -510,7 +584,7 @@ Stream<Map<String, num>> _projectsSummaryStream({
 
       for (final doc in projects) {
         final data = mergeProjectMetricsData(
-          projectData: doc.data(),
+          projectData: doc.data,
           metricsData: metricsByProjectId[doc.id],
         );
         final expenses = (data['totalExpenses'] as num?) ?? 0;
@@ -570,48 +644,62 @@ Stream<Map<String, num>> _projectsSummaryStream({
 }
 
 Stream<Map<String, num>> _weeklySummaryStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final now = DateTime.now();
-  final startDate = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(const Duration(days: 6));
-  final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  final week = utcIsoWeekBounds();
+  final startDate = week.start;
+  final endDate = week.end;
 
-  final expensesStream = firestore
-      .collection('expenses')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
-  final paymentsStream = firestore
-      .collection('payments')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
+  final expensesStream = source.watch(
+    DocQuery(
+      'expenses',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final paymentsStream = source.watch(
+    DocQuery(
+      'payments',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final workerEntriesStream = source.watch(
+    DocQuery(
+      'worker_entries',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
-    QuerySnapshot<Map<String, dynamic>>? latestExpenses;
-    QuerySnapshot<Map<String, dynamic>>? latestPayments;
+    List<Doc>? latestExpenses;
+    List<Doc>? latestPayments;
+    List<Doc>? latestWorkerEntries;
     List<OfflineAction> latestActions = const [];
 
     void emit() {
+      const emptyDocs = <Doc>[];
       var weeklyExpenses = 0.0;
       var weeklyIncome = 0.0;
 
-      for (final doc in latestExpenses?.docs ?? const []) {
-        weeklyExpenses += ((doc.data()['amount'] as num?) ?? 0).toDouble();
+      for (final doc in latestExpenses ?? emptyDocs) {
+        weeklyExpenses += ((doc.data['amount'] as num?) ?? 0).toDouble();
       }
-      for (final doc in latestPayments?.docs ?? const []) {
-        weeklyIncome += ((doc.data()['amount'] as num?) ?? 0).toDouble();
+      for (final doc in latestWorkerEntries ?? emptyDocs) {
+        weeklyExpenses += _workerEntryCost(doc.data);
+      }
+      for (final doc in latestPayments ?? emptyDocs) {
+        weeklyIncome += _cashInFromMap(doc.data);
       }
 
       final pending = _weeklyPendingDelta(
@@ -640,6 +728,10 @@ Stream<Map<String, num>> _weeklySummaryStream({
       latestPayments = snapshot;
       emit();
     }, onError: controller.addError);
+    final workerEntrySub = workerEntriesStream.listen((snapshot) {
+      latestWorkerEntries = snapshot;
+      emit();
+    }, onError: controller.addError);
     final queueSub = queueStream.listen((actions) {
       latestActions = actions;
       emit();
@@ -648,71 +740,84 @@ Stream<Map<String, num>> _weeklySummaryStream({
     controller.onCancel = () async {
       await expenseSub.cancel();
       await paymentSub.cancel();
+      await workerEntrySub.cancel();
       await queueSub.cancel();
     };
   });
 }
 
-/// Previous-week (the 7 days immediately before the current rolling window
-/// used by [dashboardWeeklySummaryProvider]) workspace-wide totals. Additive,
+/// Previous UTC ISO week (the Monday–Sunday immediately before the current
+/// UTC week used by [dashboardWeeklySummaryProvider]) workspace-wide totals. Additive,
 /// read-only counterpart used to power the ▲/▼ week-over-week trend
 /// indicators on the dashboard's Weekly Summary cards (v2 UI audit Problem 7).
 final dashboardPreviousWeekSummaryProvider =
     StreamProvider.family<Map<String, num>, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return _previousWeekSummaryStream(
-        firestore: firestore,
+        source: source,
         queue: queue,
         workspaceId: workspaceId,
       );
     });
 
 Stream<Map<String, num>> _previousWeekSummaryStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final now = DateTime.now();
-  final currentWeekStart = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(const Duration(days: 6));
-  final startDate = currentWeekStart.subtract(const Duration(days: 7));
-  final endDate = currentWeekStart.subtract(const Duration(seconds: 1));
+  final week = previousUtcIsoWeekBounds();
+  final startDate = week.start;
+  final endDate = week.end;
 
-  final expensesStream = firestore
-      .collection('expenses')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
-  final paymentsStream = firestore
-      .collection('payments')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
+  final expensesStream = source.watch(
+    DocQuery(
+      'expenses',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final paymentsStream = source.watch(
+    DocQuery(
+      'payments',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
+  final workerEntriesStream = source.watch(
+    DocQuery(
+      'worker_entries',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
-    QuerySnapshot<Map<String, dynamic>>? latestExpenses;
-    QuerySnapshot<Map<String, dynamic>>? latestPayments;
+    List<Doc>? latestExpenses;
+    List<Doc>? latestPayments;
+    List<Doc>? latestWorkerEntries;
     List<OfflineAction> latestActions = const [];
 
     void emit() {
+      const emptyDocs = <Doc>[];
       var previousWeekExpenses = 0.0;
       var previousWeekIncome = 0.0;
 
-      for (final doc in latestExpenses?.docs ?? const []) {
-        previousWeekExpenses += ((doc.data()['amount'] as num?) ?? 0)
-            .toDouble();
+      for (final doc in latestExpenses ?? emptyDocs) {
+        previousWeekExpenses += ((doc.data['amount'] as num?) ?? 0).toDouble();
       }
-      for (final doc in latestPayments?.docs ?? const []) {
-        previousWeekIncome += ((doc.data()['amount'] as num?) ?? 0).toDouble();
+      for (final doc in latestWorkerEntries ?? emptyDocs) {
+        previousWeekExpenses += _workerEntryCost(doc.data);
+      }
+      for (final doc in latestPayments ?? emptyDocs) {
+        previousWeekIncome += _cashInFromMap(doc.data);
       }
 
       final pending = _weeklyPendingDelta(
@@ -741,6 +846,10 @@ Stream<Map<String, num>> _previousWeekSummaryStream({
       latestPayments = snapshot;
       emit();
     }, onError: controller.addError);
+    final workerEntrySub = workerEntriesStream.listen((snapshot) {
+      latestWorkerEntries = snapshot;
+      emit();
+    }, onError: controller.addError);
     final queueSub = queueStream.listen((actions) {
       latestActions = actions;
       emit();
@@ -749,6 +858,7 @@ Stream<Map<String, num>> _previousWeekSummaryStream({
     controller.onCancel = () async {
       await expenseSub.cancel();
       await paymentSub.cancel();
+      await workerEntrySub.cancel();
       await queueSub.cancel();
     };
   });
@@ -760,11 +870,13 @@ Stream<Map<String, num>> _previousWeekSummaryStream({
 /// existing `worker_entries` ledger collection (the same manually-logged
 /// "worker worked N days on date X" records used for payroll/cost by
 /// add_worker_entry_screen.dart) — no new Firestore fields or Cloud
-/// Functions. Uses the SAME rolling 7-day window (`today - 6 days` through
-/// `today 23:59:59`) as [dashboardWeeklySummaryProvider] /
+/// Functions. Uses the SAME UTC ISO week as [dashboardWeeklySummaryProvider] /
 /// [dashboardPreviousWeekSummaryProvider] for consistency.
 class WorkerAttendanceSummary {
-  const WorkerAttendanceSummary({required this.workerCount, required this.manDays});
+  const WorkerAttendanceSummary({
+    required this.workerCount,
+    required this.manDays,
+  });
 
   /// Count of distinct workers with at least one entry in the window.
   final int workerCount;
@@ -775,7 +887,7 @@ class WorkerAttendanceSummary {
   static const empty = WorkerAttendanceSummary(workerCount: 0, manDays: 0);
 }
 
-/// Workspace + rolling-7-day-window scoped query against `worker_entries` —
+/// Workspace + UTC-ISO-week scoped query against `worker_entries` —
 /// mirrors the shape of [_weeklySummaryStream] (same collection-query
 /// pattern as `expenses`/`payments`, just applied to `worker_entries`, which
 /// carries the same `workspaceId` + `isArchived` + `date` fields). This is a
@@ -783,39 +895,37 @@ class WorkerAttendanceSummary {
 /// workspace listener.
 final dashboardWorkerAttendanceProvider =
     StreamProvider.family<WorkerAttendanceSummary, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
       return _workerAttendanceStream(
-        firestore: firestore,
+        source: source,
         queue: queue,
         workspaceId: workspaceId,
       );
     });
 
 Stream<WorkerAttendanceSummary> _workerAttendanceStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required OfflineActionQueue queue,
   required String workspaceId,
 }) {
-  final now = DateTime.now();
-  final startDate = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(const Duration(days: 6));
-  final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  final week = utcIsoWeekBounds();
+  final startDate = week.start;
+  final endDate = week.end;
 
-  final entriesStream = firestore
-      .collection('worker_entries')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('date', isGreaterThanOrEqualTo: startDate)
-      .where('date', isLessThanOrEqualTo: endDate)
-      .snapshots();
+  final entriesStream = source.watch(
+    DocQuery(
+      'worker_entries',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+      rangeField: 'date',
+      rangeFrom: startDate,
+      rangeTo: endDate,
+    ),
+  );
   final queueStream = queue.watch(includeExpiredSynced: true);
 
   return Stream.multi((controller) {
-    QuerySnapshot<Map<String, dynamic>>? latestEntries;
+    List<Doc>? latestEntries;
     List<OfflineAction> latestActions = const [];
 
     bool inWindow(DateTime date) {
@@ -823,7 +933,7 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
     }
 
     void emit() {
-      final docs = latestEntries?.docs ?? const [];
+      final docs = latestEntries ?? const [];
       // entryId -> workerId for every base (already in-window, per the
       // Firestore query above) worker_entries doc. Kept keyed by entryId
       // (rather than folded straight into a Set<String>) so a pending
@@ -837,7 +947,7 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
       var manDays = 0.0;
 
       for (final doc in docs) {
-        final data = doc.data();
+        final data = doc.data;
         final workerId = '${data['workerId'] ?? ''}';
         if (workerId.isNotEmpty) {
           baseWorkerIdByEntryId[doc.id] = workerId;
@@ -856,8 +966,7 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
 
         switch (action.type) {
           case OfflineActionTypes.createWorkerEntry:
-            final date =
-                _parsePendingDate(payload['date']) ?? action.createdAt;
+            final date = _parsePendingDate(payload['date']) ?? action.createdAt;
             if (!inWindow(date)) {
               break;
             }
@@ -877,8 +986,7 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
             // _weeklyPendingDelta already uses for expenses/payments instead
             // of just skipping when the NEW date happens to fall outside
             // the window.
-            final date =
-                _parsePendingDate(payload['date']) ?? action.createdAt;
+            final date = _parsePendingDate(payload['date']) ?? action.createdAt;
             final previousDate = _parsePendingDate(payload['previousDate']);
             final daysWorked = ((payload['daysWorked'] as num?) ?? 0)
                 .toDouble();
@@ -911,8 +1019,7 @@ Stream<WorkerAttendanceSummary> _workerAttendanceStream({
             }
             break;
           case OfflineActionTypes.archiveWorkerEntry:
-            final date =
-                _parsePendingDate(payload['date']) ?? action.createdAt;
+            final date = _parsePendingDate(payload['date']) ?? action.createdAt;
             if (inWindow(date)) {
               manDays -= ((payload['daysWorked'] as num?) ?? 0).toDouble();
             }
@@ -1017,33 +1124,29 @@ final dashboardCashCollectedProvider = FutureProvider.family<double, String>((
   ref,
   workspaceId,
 ) async {
-  final firestore = ref.watch(firestoreProvider);
-  return _fetchCashCollected(firestore: firestore, workspaceId: workspaceId);
+  final source = ref.watch(docSourceProvider);
+  return _fetchCashCollected(source: source, workspaceId: workspaceId);
 });
 
 Future<double> _fetchCashCollected({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required String workspaceId,
 }) async {
-  final snapshot = await firestore
-      .collection('payments')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .get();
+  final snapshot = await source.get(
+    DocQuery(
+      'payments',
+      equals: {'workspaceId': workspaceId, 'isArchived': false},
+    ),
+  );
 
   var collected = 0.0;
-  for (final doc in snapshot.docs) {
-    final data = doc.data();
-    final amount = ((data['amount'] as num?) ?? 0).toDouble();
-    final status = '${data['paymentStatus'] ?? PaymentStatuses.paid}';
-    switch (status) {
-      case PaymentStatuses.paid:
-      case PaymentStatuses.partial:
-        collected += amount;
-        break;
-      default:
-        break;
-    }
+  for (final doc in snapshot) {
+    final data = doc.data;
+    collected += cashCollectedAmount(
+      amount: ((data['amount'] as num?) ?? 0).toDouble(),
+      paymentStatus: data['paymentStatus'] as String?,
+      paidAmount: (data['paidAmount'] as num?)?.toDouble(),
+    );
   }
   return collected;
 }
@@ -1053,27 +1156,34 @@ Future<double> _fetchCashCollected({
 /// [dashboardCashCollectedProvider] for the full cost rationale.
 final dashboardOutstandingPaymentsProvider =
     StreamProvider.family<double, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       return _outstandingPaymentsStream(
-        firestore: firestore,
+        source: source,
         workspaceId: workspaceId,
       );
     });
 
 Stream<double> _outstandingPaymentsStream({
-  required FirebaseFirestore firestore,
+  required DocSource source,
   required String workspaceId,
 }) {
-  return firestore
-      .collection('payments')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .where('isArchived', isEqualTo: false)
-      .where('paymentStatus', isEqualTo: PaymentStatuses.unpaid)
-      .snapshots()
+  // Outstanding is approximated from the first 500 unpaid payment docs.
+  return source
+      .watch(
+        DocQuery(
+          'payments',
+          equals: {
+            'workspaceId': workspaceId,
+            'isArchived': false,
+            'paymentStatus': PaymentStatuses.unpaid,
+          },
+          limit: 500,
+        ),
+      )
       .map((snapshot) {
         var outstanding = 0.0;
-        for (final doc in snapshot.docs) {
-          outstanding += ((doc.data()['amount'] as num?) ?? 0).toDouble();
+        for (final doc in snapshot) {
+          outstanding += ((doc.data['amount'] as num?) ?? 0).toDouble();
         }
         return outstanding;
       });
@@ -1132,21 +1242,55 @@ Stream<double> _outstandingPaymentsStream({
         break;
       case OfflineActionTypes.createPayment:
         if (dateInWindow) {
-          pendingIncome += amount;
+          pendingIncome += _cashInFromMap(action.payload);
         }
         break;
       case OfflineActionTypes.updatePayment:
+        final nextCash = _cashInFromMap(action.payload);
+        final previousCash = cashCollectedAmount(
+          amount: previousAmount,
+          paymentStatus:
+              (action.payload['previousPaymentStatus'] as String?) ??
+              (action.payload['paymentStatus'] as String?),
+          paidAmount: (action.payload['previousPaidAmount'] as num?)
+              ?.toDouble(),
+        );
         if (dateInWindow && previousInWindow) {
-          pendingIncome += amount - previousAmount;
+          pendingIncome += nextCash - previousCash;
         } else if (dateInWindow && !previousInWindow) {
-          pendingIncome += amount;
+          pendingIncome += nextCash;
         } else if (!dateInWindow && previousInWindow) {
-          pendingIncome -= previousAmount;
+          pendingIncome -= previousCash;
         }
         break;
       case OfflineActionTypes.archivePayment:
         if (dateInWindow) {
-          pendingIncome -= amount;
+          pendingIncome -= _cashInFromMap(action.payload);
+        }
+        break;
+      case OfflineActionTypes.createWorkerEntry:
+        if (dateInWindow) {
+          pendingExpenses += _workerEntryCost(action.payload);
+        }
+        break;
+      case OfflineActionTypes.updateWorkerEntry:
+        final nextCost = _workerEntryCost(action.payload);
+        final previousCost = _workerEntryCost({
+          'totalCost': action.payload['previousTotalCost'],
+          'daysWorked': action.payload['previousDaysWorked'],
+          'dailyWage': action.payload['previousDailyWage'],
+        });
+        if (dateInWindow && previousInWindow) {
+          pendingExpenses += nextCost - previousCost;
+        } else if (dateInWindow && !previousInWindow) {
+          pendingExpenses += nextCost;
+        } else if (!dateInWindow && previousInWindow) {
+          pendingExpenses -= previousCost;
+        }
+        break;
+      case OfflineActionTypes.archiveWorkerEntry:
+        if (dateInWindow) {
+          pendingExpenses -= _workerEntryCost(action.payload);
         }
         break;
       default:
@@ -1251,7 +1395,7 @@ _workspacePendingDelta({
           baselineField: 'projectTotalPaymentsBefore',
           currentTotal:
               incomeByProjectId['${action.payload['projectId'] ?? ''}'],
-          delta: ((action.payload['amount'] as num?) ?? 0).toDouble(),
+          delta: _cashInFromMap(action.payload),
         );
         break;
       case OfflineActionTypes.updatePayment:
@@ -1261,9 +1405,16 @@ _workspacePendingDelta({
           currentTotal:
               incomeByProjectId['${action.payload['projectId'] ?? ''}'],
           delta:
-              (((action.payload['amount'] as num?) ?? 0) -
-                      ((action.payload['previousAmount'] as num?) ?? 0))
-                  .toDouble(),
+              _cashInFromMap(action.payload) -
+              cashCollectedAmount(
+                amount: ((action.payload['previousAmount'] as num?) ?? 0)
+                    .toDouble(),
+                paymentStatus:
+                    (action.payload['previousPaymentStatus'] as String?) ??
+                    (action.payload['paymentStatus'] as String?),
+                paidAmount: (action.payload['previousPaidAmount'] as num?)
+                    ?.toDouble(),
+              ),
         );
         break;
       default:
@@ -1296,4 +1447,21 @@ double _dashboardDeltaIfNeeded({
       ? currentTotal >= expected
       : currentTotal <= expected;
   return reflected ? 0 : delta;
+}
+
+double _workerEntryCost(Map<String, dynamic> data) {
+  final totalCost = (data['totalCost'] as num?)?.toDouble();
+  if (totalCost != null) {
+    return totalCost;
+  }
+  return ((data['daysWorked'] as num?) ?? 0).toDouble() *
+      ((data['dailyWage'] as num?) ?? 0).toDouble();
+}
+
+double _cashInFromMap(Map<String, dynamic> data) {
+  return cashCollectedAmount(
+    amount: ((data['amount'] as num?) ?? 0).toDouble(),
+    paymentStatus: data['paymentStatus'] as String?,
+    paidAmount: (data['paidAmount'] as num?)?.toDouble(),
+  );
 }

@@ -9,7 +9,6 @@ import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,7 +28,7 @@ class _ArchivedProjectsScreenState extends ConsumerState<ArchivedProjectsScreen>
   final _scrollController = ScrollController();
 
   final List<Project> _projects = [];
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;

@@ -4,6 +4,7 @@ exports.processVoiceExpenseHttp = exports.processVoiceExpense = exports.openRout
 exports.verifyVoiceHttpAppCheck = verifyVoiceHttpAppCheck;
 const app_check_1 = require("firebase-admin/app-check");
 const auth_1 = require("firebase-admin/auth");
+const firestore_1 = require("firebase-admin/firestore");
 const params_1 = require("firebase-functions/params");
 const https_1 = require("firebase-functions/v2/https");
 const http_cors_1 = require("../http_cors");
@@ -13,25 +14,6 @@ exports.openRouterApiKeySecret = (0, params_1.defineSecret)("OPENROUTER_API_KEY"
 exports.openRouterModelSecret = (0, params_1.defineSecret)("OPENROUTER_MODEL");
 exports.openRouterTranscriptionModelSecret = (0, params_1.defineSecret)("OPENROUTER_TRANSCRIPTION_MODEL");
 const DEFAULT_OPENROUTER_TRANSCRIPTION_MODEL = "openai/gpt-audio-mini";
-function parseProjects(input) {
-    if (!Array.isArray(input)) {
-        return [];
-    }
-    return input
-        .map((item) => {
-        if (!item || typeof item !== "object") {
-            return null;
-        }
-        const candidate = item;
-        const id = `${candidate.id ?? ""}`.trim();
-        const name = `${candidate.name ?? ""}`.trim();
-        if (!id || !name) {
-            return null;
-        }
-        return { id, name };
-    })
-        .filter((item) => item != null);
-}
 function parseCurrency(input) {
     const value = `${input ?? ""}`.trim().toUpperCase();
     if (value === "EGP" || value === "USD" || value === "SAR" || value === "AED") {
@@ -124,13 +106,36 @@ async function verifyVoiceHttpAppCheck(appCheckToken, verifyToken = (token) => (
         throw new https_1.HttpsError("failed-precondition", "Invalid App Check token");
     }
 }
+async function loadWorkspaceProjectsForUser(uid) {
+    const db = (0, firestore_1.getFirestore)();
+    const userSnap = await db.collection("users").doc(uid).get();
+    const workspaceId = `${userSnap.data()?.workspaceId ?? ""}`.trim();
+    if (!workspaceId) {
+        return [];
+    }
+    const snap = await db
+        .collection("projects")
+        .where("workspaceId", "==", workspaceId)
+        .where("isArchived", "==", false)
+        .limit(100)
+        .get();
+    return snap.docs
+        .map((doc) => {
+        const name = `${doc.data().name ?? ""}`.trim();
+        if (!name) {
+            return null;
+        }
+        return { id: doc.id, name };
+    })
+        .filter((item) => item != null);
+}
 async function processVoiceExpenseForUser(uid, payload) {
     const storagePath = `${payload.storagePath ?? ""}`.trim();
     if (!storagePath) {
         throw new https_1.HttpsError("invalid-argument", "storagePath is required");
     }
     assertVoicePathOwnedByUser(storagePath, uid);
-    const projects = parseProjects(payload.projects);
+    const projects = await loadWorkspaceProjectsForUser(uid);
     const currency = parseCurrency(payload.currency);
     const languageHint = parseLanguageHint(payload.languageHint);
     const openRouterApiKey = exports.openRouterApiKeySecret.value() || process.env.OPENROUTER_API_KEY || "";
@@ -170,6 +175,7 @@ async function processVoiceExpenseForUser(uid, payload) {
     });
 }
 exports.processVoiceExpense = (0, https_1.onCall)({
+    enforceAppCheck: true,
     timeoutSeconds: 120,
     memory: "1GiB",
     secrets: [

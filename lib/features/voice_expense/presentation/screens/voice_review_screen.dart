@@ -1,12 +1,14 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/utils/expense_category.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
@@ -65,8 +67,9 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     _currency = _allowedCurrencies.contains(parsed.currency)
         ? parsed.currency!
         : 'EGP';
-    _category = _allowedCategories.contains(parsed.category)
-        ? parsed.category!
+    final parsedCategory = normalizeExpenseCategory(parsed.category);
+    _category = _allowedCategories.contains(parsedCategory)
+        ? parsedCategory
         : 'other';
     _projectId = _resolveInitialProjectId(parsed);
   }
@@ -187,7 +190,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
       }
       context.go(AppRoutes.projectExpensesPath(_projectId!));
     } on ExpenseSaveServiceException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (!mounted) {
           return;
         }
@@ -196,7 +199,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
         setState(() => _error = _messageForSaveError(e, l10n));
       }
     } on FirebaseFunctionsException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (!mounted) {
           return;
         }

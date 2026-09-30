@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:flutter/material.dart';
@@ -16,13 +15,16 @@ class RecentExpensesTable extends StatelessWidget {
   final List<Expense> expenses;
   final String locale;
 
-  static const _categoryColors = <String, Color>{
-    'labor': AppColors.constructionOrange,
-    'materials': Color(0xFF3B82F6),
-    'equipment': Color(0xFFF59E0B),
-    'transport': Color(0xFF14B8A6),
-    'other': Color(0xFF94A3B8),
-  };
+  Color _colorFor(BuildContext context, String category) {
+    final t = context.tokens;
+    return switch (category) {
+      'labor' => t.accent,
+      'materials' => const Color(0xFF3B82F6),
+      'equipment' => t.warning,
+      'transport' => const Color(0xFF14B8A6),
+      _ => t.textFaint,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,9 +56,9 @@ class RecentExpensesTable extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.tokens.textMuted,
+                  ),
                 ),
               ),
             )
@@ -65,7 +67,9 @@ class RecentExpensesTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(context.tokens.surface2),
+                headingRowColor: WidgetStateProperty.all(
+                  context.tokens.surface2,
+                ),
                 dataRowMinHeight: 48,
                 dataRowMaxHeight: 56,
                 columnSpacing: 20,
@@ -85,8 +89,7 @@ class RecentExpensesTable extends StatelessWidget {
                   DataColumn(label: Text(l10n.t('amount')), numeric: true),
                 ],
                 rows: items.map((e) {
-                  final color =
-                      _categoryColors[e.category] ?? const Color(0xFF94A3B8);
+                  final color = _colorFor(context, e.category);
                   return DataRow(
                     cells: [
                       DataCell(Text(DateFormat('dd/MM').format(e.date))),

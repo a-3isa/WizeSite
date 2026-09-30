@@ -164,6 +164,27 @@ test("summary builder maintains project, weekly, entity, and category payloads",
   assert.equal(Number(summaries.projectSummary.weeklyExpenses ?? 0), 200);
   assert.equal(Number(summaries.projectSummary.monthlyExpenses ?? 0), 250);
   assert.equal(Number(summaries.projectSummary.totalPayments ?? 0), 125);
+
+  const unpaidSummaries = buildAccountingSummaryPayloads({
+    workspaceId: "workspace_1",
+    projectId: "project_1",
+    now,
+    expenses: [],
+    workerEntries: [],
+    payments: [
+      {
+        id: "payment_unpaid",
+        amount: 500,
+        paymentStatus: "unpaid",
+        paymentMethod: "cash",
+        date: Timestamp.fromDate(monday),
+      },
+    ],
+  });
+  assert.equal(
+    Number(unpaidSummaries.projectSummary.totalPayments ?? 0),
+    0,
+  );
   assert.equal(Number(summaries.projectSummary.transactionCount ?? 0), 4);
   assert.equal(Number(summaries.projectSummary.attachmentCount ?? 0), 2);
 
@@ -301,6 +322,10 @@ if (!emulatorHost) {
     uid: string,
     data: Record<string, unknown>,
   ) => Promise<{ id: string }>;
+  let archiveProjectForUser: (
+    uid: string,
+    data: Record<string, unknown>,
+  ) => Promise<void>;
   let updateProjectForUser: (
     uid: string,
     data: Record<string, unknown>,
@@ -419,6 +444,7 @@ if (!emulatorHost) {
     createWorkerEntryWithQuotaForUser =
       indexModule.createWorkerEntryWithQuotaForUser;
     createProjectWithQuotaForUser = indexModule.createProjectWithQuotaForUser;
+    archiveProjectForUser = indexModule.archiveProjectForUser;
     updateProjectForUser = indexModule.updateProjectForUser;
     updatePaymentForUser = indexModule.updatePaymentForUser;
     db = getFirestore();
@@ -462,8 +488,8 @@ if (!emulatorHost) {
         {
           id: "attach_1",
           fileName: "receipt.pdf",
-          downloadUrl: "https://example.com/receipt.pdf",
-          storagePath: "attachments/receipt.pdf",
+          downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.pdf?alt=media",
+          storagePath: "attachments/user_1/receipt.pdf",
           uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "application/pdf",
           size: 12345,
@@ -480,8 +506,44 @@ if (!emulatorHost) {
     assert.equal(saved.attachments?.[0]?.id, "attach_1");
     assert.equal(
       saved.attachments?.[0]?.downloadUrl,
-      "https://example.com/receipt.pdf",
+      "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.pdf?alt=media",
     );
+  });
+
+  test("createExpenseWithQuotaForUser replays the same clientMutationId", async () => {
+    await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+      workspaceId,
+      userId: "user_1",
+      role: "owner",
+    });
+    await db.collection("projects").doc("project_1").set({
+      ...baseProject,
+    });
+
+    const payload = {
+      workspaceId,
+      projectId: "project_1",
+      category: "materials",
+      amount: 50,
+      date: Timestamp.fromDate(currentMonthDate),
+      notes: "Idempotent create",
+      paymentMethod: "cash",
+      clientMutationId: "mutation_replay_1",
+    };
+    const first = await createExpenseWithQuotaForUser("user_1", payload);
+    const second = await createExpenseWithQuotaForUser("user_1", {
+      ...payload,
+      amount: 999,
+      notes: "retry should not insert",
+    });
+    assert.equal(second.id, first.id);
+    const expenses = await db
+      .collection("expenses")
+      .where("workspaceId", "==", workspaceId)
+      .get();
+    assert.equal(expenses.size, 1);
+    const saved = (await db.collection("expenses").doc(first.id).get()).data();
+    assert.equal(saved?.amount, 50);
   });
 
   test("createPaymentWithQuotaForUser persists attachments", async () => {
@@ -508,8 +570,8 @@ if (!emulatorHost) {
         {
           id: "attach_2",
           fileName: "receipt.png",
-          downloadUrl: "https://example.com/receipt.png",
-          storagePath: "attachments/receipt.png",
+          downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.png?alt=media",
+          storagePath: "attachments/user_1/receipt.png",
           uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "image/png",
           size: 54321,
@@ -526,7 +588,7 @@ if (!emulatorHost) {
     assert.equal(saved.attachments?.[0]?.id, "attach_2");
     assert.equal(
       saved.attachments?.[0]?.downloadUrl,
-      "https://example.com/receipt.png",
+      "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.png?alt=media",
     );
   });
 
@@ -545,8 +607,8 @@ if (!emulatorHost) {
         {
           id: "attach_worker_1",
           fileName: "signed-timesheet.pdf",
-          downloadUrl: "https://example.com/signed-timesheet.pdf",
-          storagePath: "attachments/signed-timesheet.pdf",
+          downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Fsigned-timesheet.pdf?alt=media",
+          storagePath: "attachments/user_1/signed-timesheet.pdf",
           uploadedAt: Timestamp.fromDate(currentMonthDate),
           contentType: "application/pdf",
           size: 24680,
@@ -563,7 +625,7 @@ if (!emulatorHost) {
     assert.equal(saved.attachments?.[0]?.id, "attach_worker_1");
     assert.equal(
       saved.attachments?.[0]?.downloadUrl,
-      "https://example.com/signed-timesheet.pdf",
+      "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Fsigned-timesheet.pdf?alt=media",
     );
   });
 
@@ -900,7 +962,7 @@ if (!emulatorHost) {
       250,
     );
     assert.equal(
-      Number((metricsData.categoryTotals as TriggerData).labor ?? 0),
+      Number((metricsData.categoryTotals as TriggerData).worker ?? 0),
       100,
     );
   });
@@ -932,7 +994,7 @@ if (!emulatorHost) {
     const topWorkers = metricsData.topWorkers as TriggerData[];
 
     assert.equal(Number(metricsData.totalExpenses ?? 0), 450);
-    assert.equal(Number(categoryTotals.labor ?? 0), 250);
+    assert.equal(Number(categoryTotals.worker ?? 0), 250);
     assert.equal(Number(topWorkers[0].totalCost ?? 0), 250);
   });
 
@@ -1641,5 +1703,64 @@ if (!emulatorHost) {
     ).data();
     assert.equal(stored!.budgetLimit, null);
     assert.equal(stored!.contractValue, 50000);
+  });
+
+  test("a second free project is refused by the transactional quota", async () => {
+    await seedMembership();
+
+    await createProjectWithQuotaForUser(
+      "user_1",
+      createProjectPayload({name: "First Job"}),
+    );
+
+    await assert.rejects(
+      () =>
+        createProjectWithQuotaForUser(
+          "user_1",
+          createProjectPayload({name: "Second Job"}),
+        ),
+      (error: unknown) => {
+        const handled = error as HttpsError;
+        return (
+          handled instanceof HttpsError &&
+          handled.code === "failed-precondition" &&
+          handled.message === "LIMIT_REACHED"
+        );
+      },
+    );
+
+    const projects = await db.collection("projects").get();
+    assert.equal(projects.size, 1);
+    const counter = await db
+      .collection("usage_counters")
+      .doc(`${workspaceId}_projects`)
+      .get();
+    assert.equal(Number(counter.data()?.activeProjectsCount ?? 0), 1);
+  });
+
+  test("archiving frees the active project slot", async () => {
+    await seedMembership();
+
+    const first = await createProjectWithQuotaForUser(
+      "user_1",
+      createProjectPayload({name: "First Job"}),
+    );
+    await archiveProjectForUser("user_1", {
+      workspaceId,
+      projectId: first.id,
+    });
+
+    const second = await createProjectWithQuotaForUser(
+      "user_1",
+      createProjectPayload({name: "Second Job"}),
+    );
+    assert.ok(second.id);
+    assert.notEqual(second.id, first.id);
+
+    const counter = await db
+      .collection("usage_counters")
+      .doc(`${workspaceId}_projects`)
+      .get();
+    assert.equal(Number(counter.data()?.activeProjectsCount ?? 0), 1);
   });
 }

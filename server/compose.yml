@@ -1,0 +1,106 @@
+# Production / staging stack on the VPS (research R8, R13). Deployed by ops/deploy.sh.
+#
+# Public routing, one of:
+#   - Cloudflare Tunnel (current deployment): compose.tunnel.yml, added by ops/deploy.sh when
+#     CLOUDFLARE_TUNNEL_TOKEN is set. No inbound ports.
+#   - An existing Traefik on the host: labels below, enabled with TRAEFIK_ENABLE=true.
+#   - Neither: docker compose -f compose.yml -f compose.caddy.yml up -d
+#
+# Public routes stay off until DNS exists: set TRAEFIK_ENABLE=true, API_HOST and SYNC_HOST in
+# /srv/wizesite/.env (root-only, mode 0600). Nothing secret lives in this file.
+#
+# Memory caps fit a shared 4 GB / 1 vCPU box without swap (~1.4 GB total); raise them per
+# research R13 once the box is dedicated.
+name: wizesite
+
+services:
+  api:
+    build: .
+    image: ${API_IMAGE:-wizesite-server:local}
+    restart: unless-stopped
+    env_file: /srv/wizesite/.env
+    environment:
+      DATABASE_URL: postgres://wizesite:${POSTGRES_PASSWORD}@postgres:5432/wizesite
+      FILES_ROOT: /srv/wizesite/files
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      SYNC_HEALTH_URL: http://powersync:8080
+      PORT: "8080"
+    volumes:
+      - /srv/wizesite/files:/srv/wizesite/files
+      - /srv/wizesite/state:/srv/wizesite/state
+      - /srv/wizesite/secrets:/run/secrets:ro
+    networks: [internal, edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 192m
+    labels:
+      traefik.enable: "${TRAEFIK_ENABLE:-false}"
+      traefik.docker.network: wizesite_edge
+      traefik.http.routers.wizesite-api.rule: "Host(`${API_HOST:-api.invalid}`)"
+      traefik.http.routers.wizesite-api.entrypoints: websecure
+      traefik.http.routers.wizesite-api.tls.certresolver: letsencrypt
+      traefik.http.services.wizesite-api.loadbalancer.server.port: "8080"
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=40
+    environment:
+      POSTGRES_USER: wizesite
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /srv/wizesite/.env}
+      POSTGRES_DB: wizesite
+    volumes:
+      - /srv/wizesite/pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-powersync-storage.sql:ro
+    # Never published on a host port: reachable only on the internal compose network.
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wizesite -d wizesite"]
+      interval: 10s
+      retries: 10
+    mem_limit: 640m
+
+  powersync:
+    image: journeyapps/powersync-service:${POWERSYNC_VERSION:-latest}
+    restart: unless-stopped
+    command: ["start", "-r", "unified"]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+      PS_DATA_SOURCE_URI: postgres://wizesite:${POSTGRES_PASSWORD}@postgres:5432/wizesite
+      PS_STORAGE_SOURCE_URI: postgres://wizesite:${POSTGRES_PASSWORD}@postgres:5432/powersync_storage
+      PS_PORT: "8080"
+    volumes:
+      - ./powersync:/config:ro
+    networks: [internal, edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    labels:
+      traefik.enable: "${TRAEFIK_ENABLE:-false}"
+      traefik.docker.network: wizesite_edge
+      traefik.http.routers.wizesite-sync.rule: "Host(`${SYNC_HOST:-sync.invalid}`)"
+      traefik.http.routers.wizesite-sync.entrypoints: websecure
+      traefik.http.routers.wizesite-sync.tls.certresolver: letsencrypt
+      traefik.http.services.wizesite-sync.loadbalancer.server.port: "8080"
+
+networks:
+  internal:
+    internal: true
+  edge: {}

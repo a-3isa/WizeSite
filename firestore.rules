@@ -58,7 +58,18 @@ service cloud.firestore {
     }
 
     function validExpenseCategory(category) {
-      return category in ["labor", "materials", "equipment", "transport", "other"];
+      return category in [
+        "labor",
+        "worker",
+        "materials",
+        "equipment",
+        "transport",
+        "contractor",
+        "storage",
+        "rentals",
+        "payments",
+        "other"
+      ];
     }
 
     function validPaymentMethod(method) {
@@ -74,7 +85,7 @@ service cloud.firestore {
     }
 
     function validPaymentStatus(status) {
-      return status in ["paid", "unpaid", "partial"];
+      return status in ["paid", "unpaid", "partial", "refunded", "cancelled"];
     }
 
     function validAccountingRecord(data) {
@@ -127,7 +138,7 @@ service cloud.firestore {
     }
 
     function validProjectUpdate(projectId) {
-      return inWorkspace(resource.data.workspaceId)
+      return canAccessAccounting(resource.data.workspaceId)
         && request.resource.data.id == projectId
         && request.resource.data.workspaceId == resource.data.workspaceId
         && request.resource.data.ownerId == resource.data.ownerId
@@ -189,7 +200,7 @@ service cloud.firestore {
     }
 
     function validExpenseUpdate(expenseId) {
-      return inWorkspace(resource.data.workspaceId)
+      return canAccessAccounting(resource.data.workspaceId)
         && request.resource.data.id == expenseId
         && request.resource.data.workspaceId == resource.data.workspaceId
         && request.resource.data.projectId == resource.data.projectId
@@ -204,6 +215,10 @@ service cloud.firestore {
         && request.resource.data.notes is string
         && request.resource.data.supplierName is string
         && request.resource.data.paymentMethod is string
+        && (
+          !("paymentStatus" in request.resource.data)
+          || validPaymentStatus(request.resource.data.paymentStatus)
+        )
         && request.resource.data.inputMethod == resource.data.inputMethod
         && request.resource.data.transcript == resource.data.transcript
         && request.resource.data.source == resource.data.source
@@ -216,12 +231,13 @@ service cloud.firestore {
           "notes",
           "supplierName",
           "paymentMethod",
+          "paymentStatus",
           "updatedAt"
         ]);
     }
 
     function validPaymentUpdate(paymentId) {
-      return inWorkspace(resource.data.workspaceId)
+      return canAccessAccounting(resource.data.workspaceId)
         && request.resource.data.id == paymentId
         && request.resource.data.workspaceId == resource.data.workspaceId
         && request.resource.data.projectId == resource.data.projectId
@@ -233,12 +249,17 @@ service cloud.firestore {
         && request.resource.data.date is timestamp
         && validPaymentMethod(request.resource.data.paymentMethod)
         && request.resource.data.notes is string
+        && (
+          !("paymentStatus" in request.resource.data)
+          || validPaymentStatus(request.resource.data.paymentStatus)
+        )
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "amount",
           "date",
           "paymentMethod",
           "notes",
+          "paymentStatus",
           "updatedAt"
         ]);
     }
@@ -325,17 +346,7 @@ service cloud.firestore {
         inWorkspace(resource.data.workspaceId) ||
         resource.data.userId == request.auth.uid
       );
-      allow create: if signedIn()
-        && request.resource.data.workspaceId is string
-        && request.resource.data.workspaceId.size() > 0
-        && request.resource.data.userId is string
-        && request.resource.data.userId.size() > 0
-        && request.resource.data.role in ["owner", "admin", "accountingApproved", "member", "entryOnly"]
-        && membershipId == membershipDocId(
-          request.resource.data.workspaceId,
-          request.resource.data.userId
-        )
-        && isWorkspaceOwner(request.resource.data.workspaceId);
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -352,7 +363,7 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read: if inWorkspace(resource.data.workspaceId);
+      allow read: if canAccessAccounting(resource.data.workspaceId);
       allow create, delete: if false;
       allow update: if validPaymentUpdate(paymentId);
     }
@@ -412,9 +423,11 @@ service cloud.firestore {
         && request.resource.data.workspaceId is string
         && request.resource.data.workspaceId.size() > 0
         && request.resource.data.name is string;
-      // Members may touch lastUsedAt / id / attachments but not reassign the workspace.
+      // Members may touch lastUsedAt / name / attachments but not reassign the workspace.
       allow update: if inWorkspace(resource.data.workspaceId)
-        && request.resource.data.workspaceId == resource.data.workspaceId;
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["name", "lastUsedAt", "attachments", "entityType", "type", "updatedAt", "defaultRate", "normalizedName"]);
       allow delete: if false;
     }
 
@@ -426,6 +439,14 @@ service cloud.firestore {
     match /usage_counters/{counterId} {
       allow read: if inWorkspace(resource.data.workspaceId);
       allow write: if false;
+    }
+
+    match /idempotency_keys/{keyId} {
+      allow read, write: if false;
+    }
+
+    match /webhook_events/{eventId} {
+      allow read, write: if false;
     }
 
     match /notifications/{notificationId} {
@@ -491,9 +512,7 @@ service cloud.firestore {
     }
 
     match /drafts/{draftId} {
-      allow read: if inWorkspace(resource.data.workspaceId);
-      allow create: if inWorkspace(request.resource.data.workspaceId);
-      allow update, delete: if inWorkspace(resource.data.workspaceId);
+      allow read, write: if false;
     }
   }
 }

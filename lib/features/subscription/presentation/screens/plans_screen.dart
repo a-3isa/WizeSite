@@ -1,8 +1,10 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
+import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
@@ -140,7 +142,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   Card(
-                    color: const Color(0xFFFFF4E8),
+                    color: context.tokens.accentSoft,
                     child: ListTile(
                       leading: const Icon(Icons.auto_awesome),
                       title: Text(l10n.t('proPlan')),
@@ -197,12 +199,34 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 8),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: context.tokens.expense),
+                    ),
                   ],
                   if (_statusMessage != null) ...[
                     const SizedBox(height: 8),
                     Text(_statusMessage!),
                   ],
+                  const SizedBox(height: 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 16,
+                    children: [
+                      TextButton(
+                        onPressed: () => launchSafeExternalUrl(
+                          'https://buildozer.app/terms',
+                        ),
+                        child: Text(l10n.t('termsOfService')),
+                      ),
+                      TextButton(
+                        onPressed: () => launchSafeExternalUrl(
+                          'https://buildozer.app/privacy',
+                        ),
+                        child: Text(l10n.t('privacyPolicy')),
+                      ),
+                    ],
+                  ),
                 ],
               ),
       ),

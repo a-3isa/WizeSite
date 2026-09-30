@@ -1,3 +1,8 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/pagination/local_page.dart';
+import 'package:buildtrack_app/core/sync/local_queries.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
@@ -7,6 +12,9 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
+
+part 'local_worker_repository.dart';
 
 abstract interface class WorkerRepository {
   /// Watches non-archived workers. When [statuses] is provided, only workers
@@ -18,7 +26,7 @@ abstract interface class WorkerRepository {
   });
   Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   });
@@ -99,6 +107,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
         .collection('workers')
         .where('workspaceId', isEqualTo: workspaceId)
         .where('isArchived', isEqualTo: false)
+        .limit(50)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -139,10 +148,11 @@ class FirebaseWorkerRepository implements WorkerRepository {
   @override
   Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     var query = _firestore
         .collection('workers')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -151,7 +161,7 @@ class FirebaseWorkerRepository implements WorkerRepository {
         .limit(pageSize);
 
     if (cursor != null) {
-      query = query.startAfterDocument(cursor);
+      query = query.startAfterDocument(firestoreCursor!);
     }
 
     final snap = await query.get();
@@ -598,6 +608,14 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
 }
 
 final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalWorkerRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(workspaceMutationServiceProvider),
+      ref.watch(offlineActionQueueProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebaseWorkerRepository(
     ref.watch(firestoreProvider),
     ref.watch(workspaceMutationServiceProvider),
@@ -606,6 +624,14 @@ final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
 });
 
 final workerEntryRepositoryProvider = Provider<WorkerEntryRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalWorkerEntryRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(workspaceMutationServiceProvider),
+      ref.watch(offlineActionQueueProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebaseWorkerEntryRepository(
     ref.watch(firestoreProvider),
     ref.watch(workspaceMutationServiceProvider),

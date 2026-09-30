@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/storage/hive_boxes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
@@ -86,7 +87,7 @@ class PendingAttachmentService {
   final Box<String> _box;
 
   static Future<PendingAttachmentService> open() async {
-    final box = await Hive.openBox<String>('pending_attachments');
+    final box = await openEncryptedBox<String>('pending_attachments');
     return PendingAttachmentService(box);
   }
 

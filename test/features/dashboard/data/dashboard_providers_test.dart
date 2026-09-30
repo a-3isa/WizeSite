@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/utils/utc_calendar.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -86,7 +87,7 @@ void main() {
       'workspaceId': 'workspace_1',
       'isArchived': false,
       'amount': 100,
-      'date': DateTime(now.year, now.month, now.day),
+      'date': DateTime.now(),
     });
     await firestore.collection('expenses').doc('expense_future').set({
       'workspaceId': 'workspace_1',
@@ -107,11 +108,58 @@ void main() {
     expect(summary['weeklyExpenses'], 100);
   });
 
+  test('weekly summary uses the UTC ISO week not local last-7-days', () async {
+    final bounds = utcIsoWeekBounds();
+    await firestore.collection('expenses').doc('before_utc_week').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'amount': 999,
+      'date': bounds.start.subtract(const Duration(hours: 1)),
+    });
+    await firestore.collection('expenses').doc('in_utc_week').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'amount': 40,
+      'date': bounds.start,
+    });
+
+    final summary = await _readStreamProvider(
+      container,
+      dashboardWeeklySummaryProvider('workspace_1'),
+    );
+
+    expect(summary['weeklyExpenses'], 40);
+  });
+
+  test('weekly summary includes worker entry cost as expenses', () async {
+    await firestore.collection('expenses').doc('expense_this_week').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'amount': 100,
+      'date': DateTime.now(),
+    });
+    await firestore.collection('worker_entries').doc('entry_this_week').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'workerId': 'worker_1',
+      'daysWorked': 2,
+      'dailyWage': 250,
+      'totalCost': 500,
+      'date': DateTime.now(),
+    });
+
+    final summary = await _readSettledStreamProvider(
+      container,
+      dashboardWeeklySummaryProvider('workspace_1'),
+    );
+
+    expect(summary['weeklyExpenses'], 600);
+  });
+
   test(
     'weekly summary ignores synced pending actions already reflected',
     () async {
-      final now = DateTime.now();
-      final date = DateTime(now.year, now.month, now.day);
+      final date = DateTime.now();
       await firestore.collection('expenses').doc('expense_synced').set({
         'workspaceId': 'workspace_1',
         'isArchived': false,
@@ -146,8 +194,7 @@ void main() {
   test(
     'weekly insights normalizes empty names and raw category keys',
     () async {
-      final now = DateTime.now();
-      final date = DateTime(now.year, now.month, now.day);
+      final date = DateTime.now();
       await firestore.collection('expenses').doc('expense_1').set({
         'workspaceId': 'workspace_1',
         'isArchived': false,
@@ -164,7 +211,7 @@ void main() {
       );
 
       expect(insights.topEntity, 'unassigned');
-      expect(insights.topCategory, 'labor');
+      expect(insights.topCategory, 'worker');
       expect(insights.paymentSummary.keys, contains('cash'));
       expect(insights.recentTransactions.single.title, 'unassigned');
     },
@@ -252,12 +299,51 @@ void main() {
     expect(snapshot.weeklyNet, 40);
   });
 
+  test('pending unpaid payment does not inflate workspace income', () async {
+    await firestore.collection('workspace_metrics').doc('workspace_1').set({
+      'workspaceId': 'workspace_1',
+      'totalProjects': 1,
+      'activeProjects': 1,
+      'totalExpenses': 0,
+      'totalIncome': 0,
+      'weeklyExpenses': 0,
+      'weeklyIncome': 0,
+    });
+    await queue.enqueue(
+      type: OfflineActionTypes.createPayment,
+      payload: {
+        'workspaceId': 'workspace_1',
+        'projectId': 'project_1',
+        'amount': 10000,
+        'paymentStatus': 'unpaid',
+        'date': DateTime.now().toIso8601String(),
+      },
+    );
+
+    final allowedContainer = ProviderContainer(
+      overrides: [
+        firestoreProvider.overrideWithValue(firestore),
+        offlineActionQueueProvider.overrideWithValue(queue),
+        currentAccountingRoleProvider.overrideWithValue(
+          const AsyncData(AccountingAccessRoleType.owner),
+        ),
+      ],
+    );
+    addTearDown(allowedContainer.dispose);
+
+    final snapshot = await _readSettledStreamProvider(
+      allowedContainer,
+      dashboardSnapshotProvider('workspace_1'),
+    );
+
+    expect(snapshot.totalIncome, 0);
+  });
+
   test(
     'worker attendance excludes a pending update that moves an in-window '
     'entry out of the window',
     () async {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final today = DateTime.now();
       final movedOutDate = today.subtract(const Duration(days: 40));
 
       // Base doc still reflects the OLD (in-window) date/daysWorked because
@@ -301,8 +387,7 @@ void main() {
     'worker attendance keeps counting a worker whose other entry stays '
     'in-window after a sibling entry is pending-moved out',
     () async {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final today = DateTime.now();
       final movedOutDate = today.subtract(const Duration(days: 40));
 
       await firestore.collection('worker_entries').doc('entry_1').set({
@@ -354,8 +439,7 @@ void main() {
     'worker attendance adds the full day count (not a stale delta) when a '
     'pending update moves an entry into the window',
     () async {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final today = DateTime.now();
       final movedFromDate = today.subtract(const Duration(days: 40));
 
       // No base doc: the entry's currently-stored (unsynced) date is still

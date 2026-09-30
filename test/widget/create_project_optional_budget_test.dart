@@ -4,7 +4,6 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/create_project_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,7 +48,7 @@ class _RecordingProjectRepository implements ProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage<Project>(items: [], hasMore: false);
@@ -58,7 +57,7 @@ class _RecordingProjectRepository implements ProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage<Project>(items: [], hasMore: false);

@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Shared async-state primitives used across feature screens so loading,
@@ -39,6 +38,17 @@ class _AppLoadingSkeletonState extends State<AppLoadingSkeleton>
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   )..repeat(reverse: true);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+      _controller.value = 0.6;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {
@@ -113,7 +123,7 @@ class AppRecoverableError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.dangerLight,
+        color: context.tokens.expenseSoft,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: context.tokens.expense.withValues(alpha: 0.3),
@@ -148,7 +158,7 @@ class AppRecoverableError extends StatelessWidget {
                 onPressed: onRetry,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.tokens.expense,
-                  foregroundColor: AppColors.white,
+                  foregroundColor: context.tokens.onAccent,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

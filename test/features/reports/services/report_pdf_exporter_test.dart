@@ -87,6 +87,18 @@ void main() {
     },
   );
 
+  test('labeled-rows PDF builds on a background isolate', () async {
+    final bytes = await buildLabeledRowsPdfInIsolate({
+      'locale': 'en',
+      'title': 'Isolate report',
+      'rows': [
+        ['Project', 'Tower A'],
+        ['Net', '0'],
+      ],
+    });
+    expect(ascii.decode(bytes.take(4).toList()), '%PDF');
+  });
+
   test(
     'custom report PDF generates with all accounting sections selected',
     () async {

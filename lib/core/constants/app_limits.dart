@@ -1,6 +1,6 @@
 class AppLimits {
   // Temporary testing switch: set to false to re-enable plan limits.
-  static const bool usageLimitsDisabled = true;
+  static const bool usageLimitsDisabled = false;
 
   static const int freeActiveProjects = 1;
   static const int freeExpensesPerMonth = 30;

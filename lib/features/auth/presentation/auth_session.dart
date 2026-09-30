@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/local_session_cleanup.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
@@ -48,6 +49,11 @@ Future<void> clearFailedAuthSession({
 }) async {
   ref.read(activeUserIdProvider.notifier).state = null;
   ref.read(activeWorkspaceIdProvider.notifier).state = null;
+  try {
+    await LocalSessionCleanup.clearQueuedUserData();
+  } catch (_) {
+    // Hive may not be initialized on early auth failures.
+  }
   try {
     if (alsoSignOut != null) {
       await alsoSignOut();

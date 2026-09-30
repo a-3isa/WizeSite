@@ -16,6 +16,7 @@ const List<String> appErrorMessageKeys = <String>[
   'errorAuthInvalidCredentials',
   'errorRecording',
   'errorUnknown',
+  'inviteUnavailable',
 ];
 
 /// Maps an arbitrary thrown [error] to a stable, localized message key.
@@ -116,13 +117,19 @@ String _statusCodeKey(String? code, String message) {
     case 'unauthenticated':
       return 'errorUnauthenticated';
     case 'not-found':
+      if (message.toUpperCase().contains('INVITE_UNAVAILABLE')) {
+        return 'inviteUnavailable';
+      }
       return 'errorNotFound';
     case 'resource-exhausted':
     case 'limit-reached':
       return 'errorQuota';
     case 'failed-precondition':
-      // Quota/limit precondition vs other precondition failures.
-      return message.toLowerCase().contains('limit')
+      return SyncErrorClassifier.categoryFrom(
+            code: 'failed-precondition',
+            message: message,
+          ) ==
+          SyncFailureCategory.quota
           ? 'errorQuota'
           : 'errorUnknown';
     default:

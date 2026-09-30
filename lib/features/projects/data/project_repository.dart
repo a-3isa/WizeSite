@@ -1,14 +1,21 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
+
+part 'local_project_repository.dart';
 
 enum ProjectBrowseSort {
   recent,
@@ -42,7 +49,7 @@ class ProjectBrowseQuery {
 abstract interface class ProjectBrowseRepository {
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   });
 }
 
@@ -53,12 +60,12 @@ abstract interface class ProjectRepository {
   Stream<Project?> watchProject(String projectId);
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   });
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   });
   Future<MutationResult> createProject({
@@ -148,60 +155,18 @@ class FirebaseProjectRepository
 
   @override
   Stream<List<Project>> watchProjects(String workspaceId) {
+    // Newest 50 after a workspace filter. Equality + orderBy + limit hangs in
+    // FakeFirestore and needs a composite index in prod for the warm stream.
     final query = _firestore
         .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
-        .limit(50);
-    return _watchProjectQuery(
+        .where('workspaceId', isEqualTo: workspaceId);
+    return _watchProjectQueryWithMetrics(
       query: query,
       workspaceId: workspaceId,
       includePendingCreates: true,
+      excludeArchived: true,
+      maxResults: 50,
     );
-  }
-
-  Stream<List<Project>> _watchProjectQuery({
-    required Query<Map<String, dynamic>> query,
-    required String workspaceId,
-    required bool includePendingCreates,
-  }) {
-    final projectsStream = query.snapshots();
-    final queueStream = _queue.watch(includeExpiredSynced: true);
-    return Stream.multi((controller) {
-      QuerySnapshot<Map<String, dynamic>>? currentProjects;
-      List<OfflineAction> currentActions = const [];
-
-      void emit() {
-        final snapshot = currentProjects;
-        if (snapshot == null) return;
-        final projects = snapshot.docs
-            .map((doc) => Project.fromMap(doc.id, doc.data()))
-            .toList(growable: false);
-        controller.add(
-          _applyOptimisticProjectList(
-            baseItems: projects,
-            actions: currentActions,
-            workspaceId: workspaceId,
-            includePendingCreates: includePendingCreates,
-          ),
-        );
-      }
-
-      final projectSub = projectsStream.listen((snapshot) {
-        currentProjects = snapshot;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((actions) {
-        currentActions = actions;
-        emit();
-      }, onError: controller.addError);
-
-      controller.onCancel = () {
-        unawaited(projectSub.cancel());
-        unawaited(queueSub.cancel());
-      };
-    });
   }
 
   @override
@@ -315,9 +280,10 @@ class FirebaseProjectRepository
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     var query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -326,7 +292,7 @@ class FirebaseProjectRepository
         .limit(pageSize);
 
     if (cursor != null) {
-      query = query.startAfterDocument(cursor);
+      query = query.startAfterDocument(firestoreCursor!);
     }
 
     final snap = await query.get();
@@ -362,9 +328,10 @@ class FirebaseProjectRepository
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     var query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -373,7 +340,7 @@ class FirebaseProjectRepository
         .limit(pageSize);
 
     if (cursor != null) {
-      query = query.startAfterDocument(cursor);
+      query = query.startAfterDocument(firestoreCursor!);
     }
 
     final snap = await query.get();
@@ -409,7 +376,7 @@ class FirebaseProjectRepository
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) {
     if (request.sort.isFinancial) {
       return _fetchFinancialProjectPage(request, cursor: cursor);
@@ -419,8 +386,9 @@ class FirebaseProjectRepository
 
   Future<FirestorePage<Project>> _fetchProjectFieldPage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     Query<Map<String, dynamic>> query = _firestore
         .collection('projects')
         .where('workspaceId', isEqualTo: request.workspaceId);
@@ -437,12 +405,12 @@ class FirebaseProjectRepository
     if (cursor != null) {
       query = switch (request.sort) {
         ProjectBrowseSort.name => query.startAt([
-          cursor.data()?['name'],
-          cursor.data()?['id'] ?? cursor.id,
+          firestoreCursor!.data()?['name'],
+          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
         ]),
         _ => query.startAt([
-          cursor.data()?['createdAt'],
-          cursor.data()?['id'] ?? cursor.id,
+          firestoreCursor!.data()?['createdAt'],
+          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
         ]),
       };
     }
@@ -453,7 +421,7 @@ class FirebaseProjectRepository
         .where(
           (doc) =>
               cursor == null ||
-              _isProjectDocAfterCursor(doc, cursor, request.sort),
+              _isProjectDocAfterCursor(doc, firestoreCursor!, request.sort),
         )
         .take(request.pageSize)
         .toList(growable: false);
@@ -490,8 +458,9 @@ class FirebaseProjectRepository
 
   Future<FirestorePage<Project>> _fetchFinancialProjectPage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     final metricField = switch (request.sort) {
       ProjectBrowseSort.highestExpense => 'totalExpenses',
       ProjectBrowseSort.highestIncome => 'totalIncome',
@@ -513,9 +482,9 @@ class FirebaseProjectRepository
         .orderBy('projectId');
     if (cursor != null) {
       query = query.startAt([
-        cursor.data()?[metricField],
-        cursor.data()?['projectName'],
-        cursor.data()?['projectId'],
+        firestoreCursor!.data()?[metricField],
+        firestoreCursor.data()?['projectName'],
+        firestoreCursor.data()?['projectId'],
       ]);
     }
     query = query.limit(request.pageSize + (cursor == null ? 0 : 1));
@@ -525,7 +494,7 @@ class FirebaseProjectRepository
         .where(
           (doc) =>
               cursor == null ||
-              _isMetricDocAfterCursor(doc, cursor, metricField),
+              _isMetricDocAfterCursor(doc, firestoreCursor!, metricField),
         )
         .take(request.pageSize)
         .toList(growable: false);
@@ -750,34 +719,42 @@ class FirebaseProjectRepository
     required Query<Map<String, dynamic>> query,
     required String workspaceId,
     required bool includePendingCreates,
+    bool excludeArchived = false,
+    int? maxResults,
   }) {
-    final projectsStream = query.snapshots();
-    final metricsStream = _firestore
-        .collection('project_metrics')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .snapshots();
-    final queueStream = _queue.watch(includeExpiredSynced: true);
     return Stream.multi((controller) {
       QuerySnapshot<Map<String, dynamic>>? currentProjects;
-      QuerySnapshot<Map<String, dynamic>>? currentMetrics;
+      Map<String, Map<String, dynamic>> metricsByProjectId = const {};
       List<OfflineAction> currentActions = const [];
+      var metricsGeneration = 0;
 
       void emit() {
-        if (currentProjects == null) return;
-        final metricsByProjectId = {
-          for (final doc in currentMetrics?.docs ?? const [])
-            doc.id: doc.data(),
-        };
-        final projects = (currentProjects?.docs ?? const [])
-            .map(
-              (doc) => Project.fromMap(
-                doc.id,
-                mergeProjectMetricsData(
-                  projectData: doc.data(),
-                  metricsData: metricsByProjectId[doc.id],
-                ),
-              ),
-            )
+        if (currentProjects == null) {
+          return;
+        }
+        final ranked = currentProjects!.docs
+            .map((doc) {
+              final merged = mergeProjectMetricsData(
+                projectData: doc.data(),
+                metricsData: metricsByProjectId[doc.id],
+              );
+              if (excludeArchived && merged['isArchived'] == true) {
+                return null;
+              }
+              return (
+                project: Project.fromMap(doc.id, merged),
+                createdAt: merged['createdAt'],
+              );
+            })
+            .whereType<({Project project, Object? createdAt})>()
+            .toList();
+        ranked.sort(
+          (left, right) =>
+              _compareOrderedValues(right.createdAt, left.createdAt),
+        );
+        final limited = maxResults == null ? ranked : ranked.take(maxResults);
+        final projects = limited
+            .map((entry) => entry.project)
             .toList(growable: false);
         controller.add(
           _applyOptimisticProjectList(
@@ -789,22 +766,49 @@ class FirebaseProjectRepository
         );
       }
 
-      final projectSub = projectsStream.listen((snapshot) {
-        currentProjects = snapshot;
-        emit();
-      }, onError: controller.addError);
-      final metricsSub = metricsStream.listen((snapshot) {
-        currentMetrics = snapshot;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((actions) {
+      Future<void> refreshMetrics() async {
+        final snapshot = currentProjects;
+        if (snapshot == null) {
+          return;
+        }
+        final generation = ++metricsGeneration;
+        try {
+          final fetched = await _fetchMetricsForProjectIds(
+            snapshot.docs.map((doc) => doc.id),
+          );
+          if (generation != metricsGeneration) {
+            return;
+          }
+          metricsByProjectId = fetched;
+          emit();
+        } catch (error, stackTrace) {
+          if (generation != metricsGeneration) {
+            return;
+          }
+          controller.addError(error, stackTrace);
+        }
+      }
+
+      unawaited(() async {
+        try {
+          currentProjects = await query.get();
+          currentActions = await _queue.list(includeExpiredSynced: true);
+          emit();
+          unawaited(refreshMetrics());
+        } catch (error, stackTrace) {
+          controller.addError(error, stackTrace);
+        }
+      }());
+
+      final queueSub = _queue.watch(includeExpiredSynced: true).listen((
+        actions,
+      ) {
         currentActions = actions;
         emit();
       }, onError: controller.addError);
 
       controller.onCancel = () async {
-        await projectSub.cancel();
-        await metricsSub.cancel();
+        metricsGeneration += 1;
         await queueSub.cancel();
       };
     });
@@ -887,9 +891,9 @@ class FirebaseProjectRepository
         workspaceId: current.workspaceId,
         name: '${action.payload['name'] ?? current.name}',
         clientName: '${action.payload['clientName'] ?? current.clientName}',
-        contractValue:
-            (action.payload['contractValue'] as num?)?.toDouble() ??
-            current.contractValue,
+        contractValue: action.payload.containsKey('contractValue')
+            ? (action.payload['contractValue'] as num?)?.toDouble()
+            : current.contractValue,
         status: '${action.payload['status'] ?? current.status}',
         completionPercentage:
             (action.payload['completionPercentage'] as num?)?.toDouble() ??
@@ -1120,6 +1124,14 @@ class FirebaseProjectRepository
 }
 
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalProjectRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(workspaceMutationServiceProvider),
+      ref.watch(offlineActionQueueProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebaseProjectRepository(
     ref.watch(firestoreProvider),
     ref.watch(workspaceMutationServiceProvider),

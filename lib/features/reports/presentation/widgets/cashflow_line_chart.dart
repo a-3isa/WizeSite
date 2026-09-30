@@ -61,9 +61,9 @@ class CashflowLineChart extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.tokens.textMuted,
+                  ),
                 ),
               ),
             )

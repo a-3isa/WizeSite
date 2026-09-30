@@ -5,6 +5,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/voice_expense/data/voice_ai_disclosure_store.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/controllers/voice_capture_controller.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_record_screen.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +58,11 @@ class _GrantedPermissionService extends MicrophonePermissionService {
       MicrophonePermissionStatus.granted;
 }
 
+class _AcceptedVoiceAiDisclosureStore extends VoiceAiDisclosureStore {
+  @override
+  bool get hasAccepted => true;
+}
+
 Future<VoiceCaptureController> _pumpScreen(
   WidgetTester tester, {
   required _FakeRecorder recorder,
@@ -76,6 +82,9 @@ Future<VoiceCaptureController> _pumpScreen(
         ),
         microphonePermissionServiceProvider.overrideWithValue(
           _GrantedPermissionService(),
+        ),
+        voiceAiDisclosureStoreProvider.overrideWithValue(
+          _AcceptedVoiceAiDisclosureStore(),
         ),
         voiceCaptureControllerProvider.overrideWith((ref) => controller),
       ],

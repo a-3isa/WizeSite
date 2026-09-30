@@ -116,6 +116,15 @@ void main() {
         ),
         'errorNetwork',
       );
+      expect(
+        appErrorMessageKey(
+          const CallableClientException(
+            'INVITE_UNAVAILABLE',
+            code: 'not-found',
+          ),
+        ),
+        'inviteUnavailable',
+      );
     });
 
     test('falls back to a generic key for unknown failures', () {

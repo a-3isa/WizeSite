@@ -21,6 +21,7 @@ import 'package:buildtrack_app/features/contractors/presentation/screens/contrac
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/equipment/presentation/screens/equipment_screen.dart';
 import 'package:buildtrack_app/features/entities/presentation/screens/resource_directory_screen.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/add_expense_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expense_detail_screen.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expenses_screen.dart';
@@ -285,9 +286,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'addExpense',
         pageBuilder: (context, state) {
           final projectId = state.uri.queryParameters['projectId'];
+          final extra = state.extra;
           return smoothAppPage<void>(
             key: state.pageKey,
-            child: AddExpenseScreen(projectId: projectId),
+            child: AddExpenseScreen(
+              projectId: projectId,
+              duplicateFrom: extra is Expense ? extra : null,
+            ),
           );
         },
       ),

@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
+import 'package:buildtrack_app/core/services/pending_attachment_service.dart';
+import 'package:buildtrack_app/core/utils/cash_collected.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -284,6 +287,7 @@ class WorkspaceMutationService {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -292,9 +296,14 @@ class WorkspaceMutationService {
     double? projectTotalPaymentsBefore,
     List<Map<String, dynamic>>? attachments,
   }) async {
+    final collected = cashCollectedAmount(
+      amount: amount,
+      paymentStatus: paymentStatus ?? 'paid',
+      paidAmount: paidAmount,
+    );
     final projectTotalPaymentsAfter = projectTotalPaymentsBefore == null
         ? null
-        : projectTotalPaymentsBefore + amount;
+        : projectTotalPaymentsBefore + collected;
     final payload = {
       'workspaceId': workspaceId,
       'projectId': projectId,
@@ -302,6 +311,7 @@ class WorkspaceMutationService {
       'date': date.toIso8601String(),
       'paymentMethod': paymentMethod,
       'paymentStatus': paymentStatus ?? 'paid',
+      'paidAmount': paidAmount,
       'description': description ?? notes ?? '',
       'notes': notes ?? '',
       'entityId': entityId ?? '',
@@ -324,6 +334,8 @@ class WorkspaceMutationService {
     required String paymentId,
     String? projectId,
     double? amount,
+    String? paymentStatus,
+    double? paidAmount,
     DateTime? date,
   }) async {
     final payload = <String, dynamic>{
@@ -332,6 +344,8 @@ class WorkspaceMutationService {
     };
     if (projectId != null) payload['projectId'] = projectId;
     if (amount != null) payload['amount'] = amount;
+    if (paymentStatus != null) payload['paymentStatus'] = paymentStatus;
+    if (paidAmount != null) payload['paidAmount'] = paidAmount;
     if (date != null) payload['date'] = date.toIso8601String();
     return _enqueueForBackgroundSync(
       type: OfflineActionTypes.archivePayment,
@@ -347,6 +361,9 @@ class WorkspaceMutationService {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    String? previousPaymentStatus,
+    double? paidAmount,
+    double? previousPaidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -364,6 +381,9 @@ class WorkspaceMutationService {
       'date': date.toIso8601String(),
       'paymentMethod': paymentMethod,
       'paymentStatus': paymentStatus ?? 'paid',
+      'previousPaymentStatus': previousPaymentStatus,
+      'paidAmount': paidAmount,
+      'previousPaidAmount': previousPaidAmount,
       'description': description ?? notes ?? '',
       'notes': notes ?? '',
       'entityId': entityId ?? '',
@@ -701,13 +721,20 @@ class WorkspaceMutationService {
   Future<void> _applyQueuedAction(OfflineAction action) async {
     switch (action.type) {
       case OfflineActionTypes.createProject:
-        await _client.call<Map<String, dynamic>>(
+        final result = await _client.call<Map<String, dynamic>>(
           functionName: 'createProjectWithQuota',
           httpFunctionName: 'createProjectWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to create project.',
         );
+        final serverId = '${result['id'] ?? ''}'.trim();
+        if (serverId.isNotEmpty) {
+          await _queue.remapPendingProjectIds(
+            pendingId: 'pending_${action.id}',
+            serverId: serverId,
+          );
+        }
         return;
       case OfflineActionTypes.updateProject:
         await _client.call<void>(
@@ -860,10 +887,19 @@ class WorkspaceMutationService {
         );
         return;
       case OfflineActionQueueTypes.attachmentUpload:
-        throw const CallableClientException(
-          'Attachment upload is waiting for local retry.',
-          code: 'unavailable',
-        );
+        final rawAttachment = action.payload['attachment'];
+        if (rawAttachment is Map) {
+          final pending = await PendingAttachmentService.open();
+          await pending.savePending(
+            workspaceId: '${action.payload['workspaceId'] ?? ''}',
+            ownerType: '${action.payload['ownerType'] ?? ''}',
+            ownerId: '${action.payload['ownerId'] ?? ''}',
+            attachment: Attachment.fromMap(
+              Map<String, dynamic>.from(rawAttachment),
+            ),
+          );
+        }
+        return;
       default:
         throw UnsupportedError('Unsupported offline action: ${action.type}');
     }

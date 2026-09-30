@@ -3,6 +3,8 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -40,6 +42,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -232,6 +235,9 @@ Widget _appWithRouter(GoRouter router, PaymentRepository paymentRepository) {
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
       projectRepositoryProvider.overrideWithValue(_FakeProjectRepository()),
       paymentRepositoryProvider.overrideWithValue(paymentRepository),
+      currentAccountingRoleProvider.overrideWithValue(
+        const AsyncData(AccountingAccessRoleType.owner),
+      ),
       projectsProvider.overrideWith((ref) => Stream.value([_project()])),
       currentUserSettingsProvider.overrideWith(
         (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),

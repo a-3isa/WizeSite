@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+.git/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+compose*.yml
+Dockerfile
+.dockerignore

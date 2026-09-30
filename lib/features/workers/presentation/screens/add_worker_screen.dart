@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
@@ -339,7 +340,10 @@ class _AddWorkerScreenState extends ConsumerState<AddWorkerScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: context.tokens.expense),
+                    ),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _loading ? null : _save,

@@ -1,0 +1,65 @@
+# Sync rules (contracts/sync-rules.md). Read-only replication of server rows to device SQLite.
+# Writes never go through sync; they use the RPC API via the offline queue.
+#
+# Visibility is copied table by table from firestore.rules read conditions:
+#   inWorkspace          -> workspace_member    (membership row exists OR workspace owner)
+#   canAccessAccounting  -> workspace_financial (owner/admin/accountingApproved OR workspace owner)
+# Every synced row needs an `id`; tables keyed otherwise alias their key as id.
+# Server-only tables (idempotency_keys, webhook_events, drafts) are never synced.
+
+bucket_definitions:
+  user_self:
+    parameters: SELECT request.user_id() AS uid
+    data:
+      - SELECT uid AS id, email, full_name, photo_url, active_workspace_id, default_currency,
+          risk_alerts_enabled, setup_completed, created_at, updated_at
+        FROM user_profiles WHERE uid = bucket.uid
+      - SELECT * FROM memberships WHERE user_uid = bucket.uid
+      - SELECT * FROM notifications WHERE target_user_id = bucket.uid
+
+  workspace_member:
+    parameters:
+      - SELECT workspace_id FROM memberships
+        WHERE user_uid = request.user_id() AND status = 'active'
+      - SELECT id AS workspace_id FROM workspaces WHERE owner_uid = request.user_id()
+    data:
+      - SELECT * FROM workspaces WHERE id = bucket.workspace_id
+      - SELECT * FROM memberships WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM projects WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM expenses WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM worker_entries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM workers WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM entities WHERE workspace_id = bucket.workspace_id
+      - SELECT workspace_id AS id, tier, status, store, is_auto_renewing, trial_ends_at,
+          period_ends_at, last_synced_at, updated_at
+        FROM subscriptions WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM usage_counters WHERE workspace_id = bucket.workspace_id
+
+  workspace_financial:
+    # One equality query per financial role (parameter queries do not accept IN lists).
+    parameters:
+      - SELECT workspace_id FROM memberships
+        WHERE user_uid = request.user_id() AND status = 'active' AND role = 'owner'
+      - SELECT workspace_id FROM memberships
+        WHERE user_uid = request.user_id() AND status = 'active' AND role = 'admin'
+      - SELECT workspace_id FROM memberships
+        WHERE user_uid = request.user_id() AND status = 'active' AND role = 'accountingApproved'
+      - SELECT id AS workspace_id FROM workspaces WHERE owner_uid = request.user_id()
+    data:
+      - SELECT * FROM payments WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM attachments WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM worker_accounting_records WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM contractor_accounting_records WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM equipment_accounting_records WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM transport_provider_accounting_records WHERE workspace_id = bucket.workspace_id
+      - SELECT project_id AS id, workspace_id, risk_level, payload, source_version, computed_at
+        FROM project_metrics WHERE workspace_id = bucket.workspace_id
+      - SELECT workspace_id AS id, payload, source_version, computed_at
+        FROM workspace_metrics WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM project_summaries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM weekly_summaries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM entity_summaries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM category_summaries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM worker_accounting_summaries WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM reports WHERE workspace_id = bucket.workspace_id
+      - SELECT * FROM report_exports WHERE workspace_id = bucket.workspace_id

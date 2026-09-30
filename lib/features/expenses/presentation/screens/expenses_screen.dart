@@ -26,7 +26,6 @@ import 'package:buildtrack_app/features/common/presentation/controllers/transact
 import 'package:buildtrack_app/features/reports/services/report_document_actions.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -51,7 +50,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   ProviderSubscription<int>? _deadLetterSubscription;
 
   final List<Expense> _expenses = [];
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;
@@ -621,8 +620,23 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     }
   }
 
+  Future<void> _duplicateLastExpense() async {
+    if (_expenses.isEmpty) {
+      return;
+    }
+    await context.push(
+      AppRoutes.addExpensePath(projectId: widget.projectId),
+      extra: _expenses.first,
+    );
+    if (mounted) {
+      await _refresh();
+    }
+  }
+
   Future<void> _openAddExpense() async {
-    await context.push(AppRoutes.addExpensePath(projectId: widget.projectId));
+    await context.push(
+      AppRoutes.addExpensePath(projectId: widget.projectId),
+    );
     if (mounted) {
       await _refresh();
     }
@@ -944,10 +958,25 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         ),
         floatingActionButton: bulkState.isSelecting
             ? null
-            : FloatingActionButton.extended(
-                onPressed: _openAddExpense,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.t('addExpense')),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (_expenses.isNotEmpty) ...[
+                    FloatingActionButton.extended(
+                      heroTag: 'duplicate_last_expense',
+                      onPressed: _duplicateLastExpense,
+                      icon: const Icon(Icons.copy_outlined),
+                      label: Text(l10n.t('duplicateLastExpense')),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  FloatingActionButton.extended(
+                    onPressed: _openAddExpense,
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.t('addExpense')),
+                  ),
+                ],
               ),
         body: Column(
           children: [
@@ -975,7 +1004,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
             ),
             const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 16),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -987,7 +1016,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
             ),
             const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 16),
               child: BelowDropdownField<String>(
                 label: l10n.t('groupBy'),
                 value: _groupBy.name,
@@ -1081,7 +1110,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         children: [
           const SizedBox(height: 80),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: 24),
             child: AppRecoverableError(
               message: appErrorMessage(l10n, _error),
               onRetry: _refresh,
@@ -1099,7 +1128,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         children: [
           const SizedBox(height: 80),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: 24),
             child: filtersActive
                 ? AppEmptyState(
                     icon: Icons.filter_alt_off_outlined,
@@ -1123,7 +1152,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsetsDirectional.symmetric(horizontal: 16, vertical: 4),
       itemCount: itemCount,
       itemBuilder: (context, index) {
         if (index >= filtered.length) {
@@ -1169,7 +1198,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     return ListView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsetsDirectional.symmetric(horizontal: 16, vertical: 4),
       children: groups.map((group) {
         return ExpenseGroupSection(
           group: _localizedGroup(group, l10n),
@@ -1269,10 +1298,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       'yesterday': 'yesterday',
       'current_week': 'thisWeek',
       'current_month': 'thisMonth',
+      'unassigned': 'unassigned',
     };
     final idKey = idKeys[group.id];
     final title = idKey != null
         ? l10n.t(idKey)
+        : group.title == 'unassigned'
+        ? l10n.t('unassigned')
         : switch (_groupBy) {
             ExpenseGroupMode.category => l10n.expenseCategoryLabel(group.title),
             ExpenseGroupMode.paymentMethod => l10n.paymentMethodLabel(
@@ -1282,7 +1314,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
           };
     return ExpenseGroup(
       id: group.id,
-      title: title == 'Unassigned' ? l10n.t('unassigned') : title,
+      title: title,
       totalAmount: group.totalAmount,
       transactionCount: group.transactionCount,
       items: group.items,

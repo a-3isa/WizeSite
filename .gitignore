@@ -128,3 +128,17 @@ firestore-debug.log
 
 # graphify knowledge-graph output (regenerable: `graphify . --update`)
 graphify-out/
+
+# ============================================================
+# Self-hosted backend (spec 004) — secrets and local output
+# ============================================================
+!**/.env.example
+server/.env
+ops/**/*.env
+!ops/**/*.env.example
+ops/restic/*.key
+ops/pgbackrest/*.key
+server/out/
+
+# Claude Code local settings
+.claude/settings.local.json

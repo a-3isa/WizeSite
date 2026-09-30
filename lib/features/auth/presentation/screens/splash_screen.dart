@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/app_remote_config.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +20,8 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  bool _updateRequired = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,6 +29,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    try {
+      final config = await ref.read(appRemoteConfigProvider.future);
+      if (!mounted) return;
+      // Only ask the platform for the build number when a minimum is set:
+      // the common path (no gate) then does no platform I/O before restore.
+      if (config.minSupportedBuild > 0) {
+        final info = await PackageInfo.fromPlatform();
+        final build = int.tryParse(info.buildNumber) ?? 0;
+        if (build < config.minSupportedBuild) {
+          if (!mounted) return;
+          setState(() => _updateRequired = true);
+          return;
+        }
+      }
+    } catch (_) {
+      // Fail open if Remote Config or package info is unavailable.
+    }
+
     SessionRestoreResult? restored;
     try {
       restored = await ref.read(sessionRestoreServiceProvider).restore();
@@ -52,36 +75,51 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFFF7A00), Color(0xFFFF8C1A), Color(0xFFFF9E33)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    final t = context.tokens;
+    if (_updateRequired) {
+      return Scaffold(
+        backgroundColor: t.surface,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.t('updateRequiredTitle'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                Text(l10n.t('updateRequiredBody'), textAlign: TextAlign.center),
+              ],
+            ),
           ),
         ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.construction, color: Colors.white, size: 72),
-              const SizedBox(height: 16),
-              Text(
-                l10n.t('appName'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                ),
+      );
+    }
+    return Scaffold(
+      backgroundColor: t.accent,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.construction, color: t.onAccent, size: 72),
+            const SizedBox(height: 16),
+            Text(
+              l10n.t('appName'),
+              style: TextStyle(
+                color: t.onAccent,
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.t('tagline'),
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.t('tagline'),
+              style: TextStyle(color: t.onAccent, fontSize: 16),
+            ),
+          ],
         ),
       ),
     );

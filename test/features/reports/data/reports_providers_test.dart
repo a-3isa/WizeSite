@@ -497,11 +497,71 @@ void main() {
         expect(flow.last.income, 250);
         expect(categories['materials'], isNull);
         expect(categories['equipment'], 150);
-        expect(categories['labor'], 300);
+        expect(categories['worker'], 300);
+        expect(categories['labor'], isNull);
         expect(expenses.first.amount, 150);
         expect(expenses.first.notes, 'new expense');
         expect(payments.first.amount, 250);
         expect(payments.first.paymentMethod, 'bank');
+      },
+    );
+
+    test(
+      'queued worker entries merge into the server worker category',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            reportProjectIdProvider.overrideWith((ref) => 'project_1'),
+            reportBaseMetricsProvider.overrideWith(
+              (ref) => Stream.value(
+                ReportMetrics(
+                  projectId: 'project_1',
+                  projectName: 'Tower A',
+                  status: 'active',
+                  isArchived: false,
+                  totalExpenses: 300,
+                  totalIncome: 0,
+                  net: -300,
+                  // Server recompute now keys labor cost as 'worker'.
+                  categoryTotals: const {'materials': 100, 'worker': 200},
+                  monthlyFlow: const [],
+                  topWorkers: const [],
+                  recentExpenses: const [],
+                  recentPayments: const [],
+                ),
+              ),
+            ),
+            reportPendingActionsProvider.overrideWith(
+              (ref) => Stream.value([
+                OfflineAction(
+                  id: 'worker_entry_queued',
+                  type: OfflineActionTypes.createWorkerEntry,
+                  payload: {
+                    'workspaceId': 'workspace_1',
+                    'projectId': 'project_1',
+                    'workerId': 'worker_1',
+                    'daysWorked': 1,
+                    'dailyWage': 50,
+                    'date': DateTime.utc(2026, 5, 20).toIso8601String(),
+                  },
+                  createdAt: DateTime.utc(2026, 5, 20),
+                ),
+              ]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await _readStreamProvider(container, reportBaseMetricsProvider);
+        await _readStreamProvider(container, reportPendingActionsProvider);
+
+        final categories = container
+            .read(expensesByCategoryProvider)
+            .requireValue;
+
+        expect(categories['worker'], 250);
+        expect(categories['labor'], isNull);
+        expect(categories['materials'], 100);
       },
     );
 
@@ -1053,6 +1113,82 @@ void main() {
         expect(container.read(reportSummaryProvider).requireValue['net'], 180);
       },
     );
+
+    test('scoped report income ignores unpaid payments', () async {
+      final expenses = _MockExpenseRepository();
+      final payments = _MockPaymentRepository();
+      final start = DateTime.utc(2026, 6);
+      final end = DateTime.utc(2026, 6, 15, 23, 59, 59, 999);
+      final unpaid = PaymentRecord(
+        id: 'payment_unpaid',
+        workspaceId: 'workspace_1',
+        projectId: 'project_1',
+        amount: 10000,
+        date: DateTime.utc(2026, 6, 12),
+        paymentMethod: 'bank',
+        paymentStatus: 'unpaid',
+        notes: '',
+        attachments: const [],
+        isArchived: false,
+      );
+      when(
+        () => expenses.fetchExpensesPage(
+          'workspace_1',
+          projectId: 'project_1',
+          startDate: start,
+          endDate: end,
+          cursor: null,
+          pageSize: 500,
+        ),
+      ).thenAnswer(
+        (_) async => const FirestorePage(items: [], hasMore: false),
+      );
+      when(
+        () => payments.fetchPaymentsPage(
+          'workspace_1',
+          projectId: 'project_1',
+          startDate: start,
+          endDate: end,
+          cursor: null,
+          pageSize: 500,
+        ),
+      ).thenAnswer(
+        (_) async => FirestorePage(items: [unpaid], hasMore: false),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.owner),
+          ),
+          reportScopeProvider.overrideWith(
+            (ref) => ReportScope(
+              projectId: 'project_1',
+              startDate: start,
+              endDate: end,
+            ),
+          ),
+          expenseRepositoryProvider.overrideWithValue(expenses),
+          paymentRepositoryProvider.overrideWithValue(payments),
+          reportBaseMetricsProvider.overrideWith(
+            (ref) => Stream.value(null),
+          ),
+          reportPendingActionsProvider.overrideWith(
+            (ref) => Stream.value(const []),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(reportScopedRowsProvider.future);
+      await _readStreamProvider(container, reportBaseMetricsProvider);
+      await _readStreamProvider(container, reportPendingActionsProvider);
+
+      final metrics = container.read(reportMetricsProvider).requireValue!;
+      expect(metrics.totalIncome, 0);
+      expect(metrics.net, 0);
+    });
 
     test('denied roles short-circuit report data reads', () async {
       final expenses = _MockExpenseRepository();

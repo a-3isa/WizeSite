@@ -86,6 +86,40 @@ void main() {
     },
   );
 
+  test(
+    'drain reloads remapped child payloads in the same pass',
+    () async {
+      final project = await queue.enqueue(
+        type: 'create_project',
+        payload: {'name': 'Site A'},
+      );
+      final expense = await queue.enqueue(
+        type: 'create_expense',
+        payload: {
+          'projectId': 'pending_${project.id}',
+          'amount': 40,
+        },
+      );
+
+      final seenProjectIds = <String>[];
+      await queue.drain((action) async {
+        if (action.type == 'create_project') {
+          await queue.remapPendingProjectIds(
+            pendingId: 'pending_${action.id}',
+            serverId: 'project_server',
+          );
+          return;
+        }
+        seenProjectIds.add('${action.payload['projectId']}');
+      });
+
+      expect(seenProjectIds, ['project_server']);
+      final stored = await queue.list(includeExpiredSynced: true);
+      final storedExpense = stored.firstWhere((item) => item.id == expense.id);
+      expect(storedExpense.payload['projectId'], 'project_server');
+    },
+  );
+
   test('delete project actions are normal optimistic queue entries', () async {
     final action = await queue.enqueue(
       type: 'delete_project',
@@ -114,6 +148,31 @@ void main() {
       expect(deadLetters.first.status, OfflineActionStatus.deadLetter);
       expect(deadLetters.first.lastErrorCode, 'permission-denied');
       expect(deadLetters.first.lastError, contains('archived'));
+    },
+  );
+
+  test(
+    'drain stops when the earliest unsynced action is still in backoff',
+    () async {
+      final first = await queue.enqueue(
+        type: 'create_project',
+        payload: {'name': 'Site A'},
+      );
+      await queue.enqueue(type: 'create_expense', payload: {'amount': 40});
+      await queue.save(
+        first.copyWith(
+          status: OfflineActionStatus.failed,
+          nextAttemptAt: DateTime.now().add(const Duration(hours: 1)),
+        ),
+      );
+
+      final processed = <String>[];
+      await queue.drain((action) async {
+        processed.add(action.type);
+      });
+
+      expect(processed, isEmpty);
+      expect(await queue.pendingCount(), 2);
     },
   );
 }

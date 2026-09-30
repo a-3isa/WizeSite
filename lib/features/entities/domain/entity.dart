@@ -57,7 +57,7 @@ class AppEntity {
       return const [];
     }
     return value
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map((item) => Attachment.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }

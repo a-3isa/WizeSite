@@ -1,12 +1,17 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
+import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/attachment_download_service.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -48,13 +53,35 @@ class PaymentDetailScreen extends ConsumerWidget {
     final currency =
         ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
 
+    final role = ref.watch(currentAccountingRoleProvider).value;
+    if (role?.canAccessAccounting != true) {
+      return AppBackScope(
+        fallbackRoute: _fallbackRoute(),
+        child: Scaffold(
+          appBar: appBackAppBar(
+            context: context,
+            title: l10n.t('paymentDetails'),
+            fallbackRoute: _fallbackRoute(),
+          ),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.all(24),
+              child: Text(l10n.t('reportAccessDenied')),
+            ),
+          ),
+        ),
+      );
+    }
+
     Future<void> openAttachment(Attachment attachment) async {
       try {
-        final storageUploadService = ref.read(storageUploadServiceProvider);
-        final rawUrl = attachment.downloadUrl?.trim();
-        final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
-            ? rawUrl
-            : await storageUploadService.getDownloadUrl(attachment.storagePath);
+        final downloadUrl = await resolveAttachmentDownloadUrl(
+          client: ref.read(callableClientProvider),
+          storage: ref.read(storageUploadServiceProvider),
+          workspaceId: ref.read(activeWorkspaceIdProvider) ?? '',
+          attachment: attachment,
+          defaultErrorMessage: l10n.t('attachmentCannotOpen'),
+        );
         final launched = await launchSafeExternalUrl(downloadUrl);
         if (!launched) {
           throw Exception('Could not open attachment.');
@@ -219,7 +246,10 @@ class PaymentDetailScreen extends ConsumerWidget {
                       }
                     }
                   },
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.tokens.expense,
+                    foregroundColor: context.tokens.onAccent,
+                  ),
                   child: Text(l10n.t('archive')),
                 ),
               ],

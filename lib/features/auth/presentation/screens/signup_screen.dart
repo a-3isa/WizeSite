@@ -114,6 +114,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         leading: IconButton(
           key: const Key('qa_signup_back'),
           icon: const Icon(Icons.arrow_back),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => context.canPop()
               ? context.pop()
               : context.go(AppRoutes.login),

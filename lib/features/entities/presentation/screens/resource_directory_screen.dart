@@ -15,7 +15,6 @@ import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -216,7 +215,7 @@ class _ResourceDirectoryScreenState
   final _searchController = TextEditingController();
   final _items = <AppEntity>[];
   Timer? _searchDebounce;
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasMore = false;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -8,8 +9,10 @@ import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/attachment_download_service.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/utils/safe_external_url.dart';
@@ -44,10 +47,13 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
     Future<void> openAttachment(Attachment attachment) async {
       try {
-        final rawUrl = attachment.downloadUrl?.trim();
-        final downloadUrl = rawUrl != null && rawUrl.isNotEmpty
-            ? rawUrl
-            : await storageUploadService.getDownloadUrl(attachment.storagePath);
+        final downloadUrl = await resolveAttachmentDownloadUrl(
+          client: ref.read(callableClientProvider),
+          storage: storageUploadService,
+          workspaceId: ref.read(activeWorkspaceIdProvider) ?? '',
+          attachment: attachment,
+          defaultErrorMessage: l10n.t('attachmentCannotOpen'),
+        );
         final launched = await launchSafeExternalUrl(downloadUrl);
         if (!launched) {
           throw Exception('Could not open attachment.');
@@ -191,7 +197,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Container(
                                     height: 120,
-                                    color: Colors.black12,
+                                    color: context.tokens.surface3,
                                     alignment: Alignment.center,
                                     child: const Icon(Icons.broken_image),
                                   ),
@@ -290,7 +296,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                         );
                       }
                     } on CallableClientException catch (e) {
-                      if (e.code == 'failed-precondition') {
+                      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
                         if (context.mounted) {
                           context.push(
                             '${AppRoutes.subscriptionLimit}?limit=expensesPerMonth',
@@ -358,7 +364,10 @@ class ExpenseDetailScreen extends ConsumerWidget {
                       }
                     }
                   },
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.tokens.expense,
+                    foregroundColor: context.tokens.onAccent,
+                  ),
                   child: Text(l10n.t('archive')),
                 ),
               ],

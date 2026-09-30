@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,27 +12,48 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 class CallableClient {
   const CallableClient(
     this._functions,
     this._auth,
     this._appCheck,
-    this._telemetry,
-  );
+    this._telemetry, {
+    SelfHostedRpcTransport? selfHostedTransport,
+  }) : _selfHosted = selfHostedTransport;
 
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
   final FirebaseAppCheck _appCheck;
   final AppTelemetry _telemetry;
 
+  /// Set only in builds with `--dart-define=API_BASE_URL=...` (spec 004).
+  final SelfHostedRpcTransport? _selfHosted;
+
+  /// [idempotencyKey] makes a mutating call safe to retry: the self-hosted
+  /// backend applies it once. The offline queue passes its action id; direct
+  /// calls get a fresh key. Ignored by the Firebase transport.
   Future<T> call<T>({
     required String functionName,
     required Map<String, dynamic> payload,
     required T Function(dynamic result) parseResult,
     required String defaultErrorMessage,
     String? httpFunctionName,
+    String? idempotencyKey,
   }) async {
+    final selfHosted = _selfHosted;
+    if (selfHosted != null) {
+      return _callSelfHosted(
+        selfHosted,
+        functionName: functionName,
+        payload: payload,
+        parseResult: parseResult,
+        defaultErrorMessage: defaultErrorMessage,
+        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
+      );
+    }
+
     final currentUser = await _authenticatedUser();
     if (currentUser == null) {
       throw const CallableClientException(
@@ -123,6 +146,40 @@ class CallableClient {
         error.message ?? defaultErrorMessage,
         code: error.code,
       );
+    }
+  }
+
+  Future<T> _callSelfHosted<T>(
+    SelfHostedRpcTransport transport, {
+    required String functionName,
+    required Map<String, dynamic> payload,
+    required T Function(dynamic result) parseResult,
+    required String defaultErrorMessage,
+    required String idempotencyKey,
+  }) async {
+    try {
+      await _telemetry.log('callable.request', {'function': functionName});
+      final result = await transport.call(
+        functionName: functionName,
+        payload: payload,
+        idempotencyKey: idempotencyKey,
+        defaultErrorMessage: defaultErrorMessage,
+      );
+      await _telemetry.log('callable.success', {'function': functionName});
+      return parseResult(result);
+    } on CallableClientException catch (error) {
+      await _telemetry.log('callable.error', {
+        'function': functionName,
+        'code': error.code ?? 'unknown',
+      });
+      if (error.code != 'unauthenticated' && error.code != 'unavailable') {
+        await _telemetry.recordError(
+          error,
+          StackTrace.current,
+          reason: 'callable.$functionName',
+        );
+      }
+      rethrow;
     }
   }
 
@@ -285,10 +342,21 @@ class CallableClientException implements Exception {
 }
 
 final callableClientProvider = Provider<CallableClient>((ref) {
+  final auth = ref.watch(firebaseAuthProvider);
+  const backend = BackendConfig.fromEnvironment;
   return CallableClient(
     ref.watch(functionsProvider),
-    ref.watch(firebaseAuthProvider),
+    auth,
     FirebaseAppCheck.instance,
     ref.watch(appTelemetryProvider),
+    selfHostedTransport: backend.useSelfHostedBackend
+        ? SelfHostedRpcTransport(
+            config: backend,
+            httpClient: http.Client(),
+            idToken: ({required bool forceRefresh}) async =>
+                auth.currentUser?.getIdToken(forceRefresh),
+            appCheckToken: () => FirebaseAppCheck.instance.getToken(),
+          )
+        : null,
   );
 });

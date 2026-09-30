@@ -71,11 +71,40 @@ class GoogleAuthService {
     }
   }
 
-  Future<void> signOut() async {
-    if (!_initialized) {
-      return;
+  /// Reauthenticates the current Firebase user. Never signs a different
+  /// Google account in, which would otherwise let delete-account run as
+  /// whoever was picked in the account chooser.
+  Future<bool> reauthenticateWithGoogle({required FirebaseAuth auth}) async {
+    final user = auth.currentUser;
+    if (user == null) {
+      return false;
     }
+    await _initializeIfNeeded();
+    if (!_googleSignIn.supportsAuthenticate()) {
+      return false;
+    }
+    try {
+      final account = await _googleSignIn.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        return false;
+      }
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      await user.reauthenticateWithCredential(credential);
+      return auth.currentUser?.uid == user.uid;
+    } on GoogleSignInException catch (e) {
+      switch (e.code) {
+        case GoogleSignInExceptionCode.canceled:
+        case GoogleSignInExceptionCode.interrupted:
+          return false;
+        default:
+          rethrow;
+      }
+    }
+  }
 
+  Future<void> signOut() async {
+    await _initializeIfNeeded();
     try {
       await _googleSignIn.signOut();
     } catch (_) {

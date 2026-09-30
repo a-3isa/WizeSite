@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -172,15 +173,15 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
                       const SizedBox(height: 16),
                       Text(_stage, textAlign: TextAlign.center),
                     ] else ...[
-                      const Icon(
+                      Icon(
                         Icons.error_outline,
-                        color: Colors.red,
+                        color: context.tokens.expense,
                         size: 42,
                       ),
                       const SizedBox(height: 12),
                       Text(
                         _error!,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: context.tokens.expense),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),

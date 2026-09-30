@@ -32,6 +32,7 @@ class _FakeCallableClient implements CallableClient {
     required T Function(dynamic result) parseResult,
     required String defaultErrorMessage,
     String? httpFunctionName,
+    String? idempotencyKey,
   }) async {
     callCount += 1;
     lastFunctionName = functionName;
@@ -256,102 +257,95 @@ void main() {
       },
     );
 
-    test(
-      'signs the user out when no workspace can be resolved, so the router '
-      'does not bounce them between splash and login forever',
-      () async {
-        final callable = _FakeCallableClient(
-          error: const CallableClientException(
-            'Failed to restore your workspace.',
-            code: 'failed-precondition',
-          ),
-        );
+    test('signs the user out when no workspace can be resolved, so the router '
+        'does not bounce them between splash and login forever', () async {
+      final callable = _FakeCallableClient(
+        error: const CallableClientException(
+          'Failed to restore your workspace.',
+          code: 'failed-precondition',
+        ),
+      );
+      var cleaned = false;
 
-        final service = SessionRestoreService(
-          auth: auth,
-          firestore: firestore,
-          callableClient: callable,
-          telemetry: telemetry,
-        );
+      final service = SessionRestoreService(
+        auth: auth,
+        firestore: firestore,
+        callableClient: callable,
+        telemetry: telemetry,
+        onSignOutCleanup: () async {
+          cleaned = true;
+        },
+      );
 
-        final result = await service.restore();
+      final result = await service.restore();
 
-        expect(result, isNull);
-        verify(() => auth.signOut()).called(1);
-      },
-    );
+      expect(result, isNull);
+      expect(cleaned, isTrue);
+      verify(() => auth.signOut()).called(1);
+    });
 
-    test(
-      'signs out and returns null (not an exception) when restore throws '
-      'before reaching the no-workspace branch, e.g. telemetry not ready '
-      'yet on a freshly (re)installed app',
-      () async {
-        final throwingTelemetry = _FakeTelemetry(
-          throwOnLogEvent: 'session_restore.start',
-        );
-        final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
+    test('signs out and returns null (not an exception) when restore throws '
+        'before reaching the no-workspace branch, e.g. telemetry not ready '
+        'yet on a freshly (re)installed app', () async {
+      final throwingTelemetry = _FakeTelemetry(
+        throwOnLogEvent: 'session_restore.start',
+      );
+      final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
 
-        final service = SessionRestoreService(
-          auth: auth,
-          firestore: firestore,
-          callableClient: callable,
-          telemetry: throwingTelemetry,
-        );
+      final service = SessionRestoreService(
+        auth: auth,
+        firestore: firestore,
+        callableClient: callable,
+        telemetry: throwingTelemetry,
+      );
 
-        final result = await service.restore();
+      final result = await service.restore();
 
-        expect(result, isNull);
-        verify(() => auth.signOut()).called(1);
-      },
-    );
+      expect(result, isNull);
+      verify(() => auth.signOut()).called(1);
+    });
 
-    test(
-      'still signs out and returns null even if recordError itself throws '
-      'while handling the original failure',
-      () async {
-        final throwingTelemetry = _FakeTelemetry(
-          throwOnLogEvent: 'session_restore.start',
-          throwOnRecordError: true,
-        );
-        final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
+    test('still signs out and returns null even if recordError itself throws '
+        'while handling the original failure', () async {
+      final throwingTelemetry = _FakeTelemetry(
+        throwOnLogEvent: 'session_restore.start',
+        throwOnRecordError: true,
+      );
+      final callable = _FakeCallableClient(workspaceId: 'workspace_boot');
 
-        final service = SessionRestoreService(
-          auth: auth,
-          firestore: firestore,
-          callableClient: callable,
-          telemetry: throwingTelemetry,
-        );
+      final service = SessionRestoreService(
+        auth: auth,
+        firestore: firestore,
+        callableClient: callable,
+        telemetry: throwingTelemetry,
+      );
 
-        final result = await service.restore();
+      final result = await service.restore();
 
-        expect(result, isNull);
-        verify(() => auth.signOut()).called(1);
-      },
-    );
+      expect(result, isNull);
+      verify(() => auth.signOut()).called(1);
+    });
 
-    test(
-      'returns null (not an exception) even if the sign-out attempt itself '
-      'fails',
-      () async {
-        when(() => auth.signOut()).thenThrow(Exception('plugin unavailable'));
-        final callable = _FakeCallableClient(
-          error: const CallableClientException(
-            'Failed to restore your workspace.',
-            code: 'failed-precondition',
-          ),
-        );
+    test('returns null (not an exception) even if the sign-out attempt itself '
+        'fails', () async {
+      when(() => auth.signOut()).thenThrow(Exception('plugin unavailable'));
+      final callable = _FakeCallableClient(
+        error: const CallableClientException(
+          'Failed to restore your workspace.',
+          code: 'failed-precondition',
+        ),
+      );
 
-        final service = SessionRestoreService(
-          auth: auth,
-          firestore: firestore,
-          callableClient: callable,
-          telemetry: telemetry,
-        );
+      final service = SessionRestoreService(
+        auth: auth,
+        firestore: firestore,
+        callableClient: callable,
+        telemetry: telemetry,
+      );
 
-        final result = await service.restore();
+      final result = await service.restore();
 
-        expect(result, isNull);
-      },
-    );
+      expect(result, isNull);
+    });
   });
 }

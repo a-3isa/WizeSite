@@ -5,13 +5,16 @@ import 'dart:io';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/app_remote_config.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/voice_expense/data/voice_ai_disclosure_store.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_capture_state.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/controllers/voice_capture_controller.dart';
@@ -55,9 +58,43 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
   Future<void> _onMicPressed() async {
     final l10n = AppLocalizations.of(context);
     setState(() => _permissionErrorKey = null);
+    final disclosed = await _ensureVoiceAiDisclosure(l10n);
+    if (!disclosed) return;
     final granted = await _ensureMicrophonePermission(l10n);
     if (!granted) return;
     await _controller.startRecording();
+  }
+
+  Future<bool> _ensureVoiceAiDisclosure(AppLocalizations l10n) async {
+    final store = ref.read(voiceAiDisclosureStoreProvider);
+    if (store.hasAccepted) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+    final accepted = await showAdaptiveDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog.adaptive(
+        title: Text(l10n.t('voiceAiDisclosureTitle')),
+        content: Text(l10n.t('voiceAiDisclosureMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.t('notNow')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.t('voiceAiDisclosureContinue')),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) {
+      return false;
+    }
+    await store.accept();
+    return true;
   }
 
   Future<bool> _ensureMicrophonePermission(AppLocalizations l10n) async {
@@ -226,6 +263,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
         appBar: AppBar(
           leading: IconButton(
             icon: const BackButtonIcon(),
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: _handleBackNavigation,
           ),
           backgroundColor: Colors.transparent,
@@ -257,6 +295,9 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                       _MicButton(
                         isRecording: captureState.isRecording,
                         pulseController: _pulseController,
+                        semanticLabel: captureState.isRecording
+                            ? l10n.t('voiceRecordingInProgress')
+                            : l10n.t('recordExpense'),
                         onPressed: captureState.isRecording
                             ? _controller.stopRecording
                             : _onMicPressed,
@@ -294,7 +335,7 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                   left: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+                    padding: const EdgeInsetsDirectional.fromSTEB(24, 32, 24, 40),
                     decoration: BoxDecoration(
                       color: t.surface,
                       borderRadius: BorderRadius.vertical(
@@ -302,7 +343,18 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                       ),
                       boxShadow: t.shadowNav,
                     ),
-                    child: Row(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_voiceProcessBlockMessage(l10n) != null) ...[
+                          Text(
+                            _voiceProcessBlockMessage(l10n)!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: t.textMuted),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Row(
                       children: [
                         Expanded(
                           child: BuildButton(
@@ -320,19 +372,20 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                         const SizedBox(width: 16),
                         Expanded(
                           child: BuildButton(
+                            key: const Key('qa_voice_process'),
                             label: l10n.t('processVoice'),
                             size: BuildButtonSize.lg,
                             full: true,
-                            onPressed:
-                                captureState.isRecording ||
-                                    !captureState.hasRecording
-                                ? null
-                                : () => _goToProcessing(
+                            onPressed: _canProcessVoice(captureState)
+                                ? () => _goToProcessing(
                                     projectOptions,
                                     captureState,
-                                  ),
+                                  )
+                                : null,
                           ),
                         ),
+                      ],
+                    ),
                       ],
                     ),
                   ),
@@ -346,6 +399,26 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
         ),
       ),
     );
+  }
+
+  bool _canProcessVoice(VoiceCaptureState captureState) {
+    if (captureState.isRecording || !captureState.hasRecording) {
+      return false;
+    }
+    if (ref.read(isOfflineProvider)) {
+      return false;
+    }
+    return ref.read(appRemoteConfigProvider).value?.voiceAiEnabled ?? true;
+  }
+
+  String? _voiceProcessBlockMessage(AppLocalizations l10n) {
+    if (ref.watch(isOfflineProvider)) {
+      return l10n.t('voiceOfflineBlocked');
+    }
+    if (ref.watch(appRemoteConfigProvider).value?.voiceAiEnabled == false) {
+      return l10n.t('voiceAiDisabled');
+    }
+    return null;
   }
 }
 
@@ -419,48 +492,59 @@ class _MicButton extends StatelessWidget {
   const _MicButton({
     required this.isRecording,
     required this.pulseController,
+    required this.semanticLabel,
     required this.onPressed,
   });
 
   final bool isRecording;
   final AnimationController pulseController;
+  final String semanticLabel;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final ringColor = isRecording ? t.expense : t.accent;
-    return AnimatedBuilder(
-      animation: pulseController,
-      builder: (context, child) {
-        final pulse = pulseController.value;
-        return GestureDetector(
-          onTap: onPressed,
-          child: Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: ringColor,
-              boxShadow: [
-                BoxShadow(
-                  color: ringColor.withValues(
-                    alpha: isRecording ? 0.35 - (pulse * 0.2) : 0.4,
-                  ),
-                  blurRadius: isRecording ? 20 + (pulse * 24) : 20,
-                  spreadRadius: isRecording ? 4 + (pulse * 16) : 0,
-                  offset: isRecording ? Offset.zero : const Offset(0, 10),
+    return Tooltip(
+      message: semanticLabel,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        child: AnimatedBuilder(
+          animation: pulseController,
+          builder: (context, child) {
+            final pulse = pulseController.value;
+            return GestureDetector(
+              onTap: onPressed,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ringColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: ringColor.withValues(
+                        alpha: isRecording ? 0.35 - (pulse * 0.2) : 0.4,
+                      ),
+                      blurRadius: isRecording ? 20 + (pulse * 24) : 20,
+                      spreadRadius: isRecording ? 4 + (pulse * 16) : 0,
+                      offset: isRecording ? Offset.zero : const Offset(0, 10),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(
-              isRecording ? Icons.stop_circle_outlined : Icons.mic_outlined,
-              color: t.onAccent,
-              size: 48,
-            ),
-          ),
-        );
-      },
+                child: Icon(
+                  isRecording
+                      ? Icons.stop_circle_outlined
+                      : Icons.mic_outlined,
+                  color: t.onAccent,
+                  size: 48,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

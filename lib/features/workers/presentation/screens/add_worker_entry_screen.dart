@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
@@ -12,6 +13,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
@@ -256,7 +258,7 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on CallableClientException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (mounted) {
           context.push(
             '${AppRoutes.subscriptionLimit}?limit=workerEntriesPerMonth',
@@ -460,12 +462,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                                 );
                               },
                               background: Container(
-                                color: Colors.redAccent,
+                                color: context.tokens.expense,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 16),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.delete_outline,
-                                  color: Colors.white,
+                                  color: context.tokens.onAccent,
                                 ),
                               ),
                               child: ListTile(
@@ -495,12 +497,12 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                                 );
                               },
                               background: Container(
-                                color: Colors.redAccent,
+                                color: context.tokens.expense,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 16),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.delete_outline,
-                                  color: Colors.white,
+                                  color: context.tokens.onAccent,
                                 ),
                               ),
                               child: ListTile(
@@ -519,7 +521,10 @@ class _AddWorkerEntryScreenState extends ConsumerState<AddWorkerEntryScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (_error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: context.tokens.expense),
+                    ),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _loading ? null : _save,

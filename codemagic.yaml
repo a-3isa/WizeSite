@@ -25,6 +25,7 @@ workflows:
       flutter: stable
       xcode: 26.4
       cocoapods: default
+      node: 22
 
     integrations:
       app_store_connect: Buildozer
@@ -58,6 +59,16 @@ workflows:
       - name: Flutter analyze
         script: flutter analyze
 
+      - name: Flutter tests
+        script: flutter test
+
+      - name: Cloud Functions tests
+        script: |
+          cd functions
+          npm ci
+          npm run lint
+          npx --yes firebase-tools emulators:exec --only firestore,storage "npm test"
+
       - name: Verify App Store Connect app access
         script: |
           app-store-connect apps get "$APP_ID" >/dev/null
@@ -74,8 +85,9 @@ workflows:
 
       - name: Build signed iOS archive
         script: |
+          PUBSPEC_VERSION=$(python3 -c "import re; print(re.search(r'^version:\s*([0-9.]+)', open('pubspec.yaml').read(), re.M).group(1))")
           flutter build ipa --release \
-            --build-name=1.0.0 \
+            --build-name=$PUBSPEC_VERSION \
             --build-number=$NEXT_BUILD \
             --export-options-plist=/Users/builder/export_options.plist
 
@@ -116,6 +128,7 @@ workflows:
       flutter: stable
       xcode: 26.4
       cocoapods: default
+      node: 22
 
     integrations:
       app_store_connect: Buildozer
@@ -149,6 +162,16 @@ workflows:
       - name: Flutter analyze
         script: flutter analyze
 
+      - name: Flutter tests
+        script: flutter test
+
+      - name: Cloud Functions tests
+        script: |
+          cd functions
+          npm ci
+          npm run lint
+          npx --yes firebase-tools emulators:exec --only firestore,storage "npm test"
+
       - name: Verify App Store Connect app access
         script: |
           app-store-connect apps get "$APP_ID" >/dev/null
@@ -165,8 +188,9 @@ workflows:
 
       - name: Build signed iOS archive
         script: |
+          PUBSPEC_VERSION=$(python3 -c "import re; print(re.search(r'^version:\s*([0-9.]+)', open('pubspec.yaml').read(), re.M).group(1))")
           flutter build ipa --release \
-            --build-name=1.0.0 \
+            --build-name=$PUBSPEC_VERSION \
             --build-number=$NEXT_BUILD \
             --dart-define=SHOW_CRASHLYTICS_TEST=true \
             --export-options-plist=/Users/builder/export_options.plist
@@ -196,3 +220,89 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
+  android_release_artifact:
+    name: Android Release Artifact
+    max_build_duration: 120
+    instance_type: linux_x2
+    environment:
+      java: 17
+      flutter: stable
+      node: 22
+      android_signing:
+        - buildozer
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/.gradle/caches
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
+      - name: Flutter tests
+        script: flutter test
+      - name: Cloud Functions tests
+        script: |
+          cd functions
+          npm ci
+          npm run lint
+          npx --yes firebase-tools emulators:exec --only firestore,storage "npm test"
+      - name: Build signed Android App Bundle
+        script: |
+          PUBSPEC_VERSION=$(python3 -c "import re; print(re.search(r'^version:\s*([0-9.]+)', open('pubspec.yaml').read(), re.M).group(1))")
+          flutter build appbundle --release \
+            --build-name=$PUBSPEC_VERSION \
+            --build-number=${BUILD_NUMBER:-1}
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+
+  # Self-hosted backend (spec 004). Requires a Codemagic environment group "ghcr"
+  # with GHCR_USER and GHCR_TOKEN (a GitHub token with write:packages).
+  server:
+    name: Server (API) CI
+    max_build_duration: 45
+    instance_type: linux_x2
+    environment:
+      node: 22
+      groups:
+        - ghcr
+    triggering:
+      events:
+        - push
+        - pull_request
+    when:
+      changeset:
+        includes:
+          - "server/"
+          - "ops/"
+    scripts:
+      - name: Secret scan
+        script: |
+          docker run --rm -v "$CM_BUILD_DIR:/repo" zricethezav/gitleaks:latest \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 1
+      - name: Install, lint, unit tests
+        script: |
+          cd server
+          npm ci
+          npm run lint
+          npm test
+      - name: Integration tests (Postgres + PowerSync)
+        script: |
+          cd server
+          docker compose -f compose.test.yml up -d --wait
+          npm run migrate -- --database-url-var TEST_DATABASE_URL
+          npm run test:integration
+          docker compose -f compose.test.yml down -v
+        environment:
+          vars:
+            TEST_DATABASE_URL: postgres://wizesite:wizesite-test@localhost:55432/wizesite_test
+            SYNC_TEST_URL: http://localhost:58081
+      - name: Build and push image
+        script: |
+          cd server
+          IMAGE="ghcr.io/$GHCR_USER/wizesite-server:$CM_COMMIT"
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE"

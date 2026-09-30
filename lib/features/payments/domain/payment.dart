@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
+import 'package:buildtrack_app/core/utils/cash_collected.dart';
 
 class PaymentRecord {
   const PaymentRecord({
@@ -10,6 +11,7 @@ class PaymentRecord {
     required this.date,
     required this.paymentMethod,
     this.paymentStatus = PaymentStatuses.paid,
+    this.paidAmount,
     this.description = '',
     required this.notes,
     this.entityId,
@@ -27,6 +29,7 @@ class PaymentRecord {
   final DateTime date;
   final String paymentMethod;
   final String paymentStatus;
+  final double? paidAmount;
   final String description;
   final String notes;
   final String? entityId;
@@ -67,6 +70,7 @@ class PaymentRecord {
       date: parseDate(map['date']),
       paymentMethod: map['paymentMethod'] as String? ?? 'cash',
       paymentStatus: map['paymentStatus'] as String? ?? PaymentStatuses.paid,
+      paidAmount: (map['paidAmount'] as num?)?.toDouble(),
       description:
           map['description'] as String? ?? map['notes'] as String? ?? '',
       notes: map['notes'] as String? ?? '',
@@ -78,4 +82,11 @@ class PaymentRecord {
       clientMutationId: map['clientMutationId'] as String? ?? '',
     );
   }
+
+  /// Cash actually received; unpaid/refunded/cancelled contribute 0.
+  double get cashCollected => cashCollectedAmount(
+    amount: amount,
+    paymentStatus: paymentStatus,
+    paidAmount: paidAmount,
+  );
 }

@@ -121,6 +121,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     required Project project,
     required ReportMetrics metrics,
     required String currency,
+    bool share = false,
   }) async {
     try {
       final exporter = const ReportPdfExporter();
@@ -130,6 +131,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         metrics: metrics,
         currency: currency,
       );
+      if (share) {
+        await (widget.documentActions ?? ReportDocumentActions()).shareDocument(
+          bytes: documentBytes,
+          filename: 'buildozer-report.pdf',
+        );
+        return;
+      }
       await Printing.layoutPdf(onLayout: (_) async => documentBytes);
     } catch (error) {
       _showExportError(l10n, error);
@@ -458,6 +466,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final availableProjects = selectorProjects.isNotEmpty
         ? selectorProjects
         : projectsAsync.value ?? const <Project>[];
+    final selectedProject = availableProjects
+        .where((project) => project.id == currentProjectId)
+        .firstOrNull;
+    final showRevenue =
+        selectedProject == null || !selectedProject.isExpenseLedger;
     final currency =
         ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     final hasWorkspace = workspaceId != null;
@@ -604,6 +617,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   currency: currency,
                                 );
                               },
+                              onShareReport: () async {
+                                HapticFeedback.lightImpact();
+                                final metrics = ref
+                                    .read(reportMetricsProvider)
+                                    .value;
+                                final selectedProject = availableProjects
+                                    .where(
+                                      (project) =>
+                                          project.id == currentProjectId,
+                                    )
+                                    .firstOrNull;
+                                if (selectedProject == null ||
+                                    metrics == null) {
+                                  return;
+                                }
+                                await _export(
+                                  l10n: l10n,
+                                  project: selectedProject,
+                                  metrics: metrics,
+                                  currency: currency,
+                                  share: true,
+                                );
+                              },
                             )
                           : null;
 
@@ -719,7 +755,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsetsDirectional.symmetric(
+                    horizontal: 20,
+                  ),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       SectionHeader(title: l10n.t('currentSnapshot')),
@@ -729,7 +767,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             ? AppEmptyState(
                                 message: l10n.t('noWorkspaceSelected'),
                               )
-                            : GridView.count(
+                            : showRevenue
+                            ? GridView.count(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 12,
                                 crossAxisSpacing: 12,
@@ -770,6 +809,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     icon: Icons.account_balance_wallet_outlined,
                                   ),
                                 ],
+                              )
+                            : MetricCard(
+                                label: l10n.t('totalExpenses'),
+                                value: Formatters.money(
+                                  summary['totalExpenses'] ?? 0,
+                                  currencyCode: currency,
+                                  locale: locale,
+                                ),
+                                color: context.tokens.expense,
+                                icon: Icons.trending_down,
                               ),
                         error: (error, _) => AppRecoverableError(
                           message: appErrorMessage(l10n, error),
@@ -829,6 +878,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             data: data,
                             currency: currency,
                             locale: locale,
+                            showIncome: showRevenue,
                           ),
                         ),
                         error: (error, _) => AppRecoverableError(
@@ -927,7 +977,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 child: Text(
                                   '${metrics.projectName} • ${l10n.projectStatusLabel(metrics.status)}',
                                   style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: context.tokens.textMuted),
+                                      ?.copyWith(
+                                        color: context.tokens.textMuted,
+                                      ),
                                 ),
                               ),
                         error: (error, _) => AppRecoverableError(
@@ -970,7 +1022,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     },
                                   ),
                                   style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: context.tokens.textMuted),
+                                      ?.copyWith(
+                                        color: context.tokens.textMuted,
+                                      ),
                                 ),
                               ),
                             ],
@@ -1166,6 +1220,7 @@ class _ReportsHeaderActions extends StatelessWidget {
     required this.onExportCombined,
     required this.onOpenEntitySummary,
     required this.onBuildCustomReport,
+    required this.onShareReport,
   });
 
   final String? currentProjectId;
@@ -1175,6 +1230,7 @@ class _ReportsHeaderActions extends StatelessWidget {
   final VoidCallback onExportCombined;
   final VoidCallback onOpenEntitySummary;
   final VoidCallback onBuildCustomReport;
+  final VoidCallback onShareReport;
 
   @override
   Widget build(BuildContext context) {
@@ -1193,6 +1249,8 @@ class _ReportsHeaderActions extends StatelessWidget {
             onOpenEntitySummary();
           case _ReportAction.custom:
             onBuildCustomReport();
+          case _ReportAction.share:
+            onShareReport();
         }
       },
       itemBuilder: (context) => [
@@ -1220,13 +1278,18 @@ class _ReportsHeaderActions extends StatelessWidget {
             value: _ReportAction.custom,
             child: Text(l10n.t('buildCustomReport')),
           ),
+        if (currentProjectId != null)
+          PopupMenuItem(
+            value: _ReportAction.share,
+            child: Text(l10n.t('shareViaApps')),
+          ),
       ],
       child: _ExportButton(label: l10n.t('reportExports'), onTap: null),
     );
   }
 }
 
-enum _ReportAction { project, weekly, combined, entities, custom }
+enum _ReportAction { project, weekly, combined, entities, custom, share }
 
 class _ExportButton extends StatelessWidget {
   const _ExportButton({required this.label, required this.onTap});
@@ -1243,7 +1306,10 @@ class _ExportButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsetsDirectional.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

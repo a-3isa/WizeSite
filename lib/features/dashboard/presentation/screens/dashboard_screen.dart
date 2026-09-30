@@ -1303,19 +1303,22 @@ class _UpgradeCard extends StatelessWidget {
       color: context.tokens.accent,
       child: ListTile(
         onTap: onTap,
-        leading: const Icon(Icons.workspace_premium, color: Colors.white),
+        leading: Icon(
+          Icons.workspace_premium,
+          color: context.tokens.onAccent,
+        ),
         title: Text(
           l10n.t('upgradeToPro'),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.tokens.onAccent,
             fontWeight: FontWeight.bold,
           ),
         ),
         subtitle: Text(
           l10n.t('unlockHigherLimits'),
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: context.tokens.onAccent),
         ),
-        trailing: const Icon(Icons.arrow_forward, color: Colors.white),
+        trailing: Icon(Icons.arrow_forward, color: context.tokens.onAccent),
       ),
     );
   }

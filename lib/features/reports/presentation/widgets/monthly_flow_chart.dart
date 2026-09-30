@@ -10,12 +10,14 @@ class MonthlyFlowChart extends StatelessWidget {
     required this.data,
     required this.currency,
     required this.locale,
+    this.showIncome = true,
     super.key,
   });
 
   final List<MonthlyFlowData> data;
   final String currency;
   final String locale;
+  final bool showIncome;
 
   static const _monthAbbr = [
     'Jan',
@@ -35,7 +37,9 @@ class MonthlyFlowChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final hasData = data.any((d) => d.expenses > 0 || d.income > 0);
+    final hasData = data.any(
+      (d) => d.expenses > 0 || (showIncome && d.income > 0),
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -59,10 +63,11 @@ class MonthlyFlowChart extends StatelessWidget {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _DotLabel(
-                color: context.tokens.income,
-                label: l10n.t('totalIncome'),
-              ),
+              if (showIncome)
+                _DotLabel(
+                  color: context.tokens.income,
+                  label: l10n.t('totalIncome'),
+                ),
               _DotLabel(
                 color: context.tokens.expense,
                 label: l10n.t('totalExpenses'),
@@ -76,9 +81,9 @@ class MonthlyFlowChart extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.tokens.textMuted,
+                  ),
                 ),
               ),
             )
@@ -94,7 +99,7 @@ class MonthlyFlowChart extends StatelessWidget {
                       getTooltipColor: (_) =>
                           context.tokens.text.withValues(alpha: 0.9),
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final isIncome = rodIndex == 0;
+                        final isIncome = showIncome && rodIndex == 0;
                         return BarTooltipItem(
                           Formatters.money(
                             rod.toY,
@@ -173,22 +178,23 @@ class MonthlyFlowChart extends StatelessWidget {
                     return BarChartGroupData(
                       x: i,
                       barRods: [
-                        BarChartRodData(
-                          toY: d.income,
-                          color: context.tokens.income,
-                          width: 14,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4),
+                        if (showIncome)
+                          BarChartRodData(
+                            toY: d.income,
+                            color: context.tokens.income,
+                            width: 14,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                            gradient: LinearGradient(
+                              colors: [
+                                context.tokens.income,
+                                context.tokens.income.withValues(alpha: 0.7),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
                           ),
-                          gradient: LinearGradient(
-                            colors: [
-                              context.tokens.income,
-                              context.tokens.income.withValues(alpha: 0.7),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                        ),
                         BarChartRodData(
                           toY: d.expenses,
                           color: context.tokens.expense,
@@ -220,7 +226,7 @@ class MonthlyFlowChart extends StatelessWidget {
   double _maxY() {
     double max = 0;
     for (final d in data) {
-      if (d.income > max) max = d.income;
+      if (showIncome && d.income > max) max = d.income;
       if (d.expenses > max) max = d.expenses;
     }
     return max == 0 ? 100 : max * 1.15;

@@ -1,0 +1,19 @@
+# Cloudflare Tunnel override: public traffic reaches the stack through an outbound-only
+# `cloudflared` connection. No inbound ports, origin IP not exposed, TLS terminated by Cloudflare.
+# ops/deploy.sh adds this file automatically when CLOUDFLARE_TUNNEL_TOKEN is set in /srv/wizesite/.env.
+#
+# Public hostnames are configured on the tunnel in the Cloudflare Zero Trust dashboard:
+#   api.<domain>  -> http://api:8080
+#   sync.<domain> -> http://powersync:8080
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in /srv/wizesite/.env}
+    networks: [edge]
+    depends_on:
+      - api
+      - powersync
+    mem_limit: 96m

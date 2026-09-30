@@ -12,6 +12,8 @@ class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late Directory tempDir;
   late Box<String> box;
   late OfflineActionQueue queue;
@@ -31,16 +33,64 @@ void main() {
     }
   });
 
-  test('an offline-queued create with no contract shows no fabricated zero', () async {
+  test(
+    'an offline-queued create with no contract shows no fabricated zero',
+    () async {
+      final firestore = FakeFirebaseFirestore();
+      await queue.enqueue(
+        type: OfflineActionTypes.createProject,
+        payload: {
+          'workspaceId': 'workspace_1',
+          'name': 'Expense Only Job',
+          'clientName': '',
+          'contractValue': null,
+          'completionPercentage': 0,
+        },
+      );
+
+      final repository = FirebaseProjectRepository(
+        firestore,
+        _MockWorkspaceMutationService(),
+        queue,
+      );
+
+      // The stream merges two sources (Firestore + the offline queue) and emits
+      // on each, so the first emission can precede the queue listener firing.
+      final projects = await repository
+          .watchProjects('workspace_1')
+          .firstWhere((items) => items.isNotEmpty)
+          .timeout(const Duration(seconds: 5));
+
+      expect(projects, hasLength(1));
+      final optimistic = projects.single;
+      expect(optimistic.name, 'Expense Only Job');
+      // A `?? 0` on the optimistic placeholder would show the user a contract
+      // amount they never entered, for as long as the action stays queued.
+      expect(optimistic.contractValue, isNull);
+      expect(optimistic.hasContractValue, isFalse);
+      expect(optimistic.isExpenseLedger, isTrue);
+    },
+  );
+
+  test('queued contract clear is not swallowed by the current value', () async {
     final firestore = FakeFirebaseFirestore();
+    await firestore.collection('projects').doc('project_1').set({
+      'workspaceId': 'workspace_1',
+      'name': 'Tower',
+      'clientName': 'Client',
+      'contractValue': 9000,
+      'status': 'active',
+      'completionPercentage': 0,
+      'isArchived': false,
+    });
     await queue.enqueue(
-      type: OfflineActionTypes.createProject,
+      type: OfflineActionTypes.updateProject,
       payload: {
         'workspaceId': 'workspace_1',
-        'name': 'Expense Only Job',
-        'clientName': '',
+        'projectId': 'project_1',
+        'name': 'Tower',
+        'clientName': 'Client',
         'contractValue': null,
-        'completionPercentage': 0,
       },
     );
 
@@ -50,21 +100,13 @@ void main() {
       queue,
     );
 
-    // The stream merges two sources (Firestore + the offline queue) and emits
-    // on each, so the first emission can precede the queue listener firing.
     final projects = await repository
-        .watchProjects('workspace_1')
-        .firstWhere((items) => items.isNotEmpty)
+        .watchAllProjects('workspace_1')
+        .firstWhere((items) => items.any((item) => item.contractValue == null))
         .timeout(const Duration(seconds: 5));
 
-    expect(projects, hasLength(1));
-    final optimistic = projects.single;
-    expect(optimistic.name, 'Expense Only Job');
-    // A `?? 0` on the optimistic placeholder would show the user a contract
-    // amount they never entered, for as long as the action stays queued.
-    expect(optimistic.contractValue, isNull);
-    expect(optimistic.hasContractValue, isFalse);
-    expect(optimistic.isExpenseLedger, isTrue);
+    expect(projects.single.contractValue, isNull);
+    expect(projects.single.isExpenseLedger, isTrue);
   });
 
   test('hasAnyPayment ignores archived payments', () async {

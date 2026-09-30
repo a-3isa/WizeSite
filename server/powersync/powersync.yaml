@@ -1,0 +1,21 @@
+# PowerSync service configuration (production / staging). Secrets come from the environment.
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable # compose-internal network only
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_rules:
+  path: sync_rules.yaml
+
+# Firebase ID tokens are accepted directly (research R4): same token the app already holds.
+client_auth:
+  jwks_uri: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+  audience: ["wize-site"]

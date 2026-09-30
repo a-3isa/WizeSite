@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
@@ -107,6 +108,7 @@ class _EntityAggregationScreenState
           title: Text(l10n.t('entitySummary')),
           leading: IconButton(
             icon: const BackButtonIcon(),
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: () =>
                 appNavigateBack(context, fallbackRoute: AppRoutes.dashboard),
           ),
@@ -146,19 +148,24 @@ class _EntityAggregationScreenState
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade50,
+                      color: context.tokens.expenseSoft,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.red.shade200),
+                      border: Border.all(
+                        color: context.tokens.expense.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade400),
+                        Icon(
+                          Icons.error_outline,
+                          color: context.tokens.expense,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             l10n.t('reportAccessDenied'),
                             style: TextStyle(
-                              color: Colors.red.shade400,
+                              color: context.tokens.expense,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -250,27 +257,27 @@ class _EntityAggregationScreenState
                                   MetricCard(
                                     label: l10n.t('totalExpenses'),
                                     value: totalExpenses.toStringAsFixed(2),
-                                    color: Colors.red.shade400,
+                                    color: context.tokens.expense,
                                     icon: Icons.trending_down,
                                   ),
                                   MetricCard(
                                     label: l10n.t('totalPayments'),
                                     value: totalPayments.toStringAsFixed(2),
-                                    color: Colors.green.shade600,
+                                    color: context.tokens.income,
                                     icon: Icons.trending_up,
                                   ),
                                   MetricCard(
                                     label: l10n.t('netProfitLoss'),
                                     value: totalNet.toStringAsFixed(2),
                                     color: totalNet >= 0
-                                        ? Colors.green.shade600
-                                        : Colors.red.shade400,
+                                        ? context.tokens.income
+                                        : context.tokens.expense,
                                     icon: Icons.account_balance_wallet_outlined,
                                   ),
                                   MetricCard(
                                     label: l10n.t('topEntities'),
                                     value: filtered.length.toString(),
-                                    color: Colors.blue.shade600,
+                                    color: context.tokens.accent,
                                     icon: Icons.group,
                                   ),
                                 ],

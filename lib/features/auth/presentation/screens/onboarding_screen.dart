@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,7 +92,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             Icon(
                               slide.$1,
                               size: 88,
-                              color: const Color(0xFFFF7A00),
+                              color: context.tokens.accent,
                             ),
                             const SizedBox(height: 24),
                             Text(
@@ -123,8 +124,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: _index == idx
-                          ? const Color(0xFFFF7A00)
-                          : Colors.grey[300],
+                          ? context.tokens.accent
+                          : context.tokens.surface3,
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -185,7 +186,7 @@ class _LanguageStep extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.language, size: 88, color: const Color(0xFFFF7A00)),
+          Icon(Icons.language, size: 88, color: context.tokens.accent),
           const SizedBox(height: 24),
           Text(
             l10n.t('chooseLanguageTitle'),
@@ -233,15 +234,16 @@ class _LanguageOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(t.rMd),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(t.rMd),
           border: Border.all(
-            color: selected ? const Color(0xFFFF7A00) : Colors.grey.shade300,
+            color: selected ? t.accent : t.borderStrong,
             width: selected ? 2 : 1,
           ),
         ),
@@ -249,7 +251,7 @@ class _LanguageOption extends StatelessWidget {
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? const Color(0xFFFF7A00) : Colors.grey,
+              color: selected ? t.accent : t.textFaint,
             ),
             const SizedBox(width: 12),
             Expanded(

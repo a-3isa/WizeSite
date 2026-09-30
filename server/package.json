@@ -1,0 +1,38 @@
+{
+  "name": "wizesite-server",
+  "private": true,
+  "description": "Self-hosted WizeSite backend: RPC API, migrations, sync config and migration tools (spec 004).",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "dist/src/app.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "npm run build && node --enable-source-maps dist/src/app.js",
+    "lint": "eslint .",
+    "test": "npm run build && node --test \"dist/test/unit/**/*.test.js\" \"dist/test/migration/**/*.test.js\"",
+    "test:integration": "npm run build && node --test --test-concurrency=1 \"dist/test/integration/**/*.test.js\" \"dist/test/sync/**/*.test.js\"",
+    "migrate": "node-pg-migrate up --migrations-dir migrations --migration-file-language sql",
+    "migrate:firestore": "npm run build && node dist/tools/migrate-from-firestore/index.js",
+    "rollback:firestore": "npm run build && node dist/tools/rollback-to-firestore/index.js",
+    "reconcile": "node dist/src/recompute/reconcile.js",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 \"dist/test/e2e/**/*.test.js\""
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "fastify": "^5.0.0",
+    "firebase-admin": "13.10.0",
+    "node-pg-migrate": "^7.0.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "eslint": "^9.16.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.18.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

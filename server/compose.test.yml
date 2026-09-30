@@ -1,0 +1,36 @@
+# Ephemeral stack for integration and sync-rule tests (no volumes; data discarded on down).
+# Usage: docker compose -f compose.test.yml up -d --wait && npm run test:integration
+services:
+  postgres:
+    image: postgres:17
+    command: ["postgres", "-c", "wal_level=logical", "-c", "fsync=off", "-c", "synchronous_commit=off"]
+    environment:
+      POSTGRES_USER: wizesite
+      POSTGRES_PASSWORD: wizesite-test
+      POSTGRES_DB: wizesite_test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-powersync-storage.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wizesite -d wizesite_test"]
+      interval: 2s
+      retries: 20
+
+  powersync:
+    image: journeyapps/powersync-service:latest
+    command: ["start", "-r", "unified"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.test.yaml
+      PS_DATA_SOURCE_URI: postgres://wizesite:wizesite-test@postgres:5432/wizesite_test
+      PS_STORAGE_SOURCE_URI: postgres://wizesite:wizesite-test@postgres:5432/powersync_storage
+      PS_PORT: "8080"
+    ports:
+      - "58081:8080"
+    volumes:
+      - ./powersync:/config:ro

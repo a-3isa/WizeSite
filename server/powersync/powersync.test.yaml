@@ -1,0 +1,28 @@
+# PowerSync configuration for local integration tests (compose.test.yml).
+# Identical to powersync.yaml except client auth uses a local HS256 test key, so tests can mint
+# tokens for arbitrary users without Firebase. Never used outside tests.
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_rules:
+  path: sync_rules.yaml
+
+client_auth:
+  audience: ["wizesite-test"]
+  jwks:
+    keys:
+      # base64url("wizesite-sync-rules-test-secret-000") — test-only, not a credential.
+      - kty: oct
+        alg: HS256
+        kid: wizesite-test
+        k: d2l6ZXNpdGUtc3luYy1ydWxlcy10ZXN0LXNlY3JldC0wMDA

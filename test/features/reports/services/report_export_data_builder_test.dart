@@ -63,7 +63,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     calls.add((
@@ -130,6 +130,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -153,7 +154,7 @@ class _FakePaymentRepository implements PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     calls.add((
@@ -238,6 +239,7 @@ PaymentRecord _payment({
   required double amount,
   String entityId = 'supplier_1',
   String entityName = 'Supplier A',
+  String paymentStatus = 'paid',
 }) {
   return PaymentRecord(
     id: id,
@@ -246,7 +248,7 @@ PaymentRecord _payment({
     amount: amount,
     date: date,
     paymentMethod: 'bank',
-    paymentStatus: 'paid',
+    paymentStatus: paymentStatus,
     notes: '',
     entityId: entityId,
     entityName: entityName,
@@ -352,6 +354,43 @@ void main() {
       expect(paymentRepository.calls.single.projectId, 'project_1');
     },
   );
+
+  test('entity payment totals use cash collected not gross amount', () async {
+    final expenseRepository = _FakeExpenseRepository([
+      const FirestorePage<Expense>(items: [], hasMore: false),
+    ]);
+    final paymentRepository = _FakePaymentRepository([
+      FirestorePage<PaymentRecord>(
+        items: [
+          _payment(
+            id: 'payment_unpaid',
+            projectId: 'project_1',
+            date: DateTime.utc(2026, 6, 11),
+            amount: 10000,
+            paymentStatus: 'unpaid',
+          ),
+        ],
+        hasMore: false,
+      ),
+    ]);
+
+    final result = await ReportExportDataBuilder(
+      expenseRepository: expenseRepository,
+      paymentRepository: paymentRepository,
+    ).build(
+      workspaceId: 'workspace_1',
+      projectId: 'project_1',
+      startDate: DateTime.utc(2026, 6, 1),
+      endDate: DateTime.utc(2026, 6, 30, 23, 59, 59),
+      includeExpenses: false,
+      includePayments: true,
+      includeEntities: true,
+      includeDaily: false,
+      includeWeekly: false,
+    );
+
+    expect(result.entitySummaries.single.totalPayments, 0);
+  });
 
   test('continues paging until all report rows are loaded', () async {
     final expenseRepository = _FakeExpenseRepository([

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
+import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -12,7 +14,6 @@ import 'package:buildtrack_app/features/payments/presentation/screens/payments_s
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,7 +60,7 @@ class _FakeProjectRepository implements ProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage<Project>(items: [], hasMore: false);
@@ -68,7 +69,7 @@ class _FakeProjectRepository implements ProjectRepository {
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     if (_fetchCalls == 0 || secondPage == null) {
@@ -145,6 +146,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -168,7 +170,7 @@ class _FakePaymentRepository implements PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     requestedProjectIds.add(projectId);
@@ -311,6 +313,9 @@ void main() {
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
             projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
             paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+            currentAccountingRoleProvider.overrideWithValue(
+              const AsyncData(AccountingAccessRoleType.owner),
+            ),
           ],
           child: MaterialApp.router(routerConfig: _paymentsRouter()),
         ),
@@ -356,6 +361,9 @@ void main() {
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
           projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
           paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.owner),
+          ),
         ],
         child: MaterialApp.router(routerConfig: _paymentsRouter()),
       ),
@@ -410,6 +418,9 @@ void main() {
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
             projectRepositoryProvider.overrideWithValue(fakeProjectRepository),
             paymentRepositoryProvider.overrideWithValue(fakePaymentRepository),
+            currentAccountingRoleProvider.overrideWithValue(
+              const AsyncData(AccountingAccessRoleType.owner),
+            ),
           ],
           child: MaterialApp.router(routerConfig: _paymentsRouter()),
         ),
@@ -540,7 +551,7 @@ class _PendingPaymentRepository extends _FakePaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) {
     requestedProjectIds.add(projectId);

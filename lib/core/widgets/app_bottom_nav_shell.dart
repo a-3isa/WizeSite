@@ -58,8 +58,8 @@ class AppBottomNavShell extends ConsumerWidget {
                             child: Text(
                               l10n.t('noInternetConnection'),
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: t.onAccent,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),

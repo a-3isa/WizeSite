@@ -45,13 +45,24 @@ class AppLocalizations {
     'manageSubscription': 'Manage Subscription',
     'restorePurchases': 'Restore Purchases',
     'logout': 'Logout',
+    'deleteAccount': 'Delete account',
+    'deleteAccountConfirmTitle': 'Delete your account?',
+    'deleteAccountConfirmBody':
+        'This permanently deletes your account and any workspace you own that has no other members. If you own a shared workspace, transfer ownership first. This cannot be undone.',
+    'deleteAccountFailed':
+        'Could not delete your account. Check your connection and try again.',
+    'deleteAccountTransferOwnership':
+        'Transfer ownership of every shared workspace before deleting your account.',
+    'deleteAccountRecentLogin':
+        'For security, sign in again to delete your account.',
+    'confirmPasswordToDelete': 'Enter your password to delete this account',
     'profile': 'Profile',
     'editProfile': 'Edit Profile',
     'changePhoto': 'Change Photo',
     'manageTeam': 'Manage Team',
     'teamManagement': 'Team Management',
     'teamMembersTitle': 'Team Members',
-    'noTeamMembersYet': 'No team members yet.',
+    'noTeamMembersYet': 'No team members yet. Invite someone to get started.',
     'inviteMember': 'Invite Member',
     'inviteByEmail': 'Invite by email',
     'role': 'Role',
@@ -99,7 +110,7 @@ class AppLocalizations {
     'allExpenses': 'All expenses',
     'transactionSingular': 'transaction',
     'transactionPlural': 'transactions',
-    'noData': 'No data',
+    'noData': 'Nothing to show yet. Add a record to see it here.',
     'removeAttachment': 'Remove attachment',
     'queuedForSync':
         'Saved offline. It will sync automatically when you reconnect.',
@@ -296,7 +307,8 @@ class AppLocalizations {
         'Speak naturally, confirm parsed result, then save.',
     'newProject': 'New Project',
     'editProjectTitle': 'Edit Project',
-    'noProjectsYet': 'No projects yet.',
+    'noProjectsYet':
+        'No projects yet. Create your first project to start tracking expenses.',
     'projectDetails': 'Project Details',
     'projectNotFound': 'Project not found.',
     'projectName': 'Project Name',
@@ -540,6 +552,10 @@ class AppLocalizations {
     'microphonePermissionSettingsTitle': 'Microphone access is off',
     'microphonePermissionSettingsMessage':
         'Enable Microphone in iOS Settings to record voice expenses.',
+    'voiceAiDisclosureTitle': 'Voice notes are processed by AI',
+    'voiceAiDisclosureMessage':
+        'Your recording is sent to a third-party transcription service so Buildozer can turn it into an expense. Do not include personal data you do not want processed.',
+    'voiceAiDisclosureContinue': 'I understand',
     'selectProjectRequired': 'Please select a project.',
     'amountMustBeGreaterThanZero': 'Amount must be greater than zero.',
     'selectValidCategory': 'Please select a valid category.',
@@ -691,6 +707,19 @@ class AppLocalizations {
     'noDataYet': 'No data yet',
     'printReport': 'Print',
     'shareReport': 'Share',
+    'shareViaApps': 'Share via WhatsApp or other apps',
+    'duplicateLastExpense': 'Duplicate last expense',
+    'zipAttachmentWarning':
+        'ZIP files can contain untrusted content. Only open archives you trust.',
+    'voiceOfflineBlocked':
+        'Voice processing needs a network connection. Try again when you are online.',
+    'voiceAiDisabled':
+        'Voice AI is temporarily unavailable. Add the expense manually.',
+    'updateRequiredTitle': 'Update required',
+    'updateRequiredBody':
+        'This version of Buildozer is no longer supported. Install the latest update to continue.',
+    'inviteUnavailable':
+        'Unable to send this invite. Check the email and try again.',
     'shareChart': 'Share chart',
     // Worker status
     'workerStatusActive': 'Active',
@@ -849,13 +878,23 @@ class AppLocalizations {
     'manageSubscription': 'إدارة الاشتراك',
     'restorePurchases': 'استعادة المشتريات',
     'logout': 'تسجيل الخروج',
+    'deleteAccount': 'حذف الحساب',
+    'deleteAccountConfirmTitle': 'حذف حسابك؟',
+    'deleteAccountConfirmBody':
+        'سيؤدي هذا إلى حذف حسابك نهائياً وأي مساحة عمل تملكها وليس فيها أعضاء آخرون. إذا كنت تملك مساحة عمل مشتركة، انقل الملكية أولاً. لا يمكن التراجع عن هذا الإجراء.',
+    'deleteAccountFailed':
+        'تعذر حذف حسابك. تحقق من الاتصال وحاول مرة أخرى.',
+    'deleteAccountTransferOwnership':
+        'انقل ملكية كل مساحة عمل مشتركة قبل حذف حسابك.',
+    'deleteAccountRecentLogin': 'لأسباب أمنية، سجّل الدخول مرة أخرى لحذف حسابك.',
+    'confirmPasswordToDelete': 'أدخل كلمة المرور لحذف هذا الحساب',
     'profile': 'الملف الشخصي',
     'editProfile': 'تعديل الملف الشخصي',
     'changePhoto': 'تغيير الصورة',
     'manageTeam': 'إدارة الفريق',
     'teamManagement': 'إدارة الفريق',
     'teamMembersTitle': 'أعضاء الفريق',
-    'noTeamMembersYet': 'لا يوجد أعضاء فريق بعد.',
+    'noTeamMembersYet': 'لا يوجد أعضاء فريق بعد. ادعُ شخصاً للبدء.',
     'inviteMember': 'دعوة عضو',
     'inviteByEmail': 'دعوة عبر البريد الإلكتروني',
     'role': 'الدور',
@@ -1061,7 +1100,8 @@ class AppLocalizations {
     'voiceExpenseSubtitle': 'تحدث بشكل طبيعي ثم راجع النتيجة واحفظ.',
     'newProject': 'مشروع جديد',
     'editProjectTitle': 'تعديل المشروع',
-    'noProjectsYet': 'لا توجد مشاريع بعد.',
+    'noProjectsYet':
+        'لا توجد مشاريع بعد. أنشئ مشروعك الأول لبدء تتبع المصروفات.',
     'projectDetails': 'تفاصيل المشروع',
     'projectNotFound': 'المشروع غير موجود.',
     'projectName': 'اسم المشروع',
@@ -1446,6 +1486,19 @@ class AppLocalizations {
     'noDataYet': 'لا توجد بيانات بعد',
     'printReport': 'طباعة',
     'shareReport': 'مشاركة',
+    'shareViaApps': 'مشاركة عبر واتساب أو تطبيقات أخرى',
+    'duplicateLastExpense': 'تكرار آخر مصروف',
+    'zipAttachmentWarning':
+        'قد تحتوي ملفات ZIP على محتوى غير موثوق. افتح الأرشيفات التي تثق بها فقط.',
+    'voiceOfflineBlocked':
+        'معالجة الصوت تحتاج اتصالاً بالشبكة. حاول مرة أخرى عند الاتصال.',
+    'voiceAiDisabled':
+        'الذكاء الاصطناعي للصوت غير متاح مؤقتاً. أضف المصروف يدوياً.',
+    'updateRequiredTitle': 'يلزم التحديث',
+    'updateRequiredBody':
+        'هذا الإصدار من بيلدوزر لم يعد مدعوماً. ثبّت أحدث تحديث للمتابعة.',
+    'inviteUnavailable':
+        'تعذر إرسال هذه الدعوة. تحقق من البريد وحاول مرة أخرى.',
     'shareChart': 'مشاركة الرسم البياني',
     // Worker status
     'workerStatusActive': 'نشط',
@@ -1593,6 +1646,10 @@ class AppLocalizations {
     'microphonePermissionSettingsTitle': 'إذن الميكروفون مغلق',
     'microphonePermissionSettingsMessage':
         'فعّل الميكروفون من إعدادات الجهاز لتسجيل المصروفات الصوتية.',
+    'voiceAiDisclosureTitle': 'الملاحظات الصوتية تُعالَج بالذكاء الاصطناعي',
+    'voiceAiDisclosureMessage':
+        'يُرسل تسجيلك إلى خدمة تفريغ تابعة لطرف ثالث حتى يحوّله Buildozer إلى مصروف. لا تذكر بيانات شخصية لا تريد معالجتها.',
+    'voiceAiDisclosureContinue': 'فهمت',
     'offlineSyncFailureQuota':
         'تم رفض الإجراء المؤجل لأنك وصلت إلى حد خطتك الحالية.',
     'offlineSyncFailureUnauthenticated':
@@ -1611,7 +1668,7 @@ class AppLocalizations {
     'allExpenses': 'كل المصروفات',
     'transactionSingular': 'معاملة',
     'transactionPlural': 'معاملات',
-    'noData': 'لا توجد بيانات',
+    'noData': 'لا يوجد شيء للعرض بعد. أضف سجلاً ليظهر هنا.',
     'removeAttachment': 'إزالة المرفق',
   };
 

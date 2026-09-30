@@ -1,0 +1,9 @@
+rules_version = '2';
+// E2E harness only: the migrator uses the Admin SDK, which bypasses rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

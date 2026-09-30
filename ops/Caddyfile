@@ -1,0 +1,28 @@
+# TLS termination and reverse proxy (research R8). Certificates are issued and renewed
+# automatically by Caddy (Let's Encrypt). DOMAIN comes from /srv/wizesite/.env.
+{
+	email admin@{$DOMAIN}
+}
+
+(common) {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}
+
+api.{$DOMAIN} {
+	import common
+	# /internal/* is bound to localhost inside the api container and never proxied.
+	@internal path /internal/*
+	respond @internal 404
+	reverse_proxy api:8080
+}
+
+sync.{$DOMAIN} {
+	import common
+	reverse_proxy powersync:8080
+}

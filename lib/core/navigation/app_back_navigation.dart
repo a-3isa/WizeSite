@@ -53,6 +53,8 @@ class AppBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: const BackButtonIcon(),
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       onPressed: () => appNavigateBack(context, fallbackRoute: fallbackRoute),
     );
   }

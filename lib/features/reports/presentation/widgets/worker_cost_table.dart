@@ -45,9 +45,9 @@ class WorkerCostTable extends StatelessWidget {
               child: Center(
                 child: Text(
                   l10n.t('noDataYet'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: context.tokens.textMuted),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: context.tokens.textMuted,
+                  ),
                 ),
               ),
             )
@@ -56,7 +56,9 @@ class WorkerCostTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(context.tokens.surface2),
+                headingRowColor: WidgetStateProperty.all(
+                  context.tokens.surface2,
+                ),
                 dataRowMinHeight: 48,
                 dataRowMaxHeight: 56,
                 columnSpacing: 24,

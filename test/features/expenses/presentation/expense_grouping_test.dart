@@ -67,7 +67,7 @@ void main() {
 
     expect(groups.map((group) => group.title), [
       'Steel Supplier',
-      'Unassigned',
+      'unassigned',
     ]);
   });
 
@@ -93,6 +93,6 @@ void main() {
       ExpenseGroupMode.relativeDate,
       now: today,
     );
-    expect(relativeGroups.map((group) => group.title), ['Today', 'Yesterday']);
+    expect(relativeGroups.map((group) => group.title), ['today', 'yesterday']);
   });
 }

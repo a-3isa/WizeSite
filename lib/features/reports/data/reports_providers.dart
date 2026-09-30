@@ -1,4 +1,5 @@
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
+import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
@@ -157,8 +158,13 @@ class ReportMetrics {
     final rawExpenses = map['recentExpenses'];
     if (rawExpenses is List) {
       expenses = rawExpenses
-          .whereType<Map>()
-          .map((item) => Expense.fromMap('${item['id'] ?? ''}', item.cast()))
+          .whereType<Map<dynamic, dynamic>>()
+          .map(
+            (item) => Expense.fromMap(
+              '${item['id'] ?? ''}',
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList();
     }
 
@@ -166,9 +172,12 @@ class ReportMetrics {
     final rawPayments = map['recentPayments'];
     if (rawPayments is List) {
       payments = rawPayments
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map(
-            (item) => PaymentRecord.fromMap('${item['id'] ?? ''}', item.cast()),
+            (item) => PaymentRecord.fromMap(
+              '${item['id'] ?? ''}',
+              Map<String, dynamic>.from(item),
+            ),
           )
           .toList();
     }
@@ -369,16 +378,23 @@ Map<String, double> _mergeCategoryTotals(
   List<OfflineAction> actions,
   String projectId,
 ) {
-  final totals = Map<String, double>.from(base);
+  final totals = <String, double>{};
 
+  // `labor` is deprecated and merged into `worker`; server recompute already
+  // keys labor cost as `worker`, so fold legacy keys from either side into it.
   void addToCategory(String category, double delta) {
-    final nextValue = (totals[category] ?? 0) + delta;
+    final key = category == AccountingCategories.labor
+        ? AccountingCategories.worker
+        : category;
+    final nextValue = (totals[key] ?? 0) + delta;
     if (nextValue == 0) {
-      totals.remove(category);
+      totals.remove(key);
       return;
     }
-    totals[category] = nextValue;
+    totals[key] = nextValue;
   }
+
+  base.forEach(addToCategory);
 
   for (final action in actions) {
     final payloadProjectId = '${action.payload['projectId'] ?? ''}';
@@ -412,7 +428,7 @@ Map<String, double> _mergeCategoryTotals(
       case OfflineActionTypes.createWorkerEntry:
         if ('${action.payload['projectId'] ?? ''}' == projectId) {
           addToCategory(
-            'labor',
+            AccountingCategories.worker,
             ((action.payload['totalCost'] as num?)?.toDouble() ??
                 (((action.payload['daysWorked'] as num?) ?? 0) *
                         ((action.payload['dailyWage'] as num?) ?? 0))
@@ -422,7 +438,7 @@ Map<String, double> _mergeCategoryTotals(
         break;
       case OfflineActionTypes.archiveWorkerEntry:
         addToCategory(
-          'labor',
+          AccountingCategories.worker,
           -((action.payload['totalCost'] as num?)?.toDouble() ??
               (((action.payload['daysWorked'] as num?) ?? 0) *
                       ((action.payload['dailyWage'] as num?) ?? 0))
@@ -434,7 +450,7 @@ Map<String, double> _mergeCategoryTotals(
             '${action.payload['previousProjectId'] ?? projectId}';
         if (previousProjectId == projectId) {
           addToCategory(
-            'labor',
+            AccountingCategories.worker,
             -((action.payload['previousTotalCost'] as num?)?.toDouble() ??
                 (((action.payload['previousDaysWorked'] as num?) ?? 0) *
                         ((action.payload['previousDailyWage'] as num?) ?? 0))
@@ -443,7 +459,7 @@ Map<String, double> _mergeCategoryTotals(
         }
         if ('${action.payload['projectId'] ?? ''}' == projectId) {
           addToCategory(
-            'labor',
+            AccountingCategories.worker,
             ((action.payload['totalCost'] as num?)?.toDouble() ??
                 (((action.payload['daysWorked'] as num?) ?? 0) *
                         ((action.payload['dailyWage'] as num?) ?? 0))
@@ -927,49 +943,54 @@ final reportScopedRowsProvider = FutureProvider<ReportScopedRows?>((ref) async {
   // Portfolio (all-projects) rollup: aggregate workspace-wide rows in range.
   // Backed by the existing (workspaceId, isArchived, date) composite indexes.
   if (!scope.hasProject) {
-    final firestore = ref.watch(firestoreProvider);
+    final source = ref.watch(docSourceProvider);
     const limit = 1000;
     final results = await Future.wait([
-      firestore
-          .collection('expenses')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .where('date', isGreaterThanOrEqualTo: scope.startDate)
-          .where('date', isLessThanOrEqualTo: scope.endDate)
-          .orderBy('date', descending: true)
-          .limit(limit)
-          .get(),
-      firestore
-          .collection('payments')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .where('date', isGreaterThanOrEqualTo: scope.startDate)
-          .where('date', isLessThanOrEqualTo: scope.endDate)
-          .orderBy('date', descending: true)
-          .limit(limit)
-          .get(),
+      source.get(
+        DocQuery(
+          'expenses',
+          equals: {'workspaceId': workspaceId, 'isArchived': false},
+          rangeField: 'date',
+          rangeFrom: scope.startDate,
+          rangeTo: scope.endDate,
+          orderBy: 'date',
+          descending: true,
+          limit: limit,
+        ),
+      ),
+      source.get(
+        DocQuery(
+          'payments',
+          equals: {'workspaceId': workspaceId, 'isArchived': false},
+          rangeField: 'date',
+          rangeFrom: scope.startDate,
+          rangeTo: scope.endDate,
+          orderBy: 'date',
+          descending: true,
+          limit: limit,
+        ),
+      ),
     ]);
     final allExpenses =
-        results[0].docs
-            .map((doc) => Expense.fromMap(doc.id, doc.data()))
+        results[0]
+            .map((doc) => Expense.fromMap(doc.id, doc.data))
             .where((item) => scope.contains(item.date))
             .toList(growable: false)
           ..sort((a, b) => b.date.compareTo(a.date));
     final allPayments =
-        results[1].docs
-            .map((doc) => PaymentRecord.fromMap(doc.id, doc.data()))
+        results[1]
+            .map((doc) => PaymentRecord.fromMap(doc.id, doc.data))
             .where((item) => scope.contains(item.date))
             .toList(growable: false)
           ..sort((a, b) => b.date.compareTo(a.date));
     return ReportScopedRows(
       expenses: allExpenses,
       payments: allPayments,
-      hasMore:
-          results[0].docs.length >= limit || results[1].docs.length >= limit,
+      hasMore: results[0].length >= limit || results[1].length >= limit,
     );
   }
 
-  final expensePage = await ref
+  final expenseFuture = ref
       .watch(expenseRepositoryProvider)
       .fetchExpensesPage(
         workspaceId,
@@ -979,7 +1000,7 @@ final reportScopedRowsProvider = FutureProvider<ReportScopedRows?>((ref) async {
         cursor: null,
         pageSize: 500,
       );
-  final paymentPage = await ref
+  final paymentFuture = ref
       .watch(paymentRepositoryProvider)
       .fetchPaymentsPage(
         workspaceId,
@@ -989,6 +1010,8 @@ final reportScopedRowsProvider = FutureProvider<ReportScopedRows?>((ref) async {
         cursor: null,
         pageSize: 500,
       );
+  final expensePage = await expenseFuture;
+  final paymentPage = await paymentFuture;
 
   final expenses =
       expensePage.items
@@ -1051,12 +1074,13 @@ ReportMetrics _metricsFromScopedRows(
 
   var totalIncome = 0.0;
   for (final payment in rows.payments) {
-    totalIncome += payment.amount;
+    final cashIn = payment.cashCollected;
+    totalIncome += cashIn;
     final point = monthFor(payment.date);
     monthly[_monthKey(point.month)] = MonthlyFlowData(
       month: point.month,
       expenses: point.expenses,
-      income: point.income + payment.amount,
+      income: point.income + cashIn,
     );
   }
 
@@ -1083,23 +1107,19 @@ final reportBaseMetricsProvider = StreamProvider<ReportMetrics?>((ref) {
   if (projectId == null || projectId.isEmpty) {
     return Stream.value(null);
   }
-  final firestore = ref.watch(firestoreProvider);
+  final source = ref.watch(docSourceProvider);
   return (() async* {
     final role = await ref.watch(currentAccountingRoleProvider.future);
     if (role?.canAccessAccounting != true) {
       yield null;
       return;
     }
-    yield* firestore
-        .collection('project_metrics')
-        .doc(projectId)
-        .snapshots()
-        .map((snap) {
-          if (!snap.exists) {
-            return null;
-          }
-          return ReportMetrics.fromMap(snap.id, snap.data() ?? const {});
-        });
+    yield* source.watchDoc('project_metrics', projectId).map((snap) {
+      if (snap == null) {
+        return null;
+      }
+      return ReportMetrics.fromMap(snap.id, snap.data);
+    });
   })();
 });
 
@@ -1192,25 +1212,29 @@ Stream<List<T>> _scopedAccountingRecordsStream<T>({
   if (workspaceId == null || workspaceId.isEmpty || !scope.hasProject) {
     return Stream.value(List<T>.empty(growable: false));
   }
-  final firestore = ref.watch(firestoreProvider);
+  final source = ref.watch(docSourceProvider);
   return (() async* {
     final role = await ref.watch(currentAccountingRoleProvider.future);
     if (role?.canAccessAccounting != true) {
       yield List<T>.empty(growable: false);
       return;
     }
-    yield* firestore
-        .collection(collection)
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('projectId', isEqualTo: scope.projectId)
-        .where('date', isGreaterThanOrEqualTo: scope.startDate)
-        .where('date', isLessThanOrEqualTo: scope.endDate)
-        .orderBy('date', descending: true)
-        .limit(50)
-        .snapshots()
+    yield* source
+        .watch(
+          DocQuery(
+            collection,
+            equals: {'workspaceId': workspaceId, 'projectId': scope.projectId},
+            rangeField: 'date',
+            rangeFrom: scope.startDate,
+            rangeTo: scope.endDate,
+            orderBy: 'date',
+            descending: true,
+            limit: 50,
+          ),
+        )
         .map(
-          (snap) => snap.docs
-              .map((doc) => fromMap(doc.id, doc.data()))
+          (snap) => snap
+              .map((doc) => fromMap(doc.id, doc.data))
               .where((record) {
                 final date = switch (record) {
                   WorkerAccountingRecord item => item.date,

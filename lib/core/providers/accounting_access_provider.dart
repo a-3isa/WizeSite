@@ -1,5 +1,5 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/accounting_access_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,19 +29,19 @@ final currentAccountingRoleProvider = StreamProvider<AccountingAccessRoleType?>(
     }
 
     return ref
-        .watch(firestoreProvider)
-        .collection('memberships')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('userId', isEqualTo: userId)
-        .limit(1)
-        .snapshots()
-        .map((snap) {
-          if (snap.docs.isEmpty) {
+        .watch(docSourceProvider)
+        .watch(
+          DocQuery(
+            'memberships',
+            equals: {'workspaceId': workspaceId, 'userId': userId},
+            limit: 1,
+          ),
+        )
+        .map((docs) {
+          if (docs.isEmpty) {
             return null;
           }
-          return AccountingAccessRoleType.fromValue(
-            snap.docs.first.data()['role'],
-          );
+          return AccountingAccessRoleType.fromValue(docs.first.data['role']);
         });
   },
 );

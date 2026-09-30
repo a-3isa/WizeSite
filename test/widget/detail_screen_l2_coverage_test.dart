@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
@@ -18,7 +20,6 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/worker_detail_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -221,6 +222,9 @@ void main() {
           paymentDetailsProvider.overrideWith(
             (ref, paymentId) => payment.future,
           ),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.owner),
+          ),
           currentUserSettingsProvider.overrideWith(
             (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
           ),
@@ -232,6 +236,37 @@ void main() {
     await tester.pump();
 
     expect(find.byType(AppLoadingSkeleton), findsOneWidget);
+  });
+
+  testWidgets('payment detail shows access denied to a plain member', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _localizedApp(
+        overrides: [
+          paymentDetailsProvider.overrideWith(
+            (ref, paymentId) => Completer<PaymentRecord?>().future,
+          ),
+          currentAccountingRoleProvider.overrideWithValue(
+            const AsyncData(AccountingAccessRoleType.member),
+          ),
+          currentUserSettingsProvider.overrideWith(
+            (ref) => Stream.value(UserSettings.defaults(userId: 'user_1')),
+          ),
+        ],
+        child: const PaymentDetailScreen(paymentId: 'payment_1'),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(AppLoadingSkeleton), findsNothing);
+    expect(
+      find.text(
+        'You do not have permission to view financial reports, balances, or attachments.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('worker detail shows a loading skeleton while worker loads', (
@@ -412,7 +447,7 @@ class _FakeEntityRepository implements EntityRepository {
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return FirestorePage(items: [entity], hasMore: false);
@@ -542,7 +577,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return FirestorePage(items: [expense], hasMore: false);

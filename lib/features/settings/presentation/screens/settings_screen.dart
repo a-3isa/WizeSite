@@ -1,12 +1,13 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/local_session_cleanup.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -35,6 +36,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _currencyOverride;
   bool? _riskAlertsOverride;
+  bool _deletingAccount = false;
 
   @override
   Widget build(BuildContext context) {
@@ -181,6 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         context.push(AppRoutes.syncStatus);
                       },
                       child: IconButton(
+                        tooltip: l10n.t('syncStatus'),
                         onPressed: () {
                           prefetcher.warmSettings();
                           context.push(AppRoutes.syncStatus);
@@ -219,17 +222,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 24),
                     ],
                     _LogoutButton(
+                      key: const Key('qa_settings_logout'),
                       label: l10n.t('logout'),
                       onTap: () async {
                         HapticFeedback.lightImpact();
                         await ref.read(googleAuthServiceProvider).signOut();
                         await ref.read(firebaseAuthProvider).signOut();
+                        await LocalSessionCleanup.clearQueuedUserData();
                         ref.read(activeWorkspaceIdProvider.notifier).state =
                             null;
                         ref.read(activeUserIdProvider.notifier).state = null;
                         if (context.mounted) {
                           context.go(AppRoutes.login);
                         }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _LogoutButton(
+                      label: l10n.t('deleteAccount'),
+                      onTap: () async {
+                        HapticFeedback.lightImpact();
+                        await _deleteAccount();
                       },
                     ),
                     const SizedBox(height: 32),
@@ -298,6 +311,179 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.t('settingsSaveFailed'))));
   }
+
+  Future<void> _deleteAccount() async {
+    if (_deletingAccount) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.t('deleteAccountConfirmTitle')),
+        content: Text(l10n.t('deleteAccountConfirmBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.t('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.t('deleteAccount')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _deletingAccount = true);
+    try {
+      await _callDeleteOwnAccount();
+      if (!mounted) {
+        return;
+      }
+      await _clearSessionAndGoToLogin();
+    } on CallableClientException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final code = (error.code ?? '').toLowerCase().replaceAll('_', '-');
+      final message = error.message;
+      if (code == 'failed-precondition' &&
+          message.contains('RECENT_LOGIN_REQUIRED')) {
+        final refreshed = await _reauthenticateForDeletion();
+        if (!mounted || !refreshed) {
+          return;
+        }
+        try {
+          await _callDeleteOwnAccount();
+          if (!mounted) {
+            return;
+          }
+          await _clearSessionAndGoToLogin();
+          return;
+        } on CallableClientException catch (retryError) {
+          if (!mounted) {
+            return;
+          }
+          _showDeleteAccountError(retryError);
+          return;
+        }
+      }
+      _showDeleteAccountError(error);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.t('deleteAccountFailed'))));
+    } finally {
+      if (mounted) {
+        setState(() => _deletingAccount = false);
+      }
+    }
+  }
+
+  Future<void> _callDeleteOwnAccount() {
+    return ref.read(callableClientProvider).call<void>(
+      functionName: 'deleteOwnAccount',
+      payload: <String, dynamic>{'confirm': true},
+      parseResult: (_) {},
+      defaultErrorMessage: AppLocalizations.of(context).t('deleteAccountFailed'),
+    );
+  }
+
+  Future<void> _clearSessionAndGoToLogin() async {
+    await ref.read(googleAuthServiceProvider).signOut();
+    await ref.read(firebaseAuthProvider).signOut();
+    await LocalSessionCleanup.clearQueuedUserData();
+    if (!mounted) {
+      return;
+    }
+    ref.read(activeWorkspaceIdProvider.notifier).state = null;
+    ref.read(activeUserIdProvider.notifier).state = null;
+    context.go(AppRoutes.login);
+  }
+
+  Future<bool> _reauthenticateForDeletion() async {
+    final l10n = AppLocalizations.of(context);
+    final auth = ref.read(firebaseAuthProvider);
+    final user = auth.currentUser;
+    if (user == null) {
+      return false;
+    }
+    final providers = user.providerData
+        .map((provider) => provider.providerId)
+        .toSet();
+    try {
+      if (providers.contains('google.com')) {
+        return ref
+            .read(googleAuthServiceProvider)
+            .reauthenticateWithGoogle(auth: auth);
+      }
+      if (providers.contains('password')) {
+        final password = await showDialog<String>(
+          context: context,
+          builder: (context) {
+            final controller = TextEditingController();
+            return AlertDialog(
+              title: Text(l10n.t('confirmPasswordToDelete')),
+              content: TextField(
+                controller: controller,
+                obscureText: true,
+                autofocus: true,
+                decoration: InputDecoration(labelText: l10n.t('password')),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(l10n.t('cancel')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(controller.text),
+                  child: Text(l10n.t('confirm')),
+                ),
+              ],
+            );
+          },
+        );
+        if (password == null || password.isEmpty) {
+          return false;
+        }
+        await ref
+            .read(emailAuthServiceProvider)
+            .reauthenticate(user: user, password: password);
+        return true;
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.t('deleteAccountFailed'))));
+      }
+      return false;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('deleteAccountRecentLogin'))),
+      );
+    }
+    return false;
+  }
+
+  void _showDeleteAccountError(CallableClientException error) {
+    final l10n = AppLocalizations.of(context);
+    final message = error.message;
+    final text = message.contains('TRANSFER_OWNERSHIP_REQUIRED')
+        ? l10n.t('deleteAccountTransferOwnership')
+        : message.contains('RECENT_LOGIN_REQUIRED')
+        ? l10n.t('deleteAccountRecentLogin')
+        : l10n.t('deleteAccountFailed');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 }
 
 class _WorkspaceSettingsCard extends ConsumerWidget {
@@ -331,6 +517,7 @@ class _WorkspaceSettingsCard extends ConsumerWidget {
         context.push(AppRoutes.workspaceSettings);
       },
       child: IconButton(
+        tooltip: l10n.t('teamManagement'),
         onPressed: () {
           prefetcher.warmSettings();
           context.push(AppRoutes.workspaceSettings);
@@ -439,13 +626,7 @@ class _SettingsCard extends StatelessWidget {
             color: context.tokens.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: context.tokens.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: context.tokens.shadowSm,
           ),
           child: Row(
             children: [
@@ -466,7 +647,7 @@ class _SettingsCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(icon, color: Colors.white, size: 22),
+                child: Icon(icon, color: context.tokens.onAccent, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -510,7 +691,7 @@ class _SubscriptionCard extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final dynamic sub;
+  final SubscriptionState sub;
   final VoidCallback onUpgrade;
   final VoidCallback onManage;
 
@@ -526,13 +707,7 @@ class _SubscriptionCard extends StatelessWidget {
         color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.tokens.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: context.tokens.shadowSm,
       ),
       child: Column(
         children: [
@@ -565,9 +740,9 @@ class _SubscriptionCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.workspace_premium_rounded,
-                    color: Colors.white,
+                    color: context.tokens.onAccent,
                     size: 24,
                   ),
                 ),
@@ -691,13 +866,7 @@ class _AboutAndLegalSection extends StatelessWidget {
         color: context.tokens.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.tokens.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: context.tokens.shadowSm,
       ),
       child: Column(
         children: [
@@ -817,7 +986,7 @@ class _SettingsLinkTile extends StatelessWidget {
 }
 
 class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({required this.label, required this.onTap});
+  const _LogoutButton({required this.label, required this.onTap, super.key});
 
   final String label;
   final VoidCallback onTap;
@@ -830,32 +999,35 @@ class _LogoutButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: context.tokens.expense.withValues(alpha: 0.4),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: context.tokens.expense.withValues(alpha: 0.4),
+              ),
+              color: context.tokens.expenseSoft,
             ),
-            color: AppColors.dangerLight.withValues(alpha: 0.5),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.logout_rounded,
-                color: context.tokens.expense,
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.logout_rounded,
                   color: context.tokens.expense,
+                  size: 22,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: context.tokens.expense,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -886,13 +1058,7 @@ class _ProfileSection extends ConsumerWidget {
         color: context.tokens.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: context.tokens.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: context.tokens.shadowSm,
       ),
       child: Row(
         children: [
@@ -952,6 +1118,7 @@ class _ProfileSection extends ConsumerWidget {
             ),
           ),
           IconButton(
+            tooltip: l10n.t('editProfile'),
             onPressed: () {
               HapticFeedback.lightImpact();
               ref.read(appPrefetcherProvider).warmSettings();
@@ -1152,17 +1319,13 @@ class _ProfileAvatarFallback extends StatelessWidget {
       height: 60,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [context.tokens.accent, context.tokens.warning],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: context.tokens.accent,
       ),
       child: Center(
         child: Text(
           label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
+            color: context.tokens.onAccent,
             fontWeight: FontWeight.w800,
           ),
         ),

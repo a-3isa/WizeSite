@@ -25,7 +25,7 @@ class ProjectHeader extends StatelessWidget {
         border: Border.all(color: context.tokens.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: context.tokens.scrim.withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -538,7 +538,7 @@ class _ActionCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(icon, color: Colors.white, size: 16),
+                child: Icon(icon, color: context.tokens.onAccent, size: 16),
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -1,10 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/services/microphone_permission_service.dart';
 import 'package:buildtrack_app/core/services/voice_recorder_service.dart';
-import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
-import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
+import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
+import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
+import 'package:buildtrack_app/features/voice_expense/data/voice_ai_disclosure_store.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_record_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -18,31 +19,9 @@ void main() {
     final recorder = _FakeVoiceRecorderService();
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          projectsProvider.overrideWith(
-            (ref) => Stream<List<Project>>.value(const []),
-          ),
-          voiceRecorderServiceProvider.overrideWithValue(recorder),
-          microphonePermissionServiceProvider.overrideWithValue(
-            _FakeMicrophonePermissionService(),
-          ),
-          currentUserSettingsProvider.overrideWith(
-            (ref) => Stream<UserSettings>.value(
-              UserSettings.defaults(userId: '', email: ''),
-            ),
-          ),
-        ],
-        child: const MaterialApp(
-          localizationsDelegates: [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: VoiceRecordScreen(),
-        ),
+      _voiceApp(
+        recorder: recorder,
+        disclosureStore: _AcceptedVoiceAiDisclosureStore(),
       ),
     );
 
@@ -60,6 +39,81 @@ void main() {
     );
     expect(recorder.startCalls, 0);
   });
+
+  testWidgets('shows a first-run AI transcription disclosure before the mic', (
+    tester,
+  ) async {
+    final recorder = _FakeVoiceRecorderService();
+    final disclosure = _PendingVoiceAiDisclosureStore();
+
+    await tester.pumpWidget(
+      _voiceApp(recorder: recorder, disclosureStore: disclosure),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.mic_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Voice notes are processed by AI'), findsOneWidget);
+    expect(find.text('Allow microphone access'), findsNothing);
+    expect(recorder.startCalls, 0);
+
+    await tester.tap(find.text('I understand'));
+    await tester.pumpAndSettle();
+
+    expect(disclosure.hasAccepted, isTrue);
+    expect(find.text('Allow microphone access'), findsOneWidget);
+  });
+}
+
+Widget _voiceApp({
+  required _FakeVoiceRecorderService recorder,
+  required VoiceAiDisclosureStore disclosureStore,
+}) {
+  return ProviderScope(
+    overrides: [
+      projectsProvider.overrideWith(
+        (ref) => Stream<List<Project>>.value(const []),
+      ),
+      voiceRecorderServiceProvider.overrideWithValue(recorder),
+      microphonePermissionServiceProvider.overrideWithValue(
+        _FakeMicrophonePermissionService(),
+      ),
+      currentUserSettingsProvider.overrideWith(
+        (ref) => Stream<UserSettings>.value(
+          UserSettings.defaults(userId: '', email: ''),
+        ),
+      ),
+      voiceAiDisclosureStoreProvider.overrideWithValue(disclosureStore),
+    ],
+    child: const MaterialApp(
+      localizationsDelegates: [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VoiceRecordScreen(),
+    ),
+  );
+}
+
+class _AcceptedVoiceAiDisclosureStore extends VoiceAiDisclosureStore {
+  @override
+  bool get hasAccepted => true;
+}
+
+class _PendingVoiceAiDisclosureStore extends VoiceAiDisclosureStore {
+  bool _accepted = false;
+
+  @override
+  bool get hasAccepted => _accepted;
+
+  @override
+  Future<void> accept() async {
+    _accepted = true;
+  }
 }
 
 class _FakeMicrophonePermissionService extends MicrophonePermissionService {

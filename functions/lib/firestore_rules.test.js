@@ -369,6 +369,15 @@ else {
         await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(adminDb, "workspace_metrics", "workspace_owner")));
         await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(adminDb, "project_metrics", "project_owner")));
     });
+    (0, node_test_1.default)("entryOnly can read expenses but not payments", async () => {
+        await seedBaseData();
+        const entryDb = env.authenticatedContext("entry_1").firestore();
+        const accountingDb = env.authenticatedContext("accounting_1").firestore();
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(entryDb, "expenses", "expense_owner")));
+        await (0, rules_unit_testing_1.assertFails)((0, firestore_1.getDoc)((0, firestore_1.doc)(entryDb, "payments", "payment_owner")));
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(accountingDb, "expenses", "expense_owner")));
+        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.getDoc)((0, firestore_1.doc)(accountingDb, "payments", "payment_owner")));
+    });
     (0, node_test_1.default)("domain accounting records and worker summaries are accounting-role restricted", async () => {
         await seedBaseData();
         const memberDb = env.authenticatedContext("member_1").firestore();
@@ -409,11 +418,11 @@ else {
             paidAmount: 125,
         }));
     });
-    (0, node_test_1.default)("workspace owner can add members", async () => {
+    (0, node_test_1.default)("workspace owner cannot add members via client writes", async () => {
         await seedBaseData();
         const ownerDb = env.authenticatedContext("owner_1").firestore();
         const membershipDoc = (0, firestore_1.doc)(ownerDb, "memberships", "workspace_owner_member_2");
-        await (0, rules_unit_testing_1.assertSucceeds)((0, firestore_1.setDoc)(membershipDoc, {
+        await (0, rules_unit_testing_1.assertFails)((0, firestore_1.setDoc)(membershipDoc, {
             workspaceId: "workspace_owner",
             userId: "member_2",
             role: "member",
@@ -914,6 +923,12 @@ else {
                 userId: "owner_1",
                 role: "owner",
             });
+            // Pro workspace: the free team quota (owner only) is enforced separately.
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "subscriptions", "owner_ws"), {
+                workspaceId: "owner_ws",
+                tier: "pro",
+                status: "active",
+            });
         });
         const result = await inviteMemberByEmailForUser({
             ownerUid: "owner_1",
@@ -933,7 +948,7 @@ else {
             strict_1.default.equal(notificationSnap.data()?.targetUserId, "invitee_1");
         });
     });
-    (0, node_test_1.default)("email invite bypasses team quota while testing but remains owner only", async () => {
+    (0, node_test_1.default)("email invite enforces the free team quota and remains owner only", async () => {
         await env.clearFirestore();
         await env.withSecurityRulesDisabled(async (context) => {
             const db = context.firestore();
@@ -978,13 +993,23 @@ else {
                 status: "active",
             });
         });
-        const result = await inviteMemberByEmailForUser({
+        const assertLimitReached = (error) => {
+            strict_1.default.equal(error.code, "failed-precondition");
+            strict_1.default.equal(error.details?.code, "LIMIT_REACHED");
+            return true;
+        };
+        await strict_1.default.rejects(inviteMemberByEmailForUser({
             ownerUid: "owner_1",
             workspaceId: "owner_ws",
             email: "invitee@example.com",
             role: "member",
-        });
-        strict_1.default.equal(result.userId, "invitee_1");
+        }), assertLimitReached);
+        await strict_1.default.rejects(inviteMemberWithQuotaForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            userId: "invitee_2",
+            role: "entryOnly",
+        }), assertLimitReached);
         await strict_1.default.rejects(inviteMemberByEmailForUser({
             ownerUid: "owner_1",
             workspaceId: "owner_ws",
@@ -993,6 +1018,16 @@ else {
         }), (error) => {
             strict_1.default.equal(error.code, "invalid-argument");
             return true;
+        });
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const rejected = await (0, firestore_1.getDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_invitee_1"));
+            strict_1.default.equal(rejected.exists(), false);
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "subscriptions", "owner_ws"), {
+                workspaceId: "owner_ws",
+                tier: "pro",
+                status: "active",
+            });
         });
         const legacyResult = await inviteMemberWithQuotaForUser({
             ownerUid: "owner_1",
@@ -1019,6 +1054,59 @@ else {
             strict_1.default.equal(membershipSnap.data()?.role, "entryOnly");
             strict_1.default.equal(notificationSnap.data()?.workspaceId, "owner_ws");
             strict_1.default.equal(notificationSnap.data()?.targetUserId, "invitee_2");
+        });
+    });
+    (0, node_test_1.default)("email invite hides whether the user exists or is already a member", async () => {
+        await env.clearFirestore();
+        await env.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "owner_1"), {
+                id: "owner_1",
+                email: "owner@example.com",
+                workspaceId: "owner_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "users", "invitee_1"), {
+                id: "invitee_1",
+                email: "invitee@example.com",
+                workspaceId: "personal_ws",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "workspaces", "owner_ws"), {
+                id: "owner_ws",
+                ownerId: "owner_1",
+                name: "Owner Workspace",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_owner_1"), {
+                workspaceId: "owner_ws",
+                userId: "owner_1",
+                role: "owner",
+            });
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, "memberships", "owner_ws_invitee_1"), {
+                workspaceId: "owner_ws",
+                userId: "invitee_1",
+                role: "member",
+            });
+        });
+        await strict_1.default.rejects(inviteMemberByEmailForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            email: "nobody@example.com",
+            role: "member",
+        }), (error) => {
+            const typed = error;
+            strict_1.default.equal(typed.code, "not-found");
+            strict_1.default.match(`${typed.message ?? ""}`, /INVITE_UNAVAILABLE/);
+            return true;
+        });
+        await strict_1.default.rejects(inviteMemberByEmailForUser({
+            ownerUid: "owner_1",
+            workspaceId: "owner_ws",
+            email: "invitee@example.com",
+            role: "member",
+        }), (error) => {
+            const typed = error;
+            strict_1.default.equal(typed.code, "not-found");
+            strict_1.default.match(`${typed.message ?? ""}`, /INVITE_UNAVAILABLE/);
+            return true;
         });
     });
     (0, node_test_1.default)("workspace member role updates and removals protect the last owner", async () => {

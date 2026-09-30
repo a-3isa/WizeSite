@@ -1,6 +1,5 @@
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -24,16 +23,22 @@ class CategoryPieChart extends StatefulWidget {
 class _CategoryPieChartState extends State<CategoryPieChart> {
   int _touchedIndex = -1;
 
-  static const _categoryColors = <String, Color>{
-    'labor': AppColors.constructionOrange,
-    'materials': Color(0xFF3B82F6),
-    'equipment': Color(0xFFF59E0B),
-    'transport': Color(0xFF14B8A6),
-    'other': Color(0xFF94A3B8),
-  };
+  Color _colorFor(BuildContext context, String category) {
+    final t = context.tokens;
+    return switch (category) {
+      'labor' => t.accent,
+      'materials' => const Color(0xFF3B82F6),
+      'equipment' => t.warning,
+      'transport' => const Color(0xFF14B8A6),
+      _ => t.textFaint,
+    };
+  }
 
-  Color _colorFor(String category) =>
-      _categoryColors[category] ?? const Color(0xFF94A3B8);
+  Color _inkOnSlice(Color fill) {
+    return fill.computeLuminance() > 0.45
+        ? const Color(0xFF141922)
+        : const Color(0xFFFFFFFF);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,13 +95,13 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
                   final percentage = (entry.value / total * 100);
                   return PieChartSectionData(
                     value: entry.value,
-                    color: _colorFor(entry.key),
+                    color: _colorFor(context, entry.key),
                     radius: isTouched ? 60 : 50,
                     title: '${percentage.toStringAsFixed(0)}%',
                     titleStyle: TextStyle(
                       fontSize: isTouched ? 14 : 12,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: _inkOnSlice(_colorFor(context, entry.key)),
                     ),
                     titlePositionPercentageOffset: 0.6,
                   );
@@ -111,7 +116,7 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
             runSpacing: 8,
             children: entries.map((entry) {
               return _LegendItem(
-                color: _colorFor(entry.key),
+                color: _colorFor(context, entry.key),
                 label: l10n.expenseCategoryLabel(entry.key),
                 value: Formatters.money(
                   entry.value,

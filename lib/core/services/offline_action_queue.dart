@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:buildtrack_app/core/services/pending_id_remap.dart';
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
+import 'package:buildtrack_app/core/storage/hive_boxes.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
@@ -86,6 +88,7 @@ class OfflineAction {
     String? resolutionType,
     DateTime? resolutionAt,
     String? resolutionTargetId,
+    Map<String, dynamic>? payload,
     bool clearLastError = false,
     bool clearNextAttemptAt = false,
     bool clearSyncedAt = false,
@@ -94,7 +97,7 @@ class OfflineAction {
     return OfflineAction(
       id: id,
       type: type,
-      payload: payload,
+      payload: payload ?? this.payload,
       createdAt: createdAt,
       retryCount: retryCount ?? this.retryCount,
       lastError: clearLastError ? null : (lastError ?? this.lastError),
@@ -185,7 +188,7 @@ class OfflineActionQueue {
   static const syncedVisibilityWindow = Duration(minutes: 2);
 
   static Future<OfflineActionQueue> open() async {
-    final box = await Hive.openBox<String>('offline_actions');
+    final box = await openEncryptedBox<String>('offline_actions');
     return OfflineActionQueue(box);
   }
 
@@ -320,10 +323,19 @@ class OfflineActionQueue {
             .toList();
         var processedAny = false;
 
-        for (final action in actions) {
+        for (final listed in actions) {
+          final action = _actionFromBox(listed.id);
+          if (action == null ||
+              action.status == OfflineActionStatus.synced ||
+              action.status == OfflineActionStatus.deadLetter) {
+            continue;
+          }
           if (action.nextAttemptAt != null &&
               action.nextAttemptAt!.isAfter(now)) {
-            continue;
+            // Head-of-line blocking: do not drain later actions while an
+            // earlier unsynced item is still in backoff.
+            blockedByFailure = true;
+            break;
           }
           processedAny = true;
           try {
@@ -332,8 +344,9 @@ class OfflineActionQueue {
                 ? rawOutcome
                 : const OfflineActionOutcome.applied();
             final resolvedAt = DateTime.now();
+            final latest = _actionFromBox(listed.id) ?? action;
             await save(
-              action.copyWith(
+              latest.copyWith(
                 status: OfflineActionStatus.synced,
                 syncedAt: resolvedAt,
                 resolutionType: outcome.resolutionType,
@@ -345,11 +358,12 @@ class OfflineActionQueue {
             );
           } catch (error) {
             final details = SyncErrorClassifier.detailsFrom(error);
-            final nextRetryCount = action.retryCount + 1;
+            final current = _actionFromBox(listed.id) ?? action;
+            final nextRetryCount = current.retryCount + 1;
             if (SyncErrorClassifier.isTerminal(error) ||
                 nextRetryCount >= maxRetries) {
               await save(
-                action.copyWith(
+                current.copyWith(
                   retryCount: nextRetryCount,
                   lastError: details.message,
                   lastErrorCode: details.code,
@@ -359,7 +373,7 @@ class OfflineActionQueue {
               );
             } else {
               await save(
-                action.copyWith(
+                current.copyWith(
                   retryCount: nextRetryCount,
                   lastError: details.message,
                   lastErrorCode: details.code,
@@ -400,5 +414,36 @@ class OfflineActionQueue {
     return actions
         .where((action) => action.status == OfflineActionStatus.deadLetter)
         .toList();
+  }
+
+  Future<void> remapPendingProjectIds({
+    required String pendingId,
+    required String serverId,
+  }) async {
+    final actions = await list(
+      includeDeadLetters: true,
+      includeExpiredSynced: true,
+    );
+    for (final action in actions) {
+      final next = remapPendingProjectId(
+        payload: action.payload,
+        pendingId: pendingId,
+        serverId: serverId,
+      );
+      if (next['projectId'] != action.payload['projectId'] ||
+          next['previousProjectId'] != action.payload['previousProjectId']) {
+        await save(action.copyWith(payload: next));
+      }
+    }
+  }
+
+  Future<void> clear() => _box.clear();
+
+  OfflineAction? _actionFromBox(String id) {
+    final raw = _box.get(id);
+    if (raw == null) {
+      return null;
+    }
+    return OfflineAction.fromMap(jsonDecode(raw) as Map<String, dynamic>);
   }
 }

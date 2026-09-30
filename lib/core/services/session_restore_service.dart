@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/local_session_cleanup.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,15 +25,18 @@ class SessionRestoreService {
     required FirebaseFirestore firestore,
     required CallableClient callableClient,
     required AppTelemetry telemetry,
+    Future<void> Function()? onSignOutCleanup,
   }) : _auth = auth,
        _firestore = firestore,
        _callableClient = callableClient,
-       _telemetry = telemetry;
+       _telemetry = telemetry,
+       _onSignOutCleanup = onSignOutCleanup;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final CallableClient _callableClient;
   final AppTelemetry _telemetry;
+  final Future<void> Function()? _onSignOutCleanup;
 
   Future<SessionRestoreResult?> restore() async {
     final user = _auth.currentUser;
@@ -90,6 +94,14 @@ class SessionRestoreService {
   // screen to retry this same restore, which fails the same way forever
   // with no path back to an actual login form. Signing out breaks that loop.
   Future<void> _signOutToBreakStrandedSessionLoop() async {
+    final cleanup = _onSignOutCleanup;
+    if (cleanup != null) {
+      try {
+        await cleanup();
+      } catch (_) {
+        // Hive may not be open yet; still sign out.
+      }
+    }
     try {
       await _auth.signOut();
     } catch (_) {
@@ -198,5 +210,6 @@ final sessionRestoreServiceProvider = Provider<SessionRestoreService>((ref) {
     firestore: ref.watch(firestoreProvider),
     callableClient: ref.watch(callableClientProvider),
     telemetry: ref.watch(appTelemetryProvider),
+    onSignOutCleanup: LocalSessionCleanup.clearQueuedUserData,
   );
 });

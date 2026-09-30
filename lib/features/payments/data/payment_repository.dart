@@ -1,3 +1,8 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/pagination/local_page.dart';
+import 'package:buildtrack_app/core/sync/local_queries.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -7,6 +12,9 @@ import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
+
+part 'local_payment_repository.dart';
 
 abstract interface class PaymentRepository {
   Stream<List<PaymentRecord>> watchPayments(
@@ -24,7 +32,7 @@ abstract interface class PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   });
   Future<PaymentRecord?> getPayment(String paymentId);
@@ -36,6 +44,7 @@ abstract interface class PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -87,6 +96,7 @@ class FirebasePaymentRepository implements PaymentRepository {
     }
     final baseStream = query
         .orderBy('date', descending: true)
+        .limit(24)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -137,9 +147,10 @@ class FirebasePaymentRepository implements PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     Query<Map<String, dynamic>> query = _firestore
         .collection('payments')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -170,7 +181,7 @@ class FirebasePaymentRepository implements PaymentRepository {
     query = query.orderBy('date', descending: true).limit(pageSize);
 
     if (cursor != null) {
-      query = query.startAfterDocument(cursor);
+      query = query.startAfterDocument(firestoreCursor!);
     }
 
     final snap = await query.get();
@@ -226,6 +237,7 @@ class FirebasePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -247,6 +259,7 @@ class FirebasePaymentRepository implements PaymentRepository {
       date: date,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
+      paidAmount: paidAmount,
       description: description,
       notes: notes,
       entityId: entityId,
@@ -344,6 +357,8 @@ class FirebasePaymentRepository implements PaymentRepository {
       paymentId: paymentId,
       projectId: payment.projectId,
       amount: payment.amount,
+      paymentStatus: payment.paymentStatus,
+      paidAmount: payment.paidAmount,
       date: payment.date,
     );
   }
@@ -533,6 +548,7 @@ class FirebasePaymentRepository implements PaymentRepository {
       date: parsedDate ?? action.createdAt,
       paymentMethod: '${payload['paymentMethod'] ?? 'cash'}',
       paymentStatus: '${payload['paymentStatus'] ?? 'paid'}',
+      paidAmount: (payload['paidAmount'] as num?)?.toDouble(),
       description: '${payload['description'] ?? payload['notes'] ?? ''}',
       notes: '${payload['notes'] ?? ''}',
       entityId:
@@ -555,6 +571,14 @@ class FirebasePaymentRepository implements PaymentRepository {
 }
 
 final paymentRepositoryProvider = Provider<PaymentRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalPaymentRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(workspaceMutationServiceProvider),
+      ref.watch(offlineActionQueueProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebasePaymentRepository(
     ref.watch(firestoreProvider),
     ref.watch(workspaceMutationServiceProvider),

@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/constants/app_limits.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_quota_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,14 +13,35 @@ String usagePeriodKey(DateTime now) => DateFormat('yyyyMM').format(now.toUtc());
 
 class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
   FirebaseUsageQuotaRepository(
-    this._firestore,
+    FirebaseFirestore firestore,
     this._functions, {
     DateTime Function()? nowProvider,
-  }) : _nowProvider = nowProvider ?? DateTime.now;
+  }) : _source = FirestoreDocSource(firestore),
+       _nowProvider = nowProvider ?? DateTime.now;
 
-  final FirebaseFirestore _firestore;
+  /// Reads through [source] (local replica in self-hosted builds, spec 004).
+  FirebaseUsageQuotaRepository.withSource(
+    DocSource source,
+    this._functions, {
+    DateTime Function()? nowProvider,
+  }) : _source = source,
+       _nowProvider = nowProvider ?? DateTime.now;
+
+  final DocSource _source;
   final FirebaseFunctions _functions;
   final DateTime Function() _nowProvider;
+
+  static DocQuery _activeProjectsQuery(String workspaceId) => DocQuery(
+    'projects',
+    equals: {
+      'workspaceId': workspaceId,
+      'status': 'active',
+      'isArchived': false,
+    },
+  );
+
+  static DocQuery _membershipsQuery(String workspaceId) =>
+      DocQuery('memberships', equals: {'workspaceId': workspaceId});
 
   @override
   Future<UsageSnapshot> getUsageSnapshot({
@@ -32,37 +54,22 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     // Each query is fetched independently so a single failure (e.g. an
     // aggregate count that doesn't work offline) doesn't blow up the whole
     // snapshot — it just falls back to 0 / last-cached values.
-    DocumentSnapshot<Map<String, dynamic>>? counterDoc;
+    Doc? counterDoc;
     try {
-      counterDoc = await _firestore
-          .collection('usage_counters')
-          .doc(counterId)
-          .get();
+      counterDoc = await _source.getDoc('usage_counters', counterId);
     } catch (_) {}
 
     int activeProjects = 0;
     try {
-      final snap = await _firestore
-          .collection('projects')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('status', isEqualTo: 'active')
-          .where('isArchived', isEqualTo: false)
-          .count()
-          .get();
-      activeProjects = snap.count ?? 0;
+      activeProjects = await _source.count(_activeProjectsQuery(workspaceId));
     } catch (_) {}
 
     int memberCount = 1;
     try {
-      final snap = await _firestore
-          .collection('memberships')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .count()
-          .get();
-      memberCount = snap.count ?? 1;
+      memberCount = await _source.count(_membershipsQuery(workspaceId));
     } catch (_) {}
 
-    final data = counterDoc?.data() ?? const <String, dynamic>{};
+    final data = counterDoc?.data ?? const <String, dynamic>{};
 
     return UsageSnapshot(
       periodKey: key,
@@ -91,20 +98,9 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     }
 
     // Watch for changes in usage counters, projects, and memberships.
-    final counterStream = _firestore
-        .collection('usage_counters')
-        .doc(counterId)
-        .snapshots();
-    final projectsStream = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('status', isEqualTo: 'active')
-        .where('isArchived', isEqualTo: false)
-        .snapshots();
-    final membershipsStream = _firestore
-        .collection('memberships')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .snapshots();
+    final counterStream = _source.watchDoc('usage_counters', counterId);
+    final projectsStream = _source.watch(_activeProjectsQuery(workspaceId));
+    final membershipsStream = _source.watch(_membershipsQuery(workspaceId));
 
     final controller = StreamController<void>.broadcast();
     final subs = [
@@ -174,8 +170,8 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
 }
 
 final usageQuotaRepositoryProvider = Provider<UsageQuotaRepository>((ref) {
-  return FirebaseUsageQuotaRepository(
-    ref.watch(firestoreProvider),
+  return FirebaseUsageQuotaRepository.withSource(
+    ref.watch(docSourceProvider),
     ref.watch(functionsProvider),
   );
 });

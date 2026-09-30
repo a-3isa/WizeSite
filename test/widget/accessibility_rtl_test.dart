@@ -1,6 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
+import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -9,6 +10,7 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart';
 import 'package:buildtrack_app/core/widgets/build_bottom_nav.dart';
+import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -25,7 +27,6 @@ import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,6 +91,35 @@ void main() {
       expect(find.text(l10n.t(key)), findsOneWidget);
     }
   });
+
+  testWidgets(
+    'app back button meets the 48dp touch target and exposes a tooltip',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            appBar: AppBar(
+              leading: const AppBackButton(fallbackRoute: '/'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final back = find.byType(IconButton);
+      expect(tester.getSize(back).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(back).height, greaterThanOrEqualTo(48));
+      expect(find.byTooltip('Back'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'dashboard project selector meets the 48dp touch target and exposes '
@@ -198,6 +228,58 @@ void main() {
       expect(find.byIcon(Icons.trending_up), findsOneWidget);
     },
   );
+
+  testWidgets('Add expense, Voice, and Settings primary CTAs meet 48dp', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              BuildButton(
+                key: const Key('qa_add_expense_save'),
+                label: 'Save Expense',
+                size: BuildButtonSize.lg,
+                onPressed: () {},
+              ),
+              BuildButton(
+                key: const Key('qa_voice_process'),
+                label: 'Process',
+                size: BuildButtonSize.lg,
+                onPressed: () {},
+              ),
+              Semantics(
+                button: true,
+                label: 'Log out',
+                child: const SizedBox(
+                  key: Key('qa_settings_logout'),
+                  height: 48,
+                  width: 120,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const Key('qa_add_expense_save'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('qa_voice_process'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('qa_settings_logout'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(find.bySemanticsLabel('Log out'), findsOneWidget);
+    expect(find.bySemanticsLabel('Save Expense'), findsWidgets);
+    expect(find.bySemanticsLabel('Process'), findsWidgets);
+  });
 }
 
 Widget _dashboardApp() {
@@ -378,13 +460,13 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) async => page;
 
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => page;
 
@@ -415,7 +497,7 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => const FirestorePage(items: [], hasMore: false);
 

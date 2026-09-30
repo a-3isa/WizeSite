@@ -1,0 +1,21 @@
+# Optional override for a server WITHOUT an existing reverse proxy: Caddy terminates TLS and
+# routes api.$DOMAIN / sync.$DOMAIN (ops/Caddyfile).
+#   docker compose -f compose.yml -f compose.caddy.yml up -d
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in /srv/wizesite/.env}
+    volumes:
+      - ../ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/wizesite/caddy/data:/data
+      - /srv/wizesite/caddy/config:/config
+    networks: [edge]
+    depends_on:
+      - api
+      - powersync
+    mem_limit: 64m

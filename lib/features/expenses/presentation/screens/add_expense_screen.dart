@@ -15,6 +15,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -25,6 +26,7 @@ import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_entry_defaults.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -37,10 +39,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  const AddExpenseScreen({this.expenseId, this.projectId, super.key});
+  const AddExpenseScreen({
+    this.expenseId,
+    this.projectId,
+    this.duplicateFrom,
+    super.key,
+  });
 
   final String? expenseId;
   final String? projectId;
+  final Expense? duplicateFrom;
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -87,6 +95,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _paymentStatus = defaults.paymentStatus;
       if (widget.projectId != null) {
         _projectId = widget.projectId;
+      }
+      final seed = widget.duplicateFrom;
+      if (seed != null) {
+        _projectId = seed.projectId;
+        _projectName = seed.projectName;
+        _category = seed.category;
+        _amountController.text =
+            ThousandsSeparatorInputFormatter.formatInitial(
+              seed.amount.toStringAsFixed(2),
+            );
+        _entityId = seed.entityId;
+        _entityName = seed.entityName;
+        _date = DateTime.now();
       }
     }
   }
@@ -320,7 +341,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on CallableClientException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=expensesPerMonth');
         }
@@ -447,7 +468,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on CallableClientException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (mounted) {
           context.push(
             '${AppRoutes.subscriptionLimit}?limit=workerEntriesPerMonth',
@@ -501,6 +522,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           fallbackRoute: _fallbackRoute(),
           actions: [
             IconButton(
+              tooltip: l10n.t('recordExpense'),
               onPressed: () => context.push(AppRoutes.voiceExpense),
               icon: const Icon(Icons.mic_outlined),
             ),
@@ -846,6 +868,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         fontWeight: FontWeight.w700,
                         color: t.text,
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.t('zipAttachmentWarning'),
+                      style: TextStyle(fontSize: 12, color: t.textMuted),
                     ),
                     const SizedBox(height: 8),
                     if (_attachments.isNotEmpty)

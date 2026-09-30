@@ -357,6 +357,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('App version'), findsOneWidget);
+      expect(find.text('Delete account'), findsOneWidget);
       expect(find.text('1.2.3 (45)'), findsOneWidget);
       expect(find.text('Help & Support'), findsOneWidget);
       expect(find.text('Privacy Policy'), findsOneWidget);

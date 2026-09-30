@@ -53,7 +53,7 @@ class DashboardSnapshot {
       topEntity: _optionalText(data['topEntity']),
       recentTransactions: recent is List
           ? recent
-                .whereType<Map>()
+                .whereType<Map<dynamic, dynamic>>()
                 .map(
                   (item) => DashboardTransactionRef.fromMap(
                     Map<String, dynamic>.from(item),

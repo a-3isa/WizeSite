@@ -1,9 +1,10 @@
+import 'package:buildtrack_app/features/common/data/domain_accounting_records_source.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
+import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
@@ -74,15 +75,15 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
           ? const AppLoadingSkeleton()
           : !canAccessAccounting
           ? _DeniedAccountingState(message: l10n.t('reportAccessDenied'))
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: ref
-                  .watch(firestoreProvider)
-                  .collection(collectionName)
-                  .where('workspaceId', isEqualTo: workspaceId)
-                  .where(ownerIdField, isEqualTo: ownerId)
-                  .orderBy('date', descending: true)
-                  .limit(50)
-                  .snapshots(),
+          : StreamBuilder<List<DomainRecord>>(
+              stream: ref.watch(
+                domainAccountingRecordsProvider((
+                  collection: collectionName,
+                  ownerField: ownerIdField,
+                  ownerId: ownerId,
+                  workspaceId: workspaceId,
+                )),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Padding(
@@ -95,8 +96,8 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                 if (!snapshot.hasData) {
                   return const AppLoadingSkeleton(lineCount: 6);
                 }
-                final records = snapshot.data!.docs
-                    .map((doc) => _AccountingRecord(doc.id, doc.data()))
+                final records = snapshot.data!
+                    .map((record) => _AccountingRecord(record.id, record.data))
                     .toList(growable: false);
                 final header = headerBuilder?.call(context, ref, workspaceId);
                 if (records.isEmpty) {
@@ -309,7 +310,10 @@ class DomainAccountingRecordsScreen extends ConsumerWidget {
                   ),
                   if (formError != null) ...[
                     const SizedBox(height: 12),
-                    Text(formError!, style: const TextStyle(color: Colors.red)),
+                    Text(
+                      formError!,
+                      style: TextStyle(color: context.tokens.expense),
+                    ),
                   ],
                   const SizedBox(height: 16),
                   FilledButton(

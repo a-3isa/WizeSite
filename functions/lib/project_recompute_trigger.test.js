@@ -158,6 +158,23 @@ function workerAccountingWriteEvent(before, after, recordId = "worker_record_1")
     strict_1.default.equal(Number(summaries.projectSummary.weeklyExpenses ?? 0), 200);
     strict_1.default.equal(Number(summaries.projectSummary.monthlyExpenses ?? 0), 250);
     strict_1.default.equal(Number(summaries.projectSummary.totalPayments ?? 0), 125);
+    const unpaidSummaries = buildAccountingSummaryPayloads({
+        workspaceId: "workspace_1",
+        projectId: "project_1",
+        now,
+        expenses: [],
+        workerEntries: [],
+        payments: [
+            {
+                id: "payment_unpaid",
+                amount: 500,
+                paymentStatus: "unpaid",
+                paymentMethod: "cash",
+                date: firestore_1.Timestamp.fromDate(monday),
+            },
+        ],
+    });
+    strict_1.default.equal(Number(unpaidSummaries.projectSummary.totalPayments ?? 0), 0);
     strict_1.default.equal(Number(summaries.projectSummary.transactionCount ?? 0), 4);
     strict_1.default.equal(Number(summaries.projectSummary.attachmentCount ?? 0), 2);
     const currentWeekly = summaries.weeklySummaries.find((summary) => `${summary.id ?? ""}`.includes("2026_05_25"));
@@ -262,6 +279,7 @@ else {
     let createPaymentWithQuotaForUser;
     let createWorkerEntryWithQuotaForUser;
     let createProjectWithQuotaForUser;
+    let archiveProjectForUser;
     let updateProjectForUser;
     let updatePaymentForUser;
     const workspaceId = "workspace_1";
@@ -362,6 +380,7 @@ else {
         createWorkerEntryWithQuotaForUser =
             indexModule.createWorkerEntryWithQuotaForUser;
         createProjectWithQuotaForUser = indexModule.createProjectWithQuotaForUser;
+        archiveProjectForUser = indexModule.archiveProjectForUser;
         updateProjectForUser = indexModule.updateProjectForUser;
         updatePaymentForUser = indexModule.updatePaymentForUser;
         db = (0, firestore_1.getFirestore)();
@@ -399,8 +418,8 @@ else {
                 {
                     id: "attach_1",
                     fileName: "receipt.pdf",
-                    downloadUrl: "https://example.com/receipt.pdf",
-                    storagePath: "attachments/receipt.pdf",
+                    downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.pdf?alt=media",
+                    storagePath: "attachments/user_1/receipt.pdf",
                     uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "application/pdf",
                     size: 12345,
@@ -412,7 +431,41 @@ else {
         strict_1.default.equal(Array.isArray(saved.attachments), true);
         strict_1.default.equal(saved.attachments?.length, 1);
         strict_1.default.equal(saved.attachments?.[0]?.id, "attach_1");
-        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/receipt.pdf");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.pdf?alt=media");
+    });
+    (0, node_test_1.default)("createExpenseWithQuotaForUser replays the same clientMutationId", async () => {
+        await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
+            workspaceId,
+            userId: "user_1",
+            role: "owner",
+        });
+        await db.collection("projects").doc("project_1").set({
+            ...baseProject,
+        });
+        const payload = {
+            workspaceId,
+            projectId: "project_1",
+            category: "materials",
+            amount: 50,
+            date: firestore_1.Timestamp.fromDate(currentMonthDate),
+            notes: "Idempotent create",
+            paymentMethod: "cash",
+            clientMutationId: "mutation_replay_1",
+        };
+        const first = await createExpenseWithQuotaForUser("user_1", payload);
+        const second = await createExpenseWithQuotaForUser("user_1", {
+            ...payload,
+            amount: 999,
+            notes: "retry should not insert",
+        });
+        strict_1.default.equal(second.id, first.id);
+        const expenses = await db
+            .collection("expenses")
+            .where("workspaceId", "==", workspaceId)
+            .get();
+        strict_1.default.equal(expenses.size, 1);
+        const saved = (await db.collection("expenses").doc(first.id).get()).data();
+        strict_1.default.equal(saved?.amount, 50);
     });
     (0, node_test_1.default)("createPaymentWithQuotaForUser persists attachments", async () => {
         await db.collection("memberships").doc(`${workspaceId}_user_1`).set({
@@ -437,8 +490,8 @@ else {
                 {
                     id: "attach_2",
                     fileName: "receipt.png",
-                    downloadUrl: "https://example.com/receipt.png",
-                    storagePath: "attachments/receipt.png",
+                    downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.png?alt=media",
+                    storagePath: "attachments/user_1/receipt.png",
                     uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "image/png",
                     size: 54321,
@@ -450,7 +503,7 @@ else {
         strict_1.default.equal(Array.isArray(saved.attachments), true);
         strict_1.default.equal(saved.attachments?.length, 1);
         strict_1.default.equal(saved.attachments?.[0]?.id, "attach_2");
-        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/receipt.png");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Freceipt.png?alt=media");
     });
     (0, node_test_1.default)("createWorkerEntryWithQuotaForUser persists attachments", async () => {
         await seedRecomputeInputs();
@@ -466,8 +519,8 @@ else {
                 {
                     id: "attach_worker_1",
                     fileName: "signed-timesheet.pdf",
-                    downloadUrl: "https://example.com/signed-timesheet.pdf",
-                    storagePath: "attachments/signed-timesheet.pdf",
+                    downloadUrl: "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Fsigned-timesheet.pdf?alt=media",
+                    storagePath: "attachments/user_1/signed-timesheet.pdf",
                     uploadedAt: firestore_1.Timestamp.fromDate(currentMonthDate),
                     contentType: "application/pdf",
                     size: 24680,
@@ -479,7 +532,7 @@ else {
         strict_1.default.equal(Array.isArray(saved.attachments), true);
         strict_1.default.equal(saved.attachments?.length, 1);
         strict_1.default.equal(saved.attachments?.[0]?.id, "attach_worker_1");
-        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://example.com/signed-timesheet.pdf");
+        strict_1.default.equal(saved.attachments?.[0]?.downloadUrl, "https://firebasestorage.googleapis.com/v0/b/wize-site.firebasestorage.app/o/attachments%2Fuser_1%2Fsigned-timesheet.pdf?alt=media");
     });
     (0, node_test_1.default)("project write does not loop on derived-only project field changes", async () => {
         await seedRecomputeInputs();
@@ -681,7 +734,7 @@ else {
         strict_1.default.equal(Number(metricsData.totalIncome ?? 0), 300);
         strict_1.default.equal(Number(metricsData.netProfit ?? 0), -50);
         strict_1.default.equal(Number(metricsData.categoryTotals.materials ?? 0), 250);
-        strict_1.default.equal(Number(metricsData.categoryTotals.labor ?? 0), 100);
+        strict_1.default.equal(Number(metricsData.categoryTotals.worker ?? 0), 100);
     });
     (0, node_test_1.default)("worker entry recompute derives labor cost when legacy totalCost is missing", async () => {
         await seedRecomputeInputs();
@@ -704,7 +757,7 @@ else {
         const categoryTotals = metricsData.categoryTotals;
         const topWorkers = metricsData.topWorkers;
         strict_1.default.equal(Number(metricsData.totalExpenses ?? 0), 450);
-        strict_1.default.equal(Number(categoryTotals.labor ?? 0), 250);
+        strict_1.default.equal(Number(categoryTotals.worker ?? 0), 250);
         strict_1.default.equal(Number(topWorkers[0].totalCost ?? 0), 250);
     });
     (0, node_test_1.default)("recompute monthly flow preserves timestamp-dated expenses payments and worker entries", async () => {
@@ -1193,6 +1246,39 @@ else {
         const stored = (await db.collection("projects").doc("project_1").get()).data();
         strict_1.default.equal(stored.budgetLimit, null);
         strict_1.default.equal(stored.contractValue, 50000);
+    });
+    (0, node_test_1.default)("a second free project is refused by the transactional quota", async () => {
+        await seedMembership();
+        await createProjectWithQuotaForUser("user_1", createProjectPayload({ name: "First Job" }));
+        await strict_1.default.rejects(() => createProjectWithQuotaForUser("user_1", createProjectPayload({ name: "Second Job" })), (error) => {
+            const handled = error;
+            return (handled instanceof https_1.HttpsError &&
+                handled.code === "failed-precondition" &&
+                handled.message === "LIMIT_REACHED");
+        });
+        const projects = await db.collection("projects").get();
+        strict_1.default.equal(projects.size, 1);
+        const counter = await db
+            .collection("usage_counters")
+            .doc(`${workspaceId}_projects`)
+            .get();
+        strict_1.default.equal(Number(counter.data()?.activeProjectsCount ?? 0), 1);
+    });
+    (0, node_test_1.default)("archiving frees the active project slot", async () => {
+        await seedMembership();
+        const first = await createProjectWithQuotaForUser("user_1", createProjectPayload({ name: "First Job" }));
+        await archiveProjectForUser("user_1", {
+            workspaceId,
+            projectId: first.id,
+        });
+        const second = await createProjectWithQuotaForUser("user_1", createProjectPayload({ name: "Second Job" }));
+        strict_1.default.ok(second.id);
+        strict_1.default.notEqual(second.id, first.id);
+        const counter = await db
+            .collection("usage_counters")
+            .doc(`${workspaceId}_projects`)
+            .get();
+        strict_1.default.equal(Number(counter.data()?.activeProjectsCount ?? 0), 1);
     });
 }
 //# sourceMappingURL=project_recompute_trigger.test.js.map

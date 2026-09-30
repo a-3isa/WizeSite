@@ -1,8 +1,16 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
+import 'package:buildtrack_app/core/pagination/local_page.dart';
+import 'package:buildtrack_app/core/sync/local_queries.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
+
+part 'local_entity_repository.dart';
 
 /// Ordering options for an exact-type entity directory.
 enum EntityDirectorySort {
@@ -28,7 +36,7 @@ abstract interface class EntityRepository {
     String workspaceId, {
     required String type,
     EntityDirectorySort sort,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize,
   });
 
@@ -121,9 +129,10 @@ class FirebaseEntityRepository implements EntityRepository {
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
+    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
     Query<Map<String, dynamic>> query = _firestore
         .collection('entities')
         .where('workspaceId', isEqualTo: workspaceId)
@@ -142,16 +151,16 @@ class FirebaseEntityRepository implements EntityRepository {
     if (cursor != null) {
       query = switch (sort) {
         EntityDirectorySort.recent => query.startAfter([
-          cursor.data()?['lastUsedAt'],
-          cursor.data()?['normalizedName'],
-          cursor.data()?['id'] ?? cursor.id,
+          firestoreCursor!.data()?['lastUsedAt'],
+          firestoreCursor.data()?['normalizedName'],
+          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
         ]),
         EntityDirectorySort.name => query.startAfter([
-          cursor.data()?['normalizedName'],
-          cursor.data()?['id'] ?? cursor.id,
+          firestoreCursor!.data()?['normalizedName'],
+          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
         ]),
         EntityDirectorySort.id => query.startAfter([
-          cursor.data()?['id'] ?? cursor.id,
+          firestoreCursor!.data()?['id'] ?? firestoreCursor.id,
         ]),
       };
     }
@@ -251,7 +260,7 @@ class FirebaseEntityRepository implements EntityRepository {
         'type': type ?? 'supplier',
         'createdAt': FieldValue.serverTimestamp(),
         'lastUsedAt': FieldValue.serverTimestamp(),
-        'attachments': const [],
+        'attachments': const <Map<String, dynamic>>[],
       });
       await ref.set({'id': ref.id}, SetOptions(merge: true));
       final createdSnap = await ref.get();
@@ -291,7 +300,7 @@ class FirebaseEntityRepository implements EntityRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'lastUsedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      'attachments': const [],
+      'attachments': const <Map<String, dynamic>>[],
     };
     if (defaultRate != null) {
       payload['defaultRate'] = defaultRate;
@@ -374,5 +383,11 @@ class FirebaseEntityRepository implements EntityRepository {
 }
 
 final entityRepositoryProvider = Provider<EntityRepository>((ref) {
+  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
+    return LocalEntityRepository(
+      ref.watch(firestoreProvider),
+      ref.watch(localDatabaseProvider),
+    );
+  }
   return FirebaseEntityRepository(ref.watch(firestoreProvider));
 });

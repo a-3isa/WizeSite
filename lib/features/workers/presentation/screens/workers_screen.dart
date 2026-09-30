@@ -10,7 +10,6 @@ import 'package:buildtrack_app/core/widgets/app_search_field.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,7 +37,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen>
   final _scrollController = ScrollController();
 
   final List<WorkerProfile> _workers = [];
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;

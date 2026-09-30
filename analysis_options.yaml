@@ -16,6 +16,10 @@ analyzer:
     - ios/Pods/**
     - macos/Pods/**
     - packages/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
 
 linter:
   # The lint rules applied to this project can be customized in the

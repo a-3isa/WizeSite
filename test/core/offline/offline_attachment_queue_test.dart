@@ -48,27 +48,27 @@ void main() {
         },
       );
 
-      expect(action.payload['attachments'], isA<List>());
+      expect(action.payload['attachments'], isA<List<Object?>>());
       expect(
-        (action.payload['attachments'] as List).first['downloadUrl'],
-        attachment['downloadUrl'],
+        (action.payload['attachments'] as List<Object?>).first,
+        containsPair('downloadUrl', attachment['downloadUrl']),
       );
 
       await queue.drain((pendingAction) async {
-        expect(pendingAction.payload['attachments'], isA<List>());
+        expect(pendingAction.payload['attachments'], isA<List<Object?>>());
         expect(
-          (pendingAction.payload['attachments'] as List).first['id'],
-          'attach_1',
+          (pendingAction.payload['attachments'] as List<Object?>).first,
+          containsPair('id', 'attach_1'),
         );
       });
 
       final list = await queue.list();
       expect(list, hasLength(1));
       expect(list.first.status, OfflineActionStatus.synced);
-      expect(list.first.payload['attachments'], isA<List>());
+      expect(list.first.payload['attachments'], isA<List<Object?>>());
       expect(
-        (list.first.payload['attachments'] as List).first['fileName'],
-        'receipt.pdf',
+        (list.first.payload['attachments'] as List<Object?>).first,
+        containsPair('fileName', 'receipt.pdf'),
       );
     },
   );

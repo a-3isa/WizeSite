@@ -5,7 +5,6 @@ import 'package:buildtrack_app/core/services/contacts_service.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/add_worker_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,7 +68,7 @@ class _FakeWorkerRepository implements WorkerRepository {
   @override
   Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async =>

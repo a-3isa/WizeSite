@@ -34,7 +34,7 @@ List<ExpenseGroup> groupExpenses(
     return [
       ExpenseGroup(
         id: 'list',
-        title: 'All expenses',
+        title: 'allExpenses',
         totalAmount: _sum(expenses),
         transactionCount: expenses.length,
         items: _sorted(expenses),
@@ -75,21 +75,21 @@ List<ExpenseGroup> groupExpenses(
     case ExpenseGroupMode.relativeDate:
       return _relativeDateKey(expense.date, now ?? DateTime.now());
     case ExpenseGroupMode.category:
-      final category = _fallback(expense.category, 'Unassigned');
+      final category = _fallback(expense.category, 'unassigned');
       return (id: category, title: category);
     case ExpenseGroupMode.entity:
       final entity = _fallback(
         expense.entityName.isNotEmpty
             ? expense.entityName
             : expense.supplierName,
-        'Unassigned',
+        'unassigned',
       );
       return (id: entity, title: entity);
     case ExpenseGroupMode.paymentMethod:
-      final method = _fallback(expense.paymentMethod, 'Unassigned');
+      final method = _fallback(expense.paymentMethod, 'unassigned');
       return (id: method, title: method);
     case ExpenseGroupMode.list:
-      return (id: 'list', title: 'All expenses');
+      return (id: 'list', title: 'allExpenses');
   }
 }
 
@@ -97,18 +97,18 @@ List<ExpenseGroup> groupExpenses(
   final normalizedDate = DateTime.utc(date.year, date.month, date.day);
   final today = DateTime.utc(now.year, now.month, now.day);
   if (normalizedDate == today) {
-    return (id: 'today', title: 'Today');
+    return (id: 'today', title: 'today');
   }
   if (normalizedDate == today.subtract(const Duration(days: 1))) {
-    return (id: 'yesterday', title: 'Yesterday');
+    return (id: 'yesterday', title: 'yesterday');
   }
   final weekStart = today.subtract(Duration(days: today.weekday - 1));
   if (!normalizedDate.isBefore(weekStart) && !normalizedDate.isAfter(today)) {
-    return (id: 'current_week', title: 'Current week');
+    return (id: 'current_week', title: 'thisWeek');
   }
   if (normalizedDate.year == today.year &&
       normalizedDate.month == today.month) {
-    return (id: 'current_month', title: 'Current month');
+    return (id: 'current_month', title: 'thisMonth');
   }
   final id = _dateId(date);
   return (id: id, title: id);

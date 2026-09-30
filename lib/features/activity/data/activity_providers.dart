@@ -1,8 +1,8 @@
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'dart:async';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// How many of the most-recent expenses and payments the activity feed pulls
@@ -23,17 +23,20 @@ final workspaceActivityProvider =
       ref,
       workspaceId,
     ) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
 
-      Query<Map<String, dynamic>> recent(String collection) => firestore
-          .collection(collection)
-          .where('workspaceId', isEqualTo: workspaceId)
-          .where('isArchived', isEqualTo: false)
-          .orderBy('date', descending: true)
-          .limit(_activityFeedLimit);
+      Stream<List<Doc>> recent(String collection) => source.watch(
+        DocQuery(
+          collection,
+          equals: {'workspaceId': workspaceId, 'isArchived': false},
+          orderBy: 'date',
+          descending: true,
+          limit: _activityFeedLimit,
+        ),
+      );
 
-      final expensesStream = recent('expenses').snapshots();
-      final paymentsStream = recent('payments').snapshots();
+      final expensesStream = recent('expenses');
+      final paymentsStream = recent('payments');
 
       return Stream.multi((controller) {
         List<DashboardTransactionRef>? expenses;
@@ -51,10 +54,10 @@ final workspaceActivityProvider =
           );
         }
 
-        final expenseSub = expensesStream.listen((snap) {
-          expenses = snap.docs
+        final expenseSub = expensesStream.listen((docs) {
+          expenses = docs
               .map((doc) {
-                final e = Expense.fromMap(doc.id, doc.data());
+                final e = Expense.fromMap(doc.id, doc.data);
                 return DashboardTransactionRef(
                   id: e.id,
                   type: 'expense',
@@ -71,10 +74,10 @@ final workspaceActivityProvider =
           emit();
         }, onError: controller.addError);
 
-        final paymentSub = paymentsStream.listen((snap) {
-          payments = snap.docs
+        final paymentSub = paymentsStream.listen((docs) {
+          payments = docs
               .map((doc) {
-                final p = PaymentRecord.fromMap(doc.id, doc.data());
+                final p = PaymentRecord.fromMap(doc.id, doc.data);
                 return DashboardTransactionRef(
                   id: p.id,
                   type: 'payment',
@@ -87,9 +90,9 @@ final workspaceActivityProvider =
           emit();
         }, onError: controller.addError);
 
-        controller.onCancel = () async {
-          await expenseSub.cancel();
-          await paymentSub.cancel();
+        controller.onCancel = () {
+          unawaited(expenseSub.cancel());
+          unawaited(paymentSub.cancel());
         };
       });
     });

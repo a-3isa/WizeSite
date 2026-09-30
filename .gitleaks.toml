@@ -1,0 +1,14 @@
+# gitleaks configuration (FR-024). Extends the default rule set.
+# Allowlisted files hold Firebase *client* configuration, which is public by design
+# (identifies the project to the app); it is not a credential.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public Firebase client config"
+paths = [
+  '''android/app/google-services\.json''',
+  '''ios/Runner/GoogleService-Info\.plist''',
+  '''lib/firebase_options\.dart''',
+  '''functions/lib/.*\.js\.map''',
+]

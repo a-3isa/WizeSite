@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.createWorkspace = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
+exports.onProjectWriteRecompute = exports.onWorkerAccountingWriteRecompute = exports.onWorkerEntryWriteRecompute = exports.onPaymentWriteRecompute = exports.onExpenseWriteRecompute = exports.revenuecatWebhook = exports.deleteOwnAccount = exports.inviteMemberWithQuota = exports.inviteMemberByEmail = exports.removeWorkspaceMember = exports.updateWorkspaceMemberRole = exports.createWorkspace = exports.completeInitialWorkspaceSetup = exports.setActiveWorkspace = exports.ensureUserWorkspaceBootstrap = exports.updateUserSettings = exports.updateUserProfile = exports.getAttachmentDownloadUrl = exports.deleteProjectCascade = exports.updateWorkerEntry = exports.archiveWorker = exports.updateWorker = exports.createWorker = exports.updatePayment = exports.updateExpense = exports.archiveWorkerEntryWithQuotaRefundHttp = exports.archiveWorkerEntryWithQuotaRefund = exports.archivePaymentWithQuotaRefundHttp = exports.archivePaymentWithQuotaRefund = exports.archiveExpenseWithQuotaRefundHttp = exports.archiveExpenseWithQuotaRefund = exports.createWorkerEntryWithQuotaHttp = exports.createWorkerEntryWithQuota = exports.createPaymentWithQuotaHttp = exports.createPaymentWithQuota = exports.createExpenseWithQuotaHttp = exports.createExpenseWithQuota = exports.unarchiveProject = exports.archiveProject = exports.updateProject = exports.createProjectWithQuotaHttp = exports.createProjectWithQuota = exports.checkLimit = exports.processVoiceExpenseHttp = exports.processVoiceExpense = void 0;
 exports.classifyProjectRisk = classifyProjectRisk;
 exports.shallowEqualDerivedState = shallowEqualDerivedState;
 exports.writeIfChanged = writeIfChanged;
@@ -17,6 +17,8 @@ exports.buildAccountingSummaryPayloads = buildAccountingSummaryPayloads;
 exports.buildWorkspaceMetricsPayload = buildWorkspaceMetricsPayload;
 exports.createProjectWithQuotaForUser = createProjectWithQuotaForUser;
 exports.updateProjectForUser = updateProjectForUser;
+exports.archiveProjectForUser = archiveProjectForUser;
+exports.unarchiveProjectForUser = unarchiveProjectForUser;
 exports.createExpenseWithQuotaForUser = createExpenseWithQuotaForUser;
 exports.createPaymentWithQuotaForUser = createPaymentWithQuotaForUser;
 exports.createWorkerEntryWithQuotaForUser = createWorkerEntryWithQuotaForUser;
@@ -37,20 +39,29 @@ exports.handleProjectWriteRecompute = handleProjectWriteRecompute;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
+const storage_1 = require("firebase-admin/storage");
 const params_1 = require("firebase-functions/params");
 const v2_1 = require("firebase-functions/v2");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
-const http_app_check_1 = require("./http_app_check");
+const account_deletion_1 = require("./account_deletion");
 const http_cors_1 = require("./http_cors");
+const http_app_check_1 = require("./http_app_check");
+const idempotency_1 = require("./idempotency");
+const money_1 = require("./money");
+const revenuecat_status_1 = require("./revenuecat_status");
+const storage_lifecycle_1 = require("./storage_lifecycle");
 var process_voice_expense_1 = require("./voice/process_voice_expense");
 Object.defineProperty(exports, "processVoiceExpense", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpense; } });
 Object.defineProperty(exports, "processVoiceExpenseHttp", { enumerable: true, get: function () { return process_voice_expense_1.processVoiceExpenseHttp; } });
 (0, app_1.initializeApp)();
-(0, v2_1.setGlobalOptions)({ region: "us-central1", maxInstances: 10 });
+(0, v2_1.setGlobalOptions)({
+    region: "us-central1",
+    maxInstances: 10,
+});
 const db = (0, firestore_1.getFirestore)();
 const revenuecatWebhookSecret = (0, params_1.defineSecret)("REVENUECAT_WEBHOOK_SECRET");
-const ENFORCE_TEAM_MEMBER_LIMITS = false;
+const ENFORCE_TEAM_MEMBER_LIMITS = true;
 const FREE_LIMITS = {
     activeProjects: 1,
     expensesPerMonth: 30,
@@ -58,7 +69,7 @@ const FREE_LIMITS = {
     workerEntriesPerMonth: 10,
     teamMembers: 1,
 };
-const USAGE_LIMITS_DISABLED = true;
+const USAGE_LIMITS_DISABLED = false;
 function periodKey(now = new Date()) {
     const month = `${now.getUTCMonth() + 1}`.padStart(2, "0");
     return `${now.getUTCFullYear()}${month}`;
@@ -133,32 +144,11 @@ function withinUtcWeek(input, weekStart) {
     const end = endOfUtcWeek(weekStart);
     return day.getTime() >= weekStart.getTime() && day.getTime() <= end.getTime();
 }
-function mapRevenueCatStatus(eventType, periodType) {
-    if (eventType === "BILLING_ISSUE") {
-        return "grace";
-    }
-    if (eventType === "EXPIRATION") {
-        return "expired";
-    }
-    if (eventType === "CANCELLATION") {
-        return "canceled";
-    }
-    if (eventType === "INITIAL_PURCHASE" ||
-        eventType === "RENEWAL" ||
-        eventType === "UNCANCELLATION") {
-        return periodType === "TRIAL" ? "trial" : "active";
-    }
-    return "unknown";
-}
-function mapRevenueCatTier(entitlements) {
-    if (!Array.isArray(entitlements)) {
-        return "free";
-    }
-    const hasPro = entitlements.some((item) => `${item}`.toLowerCase().includes("pro"));
-    return hasPro ? "pro" : "free";
-}
 async function getSubscription(workspaceId) {
     const snap = await db.collection("subscriptions").doc(workspaceId).get();
+    return subscriptionFromSnap(snap);
+}
+function subscriptionFromSnap(snap) {
     if (!snap.exists) {
         return { tier: "free", status: "expired" };
     }
@@ -219,6 +209,20 @@ async function assertMember(workspaceId, userId) {
     const role = await roleForUser(workspaceId, userId);
     if (!role) {
         throw new https_1.HttpsError("permission-denied", "User is not a member of this workspace");
+    }
+    return role;
+}
+async function assertCanMutateMoney(workspaceId, userId) {
+    const role = await assertMember(workspaceId, userId);
+    if (!(0, money_1.canMutateMoneyViaCallable)(role)) {
+        throw new https_1.HttpsError("permission-denied", "Accounting access required");
+    }
+    return role;
+}
+async function assertCanManageProject(workspaceId, userId) {
+    const role = await assertMember(workspaceId, userId);
+    if (!(0, money_1.canUpdateProject)(role)) {
+        throw new https_1.HttpsError("permission-denied", "Not allowed to manage project");
     }
     return role;
 }
@@ -334,6 +338,9 @@ function normalizeAttachmentItem(raw, key) {
     if (urlValue.length === 0) {
         throw new https_1.HttpsError("invalid-argument", `Missing required field: ${key}.downloadUrl or ${key}.url`);
     }
+    if (!(0, storage_lifecycle_1.isFirebaseStorageDownloadUrl)(urlValue)) {
+        throw new https_1.HttpsError("invalid-argument", `Invalid attachment download URL host for ${key}`);
+    }
     const uploadedAt = parseTimestamp(attachment.uploadedAt);
     if (uploadedAt == null) {
         throw new https_1.HttpsError("invalid-argument", `Invalid or missing uploadedAt for ${key}`);
@@ -348,6 +355,9 @@ function normalizeAttachmentItem(raw, key) {
     const storagePath = typeof attachment.storagePath === "string"
         ? attachment.storagePath.trim()
         : "";
+    if (!(0, storage_lifecycle_1.isAllowedAttachmentStoragePath)(storagePath)) {
+        throw new https_1.HttpsError("invalid-argument", `Invalid attachment storage path for ${key}`);
+    }
     const type = typeof attachment.type === "string" && attachment.type.trim().length > 0
         ? attachment.type.trim()
         : deriveAttachmentType(contentType, fileName);
@@ -420,12 +430,12 @@ function membershipRef(workspaceId, userId) {
 }
 async function getCurrentUsage(workspaceId, type) {
     if (type === "activeProjects") {
-        const snap = await db
-            .collection("projects")
-            .where("workspaceId", "==", workspaceId)
-            .where("status", "==", "active")
-            .where("isArchived", "==", false)
-            .get();
+        const counterSnap = await projectUsageCounterRef(workspaceId).get();
+        const counted = counterSnap.data()?.activeProjectsCount;
+        if (counted != null) {
+            return Number(counted);
+        }
+        const snap = await activeProjectsQuery(workspaceId).get();
         return snap.size;
     }
     if (type === "teamMembers") {
@@ -447,6 +457,40 @@ async function getCurrentUsage(workspaceId, type) {
         return Number(data.paymentsCount ?? 0);
     }
     return Number(data.workerEntriesCount ?? 0);
+}
+function projectUsageCounterRef(workspaceId) {
+    return db.collection("usage_counters").doc(`${workspaceId}_projects`);
+}
+function activeProjectsQuery(workspaceId) {
+    return db
+        .collection("projects")
+        .where("workspaceId", "==", workspaceId)
+        .where("status", "==", "active")
+        .where("isArchived", "==", false);
+}
+function isCountedActiveProject(data) {
+    const status = `${data.status ?? "active"}`.trim() || "active";
+    return status === "active" && data.isArchived !== true;
+}
+async function countedActiveProjectsInTx(tx, workspaceId) {
+    const snap = await tx.get(activeProjectsQuery(workspaceId));
+    return snap.size;
+}
+async function applyActiveProjectDeltaInTx(tx, workspaceId, delta) {
+    if (delta === 0) {
+        return;
+    }
+    const ref = projectUsageCounterRef(workspaceId);
+    const snap = await tx.get(ref);
+    const existing = snap.data()?.activeProjectsCount;
+    const current = existing == null
+        ? await countedActiveProjectsInTx(tx, workspaceId)
+        : Number(existing);
+    tx.set(ref, {
+        workspaceId,
+        activeProjectsCount: Math.max(0, current + delta),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    }, { merge: true });
 }
 function limitForType(type) {
     return FREE_LIMITS[type];
@@ -963,7 +1007,7 @@ function buildAccountingSummaryPayloads(input) {
         weeklyExpenses,
         monthlyExpenses,
         transactionCount: input.expenses.length + input.payments.length + input.workerEntries.length,
-        totalPayments: input.payments.reduce((sum, payment) => sum + finiteNumber(payment.amount), 0),
+        totalPayments: input.payments.reduce((sum, payment) => sum + (0, money_1.cashCollectedAmount)(payment), 0),
         attachmentCount,
     };
     const weeklyMap = new Map();
@@ -1115,7 +1159,7 @@ function buildAccountingSummaryPayloads(input) {
         }
     }
     for (const payment of input.payments) {
-        const amount = finiteNumber(payment.amount);
+        const amount = (0, money_1.cashCollectedAmount)(payment);
         const date = recordDate(payment);
         const method = `${payment.paymentMethod ?? "unknown"}`.trim() || "unknown";
         const entity = entityFor(entityIdentity(payment, "client"));
@@ -1307,7 +1351,7 @@ async function writeAccountingSummaries(input) {
         replaceScopedSummaryDocs("category_summaries", input.workspaceId, input.projectId, summaries.categorySummaries),
     ]);
 }
-exports.checkLimit = (0, https_1.onCall)(async (request) => {
+exports.checkLimit = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1346,7 +1390,7 @@ exports.checkLimit = (0, https_1.onCall)(async (request) => {
 async function createProjectWithQuotaForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
     const role = await assertMember(workspaceId, uid);
-    if (role !== "owner" && role !== "member") {
+    if (!(0, money_1.canCreateProject)(role)) {
         throw new https_1.HttpsError("permission-denied", "Not allowed to create project");
     }
     const name = requireString(data, "name");
@@ -1358,43 +1402,61 @@ async function createProjectWithQuotaForUser(uid, data) {
     const description = `${data.description ?? ""}`.trim();
     const completionPercentage = Number(data.completionPercentage ?? 0);
     const budgetLimit = optionalPositiveNumber(data, "budgetLimit");
-    const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
-        const current = await getCurrentUsage(workspaceId, "activeProjects");
-        const max = limitForType("activeProjects");
-        if (current + 1 > max) {
-            quotaError("activeProjects", current, max);
-        }
+    const replay = await (0, idempotency_1.readExistingMutation)(db, workspaceId, "projects", data.clientMutationId);
+    if (replay) {
+        return replay;
     }
+    const subscription = await getSubscription(workspaceId);
+    const enforceProjectQuota = !hasUnlimitedQuota(subscription);
     const projectRef = db.collection("projects").doc();
-    await projectRef.set({
-        id: projectRef.id,
+    const counterRef = db
+        .collection("usage_counters")
+        .doc(`${workspaceId}_projects`);
+    return (0, idempotency_1.commitIdempotentCreate)(db, {
         workspaceId,
-        ownerId: uid,
-        name,
-        clientName,
-        contractValue,
-        startDate,
-        expectedEndDate,
-        location,
-        description,
-        budgetLimit,
-        completionPercentage,
-        status: "active",
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        createdBy: uid,
-        isArchived: false,
+        kind: "projects",
+        clientMutationId: data.clientMutationId,
+        newDocId: projectRef.id,
+        quota: {
+            counterRef,
+            field: "activeProjectsCount",
+            max: limitForType("activeProjects"),
+            apply: enforceProjectQuota,
+            onExceeded: () => quotaError("activeProjects", limitForType("activeProjects"), limitForType("activeProjects")),
+            seedFrom: (tx) => countedActiveProjectsInTx(tx, workspaceId),
+        },
+        write: (tx) => {
+            tx.set(projectRef, {
+                id: projectRef.id,
+                workspaceId,
+                ownerId: uid,
+                name,
+                clientName,
+                contractValue,
+                startDate,
+                expectedEndDate,
+                location,
+                description,
+                budgetLimit,
+                completionPercentage,
+                status: "active",
+                clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+                clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+                clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                createdBy: uid,
+                isArchived: false,
+            });
+            tx.set(counterRef, {
+                workspaceId,
+                activeProjectsCount: firestore_1.FieldValue.increment(1),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        },
     });
-    return {
-        id: projectRef.id,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    };
 }
-exports.createProjectWithQuota = (0, https_1.onCall)(async (request) => {
+exports.createProjectWithQuota = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1442,7 +1504,7 @@ exports.createProjectWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
         });
     }
 });
-exports.updateProject = (0, https_1.onCall)(async (request) => {
+exports.updateProject = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1455,7 +1517,7 @@ exports.updateProject = (0, https_1.onCall)(async (request) => {
  */
 async function updateProjectForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanManageProject(workspaceId, uid);
     const projectId = requireString(data, "projectId");
     const projectRef = db.collection("projects").doc(projectId);
     const projectSnap = await projectRef.get();
@@ -1511,55 +1573,92 @@ async function updateProjectForUser(uid, data) {
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 }
-exports.archiveProject = (0, https_1.onCall)(async (request) => {
+async function archiveProjectForUser(uid, data) {
+    const workspaceId = requireString(data, "workspaceId");
+    await assertCanManageProject(workspaceId, uid);
+    const projectId = requireString(data, "projectId");
+    const projectRef = db.collection("projects").doc(projectId);
+    await db.runTransaction(async (tx) => {
+        const projectSnap = await tx.get(projectRef);
+        if (!projectSnap.exists) {
+            throw new https_1.HttpsError("not-found", "Project not found");
+        }
+        const project = (projectSnap.data() ?? {});
+        if (`${project.workspaceId ?? ""}` !== workspaceId) {
+            throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
+        }
+        if (project.isArchived === true) {
+            return;
+        }
+        if (isCountedActiveProject(project)) {
+            await applyActiveProjectDeltaInTx(tx, workspaceId, -1);
+        }
+        tx.update(projectRef, {
+            isArchived: true,
+            clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+            clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    });
+}
+exports.archiveProject = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
-    const data = request.data;
+    await archiveProjectForUser(request.auth.uid, request.data);
+});
+async function unarchiveProjectForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    await assertCanManageProject(workspaceId, uid);
     const projectId = requireString(data, "projectId");
     const projectRef = db.collection("projects").doc(projectId);
-    const projectSnap = await projectRef.get();
-    if (!projectSnap.exists) {
-        throw new https_1.HttpsError("not-found", "Project not found");
-    }
-    const project = projectSnap.data() ?? {};
-    if (`${project.workspaceId ?? ""}` !== workspaceId) {
-        throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
-    }
-    await projectRef.update({
-        isArchived: true,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    const subscription = await getSubscription(workspaceId);
+    const enforceProjectQuota = !hasUnlimitedQuota(subscription);
+    const max = limitForType("activeProjects");
+    await db.runTransaction(async (tx) => {
+        const projectSnap = await tx.get(projectRef);
+        if (!projectSnap.exists) {
+            throw new https_1.HttpsError("not-found", "Project not found");
+        }
+        const project = (projectSnap.data() ?? {});
+        if (`${project.workspaceId ?? ""}` !== workspaceId) {
+            throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
+        }
+        if (project.isArchived !== true) {
+            return;
+        }
+        const countsAsActive = (`${project.status ?? "active"}`.trim() || "active") === "active";
+        if (countsAsActive) {
+            const counterRef = projectUsageCounterRef(workspaceId);
+            const counterSnap = await tx.get(counterRef);
+            const raw = counterSnap.data()?.activeProjectsCount;
+            const current = raw == null
+                ? await countedActiveProjectsInTx(tx, workspaceId)
+                : Number(raw);
+            if (enforceProjectQuota && current + 1 > max) {
+                quotaError("activeProjects", current, max);
+            }
+            tx.set(counterRef, {
+                workspaceId,
+                activeProjectsCount: current + 1,
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        tx.update(projectRef, {
+            isArchived: false,
+            clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+            clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
     });
-});
-exports.unarchiveProject = (0, https_1.onCall)(async (request) => {
+}
+exports.unarchiveProject = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
-    const data = request.data;
-    const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
-    const projectId = requireString(data, "projectId");
-    const projectRef = db.collection("projects").doc(projectId);
-    const projectSnap = await projectRef.get();
-    if (!projectSnap.exists) {
-        throw new https_1.HttpsError("not-found", "Project not found");
-    }
-    const project = projectSnap.data() ?? {};
-    if (`${project.workspaceId ?? ""}` !== workspaceId) {
-        throw new https_1.HttpsError("permission-denied", "Project is not available in this workspace");
-    }
-    await projectRef.update({
-        isArchived: false,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-    });
+    await unarchiveProjectForUser(request.auth.uid, request.data);
 });
-exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
+exports.createExpenseWithQuota = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1567,19 +1666,13 @@ exports.createExpenseWithQuota = (0, https_1.onCall)(async (request) => {
 });
 async function createExpenseWithQuotaForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const projectId = requireString(data, "projectId");
-    const category = requireString(data, "category");
-    const allowedCategories = [
-        "labor",
-        "materials",
-        "equipment",
-        "transport",
-        "other",
-    ];
-    if (!allowedCategories.includes(category)) {
+    const categoryRaw = requireString(data, "category");
+    if (!(0, money_1.isAllowedExpenseCategory)(categoryRaw)) {
         throw new https_1.HttpsError("invalid-argument", "Unsupported expense category");
     }
+    const category = (0, money_1.normalizeExpenseCategory)(categoryRaw);
     const amount = requireNumber(data, "amount");
     if (amount <= 0) {
         throw new https_1.HttpsError("invalid-argument", "Amount must be greater than zero");
@@ -1608,56 +1701,69 @@ async function createExpenseWithQuotaForUser(uid, data) {
     const transcript = `${data.transcript ?? ""}`.trim();
     const storagePath = `${data.storagePath ?? ""}`.trim();
     const projectName = `${data.projectName ?? ""}`.trim() || `${projectData.name ?? ""}`.trim();
-    const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
-        const current = await getCurrentUsage(workspaceId, "expensesPerMonth");
-        const max = limitForType("expensesPerMonth");
-        if (current + 1 > max) {
-            quotaError("expensesPerMonth", current, max);
-        }
+    const replay = await (0, idempotency_1.readExistingMutation)(db, workspaceId, "expenses", data.clientMutationId);
+    if (replay) {
+        return replay;
     }
+    const subscription = await getSubscription(workspaceId);
+    const enforceExpenseQuota = !hasUnlimitedQuota(subscription);
     const expenseRef = db.collection("expenses").doc();
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
-    await db.runTransaction(async (tx) => {
-        tx.set(expenseRef, {
-            id: expenseRef.id,
-            workspaceId,
-            projectId,
-            projectName,
-            category,
-            amount,
-            currency,
-            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
-            notes: `${data.notes ?? ""}`.trim(),
-            supplierName: `${data.supplierName ?? ""}`.trim(),
-            paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
-            inputMethod,
-            transcript,
-            source,
-            storagePath,
-            attachments: ensureAttachmentItems(data, "attachments"),
-            clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-            clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-            clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-            createdBy: uid,
-            createdAt: firestore_1.FieldValue.serverTimestamp(),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            isArchived: false,
-        });
-        tx.set(counterRef, {
-            workspaceId,
-            periodKey: periodKey(),
-            expensesCount: firestore_1.FieldValue.increment(1),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
+    return (0, idempotency_1.commitIdempotentCreate)(db, {
+        workspaceId,
+        kind: "expenses",
+        clientMutationId: data.clientMutationId,
+        newDocId: expenseRef.id,
+        quota: {
+            counterRef,
+            field: "expensesCount",
+            max: limitForType("expensesPerMonth"),
+            apply: enforceExpenseQuota,
+            onExceeded: () => quotaError("expensesPerMonth", limitForType("expensesPerMonth"), limitForType("expensesPerMonth")),
+        },
+        write: (tx) => {
+            tx.set(expenseRef, {
+                id: expenseRef.id,
+                workspaceId,
+                projectId,
+                projectName,
+                category,
+                amount,
+                currency,
+                date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
+                notes: `${data.notes ?? ""}`.trim(),
+                purpose: `${data.purpose ?? ""}`.trim(),
+                description: `${data.description ?? data.notes ?? ""}`.trim(),
+                supplierName: `${data.supplierName ?? ""}`.trim(),
+                entityId: `${data.entityId ?? ""}`.trim() || null,
+                entityName: `${data.entityName ?? data.supplierName ?? ""}`.trim(),
+                entityType: `${data.entityType ?? "supplier"}`.trim(),
+                paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+                paymentStatus: (0, money_1.parsePaymentStatus)(data.paymentStatus, "unpaid"),
+                inputMethod,
+                transcript,
+                source,
+                storagePath,
+                attachments: ensureAttachmentItems(data, "attachments"),
+                clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+                clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+                clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+                createdBy: uid,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                isArchived: false,
+            });
+            tx.set(counterRef, {
+                workspaceId,
+                periodKey: periodKey(),
+                expensesCount: firestore_1.FieldValue.increment(1),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
+        },
     });
-    return {
-        id: expenseRef.id,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    };
 }
 exports.createExpenseWithQuotaHttp = (0, https_1.onRequest)(async (request, response) => {
     if ((0, http_cors_1.applyCorsHeaders)(request, response)) {
@@ -1703,7 +1809,7 @@ exports.createExpenseWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
 });
 async function createPaymentWithQuotaForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const projectId = requireString(data, "projectId");
     const amount = requireNumber(data, "amount");
     if (amount <= 0) {
@@ -1726,51 +1832,72 @@ async function createPaymentWithQuotaForUser(uid, data) {
     if (!hasContractValue(projectData)) {
         throw new https_1.HttpsError("failed-precondition", "Set a contract value on this project before recording payments.");
     }
-    const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
-        const current = await getCurrentUsage(workspaceId, "paymentsPerMonth");
-        const max = limitForType("paymentsPerMonth");
-        if (current + 1 > max) {
-            quotaError("paymentsPerMonth", current, max);
-        }
+    const replay = await (0, idempotency_1.readExistingMutation)(db, workspaceId, "payments", data.clientMutationId);
+    if (replay) {
+        return replay;
     }
+    const subscription = await getSubscription(workspaceId);
+    const enforcePaymentQuota = !hasUnlimitedQuota(subscription);
+    const paymentStatus = (0, money_1.parsePaymentStatus)(data.paymentStatus, "paid");
+    const cashIn = (0, money_1.cashCollectedAmount)({
+        amount,
+        paymentStatus,
+        paidAmount: data.paidAmount,
+    });
     const paymentRef = db.collection("payments").doc();
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
-    await db.runTransaction(async (tx) => {
-        const attachments = ensureAttachmentItems(data, "attachments");
-        tx.set(paymentRef, {
-            id: paymentRef.id,
-            workspaceId,
-            projectId,
-            amount,
-            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
-            paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
-            notes: `${data.notes ?? ""}`.trim(),
-            attachments,
-            clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-            clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-            clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-            createdBy: uid,
-            createdAt: firestore_1.FieldValue.serverTimestamp(),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            isArchived: false,
-        });
-        tx.set(counterRef, {
-            workspaceId,
-            periodKey: periodKey(),
-            paymentsCount: firestore_1.FieldValue.increment(1),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, amount);
+    return (0, idempotency_1.commitIdempotentCreate)(db, {
+        workspaceId,
+        kind: "payments",
+        clientMutationId: data.clientMutationId,
+        newDocId: paymentRef.id,
+        quota: {
+            counterRef,
+            field: "paymentsCount",
+            max: limitForType("paymentsPerMonth"),
+            apply: enforcePaymentQuota,
+            onExceeded: () => quotaError("paymentsPerMonth", limitForType("paymentsPerMonth"), limitForType("paymentsPerMonth")),
+        },
+        write: (tx) => {
+            const attachments = ensureAttachmentItems(data, "attachments");
+            tx.set(paymentRef, {
+                id: paymentRef.id,
+                workspaceId,
+                projectId,
+                amount,
+                date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
+                paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
+                paymentStatus,
+                paidAmount: Number.isFinite(Number(data.paidAmount))
+                    ? Number(data.paidAmount)
+                    : null,
+                description: `${data.description ?? data.notes ?? ""}`.trim(),
+                notes: `${data.notes ?? ""}`.trim(),
+                entityId: `${data.entityId ?? ""}`.trim() || null,
+                entityName: `${data.entityName ?? ""}`.trim(),
+                entityType: `${data.entityType ?? "other"}`.trim(),
+                attachments,
+                clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+                clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+                clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+                createdBy: uid,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                isArchived: false,
+            });
+            tx.set(counterRef, {
+                workspaceId,
+                periodKey: periodKey(),
+                paymentsCount: firestore_1.FieldValue.increment(1),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, cashIn);
+        },
     });
-    return {
-        id: paymentRef.id,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    };
 }
-exports.createPaymentWithQuota = (0, https_1.onCall)(async (request) => {
+exports.createPaymentWithQuota = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1820,7 +1947,7 @@ exports.createPaymentWithQuotaHttp = (0, https_1.onRequest)(async (request, resp
 });
 async function createWorkerEntryWithQuotaForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const workerId = requireString(data, "workerId");
     const projectId = requireString(data, "projectId");
     const daysWorked = requireNumber(data, "daysWorked");
@@ -1853,53 +1980,60 @@ async function createWorkerEntryWithQuotaForUser(uid, data) {
     if (projectData.isArchived === true) {
         throw new https_1.HttpsError("permission-denied", "Project is archived and can no longer accept worker entries.");
     }
-    const subscription = await getSubscription(workspaceId);
-    if (!hasUnlimitedQuota(subscription)) {
-        const current = await getCurrentUsage(workspaceId, "workerEntriesPerMonth");
-        const max = limitForType("workerEntriesPerMonth");
-        if (current + 1 > max) {
-            quotaError("workerEntriesPerMonth", current, max);
-        }
+    const replay = await (0, idempotency_1.readExistingMutation)(db, workspaceId, "worker_entries", data.clientMutationId);
+    if (replay) {
+        return replay;
     }
+    const subscription = await getSubscription(workspaceId);
+    const enforceWorkerEntryQuota = !hasUnlimitedQuota(subscription);
     const entryRef = db.collection("worker_entries").doc();
     const attachments = ensureAttachmentItems(data, "attachments");
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
-    await db.runTransaction(async (tx) => {
-        tx.set(entryRef, {
-            id: entryRef.id,
-            workspaceId,
-            workerId,
-            projectId,
-            daysWorked,
-            dailyWage,
-            totalCost,
-            date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
-            notes: `${data.notes ?? ""}`.trim(),
-            attachments,
-            clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-            clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-            clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-            createdBy: uid,
-            createdAt: firestore_1.FieldValue.serverTimestamp(),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-            isArchived: false,
-        });
-        tx.set(counterRef, {
-            workspaceId,
-            periodKey: periodKey(),
-            workerEntriesCount: firestore_1.FieldValue.increment(1),
-            updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
+    return (0, idempotency_1.commitIdempotentCreate)(db, {
+        workspaceId,
+        kind: "worker_entries",
+        clientMutationId: data.clientMutationId,
+        newDocId: entryRef.id,
+        quota: {
+            counterRef,
+            field: "workerEntriesCount",
+            max: limitForType("workerEntriesPerMonth"),
+            apply: enforceWorkerEntryQuota,
+            onExceeded: () => quotaError("workerEntriesPerMonth", limitForType("workerEntriesPerMonth"), limitForType("workerEntriesPerMonth")),
+        },
+        write: (tx) => {
+            tx.set(entryRef, {
+                id: entryRef.id,
+                workspaceId,
+                workerId,
+                projectId,
+                daysWorked,
+                dailyWage,
+                totalCost,
+                date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
+                notes: `${data.notes ?? ""}`.trim(),
+                attachments,
+                clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+                clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+                clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+                createdBy: uid,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                isArchived: false,
+            });
+            tx.set(counterRef, {
+                workspaceId,
+                periodKey: periodKey(),
+                workerEntriesCount: firestore_1.FieldValue.increment(1),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
+        },
     });
-    return {
-        id: entryRef.id,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    };
 }
-exports.createWorkerEntryWithQuota = (0, https_1.onCall)(async (request) => {
+exports.createWorkerEntryWithQuota = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -1949,7 +2083,7 @@ exports.createWorkerEntryWithQuotaHttp = (0, https_1.onRequest)(async (request, 
 });
 async function archiveExpenseWithQuotaRefundForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const expenseId = requireString(data, "expenseId");
     const expenseRef = db.collection("expenses").doc(expenseId);
     const counterRef = db
@@ -1987,7 +2121,7 @@ async function archiveExpenseWithQuotaRefundForUser(uid, data) {
         }
     });
 }
-exports.archiveExpenseWithQuotaRefund = (0, https_1.onCall)(async (request) => {
+exports.archiveExpenseWithQuotaRefund = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2037,7 +2171,7 @@ exports.archiveExpenseWithQuotaRefundHttp = (0, https_1.onRequest)(async (reques
 });
 async function archivePaymentWithQuotaRefundForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const paymentId = requireString(data, "paymentId");
     const paymentRef = db.collection("payments").doc(paymentId);
     const counterRef = db
@@ -2055,7 +2189,7 @@ async function archivePaymentWithQuotaRefundForUser(uid, data) {
         if (payment.isArchived === true) {
             return;
         }
-        const archivedAmount = Number(payment.amount ?? 0);
+        const archivedCashIn = (0, money_1.cashCollectedAmount)(payment);
         const archivedProjectId = `${payment.projectId ?? ""}`;
         tx.update(paymentRef, {
             isArchived: true,
@@ -2071,11 +2205,11 @@ async function archivePaymentWithQuotaRefundForUser(uid, data) {
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         if (archivedProjectId) {
-            applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, 0, -archivedAmount);
+            applyMetricsDeltaInTx(tx, archivedProjectId, workspaceId, 0, -archivedCashIn);
         }
     });
 }
-exports.archivePaymentWithQuotaRefund = (0, https_1.onCall)(async (request) => {
+exports.archivePaymentWithQuotaRefund = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2125,7 +2259,7 @@ exports.archivePaymentWithQuotaRefundHttp = (0, https_1.onRequest)(async (reques
 });
 async function archiveWorkerEntryWithQuotaRefundForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const entryId = requireString(data, "entryId");
     const entryRef = db.collection("worker_entries").doc(entryId);
     const counterRef = db
@@ -2163,7 +2297,7 @@ async function archiveWorkerEntryWithQuotaRefundForUser(uid, data) {
         }
     });
 }
-exports.archiveWorkerEntryWithQuotaRefund = (0, https_1.onCall)(async (request) => {
+exports.archiveWorkerEntryWithQuotaRefund = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2211,16 +2345,20 @@ exports.archiveWorkerEntryWithQuotaRefundHttp = (0, https_1.onRequest)(async (re
         });
     }
 });
-exports.updateExpense = (0, https_1.onCall)(async (request) => {
+exports.updateExpense = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
     const data = request.data;
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    await assertCanMutateMoney(workspaceId, request.auth.uid);
     const expenseId = requireString(data, "expenseId");
     const projectId = requireString(data, "projectId");
-    const category = requireString(data, "category");
+    const categoryRaw = requireString(data, "category");
+    if (!(0, money_1.isAllowedExpenseCategory)(categoryRaw)) {
+        throw new https_1.HttpsError("invalid-argument", "Unsupported expense category");
+    }
+    const category = (0, money_1.normalizeExpenseCategory)(categoryRaw);
     const amount = requireNumber(data, "amount");
     if (amount <= 0) {
         throw new https_1.HttpsError("invalid-argument", "Amount must be greater than zero");
@@ -2258,6 +2396,7 @@ exports.updateExpense = (0, https_1.onCall)(async (request) => {
         notes: `${data.notes ?? ""}`.trim(),
         supplierName: `${data.supplierName ?? ""}`.trim(),
         paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+        paymentStatus: (0, money_1.parsePaymentStatus)(data.paymentStatus, "unpaid"),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
@@ -2276,7 +2415,7 @@ exports.updateExpense = (0, https_1.onCall)(async (request) => {
     }
     await batch.commit();
 });
-exports.updatePayment = (0, https_1.onCall)(async (request) => {
+exports.updatePayment = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2289,7 +2428,7 @@ exports.updatePayment = (0, https_1.onCall)(async (request) => {
  */
 async function updatePaymentForUser(uid, data) {
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, uid);
+    await assertCanMutateMoney(workspaceId, uid);
     const paymentId = requireString(data, "paymentId");
     const projectId = requireString(data, "projectId");
     const amount = requireNumber(data, "amount");
@@ -2324,7 +2463,13 @@ async function updatePaymentForUser(uid, data) {
     if (!hasContractValue(project)) {
         throw new https_1.HttpsError("failed-precondition", "Set a contract value on this project before recording payments.");
     }
-    const oldAmount = Number(payment.amount ?? 0);
+    const oldCashIn = (0, money_1.cashCollectedAmount)(payment);
+    const paymentStatus = (0, money_1.parsePaymentStatus)(data.paymentStatus ?? payment.paymentStatus, "paid");
+    const newCashIn = (0, money_1.cashCollectedAmount)({
+        amount,
+        paymentStatus,
+        paidAmount: data.paidAmount ?? payment.paidAmount,
+    });
     const oldProjectId = `${payment.projectId ?? ""}`;
     const batch = db.batch();
     const updateData = {
@@ -2332,6 +2477,7 @@ async function updatePaymentForUser(uid, data) {
         amount,
         date: parseTimestamp(data.date) ?? firestore_1.Timestamp.now(),
         paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
+        paymentStatus,
         notes: `${data.notes ?? ""}`.trim(),
         clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
         clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
@@ -2342,22 +2488,23 @@ async function updatePaymentForUser(uid, data) {
     }
     batch.update(paymentSnap.ref, updateData);
     if (oldProjectId === projectId) {
-        applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount - oldAmount);
+        applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, newCashIn - oldCashIn);
     }
     else {
         if (oldProjectId)
-            applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, 0, -oldAmount);
-        applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount);
+            applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, 0, -oldCashIn);
+        applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, newCashIn);
     }
     await batch.commit();
 }
-exports.createWorker = (0, https_1.onCall)(async (request) => {
+exports.createWorker = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
+    const uid = request.auth.uid;
     const data = request.data;
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    await assertMember(workspaceId, uid);
     const name = requireString(data, "name");
     const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
     const billingType = billingTypeRaw === "project" ? "project" : "daily";
@@ -2366,31 +2513,39 @@ exports.createWorker = (0, https_1.onCall)(async (request) => {
     if (billingType === "daily" && dailyWage <= 0) {
         throw new https_1.HttpsError("invalid-argument", "Daily workers must have daily wage greater than zero");
     }
+    const replay = await (0, idempotency_1.readExistingMutation)(db, workspaceId, "workers", data.clientMutationId);
+    if (replay) {
+        return replay;
+    }
     const workerRef = db.collection("workers").doc();
-    await workerRef.set({
-        id: workerRef.id,
+    return (0, idempotency_1.commitIdempotentCreate)(db, {
         workspaceId,
-        name,
-        phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-        dailyWage: billingType === "daily" ? dailyWage : 0,
-        billingType,
-        workerType: `${data.workerType ?? ""}`.trim(),
-        notes: `${data.notes ?? ""}`.trim(),
-        status,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-        createdBy: request.auth.uid,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-        isArchived: false,
+        kind: "workers",
+        clientMutationId: data.clientMutationId,
+        newDocId: workerRef.id,
+        write: (tx) => {
+            tx.set(workerRef, {
+                id: workerRef.id,
+                workspaceId,
+                name,
+                phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
+                dailyWage: billingType === "daily" ? dailyWage : 0,
+                billingType,
+                workerType: `${data.workerType ?? ""}`.trim(),
+                notes: `${data.notes ?? ""}`.trim(),
+                status,
+                clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+                clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+                clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+                createdBy: uid,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                isArchived: false,
+            });
+        },
     });
-    return {
-        id: workerRef.id,
-        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    };
 });
-exports.updateWorker = (0, https_1.onCall)(async (request) => {
+exports.updateWorker = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2431,7 +2586,7 @@ exports.updateWorker = (0, https_1.onCall)(async (request) => {
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
-exports.archiveWorker = (0, https_1.onCall)(async (request) => {
+exports.archiveWorker = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2455,13 +2610,13 @@ exports.archiveWorker = (0, https_1.onCall)(async (request) => {
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
 });
-exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
+exports.updateWorkerEntry = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
     const data = request.data;
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    await assertCanMutateMoney(workspaceId, request.auth.uid);
     const entryId = requireString(data, "entryId");
     const projectId = requireString(data, "projectId");
     const daysWorked = requireNumber(data, "daysWorked");
@@ -2522,13 +2677,16 @@ exports.updateWorkerEntry = (0, https_1.onCall)(async (request) => {
     }
     await batch.commit();
 });
-exports.deleteProjectCascade = (0, https_1.onCall)(async (request) => {
+exports.deleteProjectCascade = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
     const data = request.data;
     const workspaceId = requireString(data, "workspaceId");
-    await assertMember(workspaceId, request.auth.uid);
+    const role = await assertMember(workspaceId, request.auth.uid);
+    if (!(0, money_1.canDeleteProjectCascade)(role)) {
+        throw new https_1.HttpsError("permission-denied", "Not allowed to delete project");
+    }
     const projectId = requireString(data, "projectId");
     const projectRef = db.collection("projects").doc(projectId);
     const projectSnap = await projectRef.get();
@@ -2567,35 +2725,93 @@ exports.deleteProjectCascade = (0, https_1.onCall)(async (request) => {
     const counterRef = db
         .collection("usage_counters")
         .doc(`${workspaceId}_${periodKey()}`);
-    const batch = db.batch();
-    batch.delete(projectRef);
-    batch.delete(db.collection("project_metrics").doc(projectId));
-    for (const doc of expensesSnap.docs) {
-        batch.delete(doc.ref);
-    }
-    for (const doc of paymentsSnap.docs) {
-        batch.delete(doc.ref);
-    }
-    for (const doc of entriesSnap.docs) {
-        batch.delete(doc.ref);
-    }
-    for (const doc of notificationsSnap.docs) {
-        batch.delete(doc.ref);
-    }
+    const projectCounterRef = projectUsageCounterRef(workspaceId);
+    const storagePaths = (0, storage_lifecycle_1.collectAttachmentStoragePaths)([
+        ...expensesSnap.docs,
+        ...paymentsSnap.docs,
+        ...entriesSnap.docs,
+    ]);
+    const refsToDelete = [
+        projectRef,
+        db.collection("project_metrics").doc(projectId),
+        ...expensesSnap.docs.map((doc) => doc.ref),
+        ...paymentsSnap.docs.map((doc) => doc.ref),
+        ...entriesSnap.docs.map((doc) => doc.ref),
+        ...notificationsSnap.docs.map((doc) => doc.ref),
+    ];
     const counterSnap = await counterRef.get();
     const currentData = counterSnap.data() ?? {};
-    batch.set(counterRef, {
+    const counterPayload = {
         workspaceId,
         periodKey: periodKey(),
         expensesCount: Math.max(0, Number(currentData.expensesCount ?? 0) - expenseRefund),
         paymentsCount: Math.max(0, Number(currentData.paymentsCount ?? 0) - paymentRefund),
         workerEntriesCount: Math.max(0, Number(currentData.workerEntriesCount ?? 0) - entryRefund),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await batch.commit();
+    };
+    let projectCounterPayload = null;
+    if (isCountedActiveProject(project)) {
+        const projectCounterSnap = await projectCounterRef.get();
+        const existing = projectCounterSnap.data()?.activeProjectsCount;
+        const current = existing == null
+            ? (await activeProjectsQuery(workspaceId).get()).size
+            : Number(existing);
+        projectCounterPayload = {
+            workspaceId,
+            activeProjectsCount: Math.max(0, current - 1),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        };
+    }
+    for (const chunk of (0, storage_lifecycle_1.chunkItems)(refsToDelete)) {
+        const batch = db.batch();
+        for (const ref of chunk) {
+            batch.delete(ref);
+        }
+        await batch.commit();
+    }
+    const countersBatch = db.batch();
+    countersBatch.set(counterRef, counterPayload, { merge: true });
+    if (projectCounterPayload) {
+        countersBatch.set(projectCounterRef, projectCounterPayload, { merge: true });
+    }
+    await countersBatch.commit();
+    const bucket = (0, storage_1.getStorage)().bucket();
+    await Promise.all(storagePaths.map(async (storagePath) => {
+        try {
+            await bucket.file(storagePath).delete({ ignoreNotFound: true });
+        }
+        catch {
+            // Best-effort Storage cleanup; Firestore cascade already committed.
+        }
+    }));
     await recomputeWorkspaceMetrics(workspaceId);
 });
-exports.updateUserProfile = (0, https_1.onCall)(async (request) => {
+exports.getAttachmentDownloadUrl = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data;
+    const workspaceId = requireString(data, "workspaceId");
+    const storagePath = requireString(data, "storagePath");
+    const role = await assertMember(workspaceId, request.auth.uid);
+    if (role !== "owner" &&
+        role !== "admin" &&
+        role !== "accountingApproved") {
+        throw new https_1.HttpsError("permission-denied", "Accounting access required to download attachments");
+    }
+    if (!(0, storage_lifecycle_1.isAllowedAttachmentStoragePath)(storagePath)) {
+        throw new https_1.HttpsError("invalid-argument", "Invalid attachment storage path");
+    }
+    const [url] = await (0, storage_1.getStorage)()
+        .bucket()
+        .file(storagePath)
+        .getSignedUrl({
+        action: "read",
+        expires: Date.now() + 15 * 60 * 1000,
+    });
+    return { downloadUrl: url, expiresInSeconds: 15 * 60 };
+});
+exports.updateUserProfile = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2619,7 +2835,7 @@ exports.updateUserProfile = (0, https_1.onCall)(async (request) => {
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
 });
-exports.updateUserSettings = (0, https_1.onCall)(async (request) => {
+exports.updateUserSettings = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2776,7 +2992,7 @@ async function bootstrapWorkspaceForUser(input) {
     await batch.commit();
     return { workspaceId, created: true, setupCompleted: false };
 }
-exports.ensureUserWorkspaceBootstrap = (0, https_1.onCall)(async (request) => {
+exports.ensureUserWorkspaceBootstrap = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2814,7 +3030,7 @@ async function setActiveWorkspaceForUser(input) {
     }, { merge: true });
     return { workspaceId };
 }
-exports.setActiveWorkspace = (0, https_1.onCall)(async (request) => {
+exports.setActiveWorkspace = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2864,7 +3080,7 @@ async function completeInitialWorkspaceSetupForUser(input) {
     });
     return { workspaceId, setupCompleted: true };
 }
-exports.completeInitialWorkspaceSetup = (0, https_1.onCall)(async (request) => {
+exports.completeInitialWorkspaceSetup = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -2901,11 +3117,6 @@ async function createWorkspaceForUser(input) {
     if (!hasUnlimitedQuota(subscription)) {
         throw new https_1.HttpsError("failed-precondition", "Upgrade to Pro to create additional workspaces");
     }
-    const sourceSubscriptionSnap = await db
-        .collection("subscriptions")
-        .doc(sourceWorkspaceId)
-        .get();
-    const sourceSubscriptionData = sourceSubscriptionSnap.data();
     const workspaceRef = db.collection("workspaces").doc();
     const workspaceId = workspaceRef.id;
     const batch = db.batch();
@@ -2916,16 +3127,8 @@ async function createWorkspaceForUser(input) {
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         updatedAt: firestore_1.FieldValue.serverTimestamp(),
     });
-    if (sourceSubscriptionData) {
-        // New workspace inherits a snapshot of the owner's Pro entitlement at
-        // creation time (not a live link) — it bills/renews independently from
-        // here on, matching the per-workspace subscription model.
-        batch.set(db.collection("subscriptions").doc(workspaceId), {
-            ...sourceSubscriptionData,
-            workspaceId,
-            lastSyncedAt: firestore_1.FieldValue.serverTimestamp(),
-        });
-    }
+    // New workspaces start on the free plan. Cloning the source workspace's
+    // Pro snapshot let extra workspaces skip RevenueCat entirely.
     batch.set(membershipRef(workspaceId, uid), {
         workspaceId,
         userId: uid,
@@ -2943,7 +3146,7 @@ async function createWorkspaceForUser(input) {
     await batch.commit();
     return { workspaceId, created: true };
 }
-exports.createWorkspace = (0, https_1.onCall)(async (request) => {
+exports.createWorkspace = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -3002,7 +3205,7 @@ async function updateWorkspaceMemberRoleForUser(input) {
     }, { merge: true });
     return { userId: targetUserId, workspaceId, role };
 }
-exports.updateWorkspaceMemberRole = (0, https_1.onCall)(async (request) => {
+exports.updateWorkspaceMemberRole = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -3036,7 +3239,7 @@ async function removeWorkspaceMemberForUser(input) {
     await membership.ref.delete();
     return { userId: targetUserId, workspaceId, removed: true };
 }
-exports.removeWorkspaceMember = (0, https_1.onCall)(async (request) => {
+exports.removeWorkspaceMember = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -3068,37 +3271,33 @@ async function inviteMemberByEmailForUser(input) {
         .limit(1)
         .get();
     if (userSnap.empty) {
-        throw new https_1.HttpsError("not-found", "No existing user was found with that email");
+        throw new https_1.HttpsError("not-found", "INVITE_UNAVAILABLE");
     }
     const userId = userSnap.docs[0].id;
-    const deterministicMembership = await membershipRef(workspaceId, userId).get();
-    if (deterministicMembership.exists) {
-        throw new https_1.HttpsError("already-exists", "User is already a member of this workspace");
-    }
-    const existingMembership = await db
-        .collection("memberships")
-        .where("workspaceId", "==", workspaceId)
-        .where("userId", "==", userId)
-        .limit(1)
-        .get();
-    if (!existingMembership.empty) {
-        throw new https_1.HttpsError("already-exists", "User is already a member of this workspace");
-    }
-    const subscription = await getSubscription(workspaceId);
-    if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
-        const current = await getCurrentUsage(workspaceId, "teamMembers");
-        const max = limitForType("teamMembers");
-        if (current + 1 > max) {
-            quotaError("teamMembers", current, max);
+    const membershipDoc = membershipRef(workspaceId, userId);
+    await db.runTransaction(async (tx) => {
+        const deterministicMembership = await tx.get(membershipDoc);
+        if (deterministicMembership.exists) {
+            throw new https_1.HttpsError("not-found", "INVITE_UNAVAILABLE");
         }
-    }
-    await membershipRef(workspaceId, userId).set({
-        workspaceId,
-        userId,
-        role,
-        createdBy: ownerUid,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        const subscriptionSnap = await tx.get(db.collection("subscriptions").doc(workspaceId));
+        const subscription = subscriptionFromSnap(subscriptionSnap);
+        if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
+            const membersSnap = await tx.get(db.collection("memberships").where("workspaceId", "==", workspaceId));
+            const current = membersSnap.size;
+            const max = limitForType("teamMembers");
+            if (current + 1 > max) {
+                quotaError("teamMembers", current, max);
+            }
+        }
+        tx.set(membershipDoc, {
+            workspaceId,
+            userId,
+            role,
+            createdBy: ownerUid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
     });
     await upsertNotificationForUsers({
         workspaceId,
@@ -3109,7 +3308,7 @@ async function inviteMemberByEmailForUser(input) {
     });
     return { userId, workspaceId };
 }
-exports.inviteMemberByEmail = (0, https_1.onCall)(async (request) => {
+exports.inviteMemberByEmail = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -3174,7 +3373,7 @@ async function inviteMemberWithQuotaForUser(input) {
     });
     return { userId: newUserId, workspaceId };
 }
-exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
+exports.inviteMemberWithQuota = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication required");
     }
@@ -3186,7 +3385,96 @@ exports.inviteMemberWithQuota = (0, https_1.onCall)(async (request) => {
         role: `${data.role ?? "member"}`,
     });
 });
-exports.revenuecatWebhook = (0, https_1.onRequest)({ secrets: [revenuecatWebhookSecret] }, async (req, res) => {
+async function deleteDocsByWorkspaceId(collectionName, workspaceId) {
+    for (;;) {
+        const snap = await db
+            .collection(collectionName)
+            .where("workspaceId", "==", workspaceId)
+            .limit(400)
+            .get();
+        if (snap.empty) {
+            return;
+        }
+        const batch = db.batch();
+        for (const doc of snap.docs) {
+            batch.delete(doc.ref);
+        }
+        await batch.commit();
+        if (snap.size < 400) {
+            return;
+        }
+    }
+}
+async function deleteOwnedWorkspaceData(workspaceId) {
+    await Promise.all(account_deletion_1.WORKSPACE_SCOPED_COLLECTIONS.map((collectionName) => deleteDocsByWorkspaceId(collectionName, workspaceId)));
+    await db.collection("workspace_metrics").doc(workspaceId).delete();
+    await db.collection("subscriptions").doc(workspaceId).delete();
+    await db.collection("workspaces").doc(workspaceId).delete();
+}
+async function deleteUserStorage(uid) {
+    const bucket = (0, storage_1.getStorage)().bucket();
+    for (const prefix of (0, account_deletion_1.userStoragePrefixes)(uid)) {
+        await bucket.deleteFiles({ prefix, force: true });
+    }
+}
+exports.deleteOwnAccount = (0, https_1.onCall)({ enforceAppCheck: true }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication required");
+    }
+    if (!(0, account_deletion_1.isRecentLogin)(request.auth.token.auth_time)) {
+        throw new https_1.HttpsError("failed-precondition", "RECENT_LOGIN_REQUIRED");
+    }
+    const uid = request.auth.uid;
+    const membershipSnap = await db
+        .collection("memberships")
+        .where("userId", "==", uid)
+        .get();
+    const ownedWorkspaceIds = [];
+    const ownerDocs = membershipSnap.docs.filter((doc) => {
+        const data = doc.data();
+        const workspaceId = `${data.workspaceId ?? ""}`.trim();
+        return workspaceId.length > 0 && `${data.role ?? ""}` === "owner";
+    });
+    const ownerChecks = await Promise.all(ownerDocs.map(async (doc) => {
+        const workspaceId = `${doc.data().workspaceId ?? ""}`.trim();
+        const others = await db
+            .collection("memberships")
+            .where("workspaceId", "==", workspaceId)
+            .get();
+        const otherMemberCount = others.docs.filter((member) => {
+            return `${member.data().userId ?? ""}` !== uid;
+        }).length;
+        return { workspaceId, otherMemberCount };
+    }));
+    for (const check of ownerChecks) {
+        if ((0, account_deletion_1.ownerDeletionBlocked)(check.otherMemberCount)) {
+            throw new https_1.HttpsError("failed-precondition", "TRANSFER_OWNERSHIP_REQUIRED");
+        }
+        ownedWorkspaceIds.push(check.workspaceId);
+    }
+    for (const workspaceId of ownedWorkspaceIds) {
+        await deleteOwnedWorkspaceData(workspaceId);
+    }
+    const leftoverMemberships = await db
+        .collection("memberships")
+        .where("userId", "==", uid)
+        .get();
+    if (!leftoverMemberships.empty) {
+        const batch = db.batch();
+        for (const doc of leftoverMemberships.docs) {
+            batch.delete(doc.ref);
+        }
+        await batch.commit();
+    }
+    await db.collection("users").doc(uid).delete();
+    await deleteUserStorage(uid);
+    await (0, auth_1.getAuth)().deleteUser(uid);
+    return { deleted: true };
+});
+exports.revenuecatWebhook = (0, https_1.onRequest)({
+    secrets: [revenuecatWebhookSecret],
+    maxInstances: 20,
+}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).json({ error: "method_not_allowed" });
         return;
@@ -3196,8 +3484,7 @@ exports.revenuecatWebhook = (0, https_1.onRequest)({ secrets: [revenuecatWebhook
         res.status(500).json({ error: "missing_server_secret" });
         return;
     }
-    const incomingAuth = req.headers.authorization ?? "";
-    if (incomingAuth !== `Bearer ${expectedSecret}`) {
+    if (!(0, revenuecat_status_1.authorizationHeaderMatches)(req.headers.authorization, expectedSecret)) {
         res.status(401).json({ error: "unauthorized" });
         return;
     }
@@ -3209,30 +3496,63 @@ exports.revenuecatWebhook = (0, https_1.onRequest)({ secrets: [revenuecatWebhook
     }
     const eventType = `${event.type ?? "UNKNOWN"}`;
     const periodType = `${event.period_type ?? "UNKNOWN"}`;
-    const tier = mapRevenueCatTier(event.entitlement_ids);
-    const status = mapRevenueCatStatus(eventType, periodType);
-    const periodEndsAt = parseTimestamp(event.expiration_at_ms) ??
-        parseTimestamp(event.expires_date);
-    const trialEndsAt = periodType === "TRIAL" ? periodEndsAt : null;
-    const isAutoRenewing = status === "active" || status === "trial" || status === "grace";
-    const store = `${event.store ?? "unknown"}`;
-    await db.collection("subscriptions").doc(workspaceId).set({
-        workspaceId,
-        tier,
-        status,
-        store,
-        isAutoRenewing,
-        trialEndsAt,
-        periodEndsAt,
-        lastSyncedAt: firestore_1.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    const eventId = (0, revenuecat_status_1.revenueCatEventId)(event);
+    const subscriptionRef = db.collection("subscriptions").doc(workspaceId);
+    const applied = await db.runTransaction(async (tx) => {
+        const currentSnap = await tx.get(subscriptionRef);
+        if (eventId) {
+            const eventRef = db.collection("webhook_events").doc(eventId);
+            const existing = await tx.get(eventRef);
+            if (existing.exists) {
+                return false;
+            }
+            tx.create(eventRef, {
+                id: eventId,
+                type: eventType,
+                workspaceId,
+                receivedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+        }
+        const currentStatus = `${currentSnap.data()?.status ?? ""}`;
+        const mapped = (0, revenuecat_status_1.mapRevenueCatEvent)({
+            eventType,
+            periodType,
+            currentStatus,
+            entitlements: event.entitlement_ids,
+        });
+        const periodEndsAt = parseTimestamp(event.expiration_at_ms) ??
+            parseTimestamp(event.expires_date);
+        const trialEndsAt = periodType === "TRIAL" ? periodEndsAt : null;
+        const store = `${event.store ?? "unknown"}`;
+        tx.set(subscriptionRef, {
+            workspaceId,
+            tier: (0, revenuecat_status_1.mapRevenueCatTier)(event.entitlement_ids),
+            status: mapped.status,
+            store,
+            isAutoRenewing: mapped.isAutoRenewing,
+            trialEndsAt,
+            periodEndsAt,
+            lastSyncedAt: firestore_1.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return true;
+    });
+    if (!applied) {
+        res.status(200).json({ ok: true, duplicate: true });
+        return;
+    }
+    const tier = (0, revenuecat_status_1.mapRevenueCatTier)(event.entitlement_ids);
+    const mapped = (0, revenuecat_status_1.mapRevenueCatEvent)({
+        eventType,
+        periodType,
+        entitlements: event.entitlement_ids,
+    });
     const recipients = await notificationRecipients(workspaceId, false);
     await upsertNotificationForUsers({
         workspaceId,
         userIds: recipients,
         type: "subscription_status_changed",
         title: "Subscription Updated",
-        message: `Subscription is now ${tier.toUpperCase()} (${status})`,
+        message: `Subscription is now ${tier.toUpperCase()} (${mapped.status})`,
     });
     res.status(200).json({ ok: true });
 });
@@ -3275,7 +3595,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
     const manualExpenses = expensesSnap.docs.reduce((sum, doc) => sum + Number(doc.data().amount ?? 0), 0);
     const laborExpenses = workerEntriesSnap.docs.reduce((sum, doc) => sum + workerEntryTotalCost(doc.data()), 0);
     const totalExpenses = manualExpenses + laborExpenses;
-    const totalPayments = paymentsSnap.docs.reduce((sum, doc) => sum + Number(doc.data().amount ?? 0), 0);
+    const totalPayments = paymentsSnap.docs.reduce((sum, doc) => sum + (0, money_1.cashCollectedAmount)(doc.data()), 0);
     const netProfit = totalPayments - totalExpenses;
     // Contract-derived: meaningless without a contract to invoice against. This
     // is NOT the per-supplier/per-client `remainingBalance` in the accounting
@@ -3292,12 +3612,12 @@ async function recomputeProjectSummary(workspaceId, projectId) {
     });
     const budgetExceeded = budgetLimit != null && totalExpenses > budgetLimit;
     const categoryTotals = expensesSnap.docs.reduce((map, doc) => {
-        const category = `${doc.data().category ?? "other"}`;
+        const category = (0, money_1.normalizeExpenseCategory)(`${doc.data().category ?? "other"}`);
         map[category] = (map[category] ?? 0) + Number(doc.data().amount ?? 0);
         return map;
     }, {});
     if (laborExpenses > 0) {
-        categoryTotals.labor = (categoryTotals.labor ?? 0) + laborExpenses;
+        categoryTotals.worker = (categoryTotals.worker ?? 0) + laborExpenses;
     }
     const monthlyMap = new Map();
     const pointFor = (date) => {
@@ -3329,7 +3649,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
         if (!date) {
             continue;
         }
-        pointFor(date).income += Number(doc.data().amount ?? 0);
+        pointFor(date).income += (0, money_1.cashCollectedAmount)(doc.data());
     }
     const monthlyFlow = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month));
     const workerIdsInEntries = Array.from(new Set(workerEntriesSnap.docs
@@ -3399,7 +3719,7 @@ async function recomputeProjectSummary(workspaceId, projectId) {
         .reduce((sum, record) => sum + workerEntryTotalCost(record), 0);
     const weeklyIncome = paymentRecords
         .filter(inCurrentWeek)
-        .reduce((sum, record) => sum + Number(record.amount ?? 0), 0);
+        .reduce((sum, record) => sum + (0, money_1.cashCollectedAmount)(record), 0);
     const entityTotals = {};
     const paymentMethodTotals = {};
     for (const record of expenseRecords) {
@@ -3411,11 +3731,12 @@ async function recomputeProjectSummary(workspaceId, projectId) {
     for (const record of paymentRecords) {
         const entity = `${record.entityName ?? record.clientName ?? ""}`.trim();
         if (entity) {
-            entityTotals[entity] = (entityTotals[entity] ?? 0) + Number(record.amount ?? 0);
+            entityTotals[entity] =
+                (entityTotals[entity] ?? 0) + (0, money_1.cashCollectedAmount)(record);
         }
         const method = `${record.paymentMethod ?? "unknown"}`.trim() || "unknown";
         paymentMethodTotals[method] =
-            (paymentMethodTotals[method] ?? 0) + Number(record.amount ?? 0);
+            (paymentMethodTotals[method] ?? 0) + (0, money_1.cashCollectedAmount)(record);
     }
     const recentTransactions = [
         ...recentExpenses.map((record) => ({

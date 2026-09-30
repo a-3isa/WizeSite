@@ -82,6 +82,33 @@ void main() {
     });
   }
 
+  testWidgets('expense-ledger reports omit income and net cards', (
+    tester,
+  ) async {
+    await _pumpReportsScreen(
+      tester,
+      role: AccountingAccessRoleType.owner,
+      project: const Project(
+        id: 'project_1',
+        workspaceId: 'workspace_1',
+        name: 'Expense Only',
+        clientName: 'Client',
+        contractValue: null,
+        status: 'active',
+        completionPercentage: 10,
+        totalExpenses: 100,
+        totalPayments: 0,
+        netProfit: -100,
+        isArchived: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Total Expenses'), findsAtLeastNWidgets(1));
+    expect(find.text('Total Income'), findsNothing);
+    expect(find.text('Net Profit'), findsNothing);
+  });
+
   testWidgets('reports screen denies member access to financial reports', (
     tester,
   ) async {
@@ -205,20 +232,22 @@ Future<void> _pumpReportsScreen(
   required AccountingAccessRoleType? role,
   ReportMetrics? metrics,
   ReportExportDataBuilder? exportDataBuilder,
+  Project? project,
 }) {
-  final activeProject = const Project(
-    id: 'project_1',
-    workspaceId: 'workspace_1',
-    name: 'Tower A',
-    clientName: 'Client',
-    contractValue: 1000,
-    status: 'active',
-    completionPercentage: 10,
-    totalExpenses: 100,
-    totalPayments: 200,
-    netProfit: 100,
-    isArchived: false,
-  );
+  final activeProject = project ??
+      const Project(
+        id: 'project_1',
+        workspaceId: 'workspace_1',
+        name: 'Tower A',
+        clientName: 'Client',
+        contractValue: 1000,
+        status: 'active',
+        completionPercentage: 10,
+        totalExpenses: 100,
+        totalPayments: 200,
+        netProfit: 100,
+        isArchived: false,
+      );
   final archivedProject = const Project(
     id: 'project_archived',
     workspaceId: 'workspace_1',

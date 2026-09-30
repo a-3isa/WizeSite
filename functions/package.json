@@ -9,7 +9,8 @@
     "build": "tsc",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions --config ../firebase.deploy.json",
-    "lint": "echo \"No lint configured\"",
+    "lint": "eslint src",
+    "check:build": "npm run build && git diff --exit-code -- lib",
     "backfill:entity-last-used": "npm run build && node lib/entity_last_used_backfill.js",
     "init:worker-accounting-summaries": "npm run build && node lib/worker_accounting_summary_initializer.js",
     "test": "npm run build && node --test \"lib/**/*.test.js\""
@@ -20,8 +21,10 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
+    "eslint": "^9.16.0",
     "firebase": "^12.15.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.18.0"
   },
   "overrides": {
     "uuid": "11.1.1"

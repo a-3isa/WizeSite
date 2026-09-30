@@ -26,8 +26,30 @@ class SyncErrorClassifier {
       );
     }
 
+    final extracted = _codeAndMessage(error);
+    if (extracted != null) {
+      return extracted;
+    }
+
     final raw = error.toString().trim();
     return SyncErrorDetails(message: raw, code: _extractCodeFromText(raw));
+  }
+
+  static SyncErrorDetails? _codeAndMessage(Object error) {
+    try {
+      final dynamic typed = error;
+      final code = typed.code;
+      final message = typed.message;
+      if (code is String && message is String) {
+        return SyncErrorDetails(
+          message: message.trim(),
+          code: _normalizeCode(code),
+        );
+      }
+    } catch (_) {
+      // Not a code/message exception.
+    }
+    return null;
   }
 
   static bool isTerminal(Object error) {
@@ -56,14 +78,7 @@ class SyncErrorClassifier {
 
     if (normalizedCode == 'failed-precondition' ||
         normalizedCode == 'limit_reached') {
-      if (normalizedMessage.contains('archived') ||
-          normalizedMessage.contains('no longer accept') ||
-          normalizedMessage.contains('no longer valid') ||
-          // Contract-and-payment invariant rejections. Without these two the
-          // messages fall through to `quota` below and the user is told they
-          // hit a plan limit, which is simply untrue.
-          normalizedMessage.contains('contract value') ||
-          normalizedMessage.contains('before recording payments')) {
+      if (_looksLikeInvalidTarget(normalizedMessage)) {
         return SyncFailureCategory.invalidTarget;
       }
       return SyncFailureCategory.quota;
@@ -84,6 +99,24 @@ class SyncErrorClassifier {
       return SyncFailureCategory.invalidTarget;
     }
     return SyncFailureCategory.generic;
+  }
+
+  /// Quota/plan limits jump to the upgrade screen; contract and archived-target
+  /// preconditions stay on the form with the existing invalid-target copy.
+  static bool isQuotaLimitFailure(Object error) {
+    final details = detailsFrom(error);
+    return categoryFrom(code: details.code, message: details.message) ==
+        SyncFailureCategory.quota;
+  }
+
+  static bool _looksLikeInvalidTarget(String normalizedMessage) {
+    return normalizedMessage.contains('archived') ||
+        normalizedMessage.contains('no longer accept') ||
+        normalizedMessage.contains('no longer valid') ||
+        normalizedMessage.contains('cannot be edited') ||
+        normalizedMessage.contains('contract value') ||
+        normalizedMessage.contains('before recording payments') ||
+        normalizedMessage.contains('remove this project');
   }
 
   static String? _normalizeCode(String? code) {

@@ -6,6 +6,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/navigation/app_route_observer.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
+import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
@@ -24,7 +25,6 @@ import 'package:buildtrack_app/features/projects/presentation/screens/projects_s
 import 'package:buildtrack_app/features/reports/services/report_document_actions.dart';
 import 'package:buildtrack_app/features/reports/services/report_pdf_exporter.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -49,7 +49,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
   ProviderSubscription<int>? _deadLetterSubscription;
 
   final List<PaymentRecord> _payments = [];
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;
@@ -745,6 +745,29 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final role = ref.watch(currentAccountingRoleProvider).value;
+    if (role?.canAccessAccounting != true) {
+      final fallbackRoute =
+          _selectedProjectId == null || _selectedProjectId!.isEmpty
+          ? AppRoutes.projects
+          : AppRoutes.projectDetailPath(_selectedProjectId!);
+      return AppBackScope(
+        fallbackRoute: fallbackRoute,
+        child: Scaffold(
+          appBar: appBackAppBar(
+            context: context,
+            title: l10n.t('payments'),
+            fallbackRoute: fallbackRoute,
+          ),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.all(24),
+              child: Text(l10n.t('reportAccessDenied')),
+            ),
+          ),
+        ),
+      );
+    }
     final projectsAsync = ref.watch(projectsProvider);
     final filtered = _filteredPayments();
     final locale = Localizations.localeOf(context).languageCode;

@@ -15,7 +15,6 @@ import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -31,13 +30,7 @@ final projectsProvider = StreamProvider<List<Project>>((ref) {
   if (workspaceId == null || workspaceId.isEmpty) {
     return const Stream.empty();
   }
-  return ref
-      .watch(projectRepositoryProvider)
-      .watchAllProjects(workspaceId)
-      .map(
-        (projects) =>
-            projects.where((project) => !project.isArchived).toList(),
-      );
+  return ref.watch(projectRepositoryProvider).watchProjects(workspaceId);
 });
 
 final allProjectsProvider = StreamProvider<List<Project>>((ref) {
@@ -66,7 +59,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   ProviderSubscription<int>? _deadLetterSubscription;
 
   final List<Project> _projects = [];
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
   Object? _error;
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;

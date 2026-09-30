@@ -1,7 +1,12 @@
+import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/local_queries.dart';
+import 'package:buildtrack_app/core/sync/local_row.dart';
+import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:powersync/powersync.dart';
 
 class WorkerAccountingRepository {
   const WorkerAccountingRepository(this._firestore);
@@ -62,6 +67,61 @@ class WorkerAccountingRepository {
   }
 }
 
+/// Reads from the local PowerSync replica (spec 004, tasks.md T045). These
+/// tables are in the financial sync bucket, like `canAccessAccounting` in
+/// firestore.rules. [save] is still the inherited direct write until US2 moves
+/// it behind an RPC.
+class LocalWorkerAccountingRepository extends WorkerAccountingRepository {
+  LocalWorkerAccountingRepository(super.firestore, this._db);
+
+  final Future<PowerSyncDatabase> _db;
+
+  @override
+  Future<WorkerAccountingSummary?> fetchSummary({
+    required String workspaceId,
+    required String workerId,
+  }) async {
+    final id = WorkerAccountingRepository.summaryDocId(workspaceId, workerId);
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM worker_accounting_summaries WHERE id = ?',
+      [id],
+    );
+    if (rows.isEmpty) return null;
+    return WorkerAccountingSummary.fromMap(
+      id,
+      localRowToMap('worker_accounting_summaries', rows.first),
+    );
+  }
+
+  @override
+  Future<List<WorkerAccountingRecord>> fetchForWorker({
+    required String workspaceId,
+    required String workerId,
+    int limit = 50,
+  }) async {
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM worker_accounting_records '
+      'WHERE workspace_id = ? AND worker_id = ? '
+      'ORDER BY date DESC, id DESC LIMIT ?',
+      [workspaceId, workerId, limit],
+    );
+    return [
+      for (final row in rows)
+        WorkerAccountingRecord.fromMap(
+          '${row['id']}',
+          localRowToMap('worker_accounting_records', row),
+        ),
+    ];
+  }
+}
+
 final workerAccountingRepositoryProvider = Provider<WorkerAccountingRepository>(
-  (ref) => WorkerAccountingRepository(ref.watch(firestoreProvider)),
+  (ref) => BackendConfig.fromEnvironment.useSelfHostedBackend
+      ? LocalWorkerAccountingRepository(
+          ref.watch(firestoreProvider),
+          ref.watch(localDatabaseProvider),
+        )
+      : WorkerAccountingRepository(ref.watch(firestoreProvider)),
 );

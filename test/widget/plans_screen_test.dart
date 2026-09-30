@@ -75,6 +75,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Buildozer Pro Annual'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+    expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text(r'$95.99 / year'), findsOneWidget);
     expect(find.text('Buildozer Pro Monthly'), findsNothing);
     expect(find.text(r'$9.99 / monthly'), findsNothing);

@@ -4,7 +4,6 @@ import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum ReportExportStage { expenses, payments, complete }
 
@@ -137,7 +136,7 @@ class ReportExportDataBuilder {
     ReportExportCancellationCheck? isCancelled,
   }) async {
     final items = <Expense>[];
-    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    Object? cursor;
 
     while (true) {
       _throwIfCancelled(isCancelled);
@@ -175,7 +174,7 @@ class ReportExportDataBuilder {
     ReportExportCancellationCheck? isCancelled,
   }) async {
     final items = <PaymentRecord>[];
-    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    Object? cursor;
 
     while (true) {
       _throwIfCancelled(isCancelled);
@@ -269,7 +268,7 @@ class ReportExportDataBuilder {
         name: name,
         type: payment.entityType.isNotEmpty ? payment.entityType : 'other',
         expenseAmount: 0,
-        paymentAmount: payment.amount,
+        paymentAmount: payment.cashCollected,
         attachmentCount: payment.attachments.length,
         date: payment.date,
       );
@@ -345,13 +344,13 @@ class ReportExportDataBuilder {
           : payment.paymentMethod;
 
       entityTotals[entityName] =
-          (entityTotals[entityName] ?? 0) + payment.amount;
+          (entityTotals[entityName] ?? 0) + payment.cashCollected;
       paymentTotals[paymentMethod] =
-          (paymentTotals[paymentMethod] ?? 0) + payment.amount;
+          (paymentTotals[paymentMethod] ?? 0) + payment.cashCollected;
       recent.add(
         WeeklyDashboardTransaction(
           title: entityName,
-          amount: payment.amount,
+          amount: payment.cashCollected,
           date: payment.date,
           type: 'payment',
         ),

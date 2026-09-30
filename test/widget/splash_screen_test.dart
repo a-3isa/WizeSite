@@ -4,6 +4,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/app_remote_config.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _MockSessionRestoreService extends Mock
     implements SessionRestoreService {}
@@ -61,12 +63,15 @@ AppPrefetcher _blockingPrefetcher() {
 Widget _testApp(
   SessionRestoreService sessionRestoreService, {
   AppPrefetcher? prefetcher,
+  AppRemoteConfig? remoteConfig,
 }) {
   return ProviderScope(
     overrides: [
       sessionRestoreServiceProvider.overrideWithValue(sessionRestoreService),
       if (prefetcher != null)
         appPrefetcherProvider.overrideWithValue(prefetcher),
+      if (remoteConfig != null)
+        appRemoteConfigProvider.overrideWith((ref) async => remoteConfig),
     ],
     child: MaterialApp.router(
       routerConfig: _router(),
@@ -189,6 +194,33 @@ void main() {
       await tester.pump();
 
       expect(find.byType(LinearProgressIndicator), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'SplashScreen blocks on update-required when build is below the minimum',
+    (tester) async {
+      PackageInfo.setMockInitialValues(
+        appName: 'WizeSite',
+        packageName: 'com.ahmed.buildozer',
+        version: '1.0.0',
+        buildNumber: '5',
+        buildSignature: '',
+      );
+      final sessionRestoreService = _MockSessionRestoreService();
+
+      await tester.pumpWidget(
+        _testApp(
+          sessionRestoreService,
+          remoteConfig: const AppRemoteConfig(minSupportedBuild: 10),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Update required'), findsOneWidget);
+      expect(find.text('Features Screen'), findsNothing);
+      verifyNever(() => sessionRestoreService.restore());
     },
   );
 }

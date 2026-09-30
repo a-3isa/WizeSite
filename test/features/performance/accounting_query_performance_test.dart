@@ -69,7 +69,9 @@ void main() {
         contains('query.limit(request.pageSize + (cursor == null ? 0 : 1))'),
       );
       expect(projectRepository, contains('watchProjects(String workspaceId)'));
-      expect(projectRepository, contains('.limit(50)'));
+      // Equality + orderBy + Firestore .limit hangs FakeFirestore, so the
+      // warm stream caps in memory after ranking by createdAt.
+      expect(projectRepository, contains('maxResults: 50'));
     });
 
     test(

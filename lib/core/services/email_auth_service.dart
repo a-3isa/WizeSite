@@ -53,6 +53,24 @@ class EmailAuthService {
     return auth.sendPasswordResetEmail(email: email.trim());
   }
 
+  /// Confirms the current password so sensitive actions (account deletion)
+  /// can refresh Firebase `auth_time`.
+  Future<UserCredential> reauthenticate({
+    required User user,
+    required String password,
+  }) {
+    final email = user.email?.trim() ?? '';
+    if (email.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'user-mismatch',
+        message: 'This account has no email to reauthenticate with.',
+      );
+    }
+    return user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+  }
+
   /// Sends (or re-sends) the address-verification email to the current user.
   Future<void> sendVerificationEmail({required FirebaseAuth auth}) async {
     final user = auth.currentUser;

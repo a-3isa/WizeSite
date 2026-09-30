@@ -24,7 +24,7 @@ class DomainAccountingSaveAdapter {
       'paymentMethod': draft.paymentMethod,
       'paymentStatus': draft.paymentStatus,
       'notes': draft.notes,
-      'attachments': const [],
+      'attachments': const <Map<String, dynamic>>[],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });

@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
-import 'package:buildtrack_app/core/constants/app_colors.dart';
 import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
@@ -12,6 +11,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
+import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -219,7 +219,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
         );
       }
     } on CallableClientException catch (e) {
-      if (e.code == 'failed-precondition') {
+      if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (mounted) {
           context.push('${AppRoutes.subscriptionLimit}?limit=activeProjects');
         }
@@ -513,7 +513,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppColors.dangerLight,
+                                color: context.tokens.expenseSoft,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: context.tokens.expense.withValues(
@@ -549,19 +549,20 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                             onPressed: _loading ? null : _save,
                             style: FilledButton.styleFrom(
                               backgroundColor: context.tokens.accent,
-                              foregroundColor: Colors.white,
+                              foregroundColor: context.tokens.onAccent,
                               padding: const EdgeInsets.symmetric(vertical: 16),
+                              minimumSize: const Size.fromHeight(48),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               elevation: 0,
                             ),
                             child: _loading
-                                ? const SizedBox.square(
+                                ? SizedBox.square(
                                     dimension: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: context.tokens.onAccent,
                                     ),
                                   )
                                 : Text(

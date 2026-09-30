@@ -15,7 +15,6 @@ import 'package:buildtrack_app/features/settings/data/user_settings_repository.d
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,7 +64,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage(items: [], hasMore: false);
@@ -138,6 +137,33 @@ void main() {
     expect(find.text(l10n.t('selectAttachments')), findsOneWidget);
     expect(find.text('Attachments'), findsNothing);
     expect(find.text('Select attachments'), findsNothing);
+  });
+
+  testWidgets('empty amount shows what to do instead of saving', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final l10n = AppLocalizations(const Locale('en'));
+    await tester.pumpWidget(
+      _screen(locale: const Locale('en'), projectId: 'project_1'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('qa_add_expense_category')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find
+          .text(l10n.expenseCategoryLabel(AccountingCategories.materials))
+          .last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('qa_add_expense_save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.t('selectProjectAndValidAmount')), findsOneWidget);
   });
 
   testWidgets('resource category shows saved resources and calculates amount', (
@@ -236,6 +262,42 @@ void main() {
     expect(entries.createdDaysWorked, 2);
     expect(entries.createdDailyWage, 120);
   });
+
+  testWidgets('duplicate last expense prefills amount and category without attachments', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _screen(
+        locale: const Locale('en'),
+        projectId: 'project_1',
+        duplicateFrom: Expense(
+          id: 'expense_last',
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          projectName: 'Tower',
+          category: AccountingCategories.materials,
+          amount: 42.5,
+          currency: 'EGP',
+          date: DateTime.utc(2026, 1, 1),
+          notes: 'old notes',
+          supplierName: '',
+          entityId: 'entity_1',
+          entityName: 'Steel Co',
+          paymentMethod: 'cash',
+          inputMethod: 'manual',
+          transcript: '',
+          source: '',
+          storagePath: '',
+          isArchived: false,
+          attachments: const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('42.50'), findsWidgets);
+    expect(find.text('receipt.jpg'), findsNothing);
+  });
 }
 
 Widget _screen({
@@ -244,6 +306,7 @@ Widget _screen({
   WorkerRepository? workerRepository,
   WorkerEntryRepository? workerEntryRepository,
   String? projectId,
+  Expense? duplicateFrom,
 }) {
   return ProviderScope(
     overrides: [
@@ -272,7 +335,7 @@ Widget _screen({
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: AddExpenseScreen(projectId: projectId),
+      home: AddExpenseScreen(projectId: projectId, duplicateFrom: duplicateFrom),
     ),
   );
 }
@@ -312,7 +375,7 @@ class _FakeEntityRepository implements EntityRepository {
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return FirestorePage(
@@ -403,7 +466,7 @@ class _FakeWorkerRepository implements WorkerRepository {
   @override
   Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async {

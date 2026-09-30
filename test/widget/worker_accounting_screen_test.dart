@@ -131,7 +131,7 @@ Future<void> _seedWorkerRecord(FakeFirebaseFirestore firestore) {
     'paymentMethod': 'cash',
     'paymentStatus': 'paid',
     'notes': '',
-    'attachments': const [],
+    'attachments': const <Map<String, dynamic>>[],
   });
 }
 

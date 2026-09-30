@@ -8,23 +8,59 @@ import {
   WriteBatch,
   getFirestore,
 } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
-import { verifyHttpAppCheck } from "./http_app_check";
+import {
+  isRecentLogin,
+  ownerDeletionBlocked,
+  userStoragePrefixes,
+  WORKSPACE_SCOPED_COLLECTIONS,
+} from "./account_deletion";
 import { applyCorsHeaders } from "./http_cors";
+import { verifyHttpAppCheck } from "./http_app_check";
+import {
+  commitIdempotentCreate,
+  readExistingMutation,
+} from "./idempotency";
+import {
+  canCreateProject,
+  canDeleteProjectCascade,
+  canMutateMoneyViaCallable,
+  canUpdateProject,
+  cashCollectedAmount,
+  isAllowedExpenseCategory,
+  normalizeExpenseCategory,
+  parsePaymentStatus,
+} from "./money";
+import {
+  authorizationHeaderMatches,
+  mapRevenueCatEvent,
+  mapRevenueCatTier,
+  revenueCatEventId,
+} from "./revenuecat_status";
+import {
+  chunkItems,
+  collectAttachmentStoragePaths,
+  isAllowedAttachmentStoragePath,
+  isFirebaseStorageDownloadUrl,
+} from "./storage_lifecycle";
 export {
   processVoiceExpense,
   processVoiceExpenseHttp,
 } from "./voice/process_voice_expense";
 
 initializeApp();
-setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+setGlobalOptions({
+  region: "us-central1",
+  maxInstances: 10,
+});
 
 const db = getFirestore();
 const revenuecatWebhookSecret = defineSecret("REVENUECAT_WEBHOOK_SECRET");
-const ENFORCE_TEAM_MEMBER_LIMITS = false;
+const ENFORCE_TEAM_MEMBER_LIMITS = true;
 
 type LimitType =
   | "activeProjects"
@@ -40,7 +76,7 @@ const FREE_LIMITS: Record<LimitType, number> = {
   workerEntriesPerMonth: 10,
   teamMembers: 1,
 };
-const USAGE_LIMITS_DISABLED = true;
+const USAGE_LIMITS_DISABLED = false;
 
 type SubscriptionTier = "free" | "pro";
 type SubscriptionStatus =
@@ -156,41 +192,12 @@ function withinUtcWeek(input: Date, weekStart: Date): boolean {
   return day.getTime() >= weekStart.getTime() && day.getTime() <= end.getTime();
 }
 
-function mapRevenueCatStatus(
-  eventType: string,
-  periodType: string,
-): SubscriptionStatus {
-  if (eventType === "BILLING_ISSUE") {
-    return "grace";
-  }
-  if (eventType === "EXPIRATION") {
-    return "expired";
-  }
-  if (eventType === "CANCELLATION") {
-    return "canceled";
-  }
-  if (
-    eventType === "INITIAL_PURCHASE" ||
-    eventType === "RENEWAL" ||
-    eventType === "UNCANCELLATION"
-  ) {
-    return periodType === "TRIAL" ? "trial" : "active";
-  }
-  return "unknown";
-}
-
-function mapRevenueCatTier(entitlements: unknown): SubscriptionTier {
-  if (!Array.isArray(entitlements)) {
-    return "free";
-  }
-  const hasPro = entitlements.some((item) =>
-    `${item}`.toLowerCase().includes("pro"),
-  );
-  return hasPro ? "pro" : "free";
-}
-
 async function getSubscription(workspaceId: string): Promise<SubscriptionDoc> {
   const snap = await db.collection("subscriptions").doc(workspaceId).get();
+  return subscriptionFromSnap(snap);
+}
+
+function subscriptionFromSnap(snap: {exists: boolean; data: () => Record<string, unknown> | undefined}): SubscriptionDoc {
   if (!snap.exists) {
     return { tier: "free", status: "expired" };
   }
@@ -273,6 +280,34 @@ async function assertMember(
     throw new HttpsError(
       "permission-denied",
       "User is not a member of this workspace",
+    );
+  }
+  return role;
+}
+
+async function assertCanMutateMoney(
+  workspaceId: string,
+  userId: string,
+): Promise<string> {
+  const role = await assertMember(workspaceId, userId);
+  if (!canMutateMoneyViaCallable(role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Accounting access required",
+    );
+  }
+  return role;
+}
+
+async function assertCanManageProject(
+  workspaceId: string,
+  userId: string,
+): Promise<string> {
+  const role = await assertMember(workspaceId, userId);
+  if (!canUpdateProject(role)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Not allowed to manage project",
     );
   }
   return role;
@@ -416,6 +451,12 @@ function normalizeAttachmentItem(
       `Missing required field: ${key}.downloadUrl or ${key}.url`,
     );
   }
+  if (!isFirebaseStorageDownloadUrl(urlValue)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid attachment download URL host for ${key}`,
+    );
+  }
   const uploadedAt = parseTimestamp(attachment.uploadedAt);
   if (uploadedAt == null) {
     throw new HttpsError(
@@ -435,6 +476,12 @@ function normalizeAttachmentItem(
     typeof attachment.storagePath === "string"
       ? attachment.storagePath.trim()
       : "";
+  if (!isAllowedAttachmentStoragePath(storagePath)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid attachment storage path for ${key}`,
+    );
+  }
   const type =
     typeof attachment.type === "string" && attachment.type.trim().length > 0
       ? attachment.type.trim()
@@ -531,12 +578,12 @@ async function getCurrentUsage(
   type: LimitType,
 ): Promise<number> {
   if (type === "activeProjects") {
-    const snap = await db
-      .collection("projects")
-      .where("workspaceId", "==", workspaceId)
-      .where("status", "==", "active")
-      .where("isArchived", "==", false)
-      .get();
+    const counterSnap = await projectUsageCounterRef(workspaceId).get();
+    const counted = counterSnap.data()?.activeProjectsCount;
+    if (counted != null) {
+      return Number(counted);
+    }
+    const snap = await activeProjectsQuery(workspaceId).get();
     return snap.size;
   }
   if (type === "teamMembers") {
@@ -559,6 +606,57 @@ async function getCurrentUsage(
     return Number(data.paymentsCount ?? 0);
   }
   return Number(data.workerEntriesCount ?? 0);
+}
+
+function projectUsageCounterRef(workspaceId: string) {
+  return db.collection("usage_counters").doc(`${workspaceId}_projects`);
+}
+
+function activeProjectsQuery(workspaceId: string) {
+  return db
+    .collection("projects")
+    .where("workspaceId", "==", workspaceId)
+    .where("status", "==", "active")
+    .where("isArchived", "==", false);
+}
+
+function isCountedActiveProject(data: Record<string, unknown>): boolean {
+  const status = `${data.status ?? "active"}`.trim() || "active";
+  return status === "active" && data.isArchived !== true;
+}
+
+async function countedActiveProjectsInTx(
+  tx: Transaction,
+  workspaceId: string,
+): Promise<number> {
+  const snap = await tx.get(activeProjectsQuery(workspaceId));
+  return snap.size;
+}
+
+async function applyActiveProjectDeltaInTx(
+  tx: Transaction,
+  workspaceId: string,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) {
+    return;
+  }
+  const ref = projectUsageCounterRef(workspaceId);
+  const snap = await tx.get(ref);
+  const existing = snap.data()?.activeProjectsCount;
+  const current =
+    existing == null
+      ? await countedActiveProjectsInTx(tx, workspaceId)
+      : Number(existing);
+  tx.set(
+    ref,
+    {
+      workspaceId,
+      activeProjectsCount: Math.max(0, current + delta),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    {merge: true},
+  );
 }
 
 function limitForType(type: LimitType): number {
@@ -1338,7 +1436,7 @@ export function buildAccountingSummaryPayloads(input: {
     transactionCount:
       input.expenses.length + input.payments.length + input.workerEntries.length,
     totalPayments: input.payments.reduce(
-      (sum, payment) => sum + finiteNumber(payment.amount),
+      (sum, payment) => sum + cashCollectedAmount(payment),
       0,
     ),
     attachmentCount,
@@ -1505,7 +1603,7 @@ export function buildAccountingSummaryPayloads(input: {
   }
 
   for (const payment of input.payments) {
-    const amount = finiteNumber(payment.amount);
+    const amount = cashCollectedAmount(payment);
     const date = recordDate(payment);
     const method = `${payment.paymentMethod ?? "unknown"}`.trim() || "unknown";
     const entity = entityFor(entityIdentity(payment, "client"));
@@ -1815,7 +1913,7 @@ async function writeAccountingSummaries(input: {
   ]);
 }
 
-export const checkLimit = onCall(async (request) => {
+export const checkLimit = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -1867,7 +1965,7 @@ export async function createProjectWithQuotaForUser(
 ): Promise<{ id: string; clientMutationId?: string }> {
   const workspaceId = requireString(data, "workspaceId");
   const role = await assertMember(workspaceId, uid);
-  if (role !== "owner" && role !== "member") {
+  if (!canCreateProject(role)) {
     throw new HttpsError("permission-denied", "Not allowed to create project");
   }
 
@@ -1882,46 +1980,78 @@ export async function createProjectWithQuotaForUser(
   const completionPercentage = Number(data.completionPercentage ?? 0);
   const budgetLimit = optionalPositiveNumber(data, "budgetLimit");
 
-  const subscription = await getSubscription(workspaceId);
-  if (!hasUnlimitedQuota(subscription)) {
-    const current = await getCurrentUsage(workspaceId, "activeProjects");
-    const max = limitForType("activeProjects");
-    if (current + 1 > max) {
-      quotaError("activeProjects", current, max);
-    }
+  const replay = await readExistingMutation(
+    db,
+    workspaceId,
+    "projects",
+    data.clientMutationId,
+  );
+  if (replay) {
+    return replay;
   }
 
-  const projectRef = db.collection("projects").doc();
-  await projectRef.set({
-    id: projectRef.id,
-    workspaceId,
-    ownerId: uid,
-    name,
-    clientName,
-    contractValue,
-    startDate,
-    expectedEndDate,
-    location,
-    description,
-    budgetLimit,
-    completionPercentage,
-    status: "active",
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    createdBy: uid,
-    isArchived: false,
-  });
+  const subscription = await getSubscription(workspaceId);
+  const enforceProjectQuota = !hasUnlimitedQuota(subscription);
 
-  return {
-    id: projectRef.id,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-  };
+  const projectRef = db.collection("projects").doc();
+  const counterRef = db
+    .collection("usage_counters")
+    .doc(`${workspaceId}_projects`);
+  return commitIdempotentCreate(db, {
+    workspaceId,
+    kind: "projects",
+    clientMutationId: data.clientMutationId,
+    newDocId: projectRef.id,
+    quota: {
+      counterRef,
+      field: "activeProjectsCount",
+      max: limitForType("activeProjects"),
+      apply: enforceProjectQuota,
+      onExceeded: () =>
+        quotaError(
+          "activeProjects",
+          limitForType("activeProjects"),
+          limitForType("activeProjects"),
+        ),
+      seedFrom: (tx) => countedActiveProjectsInTx(tx, workspaceId),
+    },
+    write: (tx) => {
+      tx.set(projectRef, {
+        id: projectRef.id,
+        workspaceId,
+        ownerId: uid,
+        name,
+        clientName,
+        contractValue,
+        startDate,
+        expectedEndDate,
+        location,
+        description,
+        budgetLimit,
+        completionPercentage,
+        status: "active",
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+        isArchived: false,
+      });
+      tx.set(
+        counterRef,
+        {
+          workspaceId,
+          activeProjectsCount: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    },
+  });
 }
 
-export const createProjectWithQuota = onCall(async (request) => {
+export const createProjectWithQuota = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -1989,7 +2119,7 @@ export const createProjectWithQuotaHttp = onRequest(
   },
 );
 
-export const updateProject = onCall(async (request) => {
+export const updateProject = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2009,7 +2139,7 @@ export async function updateProjectForUser(
   data: Record<string, unknown>,
 ): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanManageProject(workspaceId, uid);
   const projectId = requireString(data, "projectId");
   const projectRef = db.collection("projects").doc(projectId);
   const projectSnap = await projectRef.get();
@@ -2080,67 +2210,122 @@ export async function updateProjectForUser(
   });
 }
 
-export const archiveProject = onCall(async (request) => {
+export async function archiveProjectForUser(
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const workspaceId = requireString(data, "workspaceId");
+  await assertCanManageProject(workspaceId, uid);
+  const projectId = requireString(data, "projectId");
+  const projectRef = db.collection("projects").doc(projectId);
+
+  await db.runTransaction(async (tx) => {
+    const projectSnap = await tx.get(projectRef);
+    if (!projectSnap.exists) {
+      throw new HttpsError("not-found", "Project not found");
+    }
+    const project = (projectSnap.data() ?? {}) as Record<string, unknown>;
+    if (`${project.workspaceId ?? ""}` !== workspaceId) {
+      throw new HttpsError(
+        "permission-denied",
+        "Project is not available in this workspace",
+      );
+    }
+    if (project.isArchived === true) {
+      return;
+    }
+    if (isCountedActiveProject(project)) {
+      await applyActiveProjectDeltaInTx(tx, workspaceId, -1);
+    }
+    tx.update(projectRef, {
+      isArchived: true,
+      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+export const archiveProject = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
-
-  const data = request.data as Record<string, unknown>;
-  const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
-  const projectId = requireString(data, "projectId");
-  const projectRef = db.collection("projects").doc(projectId);
-  const projectSnap = await projectRef.get();
-  if (!projectSnap.exists) {
-    throw new HttpsError("not-found", "Project not found");
-  }
-  const project = projectSnap.data() ?? {};
-  if (`${project.workspaceId ?? ""}` !== workspaceId) {
-    throw new HttpsError(
-      "permission-denied",
-      "Project is not available in this workspace",
-    );
-  }
-
-  await projectRef.update({
-    isArchived: true,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await archiveProjectForUser(
+    request.auth.uid,
+    request.data as Record<string, unknown>,
+  );
 });
 
-export const unarchiveProject = onCall(async (request) => {
+export async function unarchiveProjectForUser(
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const workspaceId = requireString(data, "workspaceId");
+  await assertCanManageProject(workspaceId, uid);
+  const projectId = requireString(data, "projectId");
+  const projectRef = db.collection("projects").doc(projectId);
+  const subscription = await getSubscription(workspaceId);
+  const enforceProjectQuota = !hasUnlimitedQuota(subscription);
+  const max = limitForType("activeProjects");
+
+  await db.runTransaction(async (tx) => {
+    const projectSnap = await tx.get(projectRef);
+    if (!projectSnap.exists) {
+      throw new HttpsError("not-found", "Project not found");
+    }
+    const project = (projectSnap.data() ?? {}) as Record<string, unknown>;
+    if (`${project.workspaceId ?? ""}` !== workspaceId) {
+      throw new HttpsError(
+        "permission-denied",
+        "Project is not available in this workspace",
+      );
+    }
+    if (project.isArchived !== true) {
+      return;
+    }
+    const countsAsActive =
+      (`${project.status ?? "active"}`.trim() || "active") === "active";
+    if (countsAsActive) {
+      const counterRef = projectUsageCounterRef(workspaceId);
+      const counterSnap = await tx.get(counterRef);
+      const raw = counterSnap.data()?.activeProjectsCount;
+      const current =
+        raw == null
+          ? await countedActiveProjectsInTx(tx, workspaceId)
+          : Number(raw);
+      if (enforceProjectQuota && current + 1 > max) {
+        quotaError("activeProjects", current, max);
+      }
+      tx.set(
+        counterRef,
+        {
+          workspaceId,
+          activeProjectsCount: current + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    }
+    tx.update(projectRef, {
+      isArchived: false,
+      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+export const unarchiveProject = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
-
-  const data = request.data as Record<string, unknown>;
-  const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
-  const projectId = requireString(data, "projectId");
-  const projectRef = db.collection("projects").doc(projectId);
-  const projectSnap = await projectRef.get();
-  if (!projectSnap.exists) {
-    throw new HttpsError("not-found", "Project not found");
-  }
-  const project = projectSnap.data() ?? {};
-  if (`${project.workspaceId ?? ""}` !== workspaceId) {
-    throw new HttpsError(
-      "permission-denied",
-      "Project is not available in this workspace",
-    );
-  }
-
-  await projectRef.update({
-    isArchived: false,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await unarchiveProjectForUser(
+    request.auth.uid,
+    request.data as Record<string, unknown>,
+  );
 });
 
-export const createExpenseWithQuota = onCall(async (request) => {
+export const createExpenseWithQuota = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2155,20 +2340,14 @@ export async function createExpenseWithQuotaForUser(
   data: Record<string, unknown>,
 ): Promise<{ id: string; clientMutationId?: string }> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
 
   const projectId = requireString(data, "projectId");
-  const category = requireString(data, "category");
-  const allowedCategories = [
-    "labor",
-    "materials",
-    "equipment",
-    "transport",
-    "other",
-  ];
-  if (!allowedCategories.includes(category)) {
+  const categoryRaw = requireString(data, "category");
+  if (!isAllowedExpenseCategory(categoryRaw)) {
     throw new HttpsError("invalid-argument", "Unsupported expense category");
   }
+  const category = normalizeExpenseCategory(categoryRaw);
   const amount = requireNumber(data, "amount");
   if (amount <= 0) {
     throw new HttpsError(
@@ -2215,63 +2394,86 @@ export async function createExpenseWithQuotaForUser(
   const projectName =
     `${data.projectName ?? ""}`.trim() || `${projectData.name ?? ""}`.trim();
 
-  const subscription = await getSubscription(workspaceId);
-  if (!hasUnlimitedQuota(subscription)) {
-    const current = await getCurrentUsage(workspaceId, "expensesPerMonth");
-    const max = limitForType("expensesPerMonth");
-    if (current + 1 > max) {
-      quotaError("expensesPerMonth", current, max);
-    }
+  const replay = await readExistingMutation(
+    db,
+    workspaceId,
+    "expenses",
+    data.clientMutationId,
+  );
+  if (replay) {
+    return replay;
   }
+
+  const subscription = await getSubscription(workspaceId);
+  const enforceExpenseQuota = !hasUnlimitedQuota(subscription);
 
   const expenseRef = db.collection("expenses").doc();
   const counterRef = db
     .collection("usage_counters")
     .doc(`${workspaceId}_${periodKey()}`);
 
-  await db.runTransaction(async (tx) => {
-    tx.set(expenseRef, {
-      id: expenseRef.id,
-      workspaceId,
-      projectId,
-      projectName,
-      category,
-      amount,
-      currency,
-      date: parseTimestamp(data.date) ?? Timestamp.now(),
-      notes: `${data.notes ?? ""}`.trim(),
-      supplierName: `${data.supplierName ?? ""}`.trim(),
-      paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
-      inputMethod,
-      transcript,
-      source,
-      storagePath,
-      attachments: ensureAttachmentItems(data, "attachments"),
-      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-      createdBy: uid,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      isArchived: false,
-    });
-    tx.set(
+  return commitIdempotentCreate(db, {
+    workspaceId,
+    kind: "expenses",
+    clientMutationId: data.clientMutationId,
+    newDocId: expenseRef.id,
+    quota: {
       counterRef,
-      {
+      field: "expensesCount",
+      max: limitForType("expensesPerMonth"),
+      apply: enforceExpenseQuota,
+      onExceeded: () =>
+        quotaError(
+          "expensesPerMonth",
+          limitForType("expensesPerMonth"),
+          limitForType("expensesPerMonth"),
+        ),
+    },
+    write: (tx) => {
+      tx.set(expenseRef, {
+        id: expenseRef.id,
         workspaceId,
-        periodKey: periodKey(),
-        expensesCount: FieldValue.increment(1),
+        projectId,
+        projectName,
+        category,
+        amount,
+        currency,
+        date: parseTimestamp(data.date) ?? Timestamp.now(),
+        notes: `${data.notes ?? ""}`.trim(),
+        purpose: `${data.purpose ?? ""}`.trim(),
+        description: `${data.description ?? data.notes ?? ""}`.trim(),
+        supplierName: `${data.supplierName ?? ""}`.trim(),
+        entityId: `${data.entityId ?? ""}`.trim() || null,
+        entityName: `${data.entityName ?? data.supplierName ?? ""}`.trim(),
+        entityType: `${data.entityType ?? "supplier"}`.trim(),
+        paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+        paymentStatus: parsePaymentStatus(data.paymentStatus, "unpaid"),
+        inputMethod,
+        transcript,
+        source,
+        storagePath,
+        attachments: ensureAttachmentItems(data, "attachments"),
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        createdBy: uid,
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
+        isArchived: false,
+      });
+      tx.set(
+        counterRef,
+        {
+          workspaceId,
+          periodKey: periodKey(),
+          expensesCount: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      applyMetricsDeltaInTx(tx, projectId, workspaceId, amount, 0);
+    },
   });
-
-  return {
-    id: expenseRef.id,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-  };
 }
 
 export const createExpenseWithQuotaHttp = onRequest(
@@ -2337,7 +2539,7 @@ export async function createPaymentWithQuotaForUser(
   data: Record<string, unknown>,
 ): Promise<{ id: string; clientMutationId?: string }> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
 
   const projectId = requireString(data, "projectId");
   const amount = requireNumber(data, "amount");
@@ -2370,57 +2572,88 @@ export async function createPaymentWithQuotaForUser(
       "Set a contract value on this project before recording payments.",
     );
   }
-  const subscription = await getSubscription(workspaceId);
-  if (!hasUnlimitedQuota(subscription)) {
-    const current = await getCurrentUsage(workspaceId, "paymentsPerMonth");
-    const max = limitForType("paymentsPerMonth");
-    if (current + 1 > max) {
-      quotaError("paymentsPerMonth", current, max);
-    }
+  const replay = await readExistingMutation(
+    db,
+    workspaceId,
+    "payments",
+    data.clientMutationId,
+  );
+  if (replay) {
+    return replay;
   }
+  const subscription = await getSubscription(workspaceId);
+  const enforcePaymentQuota = !hasUnlimitedQuota(subscription);
 
+  const paymentStatus = parsePaymentStatus(data.paymentStatus, "paid");
+  const cashIn = cashCollectedAmount({
+    amount,
+    paymentStatus,
+    paidAmount: data.paidAmount,
+  });
   const paymentRef = db.collection("payments").doc();
   const counterRef = db
     .collection("usage_counters")
     .doc(`${workspaceId}_${periodKey()}`);
-  await db.runTransaction(async (tx) => {
-    const attachments = ensureAttachmentItems(data, "attachments");
-    tx.set(paymentRef, {
-      id: paymentRef.id,
-      workspaceId,
-      projectId,
-      amount,
-      date: parseTimestamp(data.date) ?? Timestamp.now(),
-      paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
-      notes: `${data.notes ?? ""}`.trim(),
-      attachments,
-      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-      createdBy: uid,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      isArchived: false,
-    });
-    tx.set(
+  return commitIdempotentCreate(db, {
+    workspaceId,
+    kind: "payments",
+    clientMutationId: data.clientMutationId,
+    newDocId: paymentRef.id,
+    quota: {
       counterRef,
-      {
+      field: "paymentsCount",
+      max: limitForType("paymentsPerMonth"),
+      apply: enforcePaymentQuota,
+      onExceeded: () =>
+        quotaError(
+          "paymentsPerMonth",
+          limitForType("paymentsPerMonth"),
+          limitForType("paymentsPerMonth"),
+        ),
+    },
+    write: (tx) => {
+      const attachments = ensureAttachmentItems(data, "attachments");
+      tx.set(paymentRef, {
+        id: paymentRef.id,
         workspaceId,
-        periodKey: periodKey(),
-        paymentsCount: FieldValue.increment(1),
+        projectId,
+        amount,
+        date: parseTimestamp(data.date) ?? Timestamp.now(),
+        paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
+        paymentStatus,
+        paidAmount: Number.isFinite(Number(data.paidAmount))
+          ? Number(data.paidAmount)
+          : null,
+        description: `${data.description ?? data.notes ?? ""}`.trim(),
+        notes: `${data.notes ?? ""}`.trim(),
+        entityId: `${data.entityId ?? ""}`.trim() || null,
+        entityName: `${data.entityName ?? ""}`.trim(),
+        entityType: `${data.entityType ?? "other"}`.trim(),
+        attachments,
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        createdBy: uid,
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, amount);
+        isArchived: false,
+      });
+      tx.set(
+        counterRef,
+        {
+          workspaceId,
+          periodKey: periodKey(),
+          paymentsCount: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      applyMetricsDeltaInTx(tx, projectId, workspaceId, 0, cashIn);
+    },
   });
-  return {
-    id: paymentRef.id,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-  };
 }
 
-export const createPaymentWithQuota = onCall(async (request) => {
+export const createPaymentWithQuota = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2493,7 +2726,7 @@ export async function createWorkerEntryWithQuotaForUser(
   data: Record<string, unknown>,
 ): Promise<{ id: string; clientMutationId?: string }> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
 
   const workerId = requireString(data, "workerId");
   const projectId = requireString(data, "projectId");
@@ -2537,59 +2770,77 @@ export async function createWorkerEntryWithQuotaForUser(
     );
   }
 
-  const subscription = await getSubscription(workspaceId);
-  if (!hasUnlimitedQuota(subscription)) {
-    const current = await getCurrentUsage(workspaceId, "workerEntriesPerMonth");
-    const max = limitForType("workerEntriesPerMonth");
-    if (current + 1 > max) {
-      quotaError("workerEntriesPerMonth", current, max);
-    }
+  const replay = await readExistingMutation(
+    db,
+    workspaceId,
+    "worker_entries",
+    data.clientMutationId,
+  );
+  if (replay) {
+    return replay;
   }
+
+  const subscription = await getSubscription(workspaceId);
+  const enforceWorkerEntryQuota = !hasUnlimitedQuota(subscription);
 
   const entryRef = db.collection("worker_entries").doc();
   const attachments = ensureAttachmentItems(data, "attachments");
   const counterRef = db
     .collection("usage_counters")
     .doc(`${workspaceId}_${periodKey()}`);
-  await db.runTransaction(async (tx) => {
-    tx.set(entryRef, {
-      id: entryRef.id,
-      workspaceId,
-      workerId,
-      projectId,
-      daysWorked,
-      dailyWage,
-      totalCost,
-      date: parseTimestamp(data.date) ?? Timestamp.now(),
-      notes: `${data.notes ?? ""}`.trim(),
-      attachments,
-      clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-      clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-      clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-      createdBy: uid,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      isArchived: false,
-    });
-    tx.set(
+  return commitIdempotentCreate(db, {
+    workspaceId,
+    kind: "worker_entries",
+    clientMutationId: data.clientMutationId,
+    newDocId: entryRef.id,
+    quota: {
       counterRef,
-      {
+      field: "workerEntriesCount",
+      max: limitForType("workerEntriesPerMonth"),
+      apply: enforceWorkerEntryQuota,
+      onExceeded: () =>
+        quotaError(
+          "workerEntriesPerMonth",
+          limitForType("workerEntriesPerMonth"),
+          limitForType("workerEntriesPerMonth"),
+        ),
+    },
+    write: (tx) => {
+      tx.set(entryRef, {
+        id: entryRef.id,
         workspaceId,
-        periodKey: periodKey(),
-        workerEntriesCount: FieldValue.increment(1),
+        workerId,
+        projectId,
+        daysWorked,
+        dailyWage,
+        totalCost,
+        date: parseTimestamp(data.date) ?? Timestamp.now(),
+        notes: `${data.notes ?? ""}`.trim(),
+        attachments,
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        createdBy: uid,
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
+        isArchived: false,
+      });
+      tx.set(
+        counterRef,
+        {
+          workspaceId,
+          periodKey: periodKey(),
+          workerEntriesCount: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      applyMetricsDeltaInTx(tx, projectId, workspaceId, totalCost, 0);
+    },
   });
-  return {
-    id: entryRef.id,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-  };
 }
 
-export const createWorkerEntryWithQuota = onCall(async (request) => {
+export const createWorkerEntryWithQuota = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2662,7 +2913,7 @@ async function archiveExpenseWithQuotaRefundForUser(
   data: Record<string, unknown>,
 ): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
   const expenseId = requireString(data, "expenseId");
   const expenseRef = db.collection("expenses").doc(expenseId);
   const counterRef = db
@@ -2719,7 +2970,7 @@ async function archiveExpenseWithQuotaRefundForUser(
   });
 }
 
-export const archiveExpenseWithQuotaRefund = onCall(async (request) => {
+export const archiveExpenseWithQuotaRefund = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2786,7 +3037,7 @@ async function archivePaymentWithQuotaRefundForUser(
   data: Record<string, unknown>,
 ): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
   const paymentId = requireString(data, "paymentId");
   const paymentRef = db.collection("payments").doc(paymentId);
   const counterRef = db
@@ -2809,7 +3060,7 @@ async function archivePaymentWithQuotaRefundForUser(
       return;
     }
 
-    const archivedAmount = Number(payment.amount ?? 0);
+    const archivedCashIn = cashCollectedAmount(payment);
     const archivedProjectId = `${payment.projectId ?? ""}`;
 
     tx.update(paymentRef, {
@@ -2837,13 +3088,13 @@ async function archivePaymentWithQuotaRefundForUser(
         archivedProjectId,
         workspaceId,
         0,
-        -archivedAmount,
+        -archivedCashIn,
       );
     }
   });
 }
 
-export const archivePaymentWithQuotaRefund = onCall(async (request) => {
+export const archivePaymentWithQuotaRefund = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -2910,7 +3161,7 @@ async function archiveWorkerEntryWithQuotaRefundForUser(
   data: Record<string, unknown>,
 ): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
   const entryId = requireString(data, "entryId");
   const entryRef = db.collection("worker_entries").doc(entryId);
   const counterRef = db
@@ -2967,7 +3218,7 @@ async function archiveWorkerEntryWithQuotaRefundForUser(
   });
 }
 
-export const archiveWorkerEntryWithQuotaRefund = onCall(async (request) => {
+export const archiveWorkerEntryWithQuotaRefund = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3029,17 +3280,21 @@ export const archiveWorkerEntryWithQuotaRefundHttp = onRequest(
   },
 );
 
-export const updateExpense = onCall(async (request) => {
+export const updateExpense = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
 
   const data = request.data as Record<string, unknown>;
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertCanMutateMoney(workspaceId, request.auth.uid);
   const expenseId = requireString(data, "expenseId");
   const projectId = requireString(data, "projectId");
-  const category = requireString(data, "category");
+  const categoryRaw = requireString(data, "category");
+  if (!isAllowedExpenseCategory(categoryRaw)) {
+    throw new HttpsError("invalid-argument", "Unsupported expense category");
+  }
+  const category = normalizeExpenseCategory(categoryRaw);
   const amount = requireNumber(data, "amount");
   if (amount <= 0) {
     throw new HttpsError(
@@ -3093,6 +3348,7 @@ export const updateExpense = onCall(async (request) => {
     notes: `${data.notes ?? ""}`.trim(),
     supplierName: `${data.supplierName ?? ""}`.trim(),
     paymentMethod: `${data.paymentMethod ?? ""}`.trim(),
+    paymentStatus: parsePaymentStatus(data.paymentStatus, "unpaid"),
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
     updatedAt: FieldValue.serverTimestamp(),
@@ -3117,7 +3373,7 @@ export const updateExpense = onCall(async (request) => {
   await batch.commit();
 });
 
-export const updatePayment = onCall(async (request) => {
+export const updatePayment = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3137,7 +3393,7 @@ export async function updatePaymentForUser(
   data: Record<string, unknown>,
 ): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, uid);
+  await assertCanMutateMoney(workspaceId, uid);
   const paymentId = requireString(data, "paymentId");
   const projectId = requireString(data, "projectId");
   const amount = requireNumber(data, "amount");
@@ -3191,7 +3447,16 @@ export async function updatePaymentForUser(
     );
   }
 
-  const oldAmount = Number(payment.amount ?? 0);
+  const oldCashIn = cashCollectedAmount(payment);
+  const paymentStatus = parsePaymentStatus(
+    data.paymentStatus ?? payment.paymentStatus,
+    "paid",
+  );
+  const newCashIn = cashCollectedAmount({
+    amount,
+    paymentStatus,
+    paidAmount: data.paidAmount ?? payment.paidAmount,
+  });
   const oldProjectId = `${payment.projectId ?? ""}`;
   const batch = db.batch();
   const updateData: Record<string, unknown> = {
@@ -3199,6 +3464,7 @@ export async function updatePaymentForUser(
     amount,
     date: parseTimestamp(data.date) ?? Timestamp.now(),
     paymentMethod: `${data.paymentMethod ?? "cash"}`.trim(),
+    paymentStatus,
     notes: `${data.notes ?? ""}`.trim(),
     clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
     clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
@@ -3214,24 +3480,25 @@ export async function updatePaymentForUser(
       projectId,
       workspaceId,
       0,
-      amount - oldAmount,
+      newCashIn - oldCashIn,
     );
   } else {
     if (oldProjectId)
-      applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, 0, -oldAmount);
-    applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, amount);
+      applyMetricsDeltaInBatch(batch, oldProjectId, workspaceId, 0, -oldCashIn);
+    applyMetricsDeltaInBatch(batch, projectId, workspaceId, 0, newCashIn);
   }
   await batch.commit();
 }
 
-export const createWorker = onCall(async (request) => {
+export const createWorker = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
 
+  const uid = request.auth.uid;
   const data = request.data as Record<string, unknown>;
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertMember(workspaceId, uid);
   const name = requireString(data, "name");
   const billingTypeRaw = `${data.billingType ?? "daily"}`.trim().toLowerCase();
   const billingType = billingTypeRaw === "project" ? "project" : "daily";
@@ -3244,33 +3511,46 @@ export const createWorker = onCall(async (request) => {
     );
   }
 
-  const workerRef = db.collection("workers").doc();
-  await workerRef.set({
-    id: workerRef.id,
+  const replay = await readExistingMutation(
+    db,
     workspaceId,
-    name,
-    phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
-    dailyWage: billingType === "daily" ? dailyWage : 0,
-    billingType,
-    workerType: `${data.workerType ?? ""}`.trim(),
-    notes: `${data.notes ?? ""}`.trim(),
-    status,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-    clientCreatedAt: parseTimestamp(data.clientCreatedAt),
-    clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
-    createdBy: request.auth.uid,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    isArchived: false,
-  });
+    "workers",
+    data.clientMutationId,
+  );
+  if (replay) {
+    return replay;
+  }
 
-  return {
-    id: workerRef.id,
-    clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
-  };
+  const workerRef = db.collection("workers").doc();
+  return commitIdempotentCreate(db, {
+    workspaceId,
+    kind: "workers",
+    clientMutationId: data.clientMutationId,
+    newDocId: workerRef.id,
+    write: (tx) => {
+      tx.set(workerRef, {
+        id: workerRef.id,
+        workspaceId,
+        name,
+        phoneNumber: `${data.phoneNumber ?? ""}`.trim(),
+        dailyWage: billingType === "daily" ? dailyWage : 0,
+        billingType,
+        workerType: `${data.workerType ?? ""}`.trim(),
+        notes: `${data.notes ?? ""}`.trim(),
+        status,
+        clientMutationId: `${data.clientMutationId ?? ""}`.trim(),
+        clientCreatedAt: parseTimestamp(data.clientCreatedAt),
+        clientUpdatedAt: parseTimestamp(data.clientUpdatedAt),
+        createdBy: uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        isArchived: false,
+      });
+    },
+  });
 });
 
-export const updateWorker = onCall(async (request) => {
+export const updateWorker = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3324,7 +3604,7 @@ export const updateWorker = onCall(async (request) => {
   });
 });
 
-export const archiveWorker = onCall(async (request) => {
+export const archiveWorker = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3353,14 +3633,14 @@ export const archiveWorker = onCall(async (request) => {
   });
 });
 
-export const updateWorkerEntry = onCall(async (request) => {
+export const updateWorkerEntry = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
 
   const data = request.data as Record<string, unknown>;
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  await assertCanMutateMoney(workspaceId, request.auth.uid);
   const entryId = requireString(data, "entryId");
   const projectId = requireString(data, "projectId");
   const daysWorked = requireNumber(data, "daysWorked");
@@ -3447,13 +3727,16 @@ export const updateWorkerEntry = onCall(async (request) => {
   await batch.commit();
 });
 
-export const deleteProjectCascade = onCall(async (request) => {
+export const deleteProjectCascade = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
   const data = request.data as Record<string, unknown>;
   const workspaceId = requireString(data, "workspaceId");
-  await assertMember(workspaceId, request.auth.uid);
+  const role = await assertMember(workspaceId, request.auth.uid);
+  if (!canDeleteProjectCascade(role)) {
+    throw new HttpsError("permission-denied", "Not allowed to delete project");
+  }
   const projectId = requireString(data, "projectId");
   const projectRef = db.collection("projects").doc(projectId);
   const projectSnap = await projectRef.get();
@@ -3504,53 +3787,121 @@ export const deleteProjectCascade = onCall(async (request) => {
   const counterRef = db
     .collection("usage_counters")
     .doc(`${workspaceId}_${periodKey()}`);
+  const projectCounterRef = projectUsageCounterRef(workspaceId);
 
-  const batch = db.batch();
-  batch.delete(projectRef);
-  batch.delete(db.collection("project_metrics").doc(projectId));
+  const storagePaths = collectAttachmentStoragePaths([
+    ...expensesSnap.docs,
+    ...paymentsSnap.docs,
+    ...entriesSnap.docs,
+  ]);
 
-  for (const doc of expensesSnap.docs) {
-    batch.delete(doc.ref);
-  }
-  for (const doc of paymentsSnap.docs) {
-    batch.delete(doc.ref);
-  }
-  for (const doc of entriesSnap.docs) {
-    batch.delete(doc.ref);
-  }
-  for (const doc of notificationsSnap.docs) {
-    batch.delete(doc.ref);
-  }
+  const refsToDelete = [
+    projectRef,
+    db.collection("project_metrics").doc(projectId),
+    ...expensesSnap.docs.map((doc) => doc.ref),
+    ...paymentsSnap.docs.map((doc) => doc.ref),
+    ...entriesSnap.docs.map((doc) => doc.ref),
+    ...notificationsSnap.docs.map((doc) => doc.ref),
+  ];
 
   const counterSnap = await counterRef.get();
   const currentData = counterSnap.data() ?? {};
-  batch.set(
-    counterRef,
-    {
-      workspaceId,
-      periodKey: periodKey(),
-      expensesCount: Math.max(
-        0,
-        Number(currentData.expensesCount ?? 0) - expenseRefund,
-      ),
-      paymentsCount: Math.max(
-        0,
-        Number(currentData.paymentsCount ?? 0) - paymentRefund,
-      ),
-      workerEntriesCount: Math.max(
-        0,
-        Number(currentData.workerEntriesCount ?? 0) - entryRefund,
-      ),
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const counterPayload = {
+    workspaceId,
+    periodKey: periodKey(),
+    expensesCount: Math.max(
+      0,
+      Number(currentData.expensesCount ?? 0) - expenseRefund,
+    ),
+    paymentsCount: Math.max(
+      0,
+      Number(currentData.paymentsCount ?? 0) - paymentRefund,
+    ),
+    workerEntriesCount: Math.max(
+      0,
+      Number(currentData.workerEntriesCount ?? 0) - entryRefund,
+    ),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
 
-  await batch.commit();
+  let projectCounterPayload: Record<string, unknown> | null = null;
+  if (isCountedActiveProject(project as Record<string, unknown>)) {
+    const projectCounterSnap = await projectCounterRef.get();
+    const existing = projectCounterSnap.data()?.activeProjectsCount;
+    const current =
+      existing == null
+        ? (await activeProjectsQuery(workspaceId).get()).size
+        : Number(existing);
+    projectCounterPayload = {
+      workspaceId,
+      activeProjectsCount: Math.max(0, current - 1),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+  }
+
+  for (const chunk of chunkItems(refsToDelete)) {
+    const batch = db.batch();
+    for (const ref of chunk) {
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
+
+  const countersBatch = db.batch();
+  countersBatch.set(counterRef, counterPayload, {merge: true});
+  if (projectCounterPayload) {
+    countersBatch.set(projectCounterRef, projectCounterPayload, {merge: true});
+  }
+  await countersBatch.commit();
+
+  const bucket = getStorage().bucket();
+  await Promise.all(
+    storagePaths.map(async (storagePath) => {
+      try {
+        await bucket.file(storagePath).delete({ignoreNotFound: true});
+      } catch {
+        // Best-effort Storage cleanup; Firestore cascade already committed.
+      }
+    }),
+  );
   await recomputeWorkspaceMetrics(workspaceId);
 });
 
-export const updateUserProfile = onCall(async (request) => {
+export const getAttachmentDownloadUrl = onCall(
+  {enforceAppCheck: true},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
+    }
+    const data = request.data as Record<string, unknown>;
+    const workspaceId = requireString(data, "workspaceId");
+    const storagePath = requireString(data, "storagePath");
+    const role = await assertMember(workspaceId, request.auth.uid);
+    if (
+      role !== "owner" &&
+      role !== "admin" &&
+      role !== "accountingApproved"
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Accounting access required to download attachments",
+      );
+    }
+    if (!isAllowedAttachmentStoragePath(storagePath)) {
+      throw new HttpsError("invalid-argument", "Invalid attachment storage path");
+    }
+    const [url] = await getStorage()
+      .bucket()
+      .file(storagePath)
+      .getSignedUrl({
+        action: "read",
+        expires: Date.now() + 15 * 60 * 1000,
+      });
+    return {downloadUrl: url, expiresInSeconds: 15 * 60};
+  },
+);
+
+export const updateUserProfile = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3581,7 +3932,7 @@ export const updateUserProfile = onCall(async (request) => {
     );
 });
 
-export const updateUserSettings = onCall(async (request) => {
+export const updateUserSettings = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3794,7 +4145,7 @@ export async function bootstrapWorkspaceForUser(input: {
   return { workspaceId, created: true, setupCompleted: false };
 }
 
-export const ensureUserWorkspaceBootstrap = onCall(async (request) => {
+export const ensureUserWorkspaceBootstrap = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3848,7 +4199,7 @@ export async function setActiveWorkspaceForUser(input: {
   return {workspaceId};
 }
 
-export const setActiveWorkspace = onCall(async (request) => {
+export const setActiveWorkspace = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3923,7 +4274,7 @@ export async function completeInitialWorkspaceSetupForUser(input: {
   return {workspaceId, setupCompleted: true};
 }
 
-export const completeInitialWorkspaceSetup = onCall(async (request) => {
+export const completeInitialWorkspaceSetup = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -3974,11 +4325,6 @@ export async function createWorkspaceForUser(input: {
       "Upgrade to Pro to create additional workspaces",
     );
   }
-  const sourceSubscriptionSnap = await db
-    .collection("subscriptions")
-    .doc(sourceWorkspaceId)
-    .get();
-  const sourceSubscriptionData = sourceSubscriptionSnap.data();
 
   const workspaceRef = db.collection("workspaces").doc();
   const workspaceId = workspaceRef.id;
@@ -3990,16 +4336,8 @@ export async function createWorkspaceForUser(input: {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
-  if (sourceSubscriptionData) {
-    // New workspace inherits a snapshot of the owner's Pro entitlement at
-    // creation time (not a live link) — it bills/renews independently from
-    // here on, matching the per-workspace subscription model.
-    batch.set(db.collection("subscriptions").doc(workspaceId), {
-      ...sourceSubscriptionData,
-      workspaceId,
-      lastSyncedAt: FieldValue.serverTimestamp(),
-    });
-  }
+  // New workspaces start on the free plan. Cloning the source workspace's
+  // Pro snapshot let extra workspaces skip RevenueCat entirely.
   batch.set(membershipRef(workspaceId, uid), {
     workspaceId,
     userId: uid,
@@ -4022,7 +4360,7 @@ export async function createWorkspaceForUser(input: {
   return {workspaceId, created: true};
 }
 
-export const createWorkspace = onCall(async (request) => {
+export const createWorkspace = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -4099,7 +4437,7 @@ export async function updateWorkspaceMemberRoleForUser(input: {
   return {userId: targetUserId, workspaceId, role};
 }
 
-export const updateWorkspaceMemberRole = onCall(async (request) => {
+export const updateWorkspaceMemberRole = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -4144,7 +4482,7 @@ export async function removeWorkspaceMemberForUser(input: {
   return {userId: targetUserId, workspaceId, removed: true};
 }
 
-export const removeWorkspaceMember = onCall(async (request) => {
+export const removeWorkspaceMember = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -4183,53 +4521,38 @@ export async function inviteMemberByEmailForUser(input: {
     .limit(1)
     .get();
   if (userSnap.empty) {
-    throw new HttpsError(
-      "not-found",
-      "No existing user was found with that email",
-    );
+    throw new HttpsError("not-found", "INVITE_UNAVAILABLE");
   }
 
   const userId = userSnap.docs[0].id;
-  const deterministicMembership = await membershipRef(
-    workspaceId,
-    userId,
-  ).get();
-  if (deterministicMembership.exists) {
-    throw new HttpsError(
-      "already-exists",
-      "User is already a member of this workspace",
-    );
-  }
-
-  const existingMembership = await db
-    .collection("memberships")
-    .where("workspaceId", "==", workspaceId)
-    .where("userId", "==", userId)
-    .limit(1)
-    .get();
-  if (!existingMembership.empty) {
-    throw new HttpsError(
-      "already-exists",
-      "User is already a member of this workspace",
-    );
-  }
-
-  const subscription = await getSubscription(workspaceId);
-  if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
-    const current = await getCurrentUsage(workspaceId, "teamMembers");
-    const max = limitForType("teamMembers");
-    if (current + 1 > max) {
-      quotaError("teamMembers", current, max);
+  const membershipDoc = membershipRef(workspaceId, userId);
+  await db.runTransaction(async (tx) => {
+    const deterministicMembership = await tx.get(membershipDoc);
+    if (deterministicMembership.exists) {
+      throw new HttpsError("not-found", "INVITE_UNAVAILABLE");
     }
-  }
-
-  await membershipRef(workspaceId, userId).set({
-    workspaceId,
-    userId,
-    role,
-    createdBy: ownerUid,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+    const subscriptionSnap = await tx.get(
+      db.collection("subscriptions").doc(workspaceId),
+    );
+    const subscription = subscriptionFromSnap(subscriptionSnap);
+    if (ENFORCE_TEAM_MEMBER_LIMITS && !hasUnlimitedQuota(subscription)) {
+      const membersSnap = await tx.get(
+        db.collection("memberships").where("workspaceId", "==", workspaceId),
+      );
+      const current = membersSnap.size;
+      const max = limitForType("teamMembers");
+      if (current + 1 > max) {
+        quotaError("teamMembers", current, max);
+      }
+    }
+    tx.set(membershipDoc, {
+      workspaceId,
+      userId,
+      role,
+      createdBy: ownerUid,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 
   await upsertNotificationForUsers({
@@ -4243,7 +4566,7 @@ export async function inviteMemberByEmailForUser(input: {
   return {userId, workspaceId};
 }
 
-export const inviteMemberByEmail = onCall(async (request) => {
+export const inviteMemberByEmail = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -4329,7 +4652,7 @@ export async function inviteMemberWithQuotaForUser(input: {
   return {userId: newUserId, workspaceId};
 }
 
-export const inviteMemberWithQuota = onCall(async (request) => {
+export const inviteMemberWithQuota = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
   }
@@ -4342,8 +4665,121 @@ export const inviteMemberWithQuota = onCall(async (request) => {
   });
 });
 
+async function deleteDocsByWorkspaceId(
+  collectionName: string,
+  workspaceId: string,
+): Promise<void> {
+  for (;;) {
+    const snap = await db
+      .collection(collectionName)
+      .where("workspaceId", "==", workspaceId)
+      .limit(400)
+      .get();
+    if (snap.empty) {
+      return;
+    }
+    const batch = db.batch();
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    if (snap.size < 400) {
+      return;
+    }
+  }
+}
+
+async function deleteOwnedWorkspaceData(workspaceId: string): Promise<void> {
+  await Promise.all(
+    WORKSPACE_SCOPED_COLLECTIONS.map((collectionName) =>
+      deleteDocsByWorkspaceId(collectionName, workspaceId),
+    ),
+  );
+  await db.collection("workspace_metrics").doc(workspaceId).delete();
+  await db.collection("subscriptions").doc(workspaceId).delete();
+  await db.collection("workspaces").doc(workspaceId).delete();
+}
+
+async function deleteUserStorage(uid: string): Promise<void> {
+  const bucket = getStorage().bucket();
+  for (const prefix of userStoragePrefixes(uid)) {
+    await bucket.deleteFiles({prefix, force: true});
+  }
+}
+
+export const deleteOwnAccount = onCall({ enforceAppCheck: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+  if (!isRecentLogin(request.auth.token.auth_time)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "RECENT_LOGIN_REQUIRED",
+    );
+  }
+
+  const uid = request.auth.uid;
+  const membershipSnap = await db
+    .collection("memberships")
+    .where("userId", "==", uid)
+    .get();
+
+  const ownedWorkspaceIds: string[] = [];
+  const ownerDocs = membershipSnap.docs.filter((doc) => {
+    const data = doc.data();
+    const workspaceId = `${data.workspaceId ?? ""}`.trim();
+    return workspaceId.length > 0 && `${data.role ?? ""}` === "owner";
+  });
+  const ownerChecks = await Promise.all(
+    ownerDocs.map(async (doc) => {
+      const workspaceId = `${doc.data().workspaceId ?? ""}`.trim();
+      const others = await db
+        .collection("memberships")
+        .where("workspaceId", "==", workspaceId)
+        .get();
+      const otherMemberCount = others.docs.filter((member) => {
+        return `${member.data().userId ?? ""}` !== uid;
+      }).length;
+      return {workspaceId, otherMemberCount};
+    }),
+  );
+  for (const check of ownerChecks) {
+    if (ownerDeletionBlocked(check.otherMemberCount)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "TRANSFER_OWNERSHIP_REQUIRED",
+      );
+    }
+    ownedWorkspaceIds.push(check.workspaceId);
+  }
+
+  for (const workspaceId of ownedWorkspaceIds) {
+    await deleteOwnedWorkspaceData(workspaceId);
+  }
+
+  const leftoverMemberships = await db
+    .collection("memberships")
+    .where("userId", "==", uid)
+    .get();
+  if (!leftoverMemberships.empty) {
+    const batch = db.batch();
+    for (const doc of leftoverMemberships.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  await db.collection("users").doc(uid).delete();
+  await deleteUserStorage(uid);
+  await getAuth().deleteUser(uid);
+  return {deleted: true};
+});
+
 export const revenuecatWebhook = onRequest(
-  { secrets: [revenuecatWebhookSecret] },
+  {
+    secrets: [revenuecatWebhookSecret],
+    maxInstances: 20,
+  },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "method_not_allowed" });
@@ -4355,8 +4791,7 @@ export const revenuecatWebhook = onRequest(
       res.status(500).json({ error: "missing_server_secret" });
       return;
     }
-    const incomingAuth = req.headers.authorization ?? "";
-    if (incomingAuth !== `Bearer ${expectedSecret}`) {
+    if (!authorizationHeaderMatches(req.headers.authorization, expectedSecret)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
@@ -4370,40 +4805,73 @@ export const revenuecatWebhook = onRequest(
 
     const eventType = `${event.type ?? "UNKNOWN"}`;
     const periodType = `${event.period_type ?? "UNKNOWN"}`;
+    const eventId = revenueCatEventId(event);
+    const subscriptionRef = db.collection("subscriptions").doc(workspaceId);
+    const applied = await db.runTransaction(async (tx) => {
+      const currentSnap = await tx.get(subscriptionRef);
+      if (eventId) {
+        const eventRef = db.collection("webhook_events").doc(eventId);
+        const existing = await tx.get(eventRef);
+        if (existing.exists) {
+          return false;
+        }
+        tx.create(eventRef, {
+          id: eventId,
+          type: eventType,
+          workspaceId,
+          receivedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      const currentStatus = `${currentSnap.data()?.status ?? ""}`;
+      const mapped = mapRevenueCatEvent({
+        eventType,
+        periodType,
+        currentStatus,
+        entitlements: event.entitlement_ids,
+      });
+      const periodEndsAt =
+        parseTimestamp(event.expiration_at_ms) ??
+        parseTimestamp(event.expires_date);
+      const trialEndsAt = periodType === "TRIAL" ? periodEndsAt : null;
+      const store = `${event.store ?? "unknown"}`;
+      tx.set(
+        subscriptionRef,
+        {
+          workspaceId,
+          tier: mapRevenueCatTier(event.entitlement_ids),
+          status: mapped.status,
+          store,
+          isAutoRenewing: mapped.isAutoRenewing,
+          trialEndsAt,
+          periodEndsAt,
+          lastSyncedAt: FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+      return true;
+    });
+
+    if (!applied) {
+      res.status(200).json({ok: true, duplicate: true});
+      return;
+    }
+
     const tier = mapRevenueCatTier(event.entitlement_ids);
-    const status = mapRevenueCatStatus(eventType, periodType);
-    const periodEndsAt =
-      parseTimestamp(event.expiration_at_ms) ??
-      parseTimestamp(event.expires_date);
-    const trialEndsAt = periodType === "TRIAL" ? periodEndsAt : null;
-    const isAutoRenewing =
-      status === "active" || status === "trial" || status === "grace";
-    const store = `${event.store ?? "unknown"}`;
-
-    await db.collection("subscriptions").doc(workspaceId).set(
-      {
-        workspaceId,
-        tier,
-        status,
-        store,
-        isAutoRenewing,
-        trialEndsAt,
-        periodEndsAt,
-        lastSyncedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-
+    const mapped = mapRevenueCatEvent({
+      eventType,
+      periodType,
+      entitlements: event.entitlement_ids,
+    });
     const recipients = await notificationRecipients(workspaceId, false);
     await upsertNotificationForUsers({
       workspaceId,
       userIds: recipients,
       type: "subscription_status_changed",
       title: "Subscription Updated",
-      message: `Subscription is now ${tier.toUpperCase()} (${status})`,
+      message: `Subscription is now ${tier.toUpperCase()} (${mapped.status})`,
     });
 
-    res.status(200).json({ ok: true });
+    res.status(200).json({ok: true});
   },
 );
 
@@ -4468,7 +4936,7 @@ async function recomputeProjectSummary(
   );
   const totalExpenses = manualExpenses + laborExpenses;
   const totalPayments = paymentsSnap.docs.reduce(
-    (sum, doc) => sum + Number(doc.data().amount ?? 0),
+    (sum, doc) => sum + cashCollectedAmount(doc.data()),
     0,
   );
   const netProfit = totalPayments - totalExpenses;
@@ -4493,14 +4961,16 @@ async function recomputeProjectSummary(
 
   const categoryTotals = expensesSnap.docs.reduce<Record<string, number>>(
     (map, doc) => {
-      const category = `${doc.data().category ?? "other"}`;
+      const category = normalizeExpenseCategory(
+        `${doc.data().category ?? "other"}`,
+      );
       map[category] = (map[category] ?? 0) + Number(doc.data().amount ?? 0);
       return map;
     },
     {},
   );
   if (laborExpenses > 0) {
-    categoryTotals.labor = (categoryTotals.labor ?? 0) + laborExpenses;
+    categoryTotals.worker = (categoryTotals.worker ?? 0) + laborExpenses;
   }
 
   const monthlyMap = new Map<string, MonthlyFlowPoint>();
@@ -4534,7 +5004,7 @@ async function recomputeProjectSummary(
     if (!date) {
       continue;
     }
-    pointFor(date).income += Number(doc.data().amount ?? 0);
+    pointFor(date).income += cashCollectedAmount(doc.data());
   }
   const monthlyFlow = Array.from(monthlyMap.values()).sort((a, b) =>
     a.month.localeCompare(b.month),
@@ -4618,7 +5088,7 @@ async function recomputeProjectSummary(
     .reduce((sum, record) => sum + workerEntryTotalCost(record), 0);
   const weeklyIncome = paymentRecords
     .filter(inCurrentWeek)
-    .reduce((sum, record) => sum + Number(record.amount ?? 0), 0);
+    .reduce((sum, record) => sum + cashCollectedAmount(record), 0);
   const entityTotals: Record<string, number> = {};
   const paymentMethodTotals: Record<string, number> = {};
   for (const record of expenseRecords) {
@@ -4630,11 +5100,12 @@ async function recomputeProjectSummary(
   for (const record of paymentRecords) {
     const entity = `${record.entityName ?? record.clientName ?? ""}`.trim();
     if (entity) {
-      entityTotals[entity] = (entityTotals[entity] ?? 0) + Number(record.amount ?? 0);
+      entityTotals[entity] =
+        (entityTotals[entity] ?? 0) + cashCollectedAmount(record);
     }
     const method = `${record.paymentMethod ?? "unknown"}`.trim() || "unknown";
     paymentMethodTotals[method] =
-      (paymentMethodTotals[method] ?? 0) + Number(record.amount ?? 0);
+      (paymentMethodTotals[method] ?? 0) + cashCollectedAmount(record);
   }
   const recentTransactions = [
     ...recentExpenses.map((record) => ({

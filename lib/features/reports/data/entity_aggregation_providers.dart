@@ -1,7 +1,7 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'dart:async';
 
 import 'package:buildtrack_app/core/models/accounting_summary.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -10,43 +10,54 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final entityAggregationsProvider =
     StreamProvider.family<List<EntitySummary>, String>((ref, workspaceId) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
 
-      final summaryStream = firestore
-          .collection('entity_summaries')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .orderBy('latestTransactionDate', descending: true)
-          .limit(100)
-          .snapshots();
-      final workerAccountingStream = firestore
-          .collection('worker_accounting_records')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .limit(100)
-          .snapshots();
-      final contractorAccountingStream = firestore
-          .collection('contractor_accounting_records')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .limit(100)
-          .snapshots();
-      final equipmentAccountingStream = firestore
-          .collection('equipment_accounting_records')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .limit(100)
-          .snapshots();
-      final transportAccountingStream = firestore
-          .collection('transport_provider_accounting_records')
-          .where('workspaceId', isEqualTo: workspaceId)
-          .limit(100)
-          .snapshots();
+      final summaryStream = source.watch(
+        DocQuery(
+          'entity_summaries',
+          equals: {'workspaceId': workspaceId},
+          orderBy: 'latestTransactionDate',
+          descending: true,
+          limit: 100,
+        ),
+      );
+      final workerAccountingStream = source.watch(
+        DocQuery(
+          'worker_accounting_records',
+          equals: {'workspaceId': workspaceId},
+          limit: 100,
+        ),
+      );
+      final contractorAccountingStream = source.watch(
+        DocQuery(
+          'contractor_accounting_records',
+          equals: {'workspaceId': workspaceId},
+          limit: 100,
+        ),
+      );
+      final equipmentAccountingStream = source.watch(
+        DocQuery(
+          'equipment_accounting_records',
+          equals: {'workspaceId': workspaceId},
+          limit: 100,
+        ),
+      );
+      final transportAccountingStream = source.watch(
+        DocQuery(
+          'transport_provider_accounting_records',
+          equals: {'workspaceId': workspaceId},
+          limit: 100,
+        ),
+      );
       final actionStream = queue.watch();
 
       return Stream.multi((controller) {
-        QuerySnapshot<Map<String, dynamic>>? latestSummaries;
-        QuerySnapshot<Map<String, dynamic>>? latestWorkerRecords;
-        QuerySnapshot<Map<String, dynamic>>? latestContractorRecords;
-        QuerySnapshot<Map<String, dynamic>>? latestEquipmentRecords;
-        QuerySnapshot<Map<String, dynamic>>? latestTransportRecords;
+        List<Doc>? latestSummaries;
+        List<Doc>? latestWorkerRecords;
+        List<Doc>? latestContractorRecords;
+        List<Doc>? latestEquipmentRecords;
+        List<Doc>? latestTransportRecords;
         List<OfflineAction>? latestActions;
 
         void emitIfReady() {
@@ -147,12 +158,12 @@ class EntitySummary {
 class _DomainSnapshot {
   const _DomainSnapshot(this.snapshot, this.entityType);
 
-  final QuerySnapshot<Map<String, dynamic>> snapshot;
+  final List<Doc> snapshot;
   final String entityType;
 }
 
 List<EntitySummary> _buildEntitySummaries(
-  QuerySnapshot<Map<String, dynamic>> summariesSnapshot,
+  List<Doc> summariesSnapshot,
   List<OfflineAction> actions, {
   List<_DomainSnapshot> domainSnapshots = const [],
 }) {
@@ -188,8 +199,8 @@ List<EntitySummary> _buildEntitySummaries(
     }
   }
 
-  for (final doc in summariesSnapshot.docs) {
-    final accountingSummary = EntityAccountingSummary.fromMap(doc.data());
+  for (final doc in summariesSnapshot) {
+    final accountingSummary = EntityAccountingSummary.fromMap(doc.data);
     final key = accountingSummary.entityId.isNotEmpty
         ? accountingSummary.entityId
         : doc.id;
@@ -212,8 +223,8 @@ List<EntitySummary> _buildEntitySummaries(
   }
 
   for (final domainSnapshot in domainSnapshots) {
-    for (final doc in domainSnapshot.snapshot.docs) {
-      final data = doc.data();
+    for (final doc in domainSnapshot.snapshot) {
+      final data = doc.data;
       final amount = (data['amount'] as num?)?.toDouble() ?? 0;
       final entityId = _domainEntityId(data, domainSnapshot.entityType);
       final entityName = _domainEntityName(data, domainSnapshot.entityType);

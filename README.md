@@ -20,6 +20,8 @@ This repository now includes a production-practical **voice expense pipeline**:
 
 ## Security Notes
 
+See [docs/SECURITY.md](docs/SECURITY.md) for secrets vs public client configs.
+
 - No AI provider keys in Flutter client.
 - Secrets are read on Functions side only:
   - `OPENROUTER_API_KEY`
@@ -27,6 +29,26 @@ This repository now includes a production-practical **voice expense pipeline**:
   - `OPENROUTER_TRANSCRIPTION_MODEL`
 - Expense writes remain quota-enforced through callable functions.
 - Voice files are scoped to user path in `storage.rules`.
+
+## Cloud Functions
+
+Use **Node 22** (`functions/package.json` `engines.node` and Codemagic `node: 22`).
+
+```bash
+cd functions
+npm ci
+npm run lint
+npm test
+```
+
+The local `packages/cloud_firestore` path override is a copy of hosted `6.6.0`
+from `scripts/patch_cloud_firestore.ps1`. Keep it until CI proves pub.dev
+`cloud_firestore` without the fork. App code does not use Pipeline APIs.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits. Do not paste
+`git status` dumps as commit messages.
 
 ## Storage Paths
 

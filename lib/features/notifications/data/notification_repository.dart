@@ -1,26 +1,36 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/notifications/domain/notification_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NotificationRepository {
-  NotificationRepository(this._firestore);
+  NotificationRepository(this._firestore)
+    : _source = FirestoreDocSource(_firestore);
+
+  /// Reads through [source] (local replica in self-hosted builds, spec 004).
+  /// [markRead] still writes to Firestore until US2 moves it behind an RPC.
+  NotificationRepository.withSource(this._firestore, this._source);
 
   final FirebaseFirestore _firestore;
+  final DocSource _source;
 
   Stream<List<NotificationItem>> watchTargeted({
     required String workspaceId,
     required String userId,
     int limit = 50,
   }) {
-    return _firestore
-        .collection('notifications')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('targetUserId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
+    return _source
+        .watch(
+          DocQuery(
+            'notifications',
+            equals: {'workspaceId': workspaceId, 'targetUserId': userId},
+            orderBy: 'createdAt',
+            descending: true,
+            limit: limit,
+          ),
+        )
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+          (docs) => docs
+              .map((doc) => NotificationItem.fromMap(doc.id, doc.data))
               .toList(growable: false),
         );
   }

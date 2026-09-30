@@ -36,7 +36,9 @@ import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_quota_repository.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:buildtrack_app/features/auth/presentation/screens/login_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/features_screen.dart';
+import 'package:buildtrack_app/features/auth/presentation/screens/onboarding_screen.dart';
+import 'package:buildtrack_app/features/subscription/presentation/screens/limit_reached_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -99,7 +101,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage(items: [], hasMore: false);
@@ -147,6 +149,7 @@ class _FakePaymentRepository implements PaymentRepository {
     required DateTime date,
     required String paymentMethod,
     String? paymentStatus,
+    double? paidAmount,
     String? description,
     String? notes,
     String? entityId,
@@ -170,7 +173,7 @@ class _FakePaymentRepository implements PaymentRepository {
     String? searchText,
     DateTime? startDate,
     DateTime? endDate,
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async {
     return const FirestorePage(items: [], hasMore: false);
@@ -252,7 +255,7 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
   }) async => const FirestorePage(items: [], hasMore: false);
 
   @override
@@ -282,14 +285,14 @@ class _FakeProjectRepository
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => const FirestorePage(items: [], hasMore: false);
 
   @override
   Future<FirestorePage<Project>> fetchProjectsPage(
     String workspaceId, {
-    DocumentSnapshot<Map<String, dynamic>>? cursor,
+    Object? cursor,
     int pageSize = 20,
   }) async => const FirestorePage(items: [], hasMore: false);
 
@@ -636,6 +639,40 @@ void main() {
             activeWorkspaceIdProvider.overrideWith((ref) => null),
           ],
           child: wrap(router: router, home: const SizedBox()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Features (FeaturesScreen) renders without exception', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(child: wrap(home: const FeaturesScreen())),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Onboarding (OnboardingScreen) renders without exception', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(child: wrap(home: const OnboardingScreen())),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Limit reached screen renders without exception', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: wrap(
+            home: const LimitReachedScreen(limitType: 'paymentsPerMonth'),
+          ),
         ),
       );
       await tester.pumpAndSettle();

@@ -159,8 +159,7 @@ class _NotificationGroup extends StatelessWidget {
             ),
           ),
         ),
-        for (final item in items)
-          _NotificationCard(item: item, locale: locale),
+        for (final item in items) _NotificationCard(item: item, locale: locale),
         const SizedBox(height: 20),
       ],
     );

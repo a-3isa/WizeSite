@@ -4,13 +4,10 @@ import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 typedef ReportProjectPageLoader =
-    Future<FirestorePage<Project>> Function({
-      DocumentSnapshot<Map<String, dynamic>>? cursor,
-    });
+    Future<FirestorePage<Project>> Function({Object? cursor});
 
 class ReportProjectSelectorState {
   const ReportProjectSelectorState({
@@ -60,7 +57,7 @@ class ReportProjectSelectorController
 
   final ReportProjectPageLoader _loadActivePage;
   final ReportProjectPageLoader _loadArchivedPage;
-  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  Object? _cursor;
 
   Future<void> loadInitial() async {
     _cursor = null;
