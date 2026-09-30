@@ -157,7 +157,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 - [ ] T076 [P] [US2] Implement `processVoiceExpense` in `server/src/rpc/voice.ts` using `server/src/domain/voice/**`, reading audio from `$FILES_ROOT`
 - [ ] T077 [P] [US2] Implement `POST /v1/webhooks/revenuecat` in `server/src/webhooks/revenuecat.ts` (constant-time secret compare, dedupe, subscription + usage counter update)
 - [ ] T078 [US2] Implement the nightly reconciler `server/src/recompute/reconcile.ts` (`npm run reconcile`: recompute every project, log and count drift, non-zero exit on drift) and schedule it nightly at 02:00 through a `reconciler` cron sidecar service in `server/compose.yml` (supercronic running `npm run reconcile`), writing its last result to `/srv/wizesite/state/reconcile.json`. No dependency on US3; T095 only reads that file
-- [ ] T079 [US2] Register every function from contracts/rpc-api.md in `server/src/rpc/registry.ts`. Add a static test `server/test/unit/registry.test.ts` asserting that the registry contains every callable exported by `functions/src/index.ts` (except the `*Http` twins and triggers) plus the new RPCs
+- [X] T079 [US2] Register every function from contracts/rpc-api.md in `server/src/rpc/registry.ts`. Add a static test `server/test/unit/registry.test.ts` asserting that the registry contains every callable exported by `functions/src/index.ts` (except the `*Http` twins and triggers) plus the new RPCs _`processVoiceExpense` is listed in the test's PENDING map until T076 lands; the test fails if it is registered and still listed._
 
 ### Implementation for User Story 2 — client
 
