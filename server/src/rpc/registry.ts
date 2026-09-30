@@ -1,8 +1,12 @@
 import { fileRpcs } from "../files/download";
+import { accountingRecordRpcs } from "./accounting_records";
+import { entityRpcs } from "./entities";
 import { expenseRpcs } from "./expenses";
 import { memberRpcs } from "./members";
+import { notificationRpcs } from "./notifications";
 import { paymentRpcs } from "./payments";
 import { projectRpcs } from "./projects";
+import { sessionRpcs } from "./session";
 import { type AuthAdmin, unavailableAuthAdmin, userRpcs } from "./user";
 import { workerRpcs } from "./workers";
 import type { FilesConfig } from "../files/signing";
@@ -28,6 +32,10 @@ export function buildRegistry(deps: RegistryDeps): RpcRegistry {
     ...expenseRpcs,
     ...paymentRpcs,
     ...workerRpcs,
+    ...entityRpcs,
+    ...accountingRecordRpcs,
+    ...notificationRpcs,
+    ...sessionRpcs,
     ...userRpcs({ authAdmin: deps.authAdmin ?? unavailableAuthAdmin, files: deps.files }),
     ...fileRpcs(deps.files),
   };

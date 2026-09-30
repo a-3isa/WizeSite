@@ -77,6 +77,7 @@ their `clientMutationId` uniqueness as today.
 | Function | Replaces direct write in |
 |---|---|
 | `upsertEntity`, `archiveEntity`, `deleteEntity`, `touchEntityLastUsed` | `entities/data/entity_repository.dart` |
+| `upsertWorkerAccountingRecord` | `workers/data/worker_accounting_repository.dart` and the worker accounting screen (added during implementation: the app writes these records directly too) |
 | `upsertContractorAccountingRecord` | `contractors/data/contractor_accounting_repository.dart` |
 | `upsertEquipmentAccountingRecord` | `equipment/data/equipment_accounting_repository.dart` |
 | `upsertTransportProviderAccountingRecord` | `transport/data/transport_provider_accounting_repository.dart` |
@@ -84,6 +85,13 @@ their `clientMutationId` uniqueness as today.
 | `restoreMembership` | `core/services/session_restore_service.dart` |
 
 (`user_settings_repository.dart` direct writes → existing `updateUserSettings`.)
+
+Where `firestore.rules` blocked what the app does, the RPCs follow the app (found while porting,
+T063): equipment records use `providerId`/`providerName` (the rules demanded `equipmentId`, so every
+equipment save failed); contact edits may change `phoneNumber`, `notes` and `rateUnit` (left out of
+the rules' update allow-list); `deleteEntity` is allowed for owners and admins (the rules refused all
+deletes). `restoreMembership` only repairs the owner's missing membership (the client write it
+replaces was always refused).
 
 **Removed**: the `*Http` twins (`createProjectWithQuotaHttp`, …, `processVoiceExpenseHttp`) — every
 function is HTTP now. The five `on*WriteRecompute` triggers become in-transaction recompute (research R6).
