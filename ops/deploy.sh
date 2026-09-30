@@ -49,11 +49,11 @@ dc exec -T postgres pg_isready -U wizesite -d wizesite
 echo "==> migrations"
 dc run --rm --no-deps api npm run migrate
 
-echo "==> powersync + api${COMPOSE_FILES[2]:+ + cloudflared}"
+echo "==> powersync + api + reconciler${COMPOSE_FILES[2]:+ + cloudflared}"
 if [[ ${#COMPOSE_FILES[@]} -gt 2 ]]; then
-  dc up -d powersync api cloudflared
+  dc up -d powersync api reconciler cloudflared
 else
-  dc up -d powersync api
+  dc up -d powersync api reconciler
 fi
 
 echo "==> health check"

@@ -14,6 +14,7 @@
     "test:integration": "npm run build && node --test --test-concurrency=1 \"dist/test/integration/**/*.test.js\" \"dist/test/sync/**/*.test.js\"",
     "migrate": "node-pg-migrate up --migrations-dir migrations --migration-file-language sql",
     "migrate:firestore": "npm run build && node dist/tools/migrate-from-firestore/index.js",
+    "reconcile": "node dist/src/recompute/reconcile.js",
     "rollback:firestore": "npm run build && node dist/tools/rollback-to-firestore/index.js",
     "reconcile": "node dist/src/recompute/reconcile.js",
     "test:e2e": "npm run build && node --test --test-concurrency=1 \"dist/test/e2e/**/*.test.js\""
