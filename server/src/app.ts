@@ -10,6 +10,7 @@ import { buildRegistry } from "./rpc/registry";
 import { registerRpcRoutes, sendRpcError } from "./rpc/router";
 import type { RpcRegistry } from "./rpc/types";
 import type { AuthAdmin } from "./rpc/user";
+import { registerRevenueCatWebhook } from "./webhooks/revenuecat";
 
 export interface AppDeps {
   sql: Sql;
@@ -22,6 +23,8 @@ export interface AppDeps {
   authAdmin?: AuthAdmin;
   logLevel?: string;
   rateLimitMax?: number;
+  /** REVENUECAT_WEBHOOK_SECRET; when set (even empty) POST /v1/webhooks/revenuecat is served. */
+  revenueCatWebhookSecret?: string;
   /** PowerSync base URL probed by /healthz; omitted in tests. */
   syncHealthUrl?: string;
 }
@@ -76,6 +79,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   if (deps.files) {
     registerSignedFileRoute(app, deps.files);
   }
+  if (deps.revenueCatWebhookSecret !== undefined) {
+    registerRevenueCatWebhook(app, { sql: deps.sql, secret: deps.revenueCatWebhookSecret });
+  }
   const registry =
     deps.registry ?? (deps.files ? buildRegistry({ files: deps.files, authAdmin: deps.authAdmin }) : undefined);
   if (!registry) {
@@ -97,6 +103,7 @@ async function main(): Promise<void> {
     sql,
     verifier: firebaseVerifier(config.firebaseProjectId),
     authAdmin: firebaseAuthAdmin(config.firebaseProjectId),
+    revenueCatWebhookSecret: config.revenueCatWebhookSecret,
     files: { root: config.filesRoot, signingKey: config.filesSigningKey, publicUrl: config.publicApiUrl },
     logLevel: config.logLevel,
     syncHealthUrl: process.env.SYNC_HEALTH_URL,

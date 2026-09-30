@@ -15,7 +15,9 @@ Behavior is ported unchanged from `revenuecatWebhook` in `functions/src/index.ts
 | Secret not configured | `500 {"error":"missing_server_secret"}` |
 | Authorization mismatch (constant-time compare) | `401 {"error":"unauthorized"}` |
 | Event already in `webhook_events` | `200` (no-op, dedupe) |
-| Valid event | apply entitlement → `subscriptions`, adjust `usage_counters` limits, record event; `200` |
+| Missing `app_user_id` | `400 {"error":"missing_workspace"}` |
+| Valid event | apply entitlement → `subscriptions`, record event, notify members (`subscription_status_changed`); `200 {"ok":true}` (no `usage_counters` change, as today) |
+| Workspace unknown (e.g. anonymous RevenueCat id) | event recorded, no subscription (FK); `200 {"ok":true,"ignored":"unknown_workspace"}` so RevenueCat does not retry forever |
 
 `app_user_id` = workspace id (unchanged).
 

@@ -141,7 +141,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 - [X] T063 [P] [US2] `server/test/integration/direct_write_rpcs.test.ts`: `upsertEntity`, `archiveEntity`, `deleteEntity`, `touchEntityLastUsed`, the three accounting-record upserts, `markNotificationsRead`, `restoreMembership`. Each enforces the same conditions `firestore.rules` enforces today for those paths
 - [ ] T064 [P] [US2] `server/test/integration/files_upload.test.ts`: content-type and size limits copied verbatim from `storage.rules` (`validAttachmentUpload`, `validVoiceUpload`, `validProfilePhotoUpload`); the path is always `{kind}/{callerUid}/…`; idempotent re-upload
 - [ ] T065 [P] [US2] `server/test/integration/voice.test.ts` (OpenRouter mocked): audio upload → `processVoiceExpense` → draft is matched to a project exactly as `functions/src/voice` does today; the 120 s timeout is respected
-- [ ] T066 [P] [US2] `server/test/integration/revenuecat_webhook.test.ts`: every case in contracts/webhooks.md, including dedupe on `event_id`
+- [X] T066 [P] [US2] `server/test/integration/revenuecat_webhook.test.ts`: every case in contracts/webhooks.md, including dedupe on `event_id`
 - [ ] T067 [P] [US2] `test/core/services/offline_action_queue_idempotency_test.dart`: on replay, `X-Idempotency-Key` equals the offline action id, and a replayed action produces exactly one server record (against a mocked HTTP server)
 
 ### Implementation for User Story 2 — server
@@ -155,7 +155,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 - [X] T074 [P] [US2] Implement the new RPCs in `server/src/rpc/entities.ts`, `accounting_records.ts`, `notifications.ts` and `session.ts` per the contracts/rpc-api.md "New" table _Also `upsertWorkerAccountingRecord` (missing from the contract table). Where the rules blocked app behaviour the RPCs follow the app; see contracts/rpc-api.md._
 - [ ] T075 [P] [US2] Implement `POST /v1/files` in `server/src/files/upload.ts` per contracts/files-api.md (multipart, limits, sha256, `attachments` row when linked)
 - [ ] T076 [P] [US2] Implement `processVoiceExpense` in `server/src/rpc/voice.ts` using `server/src/domain/voice/**`, reading audio from `$FILES_ROOT`
-- [ ] T077 [P] [US2] Implement `POST /v1/webhooks/revenuecat` in `server/src/webhooks/revenuecat.ts` (constant-time secret compare, dedupe, subscription + usage counter update)
+- [X] T077 [P] [US2] Implement `POST /v1/webhooks/revenuecat` in `server/src/webhooks/revenuecat.ts` (constant-time secret compare, dedupe, subscription + usage counter update)
 - [ ] T078 [US2] Implement the nightly reconciler `server/src/recompute/reconcile.ts` (`npm run reconcile`: recompute every project, log and count drift, non-zero exit on drift) and schedule it nightly at 02:00 through a `reconciler` cron sidecar service in `server/compose.yml` (supercronic running `npm run reconcile`), writing its last result to `/srv/wizesite/state/reconcile.json`. No dependency on US3; T095 only reads that file
 - [X] T079 [US2] Register every function from contracts/rpc-api.md in `server/src/rpc/registry.ts`. Add a static test `server/test/unit/registry.test.ts` asserting that the registry contains every callable exported by `functions/src/index.ts` (except the `*Http` twins and triggers) plus the new RPCs _`processVoiceExpense` is listed in the test's PENDING map until T076 lands; the test fails if it is registered and still listed._
 
