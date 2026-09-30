@@ -612,6 +612,13 @@ class AppLocalizations {
     'expenseCategoryRentals': 'Rentals',
     'expenseCategoryPayments': 'Payments',
     'expenseCategoryOther': 'Other',
+    'endDate': 'End Date',
+    'supplier': 'Supplier',
+    'worker': 'Worker',
+    'contractor': 'Contractor',
+    'transport': 'Transport',
+    'equipment': 'Equipment',
+    'other': 'Other',
     'projectStatusActive': 'Active',
     'projectStatusPaused': 'Paused',
     'projectStatusCompleted': 'Completed',
@@ -816,8 +823,9 @@ class AppLocalizations {
     'welcomeSub': 'Track every pound on every site — by voice, in seconds.',
   };
 
+  // No `..._en` spread: every key must be listed here explicitly so the
+  // key-parity test catches strings that were only added to `_en`.
   static final _ar = <String, String>{
-    ..._en,
     'appName': 'بيلدوزر',
     'tagline': 'إدارة ذكية لمشاريع البناء',
     'home': 'الرئيسية',
@@ -1359,6 +1367,13 @@ class AppLocalizations {
     'expenseCategoryRentals': 'إيجارات',
     'expenseCategoryPayments': 'دفعات',
     'expenseCategoryOther': 'أخرى',
+    'endDate': 'تاريخ النهاية',
+    'supplier': 'مورد',
+    'worker': 'عامل',
+    'contractor': 'مقاول',
+    'transport': 'نقل',
+    'equipment': 'معدات',
+    'other': 'أخرى',
     'projectStatusActive': 'نشط',
     'projectStatusPaused': 'متوقف',
     'projectStatusCompleted': 'مكتمل',

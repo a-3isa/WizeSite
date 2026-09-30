@@ -1,10 +1,12 @@
+import 'dart:io';
+
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Keys grouped by the review-pack surfaces that must be fully localized.
 /// Each key must exist in the English keyset and have a distinct Arabic
-/// translation (not the raw English fallback produced by the `..._en` spread).
+/// translation (not the English text that `t()` falls back to).
 const Map<String, List<String>> _reviewPackKeyGroups = {
   'navigation': [
     'navigationHomeTab',
@@ -139,6 +141,28 @@ void main() {
         reason: 'Locale ${locale.languageCode} does not match keyset',
       );
     }
+  });
+
+  test('every literal key passed to t() in lib/ is defined', () {
+    // An undefined key makes t() return the key itself (e.g. 'worker'), which
+    // renders as English in the Arabic UI with no error.
+    final defined = AppLocalizations.requiredKeys;
+    final call = RegExp(r"""\.t\(\s*'([A-Za-z0-9_]+)'""");
+    final missing = <String>{};
+    for (final file in Directory('lib').listSync(recursive: true)) {
+      if (file is! File || !file.path.endsWith('.dart')) continue;
+      for (final match in call.allMatches(file.readAsStringSync())) {
+        final key = match.group(1)!;
+        if (!defined.contains(key)) missing.add('$key (${file.path})');
+      }
+    }
+
+    expect(
+      missing,
+      isEmpty,
+      reason: 'Keys used in code but missing from the localization maps:\n  '
+          '${missing.join('\n  ')}',
+    );
   });
 
   test('arabic accounting labels are translated and not raw fallback text', () {
