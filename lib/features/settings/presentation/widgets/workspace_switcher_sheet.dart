@@ -98,7 +98,8 @@ class _WorkspaceSwitcherSheet extends ConsumerWidget {
                           key: ValueKey('qa_workspace_tile_${workspace.id}'),
                           workspace: workspace,
                           active: workspace.id == activeWorkspaceId,
-                          onTap: () => _switchWorkspace(context, ref, workspace.id),
+                          onTap: () =>
+                              _switchWorkspace(context, ref, workspace.id),
                         ),
                       ),
                   ],

@@ -1,0 +1,18 @@
+[
+  {
+    "entityName": "كيان s1",
+    "id": "s1",
+    "latestTransactionDate": "2026-05-07T00:00:00Z",
+    "projectId": "p1",
+    "totalAmount": 900.5,
+    "workspaceId": "ws_1"
+  },
+  {
+    "entityName": "كيان s2",
+    "id": "s2",
+    "latestTransactionDate": "2026-05-03T00:00:00Z",
+    "projectId": "p1",
+    "totalAmount": 900.5,
+    "workspaceId": "ws_1"
+  }
+]

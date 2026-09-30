@@ -1,0 +1,38 @@
+[
+  {
+    "amount": 1000.0,
+    "attachments": [],
+    "clientMutationId": "",
+    "date": "2026-05-08T08:00:00.000Z",
+    "description": "دفعة pay2",
+    "entityId": null,
+    "entityName": "عميل",
+    "entityType": "client",
+    "id": "pay2",
+    "isArchived": false,
+    "notes": "",
+    "paidAmount": 300.0,
+    "paymentMethod": "transfer",
+    "paymentStatus": "partial",
+    "projectId": "p1",
+    "workspaceId": "ws_1"
+  },
+  {
+    "amount": 1000.0,
+    "attachments": [],
+    "clientMutationId": "",
+    "date": "2026-05-02T08:00:00.000Z",
+    "description": "دفعة pay1",
+    "entityId": null,
+    "entityName": "عميل",
+    "entityType": "client",
+    "id": "pay1",
+    "isArchived": false,
+    "notes": "",
+    "paidAmount": null,
+    "paymentMethod": "transfer",
+    "paymentStatus": "paid",
+    "projectId": "p1",
+    "workspaceId": "ws_1"
+  }
+]

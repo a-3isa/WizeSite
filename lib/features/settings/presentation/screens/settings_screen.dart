@@ -388,12 +388,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _callDeleteOwnAccount() {
-    return ref.read(callableClientProvider).call<void>(
-      functionName: 'deleteOwnAccount',
-      payload: <String, dynamic>{'confirm': true},
-      parseResult: (_) {},
-      defaultErrorMessage: AppLocalizations.of(context).t('deleteAccountFailed'),
-    );
+    return ref
+        .read(callableClientProvider)
+        .call<void>(
+          functionName: 'deleteOwnAccount',
+          payload: <String, dynamic>{'confirm': true},
+          parseResult: (_) {},
+          defaultErrorMessage: AppLocalizations.of(
+            context,
+          ).t('deleteAccountFailed'),
+        );
   }
 
   Future<void> _clearSessionAndGoToLogin() async {

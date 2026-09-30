@@ -3,6 +3,7 @@ import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
+import 'package:buildtrack_app/core/sync/sync_gate.dart';
 import 'package:buildtrack_app/core/widgets/build_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,7 +32,7 @@ class AppBottomNavShell extends ConsumerWidget {
       child: Scaffold(
         body: Stack(
           children: [
-            Positioned.fill(child: navigationShell),
+            Positioned.fill(child: SyncGate(child: navigationShell)),
             Positioned(
               top: 0,
               left: 0,

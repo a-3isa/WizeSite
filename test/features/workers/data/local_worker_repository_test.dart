@@ -104,8 +104,9 @@ void main() {
     'watchWorkers: active (non-archived), deterministic order, status filter',
     () async {
       final all = await workers.watchWorkers('ws_1').first;
-      expect(all.map((w) => w.id), ['w2', 'w1']);
-      expect(all.last.name, 'علي');
+      // Document-id order, as Firestore serves an un-ordered query.
+      expect(all.map((w) => w.id), ['w1', 'w2']);
+      expect(all.first.name, 'علي');
       final active = await workers
           .watchWorkers('ws_1', statuses: {WorkerStatus.active})
           .first;

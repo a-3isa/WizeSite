@@ -393,7 +393,8 @@ class AppLocalizations {
     'editPaymentTitle': 'Edit Payment',
     'workers': 'Workers',
     'resourceCountLabel': '{label} ({count})',
-    'workerAttendanceSummary': '{workers} Workers · {manDays} Man-Days This Week',
+    'workerAttendanceSummary':
+        '{workers} Workers · {manDays} Man-Days This Week',
     'noWorkersYet': 'No workers yet.',
     'workerDetails': 'Worker Details',
     'workerNotFound': 'Worker not found.',
@@ -745,6 +746,10 @@ class AppLocalizations {
     'workspaceNameTitle': 'Workspace name',
     'renameWorkspace': 'Rename workspace',
     'workspaceNameEmptyError': 'Enter a workspace name.',
+    'syncGateOfflineMessage':
+        'Connect to the internet to load your data. After the first load, '
+        'the app works offline.',
+    'syncGateLoadingMessage': 'Loading your data…',
     'manageMembers': 'Manage members',
     'settingsSaveFailed':
         'Could not save settings. Your previous value was restored.',
@@ -882,11 +887,11 @@ class AppLocalizations {
     'deleteAccountConfirmTitle': 'حذف حسابك؟',
     'deleteAccountConfirmBody':
         'سيؤدي هذا إلى حذف حسابك نهائياً وأي مساحة عمل تملكها وليس فيها أعضاء آخرون. إذا كنت تملك مساحة عمل مشتركة، انقل الملكية أولاً. لا يمكن التراجع عن هذا الإجراء.',
-    'deleteAccountFailed':
-        'تعذر حذف حسابك. تحقق من الاتصال وحاول مرة أخرى.',
+    'deleteAccountFailed': 'تعذر حذف حسابك. تحقق من الاتصال وحاول مرة أخرى.',
     'deleteAccountTransferOwnership':
         'انقل ملكية كل مساحة عمل مشتركة قبل حذف حسابك.',
-    'deleteAccountRecentLogin': 'لأسباب أمنية، سجّل الدخول مرة أخرى لحذف حسابك.',
+    'deleteAccountRecentLogin':
+        'لأسباب أمنية، سجّل الدخول مرة أخرى لحذف حسابك.',
     'confirmPasswordToDelete': 'أدخل كلمة المرور لحذف هذا الحساب',
     'profile': 'الملف الشخصي',
     'editProfile': 'تعديل الملف الشخصي',
@@ -1040,8 +1045,7 @@ class AppLocalizations {
     'orContinueWith': 'أو',
     'authNameRequired': 'أدخل اسمك.',
     'verifyEmailTitle': 'تأكيد بريدك الإلكتروني',
-    'verifyEmailSubtitle':
-        'أرسلنا رابط تأكيد إلى {email}. افتحه ثم تابع.',
+    'verifyEmailSubtitle': 'أرسلنا رابط تأكيد إلى {email}. افتحه ثم تابع.',
     'verificationEmailSent': 'تم إرسال رسالة التأكيد.',
     'emailNotVerifiedYet':
         'لم يتم التأكيد بعد. افتح الرابط في بريدك ثم حاول مرة أخرى.',
@@ -1524,6 +1528,9 @@ class AppLocalizations {
     'workspaceNameTitle': 'اسم مساحة العمل',
     'renameWorkspace': 'إعادة تسمية مساحة العمل',
     'workspaceNameEmptyError': 'أدخل اسم مساحة العمل.',
+    'syncGateOfflineMessage':
+        'اتصل بالإنترنت لتحميل بياناتك. بعد التحميل الأول يعمل التطبيق بدون اتصال.',
+    'syncGateLoadingMessage': 'جارٍ تحميل بياناتك…',
     'manageMembers': 'إدارة الأعضاء',
     'settingsSaveFailed': 'تعذر حفظ الإعدادات. تمت استعادة القيمة السابقة.',
     'appVersion': 'إصدار التطبيق',

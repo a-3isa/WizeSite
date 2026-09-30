@@ -260,10 +260,7 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.expenseSoft,
-        borderRadius: t.radiusMd,
-      ),
+      decoration: BoxDecoration(color: t.expenseSoft, borderRadius: t.radiusMd),
       child: Text(message, style: TextStyle(color: t.expense, fontSize: 13.5)),
     );
   }

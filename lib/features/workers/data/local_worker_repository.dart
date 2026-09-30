@@ -20,13 +20,14 @@ class LocalWorkerRepository extends FirebaseWorkerRepository {
     String workspaceId, {
     Set<WorkerStatus>? statuses,
   }) {
-    // Firestore applied limit(50) without an order, i.e. an arbitrary 50; the
-    // replica orders newest first so the same 50 come back every time.
+    // Firestore applied limit(50) without an orderBy, which Firestore serves
+    // in document-id order; the replica does the same so the list users see
+    // does not reorder at cutover (read parity, T033).
     return combineWithQueue(
       rows: watchLocalRows(
         _db,
         'SELECT * FROM workers WHERE workspace_id = ? AND is_archived = 0 '
-        'ORDER BY created_at DESC, id DESC LIMIT 50',
+        'ORDER BY id ASC LIMIT 50',
         [workspaceId],
       ),
       queue: _queue,

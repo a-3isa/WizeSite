@@ -1,0 +1,20 @@
+[
+  {
+    "createdAt": "2026-05-04T08:00:00.000Z",
+    "id": "n2",
+    "message": "رسالة",
+    "readAt": null,
+    "targetUserId": "u1",
+    "title": "تنبيه n2",
+    "workspaceId": "ws_1"
+  },
+  {
+    "createdAt": "2026-05-01T08:00:00.000Z",
+    "id": "n1",
+    "message": "رسالة",
+    "readAt": null,
+    "targetUserId": "u1",
+    "title": "تنبيه n1",
+    "workspaceId": "ws_1"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "attachments": [],
+    "clientMutationId": "",
+    "createdAt": "2026-02-01T08:00:00.000Z",
+    "defaultRate": 12.5,
+    "id": "ent1",
+    "lastUsedAt": "2026-05-07T08:00:00.000Z",
+    "name": "مورد",
+    "normalizedName": "مورد",
+    "notes": "",
+    "phoneNumber": "",
+    "rateUnit": "hour",
+    "type": "supplier",
+    "workspaceId": "ws_1"
+  },
+  {
+    "attachments": [],
+    "clientMutationId": "",
+    "createdAt": "2026-02-01T08:00:00.000Z",
+    "defaultRate": 12.5,
+    "id": "ent2",
+    "lastUsedAt": "2026-05-03T08:00:00.000Z",
+    "name": "Contractor B",
+    "normalizedName": "contractor b",
+    "notes": "",
+    "phoneNumber": "",
+    "rateUnit": "hour",
+    "type": "contractor",
+    "workspaceId": "ws_1"
+  }
+]

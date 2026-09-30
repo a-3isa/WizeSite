@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/cache/workspace_cache.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
@@ -87,11 +87,9 @@ final userPreferredWorkspaceIdProvider = StreamProvider<String?>((ref) {
     return Stream.value(null);
   }
   return ref
-      .watch(firestoreProvider)
-      .collection('users')
-      .doc(userId)
-      .snapshots()
-      .map((snap) => '${snap.data()?['workspaceId'] ?? ''}'.trim())
+      .watch(docSourceProvider)
+      .watchDoc('users', userId)
+      .map((doc) => '${doc?.data['workspaceId'] ?? ''}'.trim())
       .map((workspaceId) => workspaceId.isEmpty ? null : workspaceId);
 });
 
@@ -117,11 +115,9 @@ final activeWorkspaceNameProvider = StreamProvider<String>((ref) {
     return Stream.value('');
   }
   return ref
-      .watch(firestoreProvider)
-      .collection('workspaces')
-      .doc(workspaceId)
-      .snapshots()
-      .map((snap) => '${snap.data()?['name'] ?? ''}'.trim());
+      .watch(docSourceProvider)
+      .watchDoc('workspaces', workspaceId)
+      .map((doc) => '${doc?.data['name'] ?? ''}'.trim());
 });
 
 final userWorkspaceSummariesProvider = StreamProvider<List<WorkspaceSummary>>((
@@ -145,12 +141,10 @@ final userWorkspaceSummariesProvider = StreamProvider<List<WorkspaceSummary>>((
     yield cached;
   }
 
-  final firestore = ref.watch(firestoreProvider);
-  yield* firestore
-      .collection('memberships')
-      .where('userId', isEqualTo: userId)
-      .snapshots()
-      .asyncMap((membershipSnapshot) async {
+  final source = ref.watch(docSourceProvider);
+  yield* source
+      .watch(DocQuery('memberships', equals: {'userId': userId}))
+      .asyncMap((memberships) async {
         final summaries = <String, WorkspaceSummary>{};
 
         Future<void> addWorkspace({
@@ -160,11 +154,8 @@ final userWorkspaceSummariesProvider = StreamProvider<List<WorkspaceSummary>>((
           if (workspaceId.isEmpty) {
             return;
           }
-          final workspaceSnap = await firestore
-              .collection('workspaces')
-              .doc(workspaceId)
-              .get();
-          final workspaceData = workspaceSnap.data() ?? const {};
+          final workspaceDoc = await source.getDoc('workspaces', workspaceId);
+          final workspaceData = workspaceDoc?.data ?? const {};
           final ownerId = '${workspaceData['ownerId'] ?? ''}'.trim();
           final name = '${workspaceData['name'] ?? ''}'.trim();
           final isOwner = ownerId == userId || role == 'owner';
@@ -176,19 +167,18 @@ final userWorkspaceSummariesProvider = StreamProvider<List<WorkspaceSummary>>((
           );
         }
 
-        for (final doc in membershipSnapshot.docs) {
-          final data = doc.data();
+        for (final doc in memberships) {
+          final data = doc.data;
           await addWorkspace(
             workspaceId: '${data['workspaceId'] ?? ''}'.trim(),
             role: '${data['role'] ?? 'member'}'.trim(),
           );
         }
 
-        final ownedWorkspaces = await firestore
-            .collection('workspaces')
-            .where('ownerId', isEqualTo: userId)
-            .get();
-        for (final doc in ownedWorkspaces.docs) {
+        final ownedWorkspaces = await source.get(
+          DocQuery('workspaces', equals: {'ownerId': userId}),
+        );
+        for (final doc in ownedWorkspaces) {
           await addWorkspace(workspaceId: doc.id, role: 'owner');
         }
 

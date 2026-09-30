@@ -10,12 +10,12 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
+import 'package:buildtrack_app/core/services/attachment_cache_service.dart';
 import 'package:buildtrack_app/core/services/attachment_download_service.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
-import 'package:buildtrack_app/core/utils/safe_external_url.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -74,18 +74,21 @@ class PaymentDetailScreen extends ConsumerWidget {
     }
 
     Future<void> openAttachment(Attachment attachment) async {
+      final workspaceId = ref.read(activeWorkspaceIdProvider) ?? '';
       try {
-        final downloadUrl = await resolveAttachmentDownloadUrl(
-          client: ref.read(callableClientProvider),
-          storage: ref.read(storageUploadServiceProvider),
-          workspaceId: ref.read(activeWorkspaceIdProvider) ?? '',
-          attachment: attachment,
-          defaultErrorMessage: l10n.t('attachmentCannotOpen'),
-        );
-        final launched = await launchSafeExternalUrl(downloadUrl);
-        if (!launched) {
-          throw Exception('Could not open attachment.');
-        }
+        await ref
+            .read(attachmentCacheServiceProvider)
+            .open(
+              workspaceId: workspaceId,
+              attachment: attachment,
+              resolveUrl: () => resolveAttachmentDownloadUrl(
+                client: ref.read(callableClientProvider),
+                storage: ref.read(storageUploadServiceProvider),
+                workspaceId: workspaceId,
+                attachment: attachment,
+                defaultErrorMessage: l10n.t('attachmentCannotOpen'),
+              ),
+            );
       } catch (error) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(

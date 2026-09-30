@@ -1,0 +1,24 @@
+[
+  {
+    "amount": 409.0,
+    "attachments": [],
+    "date": "2026-05-09T08:00:00.000Z",
+    "description": "سجل 9",
+    "id": "equipment_9",
+    "owner": "eq1",
+    "ownerName": "مزود",
+    "paidAmount": null,
+    "paymentStatus": "partial"
+  },
+  {
+    "amount": 402.0,
+    "attachments": [],
+    "date": "2026-05-02T08:00:00.000Z",
+    "description": "سجل 2",
+    "id": "equipment_2",
+    "owner": "eq1",
+    "ownerName": "مزود",
+    "paidAmount": null,
+    "paymentStatus": "paid"
+  }
+]

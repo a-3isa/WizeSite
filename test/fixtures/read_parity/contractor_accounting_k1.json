@@ -1,0 +1,24 @@
+[
+  {
+    "amount": 409.0,
+    "attachments": [],
+    "date": "2026-05-09T08:00:00.000Z",
+    "description": "سجل 9",
+    "id": "contractor_9",
+    "owner": "k1",
+    "ownerName": "مقاول",
+    "paidAmount": null,
+    "paymentStatus": "partial"
+  },
+  {
+    "amount": 402.0,
+    "attachments": [],
+    "date": "2026-05-02T08:00:00.000Z",
+    "description": "سجل 2",
+    "id": "contractor_2",
+    "owner": "k1",
+    "ownerName": "مقاول",
+    "paidAmount": null,
+    "paymentStatus": "paid"
+  }
+]

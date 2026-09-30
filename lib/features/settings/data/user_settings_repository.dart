@@ -4,6 +4,7 @@ import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
@@ -24,10 +25,14 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
   FirebaseUserSettingsRepository(
     this._firestore,
     this._prefsBox,
-    this._mutationService,
-  );
+    this._mutationService, {
+    DocSource? source,
+  }) : _source = source ?? FirestoreDocSource(_firestore);
 
   final FirebaseFirestore _firestore;
+
+  /// Reads (local replica in self-hosted builds, spec 004).
+  final DocSource _source;
   final Box<String> _prefsBox;
   final WorkspaceMutationService _mutationService;
 
@@ -55,8 +60,7 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
     String? fallbackEmail,
   }) async {
     try {
-      final snap = await _firestore.collection('users').doc(userId).get();
-      final data = snap.data();
+      final data = (await _source.getDoc('users', userId))?.data;
       if (data == null) {
         return _cachedSettings(userId, fallbackEmail: fallbackEmail ?? '');
       }
@@ -74,8 +78,8 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
     String? fallbackEmail,
   }) async* {
     yield _cachedSettings(userId, fallbackEmail: fallbackEmail ?? '');
-    yield* _firestore.collection('users').doc(userId).snapshots().map((snap) {
-      final data = snap.data() ?? const <String, dynamic>{};
+    yield* _source.watchDoc('users', userId).map((doc) {
+      final data = doc?.data ?? const <String, dynamic>{};
       final settings = UserSettings.fromMap(
         userId,
         data,
@@ -131,6 +135,7 @@ final userSettingsRepositoryProvider = Provider<UserSettingsRepository>((ref) {
     ref.watch(firestoreProvider),
     Hive.box<String>('app_prefs'),
     ref.watch(workspaceMutationServiceProvider),
+    source: ref.watch(docSourceProvider),
   );
 });
 

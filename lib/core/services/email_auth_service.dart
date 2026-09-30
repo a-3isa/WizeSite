@@ -104,7 +104,5 @@ bool requiresEmailVerification(User? user) {
   if (user == null || user.emailVerified) {
     return false;
   }
-  return user.providerData.any(
-    (provider) => provider.providerId == 'password',
-  );
+  return user.providerData.any((provider) => provider.providerId == 'password');
 }

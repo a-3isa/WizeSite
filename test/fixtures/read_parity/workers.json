@@ -1,0 +1,28 @@
+[
+  {
+    "billingType": "daily",
+    "clientMutationId": "",
+    "dailyWage": 150.0,
+    "id": "w1",
+    "isArchived": false,
+    "name": "عامل w1",
+    "notes": "",
+    "phoneNumber": "0500000000",
+    "status": "active",
+    "workerType": "labor",
+    "workspaceId": "ws_1"
+  },
+  {
+    "billingType": "daily",
+    "clientMutationId": "",
+    "dailyWage": 150.0,
+    "id": "w2",
+    "isArchived": false,
+    "name": "عامل w2",
+    "notes": "",
+    "phoneNumber": "0500000000",
+    "status": "inactive",
+    "workerType": "labor",
+    "workspaceId": "ws_1"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "attachments": [],
+    "clientMutationId": "",
+    "dailyWage": 150.0,
+    "date": "2026-05-04T08:00:00.000Z",
+    "daysWorked": 1.5,
+    "id": "we2",
+    "isArchived": false,
+    "notes": "يوم 4",
+    "projectId": "p1",
+    "totalCost": 225.0,
+    "workerId": "w1",
+    "workspaceId": "ws_1"
+  },
+  {
+    "attachments": [],
+    "clientMutationId": "",
+    "dailyWage": 150.0,
+    "date": "2026-05-03T08:00:00.000Z",
+    "daysWorked": 1.5,
+    "id": "we1",
+    "isArchived": false,
+    "notes": "يوم 3",
+    "projectId": "p1",
+    "totalCost": 225.0,
+    "workerId": "w1",
+    "workspaceId": "ws_1"
+  }
+]

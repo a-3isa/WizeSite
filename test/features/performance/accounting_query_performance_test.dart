@@ -25,13 +25,13 @@ void main() {
 
       expect(
         RegExp(
-          r"collection\('expenses'\)[\s\S]*?isGreaterThanOrEqualTo: startDate[\s\S]*?isLessThanOrEqualTo: endDate",
+          r"'expenses',[\s\S]*?rangeFrom: startDate,[\s\S]*?rangeTo: endDate",
         ).hasMatch(dashboardProviders),
         isTrue,
       );
       expect(
         RegExp(
-          r"collection\('payments'\)[\s\S]*?isGreaterThanOrEqualTo: startDate[\s\S]*?isLessThanOrEqualTo: endDate",
+          r"'payments',[\s\S]*?rangeFrom: startDate,[\s\S]*?rangeTo: endDate",
         ).hasMatch(dashboardProviders),
         isTrue,
       );
@@ -44,10 +44,11 @@ void main() {
           'lib/features/reports/data/entity_aggregation_providers.dart',
         ).readAsStringSync();
 
-        expect(entityProviders, contains("collection('entity_summaries')"));
-        expect(entityProviders, contains('.limit(100)'));
-        expect(entityProviders, isNot(contains("collection('expenses')")));
-        expect(entityProviders, isNot(contains("collection('payments')")));
+        // Reads go through DocSource (spec 004): DocQuery('collection', ...).
+        expect(entityProviders, contains("'entity_summaries',"));
+        expect(entityProviders, contains('limit: 100'));
+        expect(entityProviders, isNot(contains("'expenses',")));
+        expect(entityProviders, isNot(contains("'payments',")));
       },
     );
 
@@ -85,15 +86,14 @@ void main() {
           dashboardProviders.indexOf('final dashboardSummaryProvider'),
         );
 
-        expect(snapshotStream, contains("collection('workspace_metrics')"));
-        expect(snapshotStream, contains('.doc(workspaceId)'));
         expect(
           snapshotStream,
-          isNot(contains("collection('project_metrics')")),
+          contains("watchDoc('workspace_metrics', workspaceId)"),
         );
-        expect(snapshotStream, isNot(contains("collection('projects')")));
-        expect(snapshotStream, isNot(contains("collection('expenses')")));
-        expect(snapshotStream, isNot(contains("collection('payments')")));
+        expect(snapshotStream, isNot(contains("'project_metrics'")));
+        expect(snapshotStream, isNot(contains("'projects'")));
+        expect(snapshotStream, isNot(contains("'expenses'")));
+        expect(snapshotStream, isNot(contains("'payments'")));
       },
     );
 

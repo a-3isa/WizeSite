@@ -22,7 +22,8 @@ class MoreScreen extends ConsumerWidget {
     final locale = ref.watch(localeControllerProvider);
     final platformDark =
         MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-    final isDark = themeMode == ThemeMode.dark ||
+    final isDark =
+        themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system && platformDark);
 
     return Scaffold(
@@ -268,7 +269,11 @@ class _RowIcon extends StatelessWidget {
 }
 
 class _MoreRow extends StatelessWidget {
-  const _MoreRow({required this.icon, required this.label, required this.onTap});
+  const _MoreRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;

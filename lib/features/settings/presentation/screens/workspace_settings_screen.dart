@@ -11,6 +11,7 @@ import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,21 +38,16 @@ final teamMembersProvider = StreamProvider<List<TeamMemberView>>((ref) {
     return const Stream.empty();
   }
 
-  final firestore = ref.watch(firestoreProvider);
-  return firestore
-      .collection('memberships')
-      .where('workspaceId', isEqualTo: workspaceId)
-      .snapshots()
-      .asyncMap((membershipSnap) async {
+  final source = ref.watch(docSourceProvider);
+  return source
+      .watch(DocQuery('memberships', equals: {'workspaceId': workspaceId}))
+      .asyncMap((memberships) async {
         final members = await Future.wait(
-          membershipSnap.docs.map((doc) async {
-            final data = doc.data();
+          memberships.map((doc) async {
+            final data = doc.data;
             final userId = '${data['userId'] ?? ''}';
-            final userSnap = await firestore
-                .collection('users')
-                .doc(userId)
-                .get();
-            final user = userSnap.data() ?? const <String, dynamic>{};
+            final userDoc = await source.getDoc('users', userId);
+            final user = userDoc?.data ?? const <String, dynamic>{};
             return TeamMemberView(
               userId: userId,
               fullName: '${user['fullName'] ?? ''}'.trim(),
@@ -84,11 +80,9 @@ final workspaceNameProvider = StreamProvider<String>((ref) {
     return Stream.value('');
   }
   return ref
-      .watch(firestoreProvider)
-      .collection('workspaces')
-      .doc(workspaceId)
-      .snapshots()
-      .map((snap) => '${snap.data()?['name'] ?? ''}'.trim());
+      .watch(docSourceProvider)
+      .watchDoc('workspaces', workspaceId)
+      .map((doc) => '${doc?.data['name'] ?? ''}'.trim());
 });
 
 class WorkspaceSettingsScreen extends ConsumerStatefulWidget {
@@ -431,7 +425,11 @@ class _SectionLabel extends StatelessWidget {
     final t = context.tokens;
     return Text(
       label,
-      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: t.text),
+      style: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        color: t.text,
+      ),
     );
   }
 }
@@ -604,10 +602,7 @@ class _MemberCard extends StatelessWidget {
               ],
             )
           else
-            Text(
-              roleLabel,
-              style: TextStyle(fontSize: 13, color: t.textMuted),
-            ),
+            Text(roleLabel, style: TextStyle(fontSize: 13, color: t.textMuted)),
         ],
       ),
     );

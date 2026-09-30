@@ -3,6 +3,7 @@ import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/local_session_cleanup.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,20 +21,25 @@ class SessionRestoreResult {
 }
 
 class SessionRestoreService {
-  const SessionRestoreService({
+  SessionRestoreService({
     required FirebaseAuth auth,
     required FirebaseFirestore firestore,
     required CallableClient callableClient,
     required AppTelemetry telemetry,
     Future<void> Function()? onSignOutCleanup,
+    DocSource? source,
   }) : _auth = auth,
        _firestore = firestore,
+       _source = source ?? FirestoreDocSource(firestore),
        _callableClient = callableClient,
        _telemetry = telemetry,
        _onSignOutCleanup = onSignOutCleanup;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+
+  /// Reads (local replica in self-hosted builds, spec 004).
+  final DocSource _source;
   final CallableClient _callableClient;
   final AppTelemetry _telemetry;
   final Future<void> Function()? _onSignOutCleanup;
@@ -111,24 +117,23 @@ class SessionRestoreService {
 
   Future<WorkspaceBootstrapResult?> _resolveWorkspaceId(User user) async {
     try {
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
-      final workspaceId = userDoc.data()?['workspaceId'] as String?;
+      final userDoc = await _source.getDoc('users', user.uid);
+      final workspaceId = userDoc?.data['workspaceId'] as String?;
       if (workspaceId != null && workspaceId.isNotEmpty) {
         await _ensureOwnerMembership(user: user, workspaceId: workspaceId);
         return WorkspaceBootstrapResult(
           workspaceId: workspaceId,
           created: false,
-          setupCompleted: userDoc.data()?['setupCompleted'] as bool? ?? true,
+          setupCompleted: userDoc?.data['setupCompleted'] as bool? ?? true,
         );
       }
 
-      final membershipSnap = await _firestore
-          .collection('memberships')
-          .where('userId', isEqualTo: user.uid)
-          .get();
+      final memberships = await _source.get(
+        DocQuery('memberships', equals: {'userId': user.uid}),
+      );
       final workspaceIds =
-          membershipSnap.docs
-              .map((doc) => doc.data()['workspaceId'] as String?)
+          memberships
+              .map((doc) => doc.data['workspaceId'] as String?)
               .whereType<String>()
               .map((value) => value.trim())
               .where((value) => value.isNotEmpty)
@@ -157,6 +162,11 @@ class SessionRestoreService {
     required User user,
     required String workspaceId,
   }) async {
+    // Self-hosted: the server's workspace bootstrap guarantees the owner
+    // membership, and clients never write memberships directly.
+    if (_source is! FirestoreDocSource) {
+      return;
+    }
     final workspaceSnap = await _firestore
         .collection('workspaces')
         .doc(workspaceId)
@@ -211,5 +221,6 @@ final sessionRestoreServiceProvider = Provider<SessionRestoreService>((ref) {
     callableClient: ref.watch(callableClientProvider),
     telemetry: ref.watch(appTelemetryProvider),
     onSignOutCleanup: LocalSessionCleanup.clearQueuedUserData,
+    source: ref.watch(docSourceProvider),
   );
 });

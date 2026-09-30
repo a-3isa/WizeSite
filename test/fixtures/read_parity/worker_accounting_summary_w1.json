@@ -1,0 +1,9 @@
+{
+  "confirmedOutstanding": 611.0,
+  "confirmedPaid": 200.0,
+  "recordCount": 2,
+  "totalAmount": 811.0,
+  "unresolvedLegacyCount": 0,
+  "workerId": "w1",
+  "workspaceId": "ws_1"
+}

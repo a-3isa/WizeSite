@@ -1,0 +1,24 @@
+[
+  {
+    "amount": 409.0,
+    "attachments": [],
+    "date": "2026-05-09T08:00:00.000Z",
+    "description": "سجل 9",
+    "id": "worker_9",
+    "owner": "w1",
+    "ownerName": "عامل w1",
+    "paidAmount": 100.0,
+    "paymentStatus": "partial"
+  },
+  {
+    "amount": 402.0,
+    "attachments": [],
+    "date": "2026-05-02T08:00:00.000Z",
+    "description": "سجل 2",
+    "id": "worker_2",
+    "owner": "w1",
+    "ownerName": "عامل w1",
+    "paidAmount": 100.0,
+    "paymentStatus": "paid"
+  }
+]
