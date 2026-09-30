@@ -36,3 +36,35 @@ export function newDocId(): string {
   }
   return id;
 }
+
+export function requireNumber(data: Record<string, unknown>, key: string): number {
+  const value = Number(data[key]);
+  if (!Number.isFinite(value)) {
+    throw new RpcError("invalid-argument", `Invalid number: ${key}`);
+  }
+  return value;
+}
+
+/**
+ * optionalPositiveNumber: absent, null, empty and zero all mean "not set" (null); negative and
+ * non-numeric values are rejected.
+ */
+export function optionalPositiveNumber(data: Record<string, unknown>, key: string): number | null {
+  const raw = data[key];
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") {
+    return null;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new RpcError("invalid-argument", `Invalid number: ${key}`);
+  }
+  if (value < 0) {
+    throw new RpcError("invalid-argument", `${key} must not be negative`);
+  }
+  return value === 0 ? null : value;
+}
+
+/** `${data[key] ?? fallback}`.trim(), the pattern every ported writer uses for text fields. */
+export function text(data: Record<string, unknown>, key: string, fallback = ""): string {
+  return `${data[key] ?? fallback}`.trim();
+}

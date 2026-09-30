@@ -1,4 +1,7 @@
 import { fileRpcs } from "../files/download";
+import { expenseRpcs } from "./expenses";
+import { paymentRpcs } from "./payments";
+import { projectRpcs } from "./projects";
 import type { FilesConfig } from "../files/signing";
 import type { RpcRegistry } from "./types";
 import { workspaceRpcs } from "./workspace";
@@ -15,6 +18,9 @@ export interface RegistryDeps {
 export function buildRegistry(deps: RegistryDeps): RpcRegistry {
   return {
     ...workspaceRpcs,
+    ...projectRpcs,
+    ...expenseRpcs,
+    ...paymentRpcs,
     ...fileRpcs(deps.files),
   };
 }
