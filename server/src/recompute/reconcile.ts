@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
-  const stateFile = process.env.RECONCILE_STATE ?? "/srv/wizesite/state/reconcile.json";
+  const stateFile = process.env.RECONCILE_STATE ?? "/srv/wizesite/state/reconcile/reconcile.json";
   const sql = createPool(databaseUrl, { max: 2 });
   if (!process.argv.includes("--daily")) {
     const ok = await runAndRecord(sql, stateFile);

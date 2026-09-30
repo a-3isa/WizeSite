@@ -37,6 +37,8 @@ fi
 # The API (and the migrator, same image) write attachments here as the image's non-root user.
 APP_IDS="$(docker run --rm --entrypoint sh "$API_IMAGE" -c 'echo "$(id -u app):$(id -g app)"')"
 chown "$APP_IDS" "$ROOT/files"
+# The reconciler (same image, same user) writes its last result here; state/ itself stays root-owned.
+install -d -m 755 -o "${APP_IDS%%:*}" -g "${APP_IDS##*:}" "$ROOT/state/reconcile"
 
 echo "==> postgres"
 dc up -d postgres

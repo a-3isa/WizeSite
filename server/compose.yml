@@ -101,15 +101,18 @@ services:
       traefik.http.services.wizesite-sync.loadbalancer.server.port: "8080"
 
   # Nightly reconciler (tasks.md T078): recomputes every project at 02:00 UTC and writes the result
-  # to /srv/wizesite/state/reconcile.json (drift > 0 means stored totals disagreed with the records).
+  # to /srv/wizesite/state/reconcile/reconcile.json (drift > 0: stored totals disagreed with the records).
   # Same image as the API; a small built-in daily loop instead of a cron binary.
   reconciler:
     image: ${API_IMAGE:-wizesite-server:local}
     restart: unless-stopped
     command: ["node", "dist/src/recompute/reconcile.js", "--daily"]
+    # The image healthcheck probes the API port; this service serves no HTTP.
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: postgres://wizesite:${POSTGRES_PASSWORD}@postgres:5432/wizesite
-      RECONCILE_STATE: /srv/wizesite/state/reconcile.json
+      RECONCILE_STATE: /srv/wizesite/state/reconcile/reconcile.json
       RECONCILE_HOUR_UTC: "2"
     volumes:
       - /srv/wizesite/state:/srv/wizesite/state
