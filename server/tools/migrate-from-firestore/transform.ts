@@ -6,7 +6,7 @@
  * exist in Firebase Auth. Returns rows per table, fields that would lose money precision, and
  * skip counts. Nothing is silently dropped: unmapped fields go to `legacy`.
  */
-import { NUMERIC_COLUMNS } from "../../src/recompute/rows";
+import { FLOAT_COLUMNS, NUMERIC_COLUMNS } from "../../src/recompute/rows";
 
 export interface ExportedDoc {
   id: string;
@@ -142,7 +142,10 @@ function toRow(
       legacy[field] = jsonSafe(value);
       continue;
     }
-    if (NUMERIC_COLUMNS.has(column)) {
+    if (FLOAT_COLUMNS.has(column)) {
+      const n = value === null || value === undefined || value === "" ? null : Number(value);
+      row[column] = n !== null && Number.isFinite(n) ? n : null;
+    } else if (NUMERIC_COLUMNS.has(column)) {
       row[column] = money(value, (n) => flags.push({ table, id: doc.id, column, value: n }));
     } else if (isTimestamp(value)) {
       row[column] = toDate(value);

@@ -17,6 +17,12 @@ export const NUMERIC_COLUMNS = new Set([
   "default_rate",
 ]);
 
+/**
+ * Numeric columns that are not money: stored as double precision exactly as Firestore held them
+ * (migration 004). Never rounded and never subject to the 2-decimal money check.
+ */
+export const FLOAT_COLUMNS = new Set(["completion_percentage"]);
+
 /** Columns that exist only on the server side of the migration and have no Firestore twin. */
 const INTERNAL_COLUMNS = new Set(["legacy"]);
 

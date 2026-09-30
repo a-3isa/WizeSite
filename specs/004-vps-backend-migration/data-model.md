@@ -57,7 +57,7 @@ PK `id` (RevenueCat event id), `type`, `workspace_id`, `received_at`, `payload J
 ### projects
 `id`, `workspace_id`, `name`, `client_name`, `description`, `location`, `status`,
 `contract_value NUMERIC(14,2) NULL` (optional per feature 003), `budget_limit NUMERIC(14,2) NULL`,
-`start_date`, `expected_end_date`, `completion_percentage`, `is_archived`, `client_mutation_id`, timestamps, `legacy`.
+`start_date`, `expected_end_date`, `completion_percentage DOUBLE PRECISION` (a progress figure, not money: stored exactly as Firestore held it, never rounded or precision-flagged; migration 004), `is_archived`, `client_mutation_id`, timestamps, `legacy`.
 Derived fields (`total_expenses`, `total_payments`, `total_income`, `net`, `net_profit`) are **not**
 stored here; they live in `project_metrics` (single source of truth). The client model reads them
 through a view/join as today.

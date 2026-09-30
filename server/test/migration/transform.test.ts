@@ -16,7 +16,7 @@ const columns: TableColumns = new Map(
     memberships: ["id", "workspace_id", "user_uid", "role", "status", "invited_by", "created_at", "updated_at", "legacy"],
     user_profiles: ["uid", "email", "full_name", "photo_url", "active_workspace_id", "default_currency",
       "risk_alerts_enabled", "setup_completed", "created_at", "updated_at", "legacy"],
-    projects: ["id", "workspace_id", "name", "contract_value", "is_archived", "created_at", "updated_at", "legacy"],
+    projects: ["id", "workspace_id", "name", "contract_value", "completion_percentage", "is_archived", "created_at", "updated_at", "legacy"],
     expenses: ["id", "workspace_id", "project_id", "amount", "date", "category", "notes", "attachments",
       "is_archived", "created_at", "updated_at", "legacy"],
     usage_counters: ["id", "workspace_id", "period", "expenses_count", "active_projects", "updated_at", "legacy"],
@@ -41,7 +41,7 @@ function exported(): ExportedCollections {
       { id: "ws_gone_deleted_1", data: { workspaceId: "ws_gone", userId: "deleted_1", role: "owner" } },
     ],
     projects: [
-      { id: "p1", data: { workspaceId: "ws_1", name: "Tower", contractValue: 1000, isArchived: false, colour: "blue" } },
+      { id: "p1", data: { workspaceId: "ws_1", name: "Tower", contractValue: 1000, completionPercentage: 32.80725319006043, isArchived: false, colour: "blue" } },
       { id: "p_gone", data: { workspaceId: "ws_gone", name: "Orphan" } },
     ],
     expenses: [
@@ -101,6 +101,12 @@ test("money with more than 2 decimals is flagged, not rounded; float noise is no
   );
   assert.equal(rows.get("expenses")!.find((r) => r.id === "e_precise")!.amount, "10.005", "passed through exactly");
   assert.equal(rows.get("expenses")!.find((r) => r.id === "e_float_noise")!.amount, "0.30");
+});
+
+test("completion percentage is not money: stored exactly as a float, never flagged", () => {
+  const { rows, precisionFlags } = transformExport(exported(), columns, liveUids);
+  assert.equal(precisionFlags.some((f) => f.column === "completion_percentage"), false);
+  assert.equal(rows.get("projects")!.find((r) => r.id === "p1")!.completion_percentage, 32.80725319006043);
 });
 
 test("embedded attachments stay a JSON array; Timestamps inside become ISO strings; non-ASCII names intact", () => {
