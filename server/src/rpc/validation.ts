@@ -46,6 +46,23 @@ export function requireNumber(data: Record<string, unknown>, key: string): numbe
 }
 
 /**
+ * Money and quantity columns hold 2 decimals. The app's inputs never send more, so this only turns
+ * what Postgres would round silently into an explicit error (Constitution II). Float noise such as
+ * 0.1 + 0.2 is not "more decimals".
+ */
+export function assertTwoDecimals(value: number, key: string): number {
+  if (Math.abs(Math.round(value * 100) / 100 - value) >= 1e-9) {
+    throw new RpcError("invalid-argument", `${key} can have at most 2 decimal places`);
+  }
+  return value;
+}
+
+/** requireNumber for a money or quantity field (at most 2 decimals). */
+export function requireMoney(data: Record<string, unknown>, key: string): number {
+  return assertTwoDecimals(requireNumber(data, key), key);
+}
+
+/**
  * optionalPositiveNumber: absent, null, empty and zero all mean "not set" (null); negative and
  * non-numeric values are rejected.
  */
@@ -61,7 +78,7 @@ export function optionalPositiveNumber(data: Record<string, unknown>, key: strin
   if (value < 0) {
     throw new RpcError("invalid-argument", `${key} must not be negative`);
   }
-  return value === 0 ? null : value;
+  return value === 0 ? null : assertTwoDecimals(value, key);
 }
 
 /** `${data[key] ?? fallback}`.trim(), the pattern every ported writer uses for text fields. */

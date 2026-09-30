@@ -21,6 +21,7 @@ const columns: TableColumns = new Map(
       "is_archived", "created_at", "updated_at", "legacy"],
     usage_counters: ["id", "workspace_id", "period", "expenses_count", "active_projects", "updated_at", "legacy"],
     subscriptions: ["workspace_id", "tier", "status", "period_ends_at", "updated_at", "legacy"],
+    worker_entries: ["id", "workspace_id", "project_id", "days_worked", "daily_wage", "total_cost", "date", "created_at", "updated_at", "legacy"],
   }).map(([t, cols]) => [t, new Set(cols)]),
 );
 
@@ -179,6 +180,20 @@ test("different records sharing a client_mutation_id are a conflict, never dropp
   assert.equal(rows.get("projects")!.filter((r) => r.client_mutation_id === "m1").length, 2);
   assert.deepEqual(duplicateSaves, []);
   assert.deepEqual(uniqueConflicts, ["projects: client_mutation_id m1 repeated in workspace ws_1 (p2, p3)"]);
+});
+
+test("worker entry total_cost keeps up to 4 decimals (days x wage); more is still flagged", () => {
+  const data = exported();
+  data.worker_entries = [
+    { id: "we4", data: { workspaceId: "ws_1", projectId: "p1", daysWorked: 1.25, dailyWage: 75.25, totalCost: 94.0625 } },
+    { id: "we5", data: { workspaceId: "ws_1", projectId: "p1", daysWorked: 1, dailyWage: 1, totalCost: 1.00005 } },
+  ];
+  const { rows, precisionFlags } = transformExport(data, columns, liveUids);
+  assert.equal(rows.get("worker_entries")!.find((r) => r.id === "we4")!.total_cost, "94.0625");
+  assert.deepEqual(
+    precisionFlags.filter((f) => f.table === "worker_entries").map((f) => [f.id, f.column]),
+    [["we5", "total_cost"]],
+  );
 });
 
 test("embedded attachments stay a JSON array; Timestamps inside become ISO strings; non-ASCII names intact", () => {

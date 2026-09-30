@@ -9,7 +9,7 @@
 | Primary key | `id TEXT` = the existing Firestore document ID (migrated) or a client/server-generated ID in the same format (new). Never renumbered. |
 | User identity | `*_uid TEXT` = Firebase Auth `uid`. No local users table for credentials. |
 | Workspace scoping | Every workspace-owned table has `workspace_id TEXT NOT NULL REFERENCES workspaces(id)` and an index leading with it. This is the unit of authorization and of sync. |
-| Money | `NUMERIC(14,2)`. Migrator flags any source double with more than 2 decimal places (Constitution II: no silent rounding). Client keeps `double` as today. |
+| Money | `NUMERIC(14,2)`. Migrator flags any source double with more than 2 decimal places (Constitution II: no silent rounding). Client keeps `double` as today. RPCs refuse money/quantity inputs with more than 2 decimals (`invalid-argument`) instead of letting Postgres round; the app's inputs never send more. Exception: `worker_entries.total_cost` is `NUMERIC(18,4)` (days × wage, both 2-decimal, is exact at 4; migration 005). |
 | Timestamps | `timestamptz` UTC. `created_at`, `updated_at` (set by API, never client clock) on every table. Firestore `Timestamp` → exact microsecond value. |
 | Archive | `is_archived BOOLEAN NOT NULL DEFAULT false` where the model has it today; archiving is a state change, not a delete. |
 | Hard deletes | Only project cascade delete and account deletion. PowerSync propagates deletes to devices. |

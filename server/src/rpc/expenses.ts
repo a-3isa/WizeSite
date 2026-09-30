@@ -6,7 +6,7 @@ import { recomputeProject } from "../recompute/persist";
 import { consumeMonthly, refundMonthly } from "./quota";
 import { ensureAttachmentItems, existingMutation, legacyFields, mutationIdOf, toDate } from "./records";
 import type { RpcRegistry } from "./types";
-import { asRecord, newDocId, requireNumber, requireString, text } from "./validation";
+import { asRecord, newDocId, requireMoney, requireString, text } from "./validation";
 
 /**
  * Expense RPCs ported from functions/src/index.ts (createExpenseWithQuotaForUser, updateExpense,
@@ -38,7 +38,7 @@ function validCategory(data: Record<string, unknown>): string {
 }
 
 function positiveAmount(data: Record<string, unknown>): number {
-  const amount = requireNumber(data, "amount");
+  const amount = requireMoney(data, "amount");
   if (amount <= 0) {
     throw new HttpsError("invalid-argument", "Amount must be greater than zero");
   }

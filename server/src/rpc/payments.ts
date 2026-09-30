@@ -6,7 +6,7 @@ import { recomputeProject } from "../recompute/persist";
 import { consumeMonthly, refundMonthly } from "./quota";
 import { ensureAttachmentItems, existingMutation, hasContractValue, legacyFields, mutationIdOf, toDate } from "./records";
 import type { RpcRegistry } from "./types";
-import { asRecord, newDocId, requireNumber, requireString, text } from "./validation";
+import { asRecord, assertTwoDecimals, newDocId, requireMoney, requireString, text } from "./validation";
 
 /**
  * Payment RPCs ported from functions/src/index.ts (createPaymentWithQuotaForUser,
@@ -25,7 +25,7 @@ async function projectOf(sql: Sql, projectId: string): Promise<ProjectRow | unde
 }
 
 function positiveAmount(data: Record<string, unknown>): number {
-  const amount = requireNumber(data, "amount");
+  const amount = requireMoney(data, "amount");
   if (amount <= 0) {
     throw new HttpsError("invalid-argument", "Amount must be greater than zero");
   }
@@ -66,7 +66,7 @@ export async function createPaymentWithQuotaForUser(
                           payment_method, payment_status, entity_id, entity_type, entity_name, attachments,
                           is_archived, client_mutation_id, created_by, legacy)
     VALUES (${id}, ${workspaceId}, ${projectId}, ${amount},
-            ${Number.isFinite(Number(data.paidAmount)) ? Number(data.paidAmount) : null},
+            ${Number.isFinite(Number(data.paidAmount)) ? assertTwoDecimals(Number(data.paidAmount), "paidAmount") : null},
             ${toDate(data.date) ?? new Date()}, ${`${data.description ?? data.notes ?? ""}`.trim()},
             ${text(data, "notes")}, ${text(data, "paymentMethod", "cash")},
             ${parsePaymentStatus(data.paymentStatus, "paid")}, ${text(data, "entityId") || null},

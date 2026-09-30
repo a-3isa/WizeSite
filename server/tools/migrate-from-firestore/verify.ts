@@ -83,7 +83,7 @@ export function buildReport(input: VerifyInput): Report {
 
   for (const flag of input.precisionFlags) {
     mismatches.push(
-      `${flag.table}/${flag.id}.${flag.column} = ${flag.value} has more than 2 decimals (not rounded; fix the source value)`,
+      `${flag.table}/${flag.id}.${flag.column} = ${flag.value} has more decimals than the column holds (not rounded; fix the source value)`,
     );
   }
 

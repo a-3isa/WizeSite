@@ -130,16 +130,21 @@ function jsonSafe(value: unknown): unknown {
 }
 
 /** Money: exact 2-decimal string when the double is a clean cent value, raw string (flagged) otherwise. */
+/** Columns with 4 decimals: a worker entry's total is days x wage, both 2-decimal (migration 005). */
+const SCALE_4_COLUMNS = new Set(["total_cost"]);
+
 function money(
   value: unknown,
   flag: (value: number) => void,
+  scale = 2,
 ): string | null {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
-  const cents = Math.round(n * 100);
-  if (Math.abs(cents / 100 - n) < 1e-9) {
-    return (cents / 100).toFixed(2);
+  const factor = 10 ** scale;
+  const units = Math.round(n * factor);
+  if (Math.abs(units / factor - n) < 1e-9) {
+    return (units / factor).toFixed(scale);
   }
   flag(n);
   return String(n);
@@ -180,7 +185,11 @@ function toRow(
       const n = value === null || value === undefined || value === "" ? null : Number(value);
       row[column] = n !== null && Number.isFinite(n) ? n : null;
     } else if (NUMERIC_COLUMNS.has(column)) {
-      row[column] = money(value, (n) => flags.push({ table, id: doc.id, column, value: n }));
+      row[column] = money(
+        value,
+        (n) => flags.push({ table, id: doc.id, column, value: n }),
+        SCALE_4_COLUMNS.has(column) ? 4 : 2,
+      );
     } else if (isTimestamp(value)) {
       row[column] = toDate(value);
     } else if (value !== null && typeof value === "object") {
