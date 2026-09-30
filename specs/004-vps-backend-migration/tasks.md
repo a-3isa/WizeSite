@@ -142,7 +142,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 - [X] T064 [P] [US2] `server/test/integration/files_upload.test.ts`: content-type and size limits copied verbatim from `storage.rules` (`validAttachmentUpload`, `validVoiceUpload`, `validProfilePhotoUpload`); the path is always `{kind}/{callerUid}/…`; idempotent re-upload
 - [X] T065 [P] [US2] `server/test/integration/voice.test.ts` (OpenRouter mocked): audio upload → `processVoiceExpense` → draft is matched to a project exactly as `functions/src/voice` does today; the 120 s timeout is respected
 - [X] T066 [P] [US2] `server/test/integration/revenuecat_webhook.test.ts`: every case in contracts/webhooks.md, including dedupe on `event_id`
-- [ ] T067 [P] [US2] `test/core/services/offline_action_queue_idempotency_test.dart`: on replay, `X-Idempotency-Key` equals the offline action id, and a replayed action produces exactly one server record (against a mocked HTTP server)
+- [X] T067 [P] [US2] `test/core/services/offline_action_queue_idempotency_test.dart`: on replay, `X-Idempotency-Key` equals the offline action id, and a replayed action produces exactly one server record (against a mocked HTTP server)
 
 ### Implementation for User Story 2 — server
 
@@ -161,7 +161,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 
 ### Implementation for User Story 2 — client
 
-- [ ] T080 [US2] Thread the offline action id as the idempotency key: `lib/core/services/offline_action_queue.dart` and `offline_queue_coordinator.dart` pass `action.id` to `CallableClient`. Add queue action types for the new RPCs (entities, accounting records, notifications). Keep `pending_id_remap.dart` and `sync_error_classifier.dart` behavior unchanged; extend `test/core/services/` queue tests
+- [ ] T080 [US2] Thread the offline action id as the idempotency key: `lib/core/services/offline_action_queue.dart` and `offline_queue_coordinator.dart` pass `action.id` to `CallableClient`. Add queue action types for the new RPCs (entities, accounting records, notifications). Keep `pending_id_remap.dart` and `sync_error_classifier.dart` behavior unchanged; extend `test/core/services/` queue tests _Progress: every call in `WorkspaceMutationService._applyQueuedAction` now passes `idempotencyKey: action.id` (T067 proves a replay after a lost response creates one record). Still open: queue action types for the new RPCs, done together with T082._
 - [ ] T081 [US2] Rewrite `lib/core/services/storage_upload_service.dart` to `POST /v1/files` (multipart, same kinds), returning `storagePath`. Update `lib/core/services/pending_attachment_service.dart` and `lib/features/settings/data/profile_repository.dart` (profile photo) accordingly
 - [ ] T082 [P] [US2] Replace direct Firestore writes with RPC calls through `CallableClient` or the offline queue in `lib/features/entities/data/entity_repository.dart`, `lib/features/{contractors,equipment,transport}/data/*_accounting_repository.dart`, `lib/features/common/presentation/controllers/domain_accounting_save_adapter.dart`, `lib/features/notifications/data/notification_repository.dart`, `lib/features/settings/data/user_settings_repository.dart` and `lib/core/services/session_restore_service.dart`
 - [ ] T083 [P] [US2] Route the voice screens `lib/features/voice_expense/presentation/screens/voice_processing_screen.dart` and `voice_review_screen.dart` through `CallableClient` (`processVoiceExpense`) and the new upload service. Remove direct Functions/HTTP URL usage

@@ -39,6 +39,7 @@ void main() {
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: any(named: 'defaultErrorMessage'),
         httpFunctionName: any(named: 'httpFunctionName'),
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenAnswer((_) async {});
     service = WorkspaceMutationService(client, queue, telemetry);
@@ -86,6 +87,7 @@ void main() {
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: any(named: 'defaultErrorMessage'),
         httpFunctionName: any(named: 'httpFunctionName'),
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     );
 
@@ -98,6 +100,7 @@ void main() {
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: 'Failed to update expense.',
         httpFunctionName: any(named: 'httpFunctionName'),
+        idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).called(1);
   });
@@ -152,6 +155,7 @@ void main() {
           parseResult: any(named: 'parseResult'),
           defaultErrorMessage: 'Failed to update expense.',
           httpFunctionName: any(named: 'httpFunctionName'),
+          idempotencyKey: any(named: 'idempotencyKey'),
         ),
       ).called(1);
     },

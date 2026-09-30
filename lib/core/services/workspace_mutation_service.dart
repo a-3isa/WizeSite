@@ -718,11 +718,15 @@ class WorkspaceMutationService {
     return OfflineActionOutcome.applied(targetId: _conflictTargetId(action));
   }
 
+  /// Every call carries the action id as its idempotency key (spec 004,
+  /// T080): a replay after a lost response returns the stored result
+  /// instead of creating a second record.
   Future<void> _applyQueuedAction(OfflineAction action) async {
     switch (action.type) {
       case OfflineActionTypes.createProject:
         final result = await _client.call<Map<String, dynamic>>(
           functionName: 'createProjectWithQuota',
+          idempotencyKey: action.id,
           httpFunctionName: 'createProjectWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
@@ -739,6 +743,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateProject:
         await _client.call<void>(
           functionName: 'updateProject',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update project.',
@@ -747,6 +752,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.archiveProject:
         await _client.call<void>(
           functionName: 'archiveProject',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive project.',
@@ -755,6 +761,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.unarchiveProject:
         await _client.call<void>(
           functionName: 'unarchiveProject',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to unarchive project.',
@@ -763,6 +770,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.deleteProject:
         await _client.call<void>(
           functionName: 'deleteProjectCascade',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to delete project.',
@@ -771,6 +779,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.createExpense:
         await _client.call<Map<String, dynamic>>(
           functionName: 'createExpenseWithQuota',
+          idempotencyKey: action.id,
           httpFunctionName: 'createExpenseWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
@@ -780,6 +789,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateExpense:
         await _client.call<void>(
           functionName: 'updateExpense',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update expense.',
@@ -788,6 +798,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.archiveExpense:
         await _client.call<void>(
           functionName: 'archiveExpenseWithQuotaRefund',
+          idempotencyKey: action.id,
           httpFunctionName: 'archiveExpenseWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
@@ -797,6 +808,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.createPayment:
         await _client.call<Map<String, dynamic>>(
           functionName: 'createPaymentWithQuota',
+          idempotencyKey: action.id,
           httpFunctionName: 'createPaymentWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
@@ -806,6 +818,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updatePayment:
         await _client.call<void>(
           functionName: 'updatePayment',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update payment.',
@@ -814,6 +827,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.archivePayment:
         await _client.call<void>(
           functionName: 'archivePaymentWithQuotaRefund',
+          idempotencyKey: action.id,
           httpFunctionName: 'archivePaymentWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
@@ -823,6 +837,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.createWorkerEntry:
         await _client.call<Map<String, dynamic>>(
           functionName: 'createWorkerEntryWithQuota',
+          idempotencyKey: action.id,
           httpFunctionName: 'createWorkerEntryWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
@@ -832,6 +847,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.createWorker:
         await _client.call<Map<String, dynamic>>(
           functionName: 'createWorker',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to save worker.',
@@ -840,6 +856,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateWorker:
         await _client.call<void>(
           functionName: 'updateWorker',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update worker.',
@@ -848,6 +865,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.archiveWorker:
         await _client.call<void>(
           functionName: 'archiveWorker',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive worker.',
@@ -856,6 +874,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateWorkerEntry:
         await _client.call<void>(
           functionName: 'updateWorkerEntry',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update worker entry.',
@@ -864,6 +883,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.archiveWorkerEntry:
         await _client.call<void>(
           functionName: 'archiveWorkerEntryWithQuotaRefund',
+          idempotencyKey: action.id,
           httpFunctionName: 'archiveWorkerEntryWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
@@ -873,6 +893,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateUserProfile:
         await _client.call<void>(
           functionName: 'updateUserProfile',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update profile.',
@@ -881,6 +902,7 @@ class WorkspaceMutationService {
       case OfflineActionTypes.updateUserSettings:
         await _client.call<void>(
           functionName: 'updateUserSettings',
+          idempotencyKey: action.id,
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to update settings.',
