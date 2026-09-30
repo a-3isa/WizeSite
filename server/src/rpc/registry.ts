@@ -8,6 +8,7 @@ import { paymentRpcs } from "./payments";
 import { projectRpcs } from "./projects";
 import { sessionRpcs } from "./session";
 import { type AuthAdmin, unavailableAuthAdmin, userRpcs } from "./user";
+import { type VoiceDeps, voiceRpcs } from "./voice";
 import { workerRpcs } from "./workers";
 import type { FilesConfig } from "../files/signing";
 import type { RpcRegistry } from "./types";
@@ -17,7 +18,11 @@ export interface RegistryDeps {
   files: FilesConfig;
   /** Firebase sign-in admin; without it account changes fail with `unavailable`. */
   authAdmin?: AuthAdmin;
+  /** OpenRouter settings for processVoiceExpense; without a key it answers failed-precondition. */
+  openRouter?: VoiceDeps["openRouter"];
 }
+
+const NO_OPENROUTER: VoiceDeps["openRouter"] = { apiKey: "", model: "openai/gpt-4o-mini", transcriptionModel: "openai/gpt-audio-mini" };
 
 /**
  * Every RPC the app can call (contracts/rpc-api.md "Function catalogue").
@@ -36,6 +41,7 @@ export function buildRegistry(deps: RegistryDeps): RpcRegistry {
     ...accountingRecordRpcs,
     ...notificationRpcs,
     ...sessionRpcs,
+    ...voiceRpcs({ files: deps.files, openRouter: deps.openRouter ?? NO_OPENROUTER }),
     ...userRpcs({ authAdmin: deps.authAdmin ?? unavailableAuthAdmin, files: deps.files }),
     ...fileRpcs(deps.files),
   };

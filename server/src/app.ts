@@ -10,6 +10,7 @@ import { buildRegistry } from "./rpc/registry";
 import { registerRpcRoutes, sendRpcError } from "./rpc/router";
 import type { RpcRegistry } from "./rpc/types";
 import type { AuthAdmin } from "./rpc/user";
+import type { VoiceDeps } from "./rpc/voice";
 import { registerRevenueCatWebhook } from "./webhooks/revenuecat";
 
 export interface AppDeps {
@@ -21,6 +22,8 @@ export interface AppDeps {
   files?: FilesConfig;
   /** Firebase sign-in admin for updateUserProfile / deleteOwnAccount (default registry only). */
   authAdmin?: AuthAdmin;
+  /** OpenRouter settings for processVoiceExpense (default registry only). */
+  openRouter?: VoiceDeps["openRouter"];
   logLevel?: string;
   rateLimitMax?: number;
   /** REVENUECAT_WEBHOOK_SECRET; when set (even empty) POST /v1/webhooks/revenuecat is served. */
@@ -83,7 +86,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerRevenueCatWebhook(app, { sql: deps.sql, secret: deps.revenueCatWebhookSecret });
   }
   const registry =
-    deps.registry ?? (deps.files ? buildRegistry({ files: deps.files, authAdmin: deps.authAdmin }) : undefined);
+    deps.registry ?? (deps.files ? buildRegistry({ files: deps.files, authAdmin: deps.authAdmin, openRouter: deps.openRouter }) : undefined);
   if (!registry) {
     throw new Error("buildApp needs either a registry or files config");
   }
@@ -105,6 +108,11 @@ async function main(): Promise<void> {
     verifier: firebaseVerifier(config.firebaseProjectId),
     authAdmin: firebaseAuthAdmin(config.firebaseProjectId),
     revenueCatWebhookSecret: config.revenueCatWebhookSecret,
+    openRouter: {
+      apiKey: config.openRouterApiKey,
+      model: config.openRouterModel,
+      transcriptionModel: config.openRouterTranscriptionModel,
+    },
     files: { root: config.filesRoot, signingKey: config.filesSigningKey, publicUrl: config.publicApiUrl },
     logLevel: config.logLevel,
     syncHealthUrl: process.env.SYNC_HEALTH_URL,

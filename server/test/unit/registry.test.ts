@@ -11,9 +11,7 @@ import { test } from "node:test";
 import { buildRegistry } from "../../src/rpc/registry";
 
 /** Not ported yet; each entry names the task that removes it from this list. */
-const PENDING: Record<string, string> = {
-  processVoiceExpense: "T076",
-};
+const PENDING: Record<string, string> = {};
 
 const NEW_RPCS = [
   "upsertEntity",

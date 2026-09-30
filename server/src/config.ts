@@ -33,7 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     openRouterApiKey: env.OPENROUTER_API_KEY?.trim() ?? "",
     openRouterModel: env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini",
     openRouterTranscriptionModel:
-      env.OPENROUTER_TRANSCRIPTION_MODEL?.trim() || "openai/gpt-4o-mini-transcribe",
+      env.OPENROUTER_TRANSCRIPTION_MODEL?.trim() || "openai/gpt-audio-mini",
     revenueCatWebhookSecret: env.REVENUECAT_WEBHOOK_SECRET?.trim() ?? "",
     publicApiUrl: required(env, "PUBLIC_API_URL").replace(/\/+$/, ""),
     port: Number.parseInt(env.PORT ?? "8080", 10),
