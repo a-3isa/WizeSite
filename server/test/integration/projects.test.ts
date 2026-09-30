@@ -173,3 +173,52 @@ test("through the API: idempotency key replays; errors use the envelope", { skip
     await app.close();
   }
 });
+
+test("deleteProjectCascade: removes children, refunds counters, deletes files, keeps accounting records", { skip: skipReason }, async () => {
+  const { mkdtemp, mkdir, writeFile, access } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { deleteProjectCascadeForUser } = await import("../../src/rpc/projects");
+  const { periodKey } = await import("../../src/rpc/quota");
+
+  const root = await mkdtemp(path.join(tmpdir(), "cascade-"));
+  const file = "receipts/u1/r1.jpg";
+  await mkdir(path.join(root, "receipts/u1"), { recursive: true });
+  await writeFile(path.join(root, file), "x");
+
+  const { id } = await create("u1", { name: "A", contractValue: 1000 });
+  const attachments = [{ id: "a1", fileName: "r.jpg", storagePath: file }];
+  await sql`INSERT INTO expenses (id, workspace_id, project_id, amount, date, attachments)
+            VALUES ('e1', 'ws_1', ${id}, 10, now(), ${sql.json(attachments)}), ('e_arch', 'ws_1', ${id}, 5, now(), '[]'::jsonb)`;
+  await sql`UPDATE expenses SET is_archived = true WHERE id = 'e_arch'`;
+  await sql`INSERT INTO payments (id, workspace_id, project_id, amount, date) VALUES ('pay1', 'ws_1', ${id}, 100, now())`;
+  await sql`INSERT INTO contractor_accounting_records (id, workspace_id, project_id, contractor_id, amount, date)
+            VALUES ('c1', 'ws_1', ${id}, 'k1', 50, now())`;
+  await sql`INSERT INTO notifications (id, workspace_id, target_user_id, legacy)
+            VALUES ('n1', 'ws_1', 'u1', ${sql.json({ projectId: id })}), ('n2', 'ws_1', 'u1', '{}'::jsonb)`;
+  await sql`INSERT INTO usage_counters (id, workspace_id, period, expenses_count, payments_count)
+            VALUES (${`ws_1_${periodKey()}`}, 'ws_1', ${periodKey()}, 5, 5)`;
+
+  await rejectsWith(
+    tx((t) => deleteProjectCascadeForUser(t, "m1", { workspaceId: "ws_1", projectId: id }, { root })),
+    "permission-denied",
+    "Not allowed to delete project",
+  );
+  await tx((t) => deleteProjectCascadeForUser(t, "u1", { workspaceId: "ws_1", projectId: id }, { root }));
+
+  const [left] = await sql`SELECT
+      (SELECT count(*)::int FROM projects) AS projects, (SELECT count(*)::int FROM expenses) AS expenses,
+      (SELECT count(*)::int FROM payments) AS payments, (SELECT count(*)::int FROM project_metrics) AS metrics,
+      (SELECT count(*)::int FROM notifications WHERE id = 'n1') AS notifications`;
+  assert.deepEqual({ ...left }, { projects: 0, expenses: 0, payments: 0, metrics: 0, notifications: 0 });
+  const [n2] = await sql`SELECT id FROM notifications WHERE id = 'n2'`;
+  assert.ok(n2, "notifications of other projects stay");
+  const [c1] = await sql`SELECT project_id, legacy FROM contractor_accounting_records WHERE id = 'c1'`;
+  assert.equal(c1.project_id, null, "detached, not deleted (Firebase never deleted them)");
+  assert.equal(c1.legacy.projectId, id, "the app still reads the old projectId");
+  const [counter] = await sql`SELECT expenses_count, payments_count FROM usage_counters WHERE period = ${periodKey()}`;
+  assert.deepEqual({ ...counter }, { expenses_count: 4, payments_count: 4 }, "only live records refunded");
+  const [projects] = await sql`SELECT active_projects FROM usage_counters WHERE period = 'projects'`;
+  assert.equal(projects.active_projects, 0);
+  await assert.rejects(access(path.join(root, file)), "attachment file deleted");
+});

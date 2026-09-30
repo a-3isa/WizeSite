@@ -18,7 +18,7 @@ export interface RegistryDeps {
 export function buildRegistry(deps: RegistryDeps): RpcRegistry {
   return {
     ...workspaceRpcs,
-    ...projectRpcs,
+    ...projectRpcs(deps.files),
     ...expenseRpcs,
     ...paymentRpcs,
     ...fileRpcs(deps.files),

@@ -115,9 +115,13 @@ export async function consumeMonthly(sql: Sql, workspaceId: string, type: Monthl
 
 /** Archive refund: never below zero (archive*WithQuotaRefund). */
 export async function refundMonthly(sql: Sql, workspaceId: string, type: MonthlyLimit): Promise<void> {
+  await refundMonthlyBy(sql, workspaceId, type, 1);
+}
+
+export async function refundMonthlyBy(sql: Sql, workspaceId: string, type: MonthlyLimit, count: number): Promise<void> {
   const period = periodKey();
   const current = await lockCounter(sql, workspaceId, period, MONTHLY[type], async () => 0);
-  await setCounter(sql, workspaceId, period, MONTHLY[type], current - 1);
+  await setCounter(sql, workspaceId, period, MONTHLY[type], current - count);
 }
 
 /** isCountedActiveProject: status active (blank = active) and not archived. */

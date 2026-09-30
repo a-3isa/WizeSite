@@ -1,9 +1,13 @@
+import { rm } from "node:fs/promises";
+import path from "node:path";
+
 import { assertCanManageProject, assertMember } from "../auth/roles";
 import type { Sql } from "../db/pool";
 import { RpcError as HttpsError } from "../domain/errors";
-import { canCreateProject } from "../domain/money";
-import { recomputeProject } from "../recompute/persist";
-import { changeActiveProjects, hasUnlimitedQuota } from "./quota";
+import { canCreateProject, canDeleteProjectCascade } from "../domain/money";
+import { isAllowedAttachmentStoragePath } from "../domain/storage_lifecycle";
+import { recomputeProject, recomputeWorkspace } from "../recompute/persist";
+import { changeActiveProjects, hasUnlimitedQuota, refundMonthlyBy } from "./quota";
 import { existingMutation, hasContractValue, legacyFields, mutationIdOf, toDate } from "./records";
 import type { RpcRegistry } from "./types";
 import { asRecord, newDocId, optionalPositiveNumber, requireString, text } from "./validation";
@@ -145,7 +149,93 @@ export async function unarchiveProjectForUser(sql: Sql, uid: string, data: Recor
   await recomputeProject(sql, workspaceId, projectId);
 }
 
-export const projectRpcs: RpcRegistry = {
+/** Accounting records Firebase's cascade left in place; they only point at the project. */
+const DETACHED_ON_DELETE = [
+  "worker_accounting_records",
+  "contractor_accounting_records",
+  "equipment_accounting_records",
+  "transport_provider_accounting_records",
+] as const;
+
+/**
+ * Port of deleteProjectCascade. Deletes the project with its expenses, payments, worker entries,
+ * metrics and notifications; refunds this month's counts for live records and the active-project
+ * count; then deletes the attachment files (best effort, as the Storage cleanup was).
+ * Accounting records are kept, as in Firebase: the FK would cascade them, so they are detached
+ * first with the old projectId kept in `legacy` (the app reads the same projectId as before).
+ */
+export async function deleteProjectCascadeForUser(
+  sql: Sql,
+  uid: string,
+  data: Record<string, unknown>,
+  files: { root: string },
+): Promise<void> {
+  const workspaceId = requireString(data, "workspaceId");
+  const role = await assertMember(sql, workspaceId, uid);
+  if (!canDeleteProjectCascade(role)) {
+    throw new HttpsError("permission-denied", "Not allowed to delete project");
+  }
+  const projectId = requireString(data, "projectId");
+  const project = await projectInWorkspace(sql, projectId, workspaceId);
+
+  const liveCount = async (table: "expenses" | "payments" | "worker_entries") => {
+    const [{ count }] = await sql<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM ${sql(table)}
+      WHERE workspace_id = ${workspaceId} AND project_id = ${projectId} AND NOT is_archived`;
+    return count;
+  };
+  const refunds = {
+    expensesPerMonth: await liveCount("expenses"),
+    paymentsPerMonth: await liveCount("payments"),
+    workerEntriesPerMonth: await liveCount("worker_entries"),
+  } as const;
+  const attachmentRows = await sql<{ attachments: unknown }[]>`
+    SELECT attachments FROM expenses WHERE workspace_id = ${workspaceId} AND project_id = ${projectId}
+    UNION ALL SELECT attachments FROM payments WHERE workspace_id = ${workspaceId} AND project_id = ${projectId}
+    UNION ALL SELECT attachments FROM worker_entries WHERE workspace_id = ${workspaceId} AND project_id = ${projectId}`;
+  const storagePaths = attachmentRows.flatMap((row) =>
+    (Array.isArray(row.attachments) ? row.attachments : [])
+      .map((item) => `${(item as Record<string, unknown> | null)?.storagePath ?? ""}`.trim())
+      .filter(Boolean),
+  );
+
+  for (const table of DETACHED_ON_DELETE) {
+    await sql`
+      UPDATE ${sql(table)} SET legacy = legacy || jsonb_build_object('projectId', project_id), project_id = NULL,
+        updated_at = now()
+      WHERE workspace_id = ${workspaceId} AND project_id = ${projectId}`;
+  }
+  await sql`DELETE FROM notifications WHERE workspace_id = ${workspaceId} AND legacy->>'projectId' = ${projectId}`;
+  // Expenses, payments, worker entries and every derived row go with the project (FK cascade).
+  await sql`DELETE FROM projects WHERE id = ${projectId}`;
+
+  for (const [type, count] of Object.entries(refunds) as Array<[keyof typeof refunds, number]>) {
+    if (count > 0) {
+      await refundMonthlyBy(sql, workspaceId, type, count);
+    }
+  }
+  if (countsAsActive(project.status) && !project.is_archived) {
+    await changeActiveProjects(sql, workspaceId, -1, { enforce: false });
+  }
+  await recomputeWorkspace(sql, workspaceId);
+
+  const root = path.resolve(files.root);
+  await Promise.all(
+    storagePaths.map(async (storagePath) => {
+      const target = path.resolve(root, storagePath);
+      if (!isAllowedAttachmentStoragePath(storagePath) || !target.startsWith(root + path.sep)) {
+        return;
+      }
+      try {
+        await rm(target, { force: true });
+      } catch {
+        // Best-effort file cleanup, as with the Storage cleanup before.
+      }
+    }),
+  );
+}
+
+export const projectRpcs = (files: { root: string }): RpcRegistry => ({
   createProjectWithQuota: {
     mutating: true,
     handler: (ctx, data) => createProjectWithQuotaForUser(ctx.sql, ctx.uid, asRecord(data)),
@@ -171,4 +261,11 @@ export const projectRpcs: RpcRegistry = {
       return null;
     },
   },
-};
+  deleteProjectCascade: {
+    mutating: true,
+    handler: async (ctx, data) => {
+      await deleteProjectCascadeForUser(ctx.sql, ctx.uid, asRecord(data), files);
+      return null;
+    },
+  },
+});
