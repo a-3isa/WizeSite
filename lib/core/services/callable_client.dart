@@ -41,6 +41,7 @@ class CallableClient {
     required String defaultErrorMessage,
     String? httpFunctionName,
     String? idempotencyKey,
+    Duration? selfHostedTimeout,
   }) async {
     final selfHosted = _selfHosted;
     if (selfHosted != null) {
@@ -51,6 +52,7 @@ class CallableClient {
         parseResult: parseResult,
         defaultErrorMessage: defaultErrorMessage,
         idempotencyKey: idempotencyKey ?? const Uuid().v4(),
+        timeout: selfHostedTimeout,
       );
     }
 
@@ -156,6 +158,7 @@ class CallableClient {
     required T Function(dynamic result) parseResult,
     required String defaultErrorMessage,
     required String idempotencyKey,
+    Duration? timeout,
   }) async {
     try {
       await _telemetry.log('callable.request', {'function': functionName});
@@ -164,6 +167,7 @@ class CallableClient {
         payload: payload,
         idempotencyKey: idempotencyKey,
         defaultErrorMessage: defaultErrorMessage,
+        timeout: timeout,
       );
       await _telemetry.log('callable.success', {'function': functionName});
       return parseResult(result);

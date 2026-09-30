@@ -36,17 +36,21 @@ class SelfHostedRpcTransport {
   final AppCheckTokenProvider _appCheckToken;
   final Duration _timeout;
 
+  /// [timeout] overrides the default for slow functions (processVoiceExpense
+  /// runs up to 120 s on the server).
   Future<dynamic> call({
     required String functionName,
     required Map<String, dynamic> payload,
     required String idempotencyKey,
     required String defaultErrorMessage,
+    Duration? timeout,
   }) async {
     final first = await _send(
       functionName: functionName,
       payload: payload,
       idempotencyKey: idempotencyKey,
       forceRefresh: false,
+      timeout: timeout,
     );
     // An expired ID token is the common cause of a 401: refresh once, retry once.
     final response = first.statusCode == 401
@@ -55,6 +59,7 @@ class SelfHostedRpcTransport {
             payload: payload,
             idempotencyKey: idempotencyKey,
             forceRefresh: true,
+            timeout: timeout,
           )
         : first;
     return _decode(response, defaultErrorMessage);
@@ -143,6 +148,7 @@ class SelfHostedRpcTransport {
     required Map<String, dynamic> payload,
     required String idempotencyKey,
     required bool forceRefresh,
+    Duration? timeout,
   }) async {
     final headers = {
       ...await _authHeaders(idempotencyKey, forceRefresh),
@@ -155,7 +161,7 @@ class SelfHostedRpcTransport {
             headers: headers,
             body: jsonEncode({'data': payload}),
           )
-          .timeout(_timeout),
+          .timeout(timeout ?? _timeout),
     );
   }
 

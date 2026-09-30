@@ -24,6 +24,10 @@ class CloudFunctionService {
         },
         parseResult: (result) => Map<String, dynamic>.from(result as Map),
         defaultErrorMessage: 'Failed to process voice expense.',
+        // Self-hosted (spec 004, T083): the server allows 120 s for
+        // transcription + parsing, and the same recording reuses its result.
+        idempotencyKey: 'voice:$storagePath',
+        selfHostedTimeout: const Duration(seconds: 130),
       );
     } on CallableClientException catch (error) {
       throw CloudFunctionServiceException(error.message, code: error.code);

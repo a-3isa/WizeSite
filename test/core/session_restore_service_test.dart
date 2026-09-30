@@ -33,6 +33,7 @@ class _FakeCallableClient implements CallableClient {
     required String defaultErrorMessage,
     String? httpFunctionName,
     String? idempotencyKey,
+    Duration? selfHostedTimeout,
   }) async {
     callCount += 1;
     lastFunctionName = functionName;
