@@ -3,6 +3,7 @@ import { expenseRpcs } from "./expenses";
 import { memberRpcs } from "./members";
 import { paymentRpcs } from "./payments";
 import { projectRpcs } from "./projects";
+import { type AuthAdmin, unavailableAuthAdmin, userRpcs } from "./user";
 import { workerRpcs } from "./workers";
 import type { FilesConfig } from "../files/signing";
 import type { RpcRegistry } from "./types";
@@ -10,6 +11,8 @@ import { workspaceRpcs } from "./workspace";
 
 export interface RegistryDeps {
   files: FilesConfig;
+  /** Firebase sign-in admin; without it account changes fail with `unavailable`. */
+  authAdmin?: AuthAdmin;
 }
 
 /**
@@ -25,6 +28,7 @@ export function buildRegistry(deps: RegistryDeps): RpcRegistry {
     ...expenseRpcs,
     ...paymentRpcs,
     ...workerRpcs,
+    ...userRpcs({ authAdmin: deps.authAdmin ?? unavailableAuthAdmin, files: deps.files }),
     ...fileRpcs(deps.files),
   };
 }

@@ -115,7 +115,7 @@ export async function registerRpcRoutes(
         }
         const data = request.body?.data ?? {};
         const uid = request.uid as string;
-        const { email, name: callerName, picture } = request.caller ?? { uid };
+        const { email, name: callerName, picture, authTime } = request.caller ?? { uid };
         const timeoutMs = fn.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
         let result: unknown;
@@ -126,13 +126,13 @@ export async function registerRpcRoutes(
           }
           result = await withTimeout(
             runIdempotent(deps.sql, { uid, functionName: name, idempotencyKey }, (tx) =>
-              fn.handler({ uid, email, name: callerName, picture, sql: tx }, data),
+              fn.handler({ uid, email, name: callerName, picture, authTime, sql: tx }, data),
             ),
             timeoutMs,
           );
         } else {
           result = await withTimeout(
-            fn.handler({ uid, email, name: callerName, picture, sql: deps.sql }, data),
+            fn.handler({ uid, email, name: callerName, picture, authTime, sql: deps.sql }, data),
             timeoutMs,
           );
         }

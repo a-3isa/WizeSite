@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { firebaseVerifier, type TokenVerifier } from "./auth/verify";
+import { firebaseAuthAdmin, firebaseVerifier, type TokenVerifier } from "./auth/verify";
 import { loadConfig } from "./config";
 import { createPool, type Sql } from "./db/pool";
 import { RpcError } from "./domain/errors";
@@ -9,6 +9,7 @@ import type { FilesConfig } from "./files/signing";
 import { buildRegistry } from "./rpc/registry";
 import { registerRpcRoutes, sendRpcError } from "./rpc/router";
 import type { RpcRegistry } from "./rpc/types";
+import type { AuthAdmin } from "./rpc/user";
 
 export interface AppDeps {
   sql: Sql;
@@ -17,6 +18,8 @@ export interface AppDeps {
   registry?: RpcRegistry;
   /** Attachment store + URL signing; enables GET /v1/files/signed/*. */
   files?: FilesConfig;
+  /** Firebase sign-in admin for updateUserProfile / deleteOwnAccount (default registry only). */
+  authAdmin?: AuthAdmin;
   logLevel?: string;
   rateLimitMax?: number;
   /** PowerSync base URL probed by /healthz; omitted in tests. */
@@ -73,7 +76,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   if (deps.files) {
     registerSignedFileRoute(app, deps.files);
   }
-  const registry = deps.registry ?? (deps.files ? buildRegistry({ files: deps.files }) : undefined);
+  const registry =
+    deps.registry ?? (deps.files ? buildRegistry({ files: deps.files, authAdmin: deps.authAdmin }) : undefined);
   if (!registry) {
     throw new Error("buildApp needs either a registry or files config");
   }
@@ -92,6 +96,7 @@ async function main(): Promise<void> {
   const app = await buildApp({
     sql,
     verifier: firebaseVerifier(config.firebaseProjectId),
+    authAdmin: firebaseAuthAdmin(config.firebaseProjectId),
     files: { root: config.filesRoot, signingKey: config.filesSigningKey, publicUrl: config.publicApiUrl },
     logLevel: config.logLevel,
     syncHealthUrl: process.env.SYNC_HEALTH_URL,

@@ -5,6 +5,8 @@ export interface RpcContext {
   email?: string;
   name?: string;
   picture?: string;
+  /** Seconds since epoch of the last sign-in (ID token auth_time); deleteOwnAccount needs it. */
+  authTime?: number;
   /** Pooled client for queries; for mutating functions, the transaction of this request. */
   sql: Sql;
 }
