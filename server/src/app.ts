@@ -92,6 +92,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     verifier: deps.verifier,
     registry,
     rateLimitMax: deps.rateLimitMax,
+    upload: deps.files,
   });
   return app;
 }

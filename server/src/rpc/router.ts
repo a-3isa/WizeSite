@@ -4,6 +4,8 @@ import rateLimit from "@fastify/rate-limit";
 import type { TokenVerifier, VerifiedCaller } from "../auth/verify";
 import type { Sql } from "../db/pool";
 import { RpcError, type RpcErrorCode } from "../domain/errors";
+import type { FilesConfig } from "../files/signing";
+import { registerUploadRoute } from "../files/upload";
 import { runIdempotent } from "./idempotency";
 import type { RpcRegistry } from "./types";
 
@@ -70,7 +72,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export async function registerRpcRoutes(
   app: FastifyInstance,
-  deps: { sql: Sql; verifier: TokenVerifier; registry: RpcRegistry; rateLimitMax?: number },
+  deps: { sql: Sql; verifier: TokenVerifier; registry: RpcRegistry; rateLimitMax?: number; upload?: FilesConfig },
 ): Promise<void> {
   await app.register(async (scope) => {
     // 1. Authenticate every RPC: Firebase ID token + App Check token.
@@ -102,6 +104,11 @@ export async function registerRpcRoutes(
           { statusCode: 429 },
         ),
     });
+
+    // 3. POST /v1/files shares the same authentication and rate limit.
+    if (deps.upload) {
+      await registerUploadRoute(scope, { sql: deps.sql, files: deps.upload });
+    }
 
     scope.post<{ Params: { name: string }; Body: { data?: unknown } }>(
       "/v1/rpc/:name",
