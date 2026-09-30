@@ -56,6 +56,20 @@ test("loads every table in FK order and recomputes derived state", { skip: skipR
   assert.equal(profile.active_workspace_id, "ws_1");
 });
 
+test("an explicit Firestore null in a NOT NULL column falls back to the column default", { skip: skipReason }, async () => {
+  const data = fixture();
+  data.expenses![0].data.source = null;
+  data.expenses![0].data.notes = null;
+  const columns = await readTableColumns(sql);
+  const { rows } = transformExport(data, columns, new Set(["u1"]));
+  await loadMigration(sql, rows, { now: new Date(Date.UTC(2026, 5, 10)) });
+  const [expense] = await sql<{ source: string; notes: string; entity_id: string | null }[]>`
+    SELECT source, notes, entity_id FROM expenses WHERE id = 'e1'`;
+  assert.equal(expense.source, "");
+  assert.equal(expense.notes, "");
+  assert.equal(expense.entity_id, null, "nullable columns keep NULL");
+});
+
 test("orphaned references are reported before anything is written", { skip: skipReason }, async () => {
   const data = fixture();
   data.expenses.push({

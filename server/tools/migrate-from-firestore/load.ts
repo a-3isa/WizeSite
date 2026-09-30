@@ -102,6 +102,17 @@ export async function loadMigration(
     }
   }
 
+  // Firestore treats an explicit null like a missing field, and so does the app. For NOT NULL
+  // columns with a default, leave such a value out so Postgres applies the default; a null in a
+  // required column without one still fails the load.
+  const defaulted = new Set(
+    (
+      await sql<{ table_name: string; column_name: string }[]>`
+        SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND is_nullable = 'NO' AND column_default IS NOT NULL`
+    ).map((r) => `${r.table_name}.${r.column_name}`),
+  );
+
   const loaded = new Map<string, number>();
   let recomputedProjects = 0;
   await sql.begin(async (tx) => {
@@ -121,6 +132,7 @@ export async function loadMigration(
       for (const row of list) {
         const values: Record<string, unknown> = {};
         for (const [column, value] of Object.entries(row)) {
+          if (value === null && defaulted.has(`${table}.${column}`)) continue;
           values[column] = JSON_COLUMNS.has(column) ? t.json(value as never) : value;
         }
         await t`INSERT INTO ${t(table)} ${t(values as never)}`;
