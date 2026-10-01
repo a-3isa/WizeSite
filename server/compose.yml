@@ -22,7 +22,9 @@ services:
     environment:
       DATABASE_URL: postgres://wizesite:${POSTGRES_PASSWORD}@postgres:5432/wizesite
       FILES_ROOT: /srv/wizesite/files
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      # Firebase Authentication Admin key (updateUserProfile, deleteOwnAccount). The migration runs
+      # separately with the read-only firebase-service-account.json.
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-auth-admin.json
       SYNC_HEALTH_URL: http://powersync:8080
       PORT: "8080"
     volumes:
