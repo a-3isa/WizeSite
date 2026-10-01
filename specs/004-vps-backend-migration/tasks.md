@@ -229,8 +229,8 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T109 [P] Rewrite the backend sections of `README.md` (stack, voice flow now `POST /v1/files` + `processVoiceExpense` RPC, setup via `server/` and `ops/`) and remove the Firebase Functions setup
-- [ ] T110 [P] Update `docs/SECURITY.md` for the new threat surface: VPS hardening, secrets location, signed file URLs, sync rules, backup encryption
+- [X] T109 [P] Rewrite the backend sections of `README.md` (stack, voice flow now `POST /v1/files` + `processVoiceExpense` RPC, setup via `server/` and `ops/`) and remove the Firebase Functions setup
+- [X] T110 [P] Update `docs/SECURITY.md` for the new threat surface: VPS hardening, secrets location, signed file URLs, sync rules, backup encryption
 - [ ] T111 [P] Refresh the knowledge graph to include `server/`: `graphify lib server --update`, then `graphify export obsidian`
 - [ ] T112 Final gate (constitution workflow): `flutter analyze`, `flutter test --reporter compact`, `npm --prefix server test` and the integration suites. Report any failures or skipped environment-dependent checks in `specs/004-vps-backend-migration/final-verification.md`
 

@@ -1,77 +1,69 @@
-# Buildozer (Flutter + Firebase)
+# Buildozer (Flutter + self-hosted backend)
 
-Buildozer is a mobile-first construction operations app.
+Buildozer is a mobile-first construction operations app. It works offline: every screen reads a
+local copy of the workspace's data, and changes are queued and sent to the server when online.
 
-This repository now includes a production-practical **voice expense pipeline**:
+Voice expenses:
 1. Flutter records audio.
-2. Flutter uploads audio to Firebase Storage.
-3. Flutter calls Firebase callable function `processVoiceExpense`.
-4. Cloud Function transcribes audio with OpenRouter audio input.
-5. Rule-based parser runs first.
-6. OpenRouter LLM is used only when rules are uncertain.
-7. Flutter shows review/edit confirmation.
-8. Only confirmed data is saved (via callable `createExpenseWithQuota`).
+2. Flutter uploads it to the server (`POST /v1/files`, kind `voice-expenses`).
+3. Flutter calls the `processVoiceExpense` RPC.
+4. The server transcribes the audio with OpenRouter audio input.
+5. A rule-based parser runs first; the OpenRouter LLM is used only when the rules are uncertain.
+6. Flutter shows a review/edit confirmation.
+7. Only confirmed data is saved (`createExpenseWithQuota` RPC).
 
 ## Architecture
 
-- Frontend: Flutter + Riverpod + GoRouter
-- Backend: Firebase Auth + Firestore + Storage + Cloud Functions
-- AI calls: Server-side only (Cloud Functions)
+- App: Flutter + Riverpod + GoRouter. Local replica: PowerSync (SQLite). Offline writes: Hive queue.
+- Server (`server/`): Node 22 + TypeScript + Fastify, PostgreSQL 17, PowerSync service, on one VPS
+  behind a Cloudflare Tunnel (`api.` and `sync.buildozer.dpdns.org`). RPC contract:
+  `specs/004-vps-backend-migration/contracts/`.
+- Firebase keeps only Auth (ID tokens verified by the server), App Check, Crashlytics and
+  Remote Config.
+- AI calls: server-side only.
+- Operations (`ops/`): deploy, backups (`ops/BACKUPS.md`), monitoring (`ops/MONITORING.md`),
+  restore, cutover (`ops/CUTOVER.md`).
 
 ## Security Notes
 
-See [docs/SECURITY.md](docs/SECURITY.md) for secrets vs public client configs.
+See [docs/SECURITY.md](docs/SECURITY.md).
 
-- No AI provider keys in Flutter client.
-- Secrets are read on Functions side only:
-  - `OPENROUTER_API_KEY`
-  - `OPENROUTER_MODEL`
-  - `OPENROUTER_TRANSCRIPTION_MODEL`
-- Expense writes remain quota-enforced through callable functions.
-- Voice files are scoped to user path in `storage.rules`.
+- No AI provider keys or server secrets in the Flutter app.
+- Server secrets live only in `/srv/wizesite/.env` and `/srv/wizesite/secrets/` on the VPS
+  (root-only): `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_TRANSCRIPTION_MODEL`,
+  `REVENUECAT_WEBHOOK_SECRET`, the Firebase Auth admin key, backup credentials.
+- Writes are quota-enforced on the server; every mutating RPC is idempotent.
 
-## Cloud Functions
-
-Use **Node 22** (`functions/package.json` `engines.node` and Codemagic `node: 22`).
+## Server
 
 ```bash
-cd functions
+cd server
 npm ci
 npm run lint
-npm test
+npm test                    # unit + migration tests
+docker compose -f compose.test.yml up -d --wait postgres
+DATABASE_URL=<test url> npm run migrate
+TEST_DATABASE_URL=<test url> npm run test:integration
 ```
 
-The local `packages/cloud_firestore` path override is a copy of hosted `6.6.0`
-from `scripts/patch_cloud_firestore.ps1`. Keep it until CI proves pub.dev
-`cloud_firestore` without the fork. App code does not use Pipeline APIs.
+Deploy (on the VPS): `bash /srv/wizesite/app/ops/deploy.sh --build`.
+
+`functions/` holds the old Cloud Functions until the Firebase data is decommissioned
+(tasks.md T108); the server's parity tests run against it.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits. Do not paste
 `git status` dumps as commit messages.
 
-## Storage Paths
+## File Paths
 
-- Voice notes: `voice-expenses/{userId}/{timestamp}.m4a`
-- Receipts: `receipts/{userId}/{fileName}`
+Files are stored under `/srv/wizesite/files` on the VPS and opened through short-lived signed
+links (`getAttachmentDownloadUrl`); profile photos have a permanent public link.
 
-## Firestore Save Shape (confirmed voice expense)
-
-`expenses/{expenseId}` includes:
-- `projectId`
-- `projectName`
-- `amount`
-- `currency`
-- `category`
-- `notes`
-- `inputMethod: "voice"`
-- `transcript`
-- `source` (`rules` | `llm` | `hybrid`)
-- `storagePath`
-- `createdBy`
-- `createdAt`
-- `updatedAt`
-- `isArchived`
+- Voice notes: `voice-expenses/{userId}/...`
+- Attachments: `attachments/{userId}/...`
+- Profile photos: `profile-photos/{userId}/...`
 
 ## Flutter Setup
 
@@ -81,54 +73,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits. Do not paste
 flutter pub get
 ```
 
-2. Run app:
+2. Run the app (uses `https://api.buildozer.dpdns.org` / `https://sync.buildozer.dpdns.org`
+   unless overridden):
 
 ```bash
 flutter run
+# another backend:
+flutter run --dart-define=API_BASE_URL=https://api.example.com --dart-define=SYNC_URL=https://sync.example.com
 ```
 
 3. Voice flow entry:
 - `Add Expense` screen -> microphone icon -> record -> process -> review -> confirm.
 
-## Firebase Functions Setup
+## Voice RPC
 
-1. Install functions dependencies:
-
-```bash
-cd functions
-npm install
-```
-
-2. Set Firebase secrets (recommended for production):
-
-```bash
-firebase functions:secrets:set OPENROUTER_API_KEY
-firebase functions:secrets:set OPENROUTER_MODEL
-firebase functions:secrets:set OPENROUTER_TRANSCRIPTION_MODEL
-firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET
-```
-
-Notes:
-- Voice transcription now uses OpenRouter audio input and defaults to `openai/gpt-audio-mini`.
-- You can override the transcription model with `OPENROUTER_TRANSCRIPTION_MODEL`.
-- Expense parsing still uses `OPENROUTER_MODEL` so you keep the same structured extraction model as before.
-
-3. Build and test functions:
-
-```bash
-npm run build
-npm test
-```
-
-4. Deploy:
-
-```bash
-firebase deploy --only functions,firestore:rules,storage --config firebase.deploy.json
-```
-
-## Voice Callable API
-
-### `processVoiceExpense` (callable)
+### `processVoiceExpense` (`POST /v1/rpc/processVoiceExpense`)
 
 Input:
 
@@ -178,17 +137,8 @@ Output:
 - Always return confirmation-ready payload.
 - Never auto-save without user confirmation.
 
-## Local env template
+## Tests
 
-Use `functions/.env.example` as backend reference.
-
-## Tests Added
-
-Functions tests now cover:
-- Arabic numeral conversion
-- Transcript normalization
-- Category matching
-- Project matching
-- Confidence calculation
-- Fallback decision
-- Confirmation response shape
+- App: `flutter analyze`, `flutter test --reporter compact`.
+- Server: unit, migration, integration (Postgres) and parity (against the old Cloud Functions on
+  the emulators) suites; see **Server** above.
