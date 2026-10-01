@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly on Sunday 05:00 UTC: restic-forget
+
+[Timer]
+OnCalendar=Sun *-*-* 05:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

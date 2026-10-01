@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily at 04:30 UTC: restic-check
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite restic repository check
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/wizesite/app/ops/restic/restic.sh check
+Nice=10
+IOSchedulingClass=idle

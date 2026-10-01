@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite files backup to the off-site restic repository (tasks.md T093)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/wizesite/app/ops/restic/restic.sh backup
+Nice=10
+IOSchedulingClass=idle

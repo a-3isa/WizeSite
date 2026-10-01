@@ -1,0 +1,7 @@
+[Unit]
+Description=WizeSite heartbeat: disk, backup lag, API error rate, reconciler (tasks.md T095)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/wizesite/app/ops/heartbeat.sh

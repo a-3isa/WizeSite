@@ -12,6 +12,7 @@ import { registerRpcRoutes, sendRpcError } from "./rpc/router";
 import type { RpcRegistry } from "./rpc/types";
 import type { AuthAdmin } from "./rpc/user";
 import type { VoiceDeps } from "./rpc/voice";
+import { RequestStats, registerStats } from "./stats";
 import { registerRevenueCatWebhook } from "./webhooks/revenuecat";
 
 export interface AppDeps {
@@ -31,6 +32,8 @@ export interface AppDeps {
   revenueCatWebhookSecret?: string;
   /** PowerSync base URL probed by /healthz; omitted in tests. */
   syncHealthUrl?: string;
+  /** Request counts for GET /internal/stats (heartbeat); a fresh one by default. */
+  stats?: RequestStats;
 }
 
 const BODY_LIMIT_BYTES = 1024 * 1024;
@@ -57,6 +60,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     request.log.error({ err: error }, "unhandled RPC error");
     return sendRpcError(reply, new RpcError("internal", "Something went wrong. Please try again."));
   });
+
+  registerStats(app, deps.stats ?? new RequestStats());
 
   app.get("/healthz", async (_request, reply) => {
     let db = "ok";

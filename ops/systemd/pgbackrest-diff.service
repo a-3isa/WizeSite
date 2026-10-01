@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite pgBackRest differential backup (tasks.md T092)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -u postgres wizesite-postgres-1 pgbackrest --stanza=wizesite --type=diff backup
+Nice=10
+IOSchedulingClass=idle

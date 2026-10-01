@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite pgBackRest full backup (tasks.md T092)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -u postgres wizesite-postgres-1 pgbackrest --stanza=wizesite --type=full backup
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite differential database backup every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 09,15,21:00:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

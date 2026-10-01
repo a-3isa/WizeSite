@@ -1,0 +1,10 @@
+[Unit]
+Description=WizeSite restic retention: keep 30 days and prune
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/wizesite/app/ops/restic/restic.sh forget
+Nice=10
+IOSchedulingClass=idle

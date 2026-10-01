@@ -45,12 +45,25 @@ services:
       traefik.http.services.wizesite-api.loadbalancer.server.port: "8080"
 
   postgres:
-    image: postgres:17
+    # postgres:17 plus pgBackRest (docker/postgres.Dockerfile, tasks.md T091).
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: wizesite-postgres:17
     restart: unless-stopped
     command:
       - postgres
       - -c
       - wal_level=logical
+      # WAL archiving to the encrypted off-site repository (ops/BACKUPS.md). Off until the
+      # PGBACKREST_* settings exist: with archiving on and no reachable repository, unarchived
+      # WAL would pile up on the disk. Changing it restarts postgres.
+      - -c
+      - archive_mode=${PG_ARCHIVE_MODE:-off}
+      - -c
+      - archive_timeout=60
+      - -c
+      - archive_command=pgbackrest --stanza=wizesite archive-push %p
       - -c
       - max_replication_slots=10
       - -c
@@ -67,9 +80,18 @@ services:
       POSTGRES_USER: wizesite
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /srv/wizesite/.env}
       POSTGRES_DB: wizesite
+      # pgBackRest repository (B2/R2) and its encryption passphrase, from /srv/wizesite/.env.
+      PGBACKREST_REPO1_S3_BUCKET: ${PGBACKREST_REPO1_S3_BUCKET:-}
+      PGBACKREST_REPO1_S3_ENDPOINT: ${PGBACKREST_REPO1_S3_ENDPOINT:-}
+      PGBACKREST_REPO1_S3_REGION: ${PGBACKREST_REPO1_S3_REGION:-}
+      PGBACKREST_REPO1_S3_KEY: ${PGBACKREST_REPO1_S3_KEY:-}
+      PGBACKREST_REPO1_S3_KEY_SECRET: ${PGBACKREST_REPO1_S3_KEY_SECRET:-}
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBACKREST_REPO1_CIPHER_PASS:-}
     volumes:
       - /srv/wizesite/pgdata:/var/lib/postgresql/data
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-powersync-storage.sql:ro
+      - ../ops/pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - /srv/wizesite/pgbackrest:/var/lib/pgbackrest
     # Never published on a host port: reachable only on the internal compose network.
     networks: [internal]
     healthcheck:
