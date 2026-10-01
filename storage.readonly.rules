@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Cutover (tasks.md T100, ops/CUTOVER.md): Storage becomes read-only for the rollback window.
+// Signed-in users can still download; no uploads, overwrites or deletes from clients. The
+// rollback tool copies files back with the Admin SDK, which bypasses rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

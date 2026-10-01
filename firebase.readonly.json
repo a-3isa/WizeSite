@@ -1,0 +1,9 @@
+{
+  "firestore": {
+    "rules": "firestore.readonly.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.readonly.rules"
+  }
+}
