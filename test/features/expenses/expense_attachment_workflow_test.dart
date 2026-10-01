@@ -4,10 +4,11 @@ import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -35,7 +36,8 @@ void main() {
   });
 
   test('createExpense includes attachment metadata in payload', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     final mutationService = _MockWorkspaceMutationService();
     when(
       () => mutationService.createManualExpense(
@@ -64,10 +66,10 @@ void main() {
       ),
     ).thenAnswer((_) async => const MutationResult(queued: true));
 
-    final repository = FirebaseExpenseRepository(
-      firestore,
+    final repository = LocalExpenseRepository(
       mutationService,
       queue,
+      Future.value(firestore.local.db),
     );
 
     final attachments = [
@@ -132,7 +134,8 @@ void main() {
   test(
     'updateExpense preserves existing attachments when attachments are null',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('expenses').doc('expense_1').set({
         'workspaceId': 'workspace_1',
         'projectId': 'project_1',
@@ -182,10 +185,10 @@ void main() {
         ),
       ).thenAnswer((_) async => const MutationResult(queued: true));
 
-      final repository = FirebaseExpenseRepository(
-        firestore,
+      final repository = LocalExpenseRepository(
         mutationService,
         queue,
+        Future.value(firestore.local.db),
       );
 
       await repository.updateExpense(
@@ -236,7 +239,8 @@ void main() {
   test(
     'pending offline expense exposes local attachment retry metadata',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await queue.enqueue(
         type: OfflineActionTypes.createExpense,
         payload: {
@@ -259,10 +263,10 @@ void main() {
         },
       );
 
-      final repository = FirebaseExpenseRepository(
-        firestore,
+      final repository = LocalExpenseRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchExpensesPage(

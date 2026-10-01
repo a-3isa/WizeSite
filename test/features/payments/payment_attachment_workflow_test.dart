@@ -4,10 +4,11 @@ import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -35,7 +36,8 @@ void main() {
   });
 
   test('createPayment includes attachment metadata in payload', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     final mutationService = _MockWorkspaceMutationService();
     when(
       () => mutationService.createPayment(
@@ -55,10 +57,10 @@ void main() {
       ),
     ).thenAnswer((_) async => const MutationResult(queued: true));
 
-    final repository = FirebasePaymentRepository(
-      firestore,
+    final repository = LocalPaymentRepository(
       mutationService,
       queue,
+      Future.value(firestore.local.db),
     );
 
     final attachments = [
@@ -114,7 +116,8 @@ void main() {
   test(
     'updatePayment preserves existing attachments when attachments are null',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('payments').doc('payment_1').set({
         'workspaceId': 'workspace_1',
         'projectId': 'project_1',
@@ -157,10 +160,10 @@ void main() {
         ),
       ).thenAnswer((_) async => const MutationResult(queued: true));
 
-      final repository = FirebasePaymentRepository(
-        firestore,
+      final repository = LocalPaymentRepository(
         mutationService,
         queue,
+        Future.value(firestore.local.db),
       );
 
       await repository.updatePayment(
@@ -202,7 +205,8 @@ void main() {
   test(
     'pending offline payment exposes local attachment retry metadata',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await queue.enqueue(
         type: OfflineActionTypes.createPayment,
         payload: {
@@ -225,10 +229,10 @@ void main() {
         },
       );
 
-      final repository = FirebasePaymentRepository(
-        firestore,
+      final repository = LocalPaymentRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchPaymentsPage(

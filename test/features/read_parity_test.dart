@@ -1,11 +1,9 @@
-/// Read parity (spec 004, T033): the old Firestore repositories and the new
-/// local-replica repositories must turn the same data into the same models.
+/// Read parity (spec 004, T033): the local-replica repositories must turn the
+/// fixture into the same models the Firestore repositories did.
 ///
-/// One fixture is written to `fake_cloud_firestore` and, converted like the
-/// migrator does, to the local replica. The Firestore side's model output is
-/// the golden (`test/fixtures/read_parity/*.json`, written when missing or
-/// when `UPDATE_READ_PARITY_GOLDENS=1`); both sides must match it. Once
-/// Firestore is removed (T084) the goldens keep guarding the local side.
+/// The fixture is converted to local rows the way the migrator does. The
+/// goldens (`test/fixtures/read_parity/*.json`) were recorded from the Firestore
+/// repositories before they were removed (T084/T085).
 library;
 
 import 'dart:async';
@@ -33,8 +31,6 @@ import 'package:buildtrack_app/features/workers/data/worker_accounting_repositor
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
@@ -48,8 +44,8 @@ class _MockWorkspaceMutationService extends Mock
 
 // ---------------------------------------------------------------- fixture
 
-Timestamp _ts(int month, int day, [int hour = 8]) =>
-    Timestamp.fromDate(DateTime.utc(2026, month, day, hour));
+DateTime _ts(int month, int day, [int hour = 8]) =>
+    DateTime.utc(2026, month, day, hour);
 
 final _attachment = {
   'id': 'att1',
@@ -470,34 +466,8 @@ Future<T> _settled<T>(Stream<T> stream) async {
   return last as T;
 }
 
-final _update = Platform.environment['UPDATE_READ_PARITY_GOLDENS'] == '1';
-
-/// Firestore output becomes the golden (when missing or updating); both
-/// outputs must equal it.
-void _expectParity(String name, Object? firestore, Object? local) {
-  final file = File('test/fixtures/read_parity/$name.json');
-  final firestoreJson = goldenJson(firestore);
-  if (_update || !file.existsSync()) {
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(
-      '${const JsonEncoder.withIndent('  ').convert(firestoreJson)}\n',
-    );
-  }
-  final golden = jsonDecode(file.readAsStringSync());
-  expect(
-    jsonDecode(jsonEncode(firestoreJson)),
-    golden,
-    reason: '$name: Firestore repository drifted from its golden',
-  );
-  expect(
-    jsonDecode(jsonEncode(goldenJson(local))),
-    golden,
-    reason: '$name: local repository differs from the Firestore golden',
-  );
-}
-
-/// After the Firestore repositories are removed (T084/T085) the committed
-/// goldens are the reference for the local repositories.
+/// The committed goldens were recorded from the Firestore repositories before
+/// they were removed (T084/T085); the local repositories must still match.
 void _expectGolden(String name, Object? local) {
   final file = File('test/fixtures/read_parity/$name.json');
   final golden = jsonDecode(file.readAsStringSync());
@@ -512,7 +482,6 @@ void main() {
   late Directory tempDir;
   late Box<String> box;
   late OfflineActionQueue queue;
-  late FakeFirebaseFirestore firestore;
   late LocalTestDb local;
   late Future<PowerSyncDatabase> db;
   late _MockWorkspaceMutationService mutations;
@@ -523,12 +492,10 @@ void main() {
     box = await Hive.openBox<String>('offline_actions_read_parity');
     queue = OfflineActionQueue(box);
     mutations = _MockWorkspaceMutationService();
-    firestore = FakeFirebaseFirestore();
     local = await LocalTestDb.open();
     db = Future.value(local.db);
     final rowsByTable = <String, List<Map<String, Object?>>>{};
     for (final doc in _fixture) {
-      await firestore.collection(doc.collection).doc(doc.id).set(doc.data);
       rowsByTable
           .putIfAbsent(localTableFor(doc.collection), () => [])
           .add(firestoreDocToLocalRow(doc));
@@ -546,43 +513,27 @@ void main() {
   });
 
   test('projects (with maintained metrics)', () async {
-    final old = FirebaseProjectRepository(firestore, mutations, queue);
-    final neu = LocalProjectRepository(firestore, mutations, queue, db);
-    _expectParity(
+    final neu = LocalProjectRepository(mutations, queue, db);
+    _expectGolden(
       'projects',
-      (await _settled(old.watchProjects('ws_1'))).map(_project).toList(),
       (await _settled(neu.watchProjects('ws_1'))).map(_project).toList(),
     );
-    _expectParity(
-      'project_p1',
-      _project((await old.getProject('p1'))!),
-      _project((await neu.getProject('p1'))!),
-    );
+    _expectGolden('project_p1', _project((await neu.getProject('p1'))!));
   });
 
   test('expenses', () async {
-    final old = FirebaseExpenseRepository(firestore, mutations, queue);
-    final neu = LocalExpenseRepository(firestore, mutations, queue, db);
-    _expectParity(
+    final neu = LocalExpenseRepository(mutations, queue, db);
+    _expectGolden(
       'expenses_p1',
-      (await _settled(old.watchExpenses('ws_1', 'p1'))).map(_expense).toList(),
       (await _settled(neu.watchExpenses('ws_1', 'p1'))).map(_expense).toList(),
     );
-    _expectParity(
-      'expense_e1',
-      _expense((await old.getExpense('e1'))!),
-      _expense((await neu.getExpense('e1'))!),
-    );
+    _expectGolden('expense_e1', _expense((await neu.getExpense('e1'))!));
   });
 
   test('payments', () async {
-    final old = FirebasePaymentRepository(firestore, mutations, queue);
-    final neu = LocalPaymentRepository(firestore, mutations, queue, db);
-    _expectParity(
+    final neu = LocalPaymentRepository(mutations, queue, db);
+    _expectGolden(
       'payments_p1',
-      (await _settled(
-        old.watchPayments('ws_1', projectId: 'p1'),
-      )).map(_payment).toList(),
       (await _settled(
         neu.watchPayments('ws_1', projectId: 'p1'),
       )).map(_payment).toList(),
@@ -590,29 +541,14 @@ void main() {
   });
 
   test('workers and worker entries', () async {
-    final oldWorkers = FirebaseWorkerRepository(firestore, mutations, queue);
-    final newWorkers = LocalWorkerRepository(firestore, mutations, queue, db);
-    _expectParity(
+    final newWorkers = LocalWorkerRepository(mutations, queue, db);
+    _expectGolden(
       'workers',
-      (await _settled(oldWorkers.watchWorkers('ws_1'))).map(_worker).toList(),
       (await _settled(newWorkers.watchWorkers('ws_1'))).map(_worker).toList(),
     );
-    final oldEntries = FirebaseWorkerEntryRepository(
-      firestore,
-      mutations,
-      queue,
-    );
-    final newEntries = LocalWorkerEntryRepository(
-      firestore,
-      mutations,
-      queue,
-      db,
-    );
-    _expectParity(
+    final newEntries = LocalWorkerEntryRepository(mutations, queue, db);
+    _expectGolden(
       'worker_entries_w1',
-      (await _settled(
-        oldEntries.watchEntriesByWorker(workspaceId: 'ws_1', workerId: 'w1'),
-      )).map(_entry).toList(),
       (await _settled(
         newEntries.watchEntriesByWorker(workspaceId: 'ws_1', workerId: 'w1'),
       )).map(_entry).toList(),

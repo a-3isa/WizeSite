@@ -1,20 +1,15 @@
-import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
-
-part 'local_expense_repository.dart';
 
 abstract interface class ExpenseRepository {
   Stream<List<Expense>> watchExpenses(String workspaceId, String projectId);
@@ -76,63 +71,36 @@ abstract interface class ExpenseRepository {
   Future<MutationResult> archiveExpense(String expenseId);
 }
 
-class FirebaseExpenseRepository implements ExpenseRepository {
-  FirebaseExpenseRepository(
-    this._firestore,
-    this._mutationService,
-    this._queue,
-  );
+// Expenses read from the local PowerSync replica (spec 004, T043); pending
+/// queue actions are overlaid on the rows. Writes are queued RPCs.
+class LocalExpenseRepository implements ExpenseRepository {
+  LocalExpenseRepository(this._mutationService, this._queue, this._db);
 
-  final FirebaseFirestore _firestore;
   final WorkspaceMutationService _mutationService;
   final OfflineActionQueue _queue;
+  final Future<PowerSyncDatabase> _db;
+
+  Expense _fromRow(LocalRow row) =>
+      Expense.fromMap('${row['id']}', localRowToMap('expenses', row));
 
   @override
   Stream<List<Expense>> watchExpenses(String workspaceId, String projectId) {
-    final baseStream = _firestore
-        .collection('expenses')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('projectId', isEqualTo: projectId)
-        .where('isArchived', isEqualTo: false)
-        .orderBy('date', descending: true)
-        .limit(24)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => Expense.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-    final queueStream = _queue.watch();
-    return Stream.multi((controller) {
-      List<Expense> current = const [];
-      List<OfflineAction> actions = const [];
-
-      void emit() {
-        controller.add(
-          _applyPendingExpenses(
-            baseItems: current,
-            actions: actions,
-            workspaceId: workspaceId,
-            projectId: projectId,
-            includePendingCreates: true,
-          ),
-        );
-      }
-
-      final baseSub = baseStream.listen((items) {
-        current = items;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((value) {
-        actions = value;
-        emit();
-      }, onError: controller.addError);
-
-      controller.onCancel = () async {
-        await baseSub.cancel();
-        await queueSub.cancel();
-      };
-    });
+    return combineWithQueue(
+      rows: watchLocalRows(
+        _db,
+        'SELECT * FROM expenses WHERE workspace_id = ? AND project_id = ? '
+        'AND is_archived = 0 ORDER BY date DESC, id DESC LIMIT 24',
+        [workspaceId, projectId],
+      ),
+      queue: _queue,
+      combine: (rows, actions) => _applyPendingExpenses(
+        baseItems: [for (final row in rows) _fromRow(row)],
+        actions: actions,
+        workspaceId: workspaceId,
+        projectId: projectId,
+        includePendingCreates: true,
+      ),
+    );
   }
 
   @override
@@ -151,51 +119,54 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    var query = _firestore
-        .collection('expenses')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('projectId', isEqualTo: projectId)
-        .where('isArchived', isEqualTo: false);
-
+    final where = <String>[
+      'workspace_id = ?',
+      'project_id = ?',
+      'is_archived = 0',
+    ];
+    final args = <Object?>[workspaceId, projectId];
     if (entityId != null && entityId.isNotEmpty) {
-      query = query.where('entityId', isEqualTo: entityId);
+      where.add('entity_id = ?');
+      args.add(entityId);
     } else if (entityName != null && entityName.trim().isNotEmpty) {
-      query = query.where('supplierName', isEqualTo: entityName.trim());
+      where.add('supplier_name = ?');
+      args.add(entityName.trim());
     }
-    if (category != null && category.isNotEmpty) {
-      query = query.where('category', isEqualTo: category);
+    for (final (column, value) in [
+      ('category', category),
+      ('entity_type', entityType),
+      ('payment_method', paymentMethod),
+      ('payment_status', paymentStatus),
+    ]) {
+      if (value != null && value.isNotEmpty) {
+        where.add('$column = ?');
+        args.add(value);
+      }
     }
-    if (entityType != null && entityType.isNotEmpty) {
-      query = query.where('entityType', isEqualTo: entityType);
-    }
-    if (paymentMethod != null && paymentMethod.isNotEmpty) {
-      query = query.where('paymentMethod', isEqualTo: paymentMethod);
-    }
-    if (paymentStatus != null && paymentStatus.isNotEmpty) {
-      query = query.where('paymentStatus', isEqualTo: paymentStatus);
-    }
+    // julianday() parses both the replica's timestamp text and ISO-8601.
     if (startDate != null) {
-      query = query.where('date', isGreaterThanOrEqualTo: startDate);
+      where.add('julianday(date) >= julianday(?)');
+      args.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      query = query.where('date', isLessThanOrEqualTo: endDate);
+      where.add('julianday(date) <= julianday(?)');
+      args.add(endDate.toUtc().toIso8601String());
     }
-
-    query = query.orderBy('date', descending: true).limit(pageSize);
-
-    if (cursor != null) {
-      query = query.startAfterDocument(firestoreCursor!);
+    final keyset = cursor as LocalPageCursor?;
+    if (keyset != null) {
+      where.add('(date < ? OR (date = ? AND id < ?))');
+      args.addAll([keyset.sortValue, keyset.sortValue, keyset.id]);
     }
-
-    final snap = await query.get();
-    final items = snap.docs
-        .map((doc) => Expense.fromMap(doc.id, doc.data()))
-        .toList();
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM expenses WHERE ${where.join(' AND ')} '
+      'ORDER BY date DESC, id DESC LIMIT ?',
+      [...args, pageSize],
+    );
     final actions = await _queue.list();
-    final mergedItems =
+    final items =
         _applyPendingExpenses(
-              baseItems: items,
+              baseItems: [for (final row in rows) _fromRow(row)],
               actions: actions,
               workspaceId: workspaceId,
               projectId: projectId,
@@ -216,21 +187,24 @@ class FirebaseExpenseRepository implements ExpenseRepository {
               ),
             )
             .toList(growable: false);
-
+    final last = rows.isEmpty ? null : rows.last;
     return FirestorePage<Expense>(
-      items: mergedItems,
-      hasMore: snap.docs.length == pageSize,
-      nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
+      items: items,
+      hasMore: rows.length == pageSize,
+      nextCursor: last == null
+          ? cursor
+          : LocalPageCursor(sortValue: last['date'], id: '${last['id']}'),
     );
   }
 
   @override
   Future<Expense?> getExpense(String expenseId) async {
-    final snap = await _firestore.collection('expenses').doc(expenseId).get();
-    if (!snap.exists) {
-      return null;
-    }
-    return Expense.fromMap(snap.id, snap.data() ?? const {});
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM expenses WHERE id = ?',
+      [expenseId],
+    );
+    return rows.isEmpty ? null : _fromRow(rows.first);
   }
 
   @override
@@ -575,17 +549,9 @@ class FirebaseExpenseRepository implements ExpenseRepository {
 }
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-    return LocalExpenseRepository(
-      ref.watch(firestoreProvider),
-      ref.watch(workspaceMutationServiceProvider),
-      ref.watch(offlineActionQueueProvider),
-      ref.watch(localDatabaseProvider),
-    );
-  }
-  return FirebaseExpenseRepository(
-    ref.watch(firestoreProvider),
+  return LocalExpenseRepository(
     ref.watch(workspaceMutationServiceProvider),
     ref.watch(offlineActionQueueProvider),
+    ref.watch(localDatabaseProvider),
   );
 });

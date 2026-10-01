@@ -4,12 +4,13 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../helpers/local_db.dart';
+
+import '../../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -28,15 +29,14 @@ void main() {
     box = await Hive.openBox<String>('offline_actions_local_workers');
     queue = OfflineActionQueue(box);
     local = await LocalTestDb.open();
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     workers = LocalWorkerRepository(
-      firestore,
       _MockWorkspaceMutationService(),
       queue,
       Future.value(local.db),
     );
     entries = LocalWorkerEntryRepository(
-      firestore,
       _MockWorkspaceMutationService(),
       queue,
       Future.value(local.db),

@@ -4,10 +4,11 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -104,8 +105,8 @@ void main() {
     late Directory tempDir;
     late Box<String> box;
     late OfflineActionQueue queue;
-    late FakeFirebaseFirestore firestore;
-    late FirebaseWorkerRepository repo;
+    late LocalFixtureStore firestore;
+    late LocalWorkerRepository repo;
 
     setUpAll(() async {
       tempDir = await Directory.systemTemp.createTemp('worker_status_test_');
@@ -124,11 +125,11 @@ void main() {
         'wq_${DateTime.now().microsecondsSinceEpoch}',
       );
       queue = OfflineActionQueue(box);
-      firestore = FakeFirebaseFirestore();
-      repo = FirebaseWorkerRepository(
-        firestore,
+      firestore = await LocalFixtureStore.open();
+      repo = LocalWorkerRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       Future<void> seed(String id, WorkerStatus status, bool archived) {
@@ -149,6 +150,7 @@ void main() {
 
     tearDown(() async {
       await box.close();
+      await firestore.dispose();
     });
 
     test(
@@ -203,10 +205,12 @@ void main() {
           status: any(named: 'status'),
         ),
       ).thenAnswer((_) async => const MutationResult());
-      final repo = FirebaseWorkerRepository(
-        FakeFirebaseFirestore(),
+      final store = await LocalFixtureStore.open();
+      addTearDown(store.dispose);
+      final repo = LocalWorkerRepository(
         mutationService,
         OfflineActionQueue(await Hive.openBox<String>('status_create')),
+        Future.value(store.local.db),
       );
 
       await repo.createWorker(
@@ -249,16 +253,17 @@ void main() {
           status: any(named: 'status'),
         ),
       ).thenAnswer((_) async => const MutationResult());
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('workers').doc('w1').set({
         'workspaceId': 'ws',
         'name': 'Sam',
         'status': 'active',
       });
-      final repo = FirebaseWorkerRepository(
-        firestore,
+      final repo = LocalWorkerRepository(
         mutationService,
         OfflineActionQueue(await Hive.openBox<String>('status_update')),
+        Future.value(firestore.local.db),
       );
 
       await repo.updateWorker(

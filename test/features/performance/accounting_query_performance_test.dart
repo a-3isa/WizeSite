@@ -12,10 +12,12 @@ void main() {
         'lib/features/payments/data/payment_repository.dart',
       ).readAsStringSync();
 
-      expect(expenseRepository, contains(".limit(pageSize)"));
-      expect(paymentRepository, contains(".limit(pageSize)"));
-      expect(expenseRepository, contains("startAfterDocument"));
-      expect(paymentRepository, contains("startAfterDocument"));
+      // Local replica reads (spec 004): keyset pages of `pageSize` rows.
+      for (final repository in [expenseRepository, paymentRepository]) {
+        expect(repository, contains('ORDER BY date DESC, id DESC LIMIT ?'));
+        expect(repository, contains('[...args, pageSize]'));
+        expect(repository, contains('cursor as LocalPageCursor?'));
+      }
     });
 
     test('weekly dashboard reads are date bounded on both sides', () {
@@ -57,21 +59,16 @@ void main() {
         'lib/features/projects/data/project_repository.dart',
       ).readAsStringSync();
 
-      expect(projectRepository, contains("collection('project_metrics')"));
+      // Local replica reads (spec 004): financial sorts rank on the
+      // maintained metrics row, keyset-paged, in SQL.
+      expect(projectRepository, contains('LEFT JOIN project_metrics m'));
       expect(
         projectRepository,
-        contains(".orderBy(metricField, descending: true)"),
+        contains(r"json_extract(m.payload, '\$.totalExpenses')"),
       );
-      expect(projectRepository, contains(".orderBy('projectName')"));
-      expect(projectRepository, contains(".orderBy('projectId')"));
-      expect(projectRepository, contains('_isMetricDocAfterCursor'));
-      expect(
-        projectRepository,
-        contains('query.limit(request.pageSize + (cursor == null ? 0 : 1))'),
-      );
+      expect(projectRepository, contains('cursor as LocalPageCursor?'));
+      expect(projectRepository, contains("'LIMIT ?'"));
       expect(projectRepository, contains('watchProjects(String workspaceId)'));
-      // Equality + orderBy + Firestore .limit hangs FakeFirestore, so the
-      // warm stream caps in memory after ranking by createdAt.
       expect(projectRepository, contains('maxResults: 50'));
     });
 

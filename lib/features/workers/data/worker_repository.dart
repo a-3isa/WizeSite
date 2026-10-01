@@ -1,20 +1,15 @@
-import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
-
-part 'local_worker_repository.dart';
 
 abstract interface class WorkerRepository {
   /// Watches non-archived workers. When [statuses] is provided, only workers
@@ -91,58 +86,47 @@ abstract interface class WorkerEntryRepository {
   Future<MutationResult> archiveEntry(String entryId);
 }
 
-class FirebaseWorkerRepository implements WorkerRepository {
-  FirebaseWorkerRepository(this._firestore, this._mutationService, this._queue);
+/// Workers read from the local PowerSync replica (spec 004, T045); pending
+/// queue actions are overlaid on the rows. Writes are queued RPCs.
+class LocalWorkerRepository implements WorkerRepository {
+  LocalWorkerRepository(this._mutationService, this._queue, this._db);
 
-  final FirebaseFirestore _firestore;
   final WorkspaceMutationService _mutationService;
   final OfflineActionQueue _queue;
+  final Future<PowerSyncDatabase> _db;
+
+  WorkerProfile _fromRow(LocalRow row) =>
+      WorkerProfile.fromMap('${row['id']}', localRowToMap('workers', row));
 
   @override
   Stream<List<WorkerProfile>> watchWorkers(
     String workspaceId, {
     Set<WorkerStatus>? statuses,
   }) {
-    final baseStream = _firestore
-        .collection('workers')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false)
-        .limit(50)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => WorkerProfile.fromMap(doc.id, doc.data()))
-              .toList(),
+    // Firestore applied limit(50) without an orderBy, which Firestore serves
+    // in document-id order; the replica does the same so the list users see
+    // does not reorder at cutover (read parity, T033).
+    return combineWithQueue(
+      rows: watchLocalRows(
+        _db,
+        'SELECT * FROM workers WHERE workspace_id = ? AND is_archived = 0 '
+        'ORDER BY id ASC LIMIT 50',
+        [workspaceId],
+      ),
+      queue: _queue,
+      combine: (rows, actions) {
+        final workers = _applyPendingWorkers(
+          [for (final row in rows) _fromRow(row)],
+          actions,
+          workspaceId,
         );
-    final queueStream = _queue.watch();
-    return Stream.multi((controller) {
-      List<WorkerProfile> current = const [];
-      List<OfflineAction> actions = const [];
-
-      void emit() {
-        final workers = _applyPendingWorkers(current, actions, workspaceId);
-        controller.add(
-          statuses == null
-              ? workers
-              : workers
-                    .where((worker) => statuses.contains(worker.status))
-                    .toList(growable: false),
-        );
-      }
-
-      final baseSub = baseStream.listen((items) {
-        current = items;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((value) {
-        actions = value;
-        emit();
-      }, onError: controller.addError);
-      controller.onCancel = () async {
-        await baseSub.cancel();
-        await queueSub.cancel();
-      };
-    });
+        return statuses == null
+            ? workers
+            : workers
+                  .where((worker) => statuses.contains(worker.status))
+                  .toList(growable: false);
+      },
+    );
   }
 
   @override
@@ -152,38 +136,37 @@ class FirebaseWorkerRepository implements WorkerRepository {
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    var query = _firestore
-        .collection('workers')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
-        .limit(pageSize);
-
-    if (cursor != null) {
-      query = query.startAfterDocument(firestoreCursor!);
-    }
-
-    final snap = await query.get();
-    final items = snap.docs
-        .map((doc) => WorkerProfile.fromMap(doc.id, doc.data()))
-        .where((worker) => statuses == null || statuses.contains(worker.status))
-        .toList();
-
+    final keyset = cursor as LocalPageCursor?;
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM workers WHERE workspace_id = ? AND is_archived = 0'
+      '${keyset == null ? '' : ' AND (created_at < ? OR (created_at = ? AND id < ?))'} '
+      'ORDER BY created_at DESC, id DESC LIMIT ?',
+      [
+        workspaceId,
+        if (keyset != null) ...[keyset.sortValue, keyset.sortValue, keyset.id],
+        pageSize,
+      ],
+    );
+    final items = [
+      for (final row in rows) _fromRow(row),
+    ].where((w) => statuses == null || statuses.contains(w.status)).toList();
+    final last = rows.isEmpty ? null : rows.last;
     return FirestorePage<WorkerProfile>(
       items: items,
-      hasMore: snap.docs.length == pageSize,
-      nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
+      hasMore: rows.length == pageSize,
+      nextCursor: last == null
+          ? cursor
+          : LocalPageCursor(sortValue: last['created_at'], id: '${last['id']}'),
     );
   }
 
   @override
   Future<WorkerProfile?> getWorker(String workerId) async {
-    final snap = await _firestore.collection('workers').doc(workerId).get();
-    if (!snap.exists) {
-      return null;
-    }
-    return WorkerProfile.fromMap(snap.id, snap.data() ?? const {});
+    final rows = await getLocalRows(_db, 'SELECT * FROM workers WHERE id = ?', [
+      workerId,
+    ]);
+    return rows.isEmpty ? null : _fromRow(rows.first);
   }
 
   @override
@@ -343,75 +326,50 @@ class FirebaseWorkerRepository implements WorkerRepository {
   }
 }
 
-class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
-  FirebaseWorkerEntryRepository(
-    this._firestore,
-    this._mutationService,
-    this._queue,
-  );
+/// Worker entries read from the local PowerSync replica (spec 004, T045);
+/// pending queue actions are overlaid on the rows. Writes are queued RPCs.
+class LocalWorkerEntryRepository implements WorkerEntryRepository {
+  LocalWorkerEntryRepository(this._mutationService, this._queue, this._db);
 
-  final FirebaseFirestore _firestore;
   final WorkspaceMutationService _mutationService;
   final OfflineActionQueue _queue;
+  final Future<PowerSyncDatabase> _db;
+
+  WorkerEntryRecord _fromRow(LocalRow row) => WorkerEntryRecord.fromMap(
+    '${row['id']}',
+    localRowToMap('worker_entries', row),
+  );
 
   @override
   Stream<List<WorkerEntryRecord>> watchEntriesByWorker({
     required String workspaceId,
     required String workerId,
   }) {
-    final baseStream = _firestore
-        .collection('worker_entries')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('workerId', isEqualTo: workerId)
-        .where('isArchived', isEqualTo: false)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => WorkerEntryRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-    final queueStream = _queue.watch();
-    return Stream.multi((controller) {
-      List<WorkerEntryRecord> current = const [];
-      List<OfflineAction> actions = const [];
-
-      void emit() {
-        controller.add(
-          _applyPendingEntries(
-            baseItems: current,
-            actions: actions,
-            workspaceId: workspaceId,
-            workerId: workerId,
-          ),
-        );
-      }
-
-      final baseSub = baseStream.listen((items) {
-        current = items;
-        emit();
-      }, onError: controller.addError);
-      final queueSub = queueStream.listen((value) {
-        actions = value;
-        emit();
-      }, onError: controller.addError);
-      controller.onCancel = () async {
-        await baseSub.cancel();
-        await queueSub.cancel();
-      };
-    });
+    return combineWithQueue(
+      rows: watchLocalRows(
+        _db,
+        'SELECT * FROM worker_entries WHERE workspace_id = ? AND worker_id = ? '
+        'AND is_archived = 0 ORDER BY date DESC, id DESC',
+        [workspaceId, workerId],
+      ),
+      queue: _queue,
+      combine: (rows, actions) => _applyPendingEntries(
+        baseItems: [for (final row in rows) _fromRow(row)],
+        actions: actions,
+        workspaceId: workspaceId,
+        workerId: workerId,
+      ),
+    );
   }
 
   @override
   Future<WorkerEntryRecord?> getEntry(String entryId) async {
-    final snap = await _firestore
-        .collection('worker_entries')
-        .doc(entryId)
-        .get();
-    if (!snap.exists) {
-      return null;
-    }
-    return WorkerEntryRecord.fromMap(snap.id, snap.data() ?? const {});
+    final rows = await getLocalRows(
+      _db,
+      'SELECT * FROM worker_entries WHERE id = ?',
+      [entryId],
+    );
+    return rows.isEmpty ? null : _fromRow(rows.first);
   }
 
   @override
@@ -608,33 +566,17 @@ class FirebaseWorkerEntryRepository implements WorkerEntryRepository {
 }
 
 final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
-  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-    return LocalWorkerRepository(
-      ref.watch(firestoreProvider),
-      ref.watch(workspaceMutationServiceProvider),
-      ref.watch(offlineActionQueueProvider),
-      ref.watch(localDatabaseProvider),
-    );
-  }
-  return FirebaseWorkerRepository(
-    ref.watch(firestoreProvider),
+  return LocalWorkerRepository(
     ref.watch(workspaceMutationServiceProvider),
     ref.watch(offlineActionQueueProvider),
+    ref.watch(localDatabaseProvider),
   );
 });
 
 final workerEntryRepositoryProvider = Provider<WorkerEntryRepository>((ref) {
-  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-    return LocalWorkerEntryRepository(
-      ref.watch(firestoreProvider),
-      ref.watch(workspaceMutationServiceProvider),
-      ref.watch(offlineActionQueueProvider),
-      ref.watch(localDatabaseProvider),
-    );
-  }
-  return FirebaseWorkerEntryRepository(
-    ref.watch(firestoreProvider),
+  return LocalWorkerEntryRepository(
     ref.watch(workspaceMutationServiceProvider),
     ref.watch(offlineActionQueueProvider),
+    ref.watch(localDatabaseProvider),
   );
 });

@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/pagination/local_page.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -11,11 +9,8 @@ import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/features/projects/data/project_metrics_merger.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
-
-part 'local_project_repository.dart';
 
 enum ProjectBrowseSort {
   recent,
@@ -113,38 +108,106 @@ abstract interface class ProjectRepository {
   Future<bool> hasAnyPayment(String projectId);
 }
 
-class FirebaseProjectRepository
+/// Projects read from the local PowerSync replica (spec 004, T042), with
+/// the metrics row merged in and pending queue actions overlaid. Writes go
+/// through the RPC/offline-queue path.
+class LocalProjectRepository
     implements ProjectRepository, ProjectBrowseRepository {
-  FirebaseProjectRepository(
-    this._firestore,
-    this._mutationService,
-    this._queue,
-  );
+  LocalProjectRepository(this._mutationService, this._queue, this._db);
 
-  final FirebaseFirestore _firestore;
   final WorkspaceMutationService _mutationService;
   final OfflineActionQueue _queue;
+  final Future<PowerSyncDatabase> _db;
+
+  static const _selectWithMetrics =
+      'SELECT p.*, m.payload AS metrics_payload '
+      'FROM projects p LEFT JOIN project_metrics m ON m.id = p.id';
+
+  static List<Map<String, Object?>> _asMaps(
+    Iterable<Map<String, dynamic>> rows,
+  ) => [for (final row in rows) Map<String, Object?>.from(row)];
+
+  /// Row → Project, merging the metrics payload exactly as the Firestore
+  /// repository merges the `project_metrics` document.
+  Project _fromRow(Map<String, Object?> row) {
+    final projectRow = Map<String, Object?>.from(row)
+      ..remove('metrics_payload');
+    final metrics = row['metrics_payload'] == null
+        ? null
+        : localRowToMap('project_metrics', {'payload': row['metrics_payload']});
+    return Project.fromMap(
+      '${row['id']}',
+      mergeProjectMetricsData(
+        projectData: localRowToMap('projects', projectRow),
+        metricsData: metrics,
+      ),
+    );
+  }
+
+  Stream<List<Project>> _watchLocal({
+    required String where,
+    required List<Object?> args,
+    required String workspaceId,
+    required bool includePendingCreates,
+    int? maxResults,
+  }) {
+    final limit = maxResults == null ? '' : ' LIMIT $maxResults';
+    // A fresh replica query per listener: Stream.multi may be listened to
+    // more than once, and each watch stream is single-subscription.
+    Stream<List<Map<String, Object?>>> rows() => Stream.fromFuture(_db)
+        .asyncExpand(
+          (db) => db.watch(
+            '$_selectWithMetrics WHERE $where '
+            'ORDER BY p.created_at DESC, p.id DESC$limit',
+            parameters: args,
+          ),
+        )
+        .map(_asMaps);
+    return Stream.multi((controller) {
+      List<Project>? current;
+      List<OfflineAction> actions = const [];
+      void emit() {
+        final base = current;
+        if (base == null) return;
+        controller.add(
+          _applyOptimisticProjectList(
+            baseItems: base,
+            actions: actions,
+            workspaceId: workspaceId,
+            includePendingCreates: includePendingCreates,
+          ),
+        );
+      }
+
+      final rowSub = rows().listen((result) {
+        try {
+          current = [for (final row in result) _fromRow(row)];
+          emit();
+        } catch (error, stackTrace) {
+          controller.addError(error, stackTrace);
+        }
+      }, onError: controller.addError);
+      final queueSub = _queue.watch(includeExpiredSynced: true).listen((next) {
+        actions = next;
+        emit();
+      }, onError: controller.addError);
+      // Not awaited: a consumer (e.g. `.first`) must not wait for the replica
+      // query or the queue watcher to finish tearing down.
+      controller.onCancel = () {
+        unawaited(rowSub.cancel());
+        unawaited(queueSub.cancel());
+      };
+    });
+  }
 
   @override
   Future<bool> hasAnyPayment(String projectId) async {
-    // limit(1) existence probe — O(1), and no new index: two equality filters
-    // are served by merging single-field indexes.
-    //
-    // Archived payments are excluded deliberately, matching the server guard:
-    // archiving is the only removal this app offers, so counting archived
-    // records would leave the user permanently unable to clear a contract they
-    // were told to clear by removing payments.
-    final synced = await _firestore
-        .collection('payments')
-        .where('projectId', isEqualTo: projectId)
-        .where('isArchived', isEqualTo: false)
-        .limit(1)
-        .get();
-    if (synced.docs.isNotEmpty) {
-      return true;
-    }
-    // A payment still waiting to sync counts too, otherwise a user could clear
-    // the contract offline and strand the queued payment on sync.
+    final db = await _db;
+    final synced = await db.getOptional(
+      'SELECT 1 FROM payments WHERE project_id = ? AND is_archived = 0 LIMIT 1',
+      [projectId],
+    );
+    if (synced != null) return true;
     final pending = await _queue.list();
     return pending.any(
       (action) =>
@@ -154,127 +217,85 @@ class FirebaseProjectRepository
   }
 
   @override
-  Stream<List<Project>> watchProjects(String workspaceId) {
-    // Newest 50 after a workspace filter. Equality + orderBy + limit hangs in
-    // FakeFirestore and needs a composite index in prod for the warm stream.
-    final query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId);
-    return _watchProjectQueryWithMetrics(
-      query: query,
-      workspaceId: workspaceId,
-      includePendingCreates: true,
-      excludeArchived: true,
-      maxResults: 50,
-    );
-  }
+  Stream<List<Project>> watchProjects(String workspaceId) => _watchLocal(
+    where: 'p.workspace_id = ? AND p.is_archived = 0',
+    args: [workspaceId],
+    workspaceId: workspaceId,
+    includePendingCreates: true,
+    maxResults: 50,
+  );
 
   @override
-  Stream<List<Project>> watchAllProjects(String workspaceId) {
-    final query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId);
-    return _watchProjectQueryWithMetrics(
-      query: query,
-      workspaceId: workspaceId,
-      includePendingCreates: true,
-    );
-  }
+  Stream<List<Project>> watchAllProjects(String workspaceId) => _watchLocal(
+    where: 'p.workspace_id = ?',
+    args: [workspaceId],
+    workspaceId: workspaceId,
+    includePendingCreates: true,
+  );
 
   @override
-  Stream<List<Project>> watchArchivedProjects(String workspaceId) {
-    final query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: true);
-    return _watchProjectQueryWithMetrics(
-      query: query,
-      workspaceId: workspaceId,
-      includePendingCreates: false,
-    );
-  }
+  Stream<List<Project>> watchArchivedProjects(String workspaceId) =>
+      _watchLocal(
+        where: 'p.workspace_id = ? AND p.is_archived = 1',
+        args: [workspaceId],
+        workspaceId: workspaceId,
+        includePendingCreates: false,
+      );
 
   @override
   Stream<Project?> watchProject(String projectId) {
     if (projectId.startsWith('pending_')) {
-      return _queue.watch(includeExpiredSynced: true).map((actions) {
-        for (final action in actions) {
-          if (action.type != OfflineActionTypes.createProject) {
-            continue;
-          }
-          if ('pending_${action.id}' == projectId) {
-            return _projectFromCreateAction(action);
-          }
-        }
-        return null;
-      });
+      return _watchPendingProject(projectId); // queue only
     }
-
-    final projectStream = _firestore
-        .collection('projects')
-        .doc(projectId)
-        .snapshots();
-    final metricsStream = _firestore
-        .collection('project_metrics')
-        .doc(projectId)
-        .snapshots();
-    final queueStream = _queue.watch(includeExpiredSynced: true);
-    return Stream.multi((controller) {
-      DocumentSnapshot<Map<String, dynamic>>? currentProjectSnap;
-      Map<String, dynamic>? currentMetrics;
-      List<OfflineAction> currentActions = const [];
-      StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? projectSub;
-      StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? metricsSub;
-      StreamSubscription<List<OfflineAction>>? queueSub;
-      var canceled = false;
-
-      void emit() {
-        if (canceled) {
-          return;
-        }
-        final projectSnap = currentProjectSnap;
-        if (projectSnap == null || !projectSnap.exists) {
-          controller.add(null);
-          return;
-        }
-        final baseProject = Project.fromMap(
-          projectSnap.id,
-          mergeProjectMetricsData(
-            projectData: projectSnap.data() ?? const {},
-            metricsData: currentMetrics,
+    Stream<List<Map<String, Object?>>> rows() => Stream.fromFuture(_db)
+        .asyncExpand(
+          (db) => db.watch(
+            '$_selectWithMetrics WHERE p.id = ?',
+            parameters: [projectId],
           ),
+        )
+        .map(_asMaps);
+    return Stream.multi((controller) {
+      Project? current;
+      var loaded = false;
+      List<OfflineAction> actions = const [];
+      void emit() {
+        if (!loaded) return;
+        final project = current;
+        controller.add(
+          project == null ? null : _applyPendingDeltas(project, actions),
         );
-        controller.add(_applyPendingDeltas(baseProject, currentActions));
       }
 
-      Future<void> start() async {
-        currentActions = await _queue.list(includeExpiredSynced: true);
-        if (canceled) {
-          return;
+      final rowSub = rows().listen((result) {
+        try {
+          loaded = true;
+          current = result.isEmpty ? null : _fromRow(result.first);
+          emit();
+        } catch (error, stackTrace) {
+          controller.addError(error, stackTrace);
         }
-        projectSub = projectStream.listen((snapshot) {
-          currentProjectSnap = snapshot;
-          emit();
-        }, onError: controller.addError);
-        metricsSub = metricsStream.listen((snapshot) {
-          currentMetrics = snapshot.exists ? snapshot.data() : null;
-          emit();
-        }, onError: controller.addError);
-        queueSub = queueStream.listen((actions) {
-          currentActions = actions;
-          emit();
-        }, onError: controller.addError);
-      }
-
-      unawaited(start());
-
-      controller.onCancel = () async {
-        canceled = true;
-        await projectSub?.cancel();
-        await metricsSub?.cancel();
-        await queueSub?.cancel();
+      }, onError: controller.addError);
+      final queueSub = _queue.watch(includeExpiredSynced: true).listen((next) {
+        actions = next;
+        emit();
+      }, onError: controller.addError);
+      // Not awaited: a consumer (e.g. `.first`) must not wait for the replica
+      // query or the queue watcher to finish tearing down.
+      controller.onCancel = () {
+        unawaited(rowSub.cancel());
+        unawaited(queueSub.cancel());
       };
     });
+  }
+
+  @override
+  Future<Project?> getProject(String projectId) async {
+    final db = await _db;
+    final row = await db.getOptional('$_selectWithMetrics WHERE p.id = ?', [
+      projectId,
+    ]);
+    return row == null ? null : _fromRow(row);
   }
 
   @override
@@ -282,319 +303,166 @@ class FirebaseProjectRepository
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    var query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
-        .limit(pageSize);
-
-    if (cursor != null) {
-      query = query.startAfterDocument(firestoreCursor!);
-    }
-
-    final snap = await query.get();
-    final metricsByProjectId = await _fetchMetricsForProjectIds(
-      snap.docs.map((doc) => doc.id),
-    );
-    final items = snap.docs
-        .map(
-          (doc) => Project.fromMap(
-            doc.id,
-            mergeProjectMetricsData(
-              projectData: doc.data(),
-              metricsData: metricsByProjectId[doc.id],
-            ),
-          ),
-        )
-        .toList();
-    final actions = await _queue.list(includeExpiredSynced: true);
-    final mergedItems = _applyOptimisticProjectList(
-      baseItems: items,
-      actions: actions,
-      workspaceId: workspaceId,
-      includePendingCreates: cursor == null,
-    );
-
-    return FirestorePage<Project>(
-      items: mergedItems,
-      hasMore: snap.docs.length == pageSize,
-      nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
-    );
-  }
+  }) => _pageWithSortValue(
+    workspaceId: workspaceId,
+    where: 'p.workspace_id = ? AND p.is_archived = 0',
+    args: [workspaceId],
+    sortExpression: 'p.created_at',
+    descending: true,
+    pageSize: pageSize,
+    cursor: cursor,
+    includePendingCreates: cursor == null,
+  );
 
   @override
   Future<FirestorePage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    var query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: workspaceId)
-        .where('isArchived', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(pageSize);
-
-    if (cursor != null) {
-      query = query.startAfterDocument(firestoreCursor!);
-    }
-
-    final snap = await query.get();
-    final metricsByProjectId = await _fetchMetricsForProjectIds(
-      snap.docs.map((doc) => doc.id),
-    );
-    final items = snap.docs
-        .map(
-          (doc) => Project.fromMap(
-            doc.id,
-            mergeProjectMetricsData(
-              projectData: doc.data(),
-              metricsData: metricsByProjectId[doc.id],
-            ),
-          ),
-        )
-        .toList();
-    final actions = await _queue.list(includeExpiredSynced: true);
-    final mergedItems = _applyOptimisticProjectList(
-      baseItems: items,
-      actions: actions,
-      workspaceId: workspaceId,
-      includePendingCreates: false,
-    );
-
-    return FirestorePage<Project>(
-      items: mergedItems,
-      hasMore: snap.docs.length == pageSize,
-      nextCursor: snap.docs.isEmpty ? cursor : snap.docs.last,
-    );
-  }
+  }) => _pageWithSortValue(
+    workspaceId: workspaceId,
+    where: 'p.workspace_id = ? AND p.is_archived = 1',
+    args: [workspaceId],
+    sortExpression: 'p.created_at',
+    descending: true,
+    pageSize: pageSize,
+    cursor: cursor,
+    includePendingCreates: false,
+  );
 
   @override
   Future<FirestorePage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) {
-    if (request.sort.isFinancial) {
-      return _fetchFinancialProjectPage(request, cursor: cursor);
-    }
-    return _fetchProjectFieldPage(request, cursor: cursor);
-  }
-
-  Future<FirestorePage<Project>> _fetchProjectFieldPage(
-    ProjectBrowseQuery request, {
-    Object? cursor,
-  }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('projects')
-        .where('workspaceId', isEqualTo: request.workspaceId);
-    if (!request.includeArchived) {
-      query = query.where('isArchived', isEqualTo: false);
-    }
+    final filters = <String>['p.workspace_id = ?'];
+    final args = <Object?>[request.workspaceId];
+    if (!request.includeArchived) filters.add('p.is_archived = 0');
     if (request.status != null && request.status!.isNotEmpty) {
-      query = query.where('status', isEqualTo: request.status);
+      filters.add('p.status = ?');
+      args.add(request.status);
     }
-    query = switch (request.sort) {
-      ProjectBrowseSort.name => query.orderBy('name').orderBy('id'),
-      _ => query.orderBy('createdAt', descending: true).orderBy('id'),
-    };
-    if (cursor != null) {
-      query = switch (request.sort) {
-        ProjectBrowseSort.name => query.startAt([
-          firestoreCursor!.data()?['name'],
-          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
-        ]),
-        _ => query.startAt([
-          firestoreCursor!.data()?['createdAt'],
-          firestoreCursor.data()?['id'] ?? firestoreCursor.id,
-        ]),
-      };
-    }
-    query = query.limit(request.pageSize + (cursor == null ? 0 : 1));
-
-    final snapshot = await query.get();
-    final pageDocs = snapshot.docs
-        .where(
-          (doc) =>
-              cursor == null ||
-              _isProjectDocAfterCursor(doc, firestoreCursor!, request.sort),
-        )
-        .take(request.pageSize)
-        .toList(growable: false);
-    final actions = await _queue.list(includeExpiredSynced: true);
-    final metricsByProjectId = await _fetchMetricsForProjectIds(
-      pageDocs.map((doc) => doc.id),
-    );
-    final projects = pageDocs
-        .map(
-          (doc) => Project.fromMap(
-            doc.id,
-            mergeProjectMetricsData(
-              projectData: doc.data(),
-              metricsData: metricsByProjectId[doc.id],
-            ),
-          ),
-        )
-        .toList(growable: false);
-    final items = _applyOptimisticProjectList(
-      baseItems: projects,
-      actions: actions,
-      workspaceId: request.workspaceId,
-      includePendingCreates: cursor == null && !request.includeArchived,
-    );
-
-    return FirestorePage<Project>(
-      items: items,
-      hasMore: cursor == null
-          ? snapshot.docs.length == request.pageSize
-          : snapshot.docs.length > request.pageSize,
-      nextCursor: pageDocs.isEmpty ? cursor : pageDocs.last,
-    );
-  }
-
-  Future<FirestorePage<Project>> _fetchFinancialProjectPage(
-    ProjectBrowseQuery request, {
-    Object? cursor,
-  }) async {
-    final firestoreCursor = cursor as DocumentSnapshot<Map<String, dynamic>>?;
-    final metricField = switch (request.sort) {
-      ProjectBrowseSort.highestExpense => 'totalExpenses',
-      ProjectBrowseSort.highestIncome => 'totalIncome',
-      ProjectBrowseSort.highestNet => 'net',
-      _ => throw ArgumentError.value(request.sort, 'sort'),
-    };
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('project_metrics')
-        .where('workspaceId', isEqualTo: request.workspaceId);
-    if (!request.includeArchived) {
-      query = query.where('isArchived', isEqualTo: false);
-    }
-    if (request.status != null && request.status!.isNotEmpty) {
-      query = query.where('status', isEqualTo: request.status);
-    }
-    query = query
-        .orderBy(metricField, descending: true)
-        .orderBy('projectName')
-        .orderBy('projectId');
-    if (cursor != null) {
-      query = query.startAt([
-        firestoreCursor!.data()?[metricField],
-        firestoreCursor.data()?['projectName'],
-        firestoreCursor.data()?['projectId'],
-      ]);
-    }
-    query = query.limit(request.pageSize + (cursor == null ? 0 : 1));
-
-    final metricSnapshot = await query.get();
-    final metricDocs = metricSnapshot.docs
-        .where(
-          (doc) =>
-              cursor == null ||
-              _isMetricDocAfterCursor(doc, firestoreCursor!, metricField),
-        )
-        .take(request.pageSize)
-        .toList(growable: false);
-    final projectSnapshots = await Future.wait(
-      metricDocs.map(
-        (metric) => _firestore.collection('projects').doc(metric.id).get(),
+    final (sortExpression, descending) = switch (request.sort) {
+      ProjectBrowseSort.name => ('p.name', false),
+      ProjectBrowseSort.recent => ('p.created_at', true),
+      // Financial sorts read the recompute output, like the Firestore query
+      // on project_metrics. Projects without metrics sort last.
+      ProjectBrowseSort.highestExpense => (
+        "COALESCE(json_extract(m.payload, '\$.totalExpenses'), -1e18)",
+        true,
       ),
-    );
-    final projectsById = {
-      for (final snapshot in projectSnapshots)
-        if (snapshot.exists) snapshot.id: snapshot,
+      ProjectBrowseSort.highestIncome => (
+        "COALESCE(json_extract(m.payload, '\$.totalIncome'), -1e18)",
+        true,
+      ),
+      ProjectBrowseSort.highestNet => (
+        "COALESCE(json_extract(m.payload, '\$.net'), -1e18)",
+        true,
+      ),
     };
-    final orderedProjects = <Project>[];
-    for (final metric in metricDocs) {
-      final project = projectsById[metric.id];
-      if (project == null) continue;
-      orderedProjects.add(
-        Project.fromMap(
-          project.id,
-          mergeProjectMetricsData(
-            projectData: project.data() ?? const {},
-            metricsData: metric.data(),
-          ),
-        ),
-      );
+    return _pageWithSortValue(
+      workspaceId: request.workspaceId,
+      where: filters.join(' AND '),
+      args: args,
+      sortExpression: sortExpression,
+      descending: descending,
+      pageSize: request.pageSize,
+      cursor: cursor,
+      includePendingCreates:
+          cursor == null &&
+          !request.includeArchived &&
+          !request.sort.isFinancial,
+    );
+  }
+
+  /// [_page] ordered by an arbitrary SQL expression, exposed as `sort_value`
+  /// so the keyset cursor can compare against it.
+  Future<FirestorePage<Project>> _pageWithSortValue({
+    required String workspaceId,
+    required String where,
+    required List<Object?> args,
+    required String sortExpression,
+    required bool descending,
+    required int pageSize,
+    required Object? cursor,
+    required bool includePendingCreates,
+  }) {
+    return _pageFrom(
+      select:
+          'SELECT * FROM (SELECT p.*, m.payload AS metrics_payload, '
+          '$sortExpression AS sort_value FROM projects p '
+          'LEFT JOIN project_metrics m ON m.id = p.id WHERE $where) p',
+      args: args,
+      workspaceId: workspaceId,
+      descending: descending,
+      pageSize: pageSize,
+      cursor: cursor,
+      includePendingCreates: includePendingCreates,
+    );
+  }
+
+  Future<FirestorePage<Project>> _pageFrom({
+    required String select,
+    required List<Object?> args,
+    required String workspaceId,
+    required bool descending,
+    required int pageSize,
+    required Object? cursor,
+    required bool includePendingCreates,
+  }) async {
+    final db = await _db;
+    final keyset = cursor as LocalPageCursor?;
+    final op = descending ? '<' : '>';
+    final direction = descending ? 'DESC' : 'ASC';
+    final params = [...args];
+    var keysetSql = '';
+    if (keyset != null) {
+      keysetSql =
+          ' WHERE (p.sort_value $op ? OR (p.sort_value = ? AND p.id $op ?))';
+      params.addAll([keyset.sortValue, keyset.sortValue, keyset.id]);
     }
+    params.add(pageSize + 1);
+    final result = await db.getAll(
+      '$select$keysetSql ORDER BY p.sort_value $direction, p.id $direction '
+      'LIMIT ?',
+      params,
+    );
+    final rows = [for (final row in result) Map<String, Object?>.from(row)];
+    final hasMore = rows.length > pageSize;
+    final pageRows = hasMore ? rows.sublist(0, pageSize) : rows;
     final actions = await _queue.list(includeExpiredSynced: true);
     final items = _applyOptimisticProjectList(
-      baseItems: orderedProjects,
+      baseItems: [
+        for (final row in pageRows)
+          _fromRow(Map<String, Object?>.from(row)..remove('sort_value')),
+      ],
       actions: actions,
-      workspaceId: request.workspaceId,
-      includePendingCreates: false,
+      workspaceId: workspaceId,
+      includePendingCreates: includePendingCreates,
     );
-
+    final last = pageRows.isEmpty ? null : pageRows.last;
     return FirestorePage<Project>(
       items: items,
-      hasMore: cursor == null
-          ? metricSnapshot.docs.length == request.pageSize
-          : metricSnapshot.docs.length > request.pageSize,
-      nextCursor: metricDocs.isEmpty ? cursor : metricDocs.last,
+      hasMore: hasMore,
+      nextCursor: last == null
+          ? cursor
+          : LocalPageCursor(sortValue: last['sort_value'], id: '${last['id']}'),
     );
   }
 
-  bool _isProjectDocAfterCursor(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    DocumentSnapshot<Map<String, dynamic>> cursor,
-    ProjectBrowseSort sort,
-  ) {
-    final docData = doc.data();
-    final cursorData = cursor.data() ?? const {};
-    if (sort == ProjectBrowseSort.name) {
-      final nameCompare = '${docData['name'] ?? ''}'.compareTo(
-        '${cursorData['name'] ?? ''}',
-      );
-      if (nameCompare != 0) return nameCompare > 0;
-    } else {
-      final dateCompare = _compareOrderedValues(
-        docData['createdAt'],
-        cursorData['createdAt'],
-      );
-      if (dateCompare != 0) return dateCompare < 0;
-    }
-    final docId = '${docData['id'] ?? doc.id}';
-    final cursorId = '${cursorData['id'] ?? cursor.id}';
-    return docId.compareTo(cursorId) > 0;
-  }
-
-  bool _isMetricDocAfterCursor(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    DocumentSnapshot<Map<String, dynamic>> cursor,
-    String metricField,
-  ) {
-    final docData = doc.data();
-    final cursorData = cursor.data() ?? const {};
-    final metricCompare = _compareOrderedValues(
-      docData[metricField],
-      cursorData[metricField],
-    );
-    if (metricCompare != 0) return metricCompare < 0;
-    final nameCompare = '${docData['projectName'] ?? ''}'.compareTo(
-      '${cursorData['projectName'] ?? ''}',
-    );
-    if (nameCompare != 0) return nameCompare > 0;
-    return '${docData['projectId'] ?? doc.id}'.compareTo(
-          '${cursorData['projectId'] ?? cursor.id}',
-        ) >
-        0;
-  }
-
-  int _compareOrderedValues(Object? left, Object? right) {
-    if (left is Timestamp && right is Timestamp) {
-      return left.compareTo(right);
-    }
-    if (left is DateTime && right is DateTime) {
-      return left.compareTo(right);
-    }
-    if (left is num && right is num) {
-      return left.compareTo(right);
-    }
-    return '$left'.compareTo('$right');
+  /// A project created offline, from its queued create action.
+  Stream<Project?> _watchPendingProject(String projectId) {
+    return _queue.watch(includeExpiredSynced: true).map((actions) {
+      for (final action in actions) {
+        if (action.type != OfflineActionTypes.createProject) {
+          continue;
+        }
+        if ('pending_${action.id}' == projectId) {
+          return _projectFromCreateAction(action);
+        }
+      }
+      return null;
+    });
   }
 
   @override
@@ -622,26 +490,6 @@ class FirebaseProjectRepository
       description: description,
       budgetLimit: budgetLimit,
       completionPercentage: completionPercentage,
-    );
-  }
-
-  @override
-  Future<Project?> getProject(String projectId) async {
-    final results = await Future.wait([
-      _firestore.collection('projects').doc(projectId).get(),
-      _firestore.collection('project_metrics').doc(projectId).get(),
-    ]);
-    final snap = results[0];
-    if (!snap.exists) {
-      return null;
-    }
-    final metricsSnap = results[1];
-    return Project.fromMap(
-      snap.id,
-      mergeProjectMetricsData(
-        projectData: snap.data() ?? const {},
-        metricsData: metricsSnap.exists ? metricsSnap.data() : null,
-      ),
     );
   }
 
@@ -713,121 +561,6 @@ class FirebaseProjectRepository
       workspaceId: project.workspaceId,
       projectId: projectId,
     );
-  }
-
-  Stream<List<Project>> _watchProjectQueryWithMetrics({
-    required Query<Map<String, dynamic>> query,
-    required String workspaceId,
-    required bool includePendingCreates,
-    bool excludeArchived = false,
-    int? maxResults,
-  }) {
-    return Stream.multi((controller) {
-      QuerySnapshot<Map<String, dynamic>>? currentProjects;
-      Map<String, Map<String, dynamic>> metricsByProjectId = const {};
-      List<OfflineAction> currentActions = const [];
-      var metricsGeneration = 0;
-
-      void emit() {
-        if (currentProjects == null) {
-          return;
-        }
-        final ranked = currentProjects!.docs
-            .map((doc) {
-              final merged = mergeProjectMetricsData(
-                projectData: doc.data(),
-                metricsData: metricsByProjectId[doc.id],
-              );
-              if (excludeArchived && merged['isArchived'] == true) {
-                return null;
-              }
-              return (
-                project: Project.fromMap(doc.id, merged),
-                createdAt: merged['createdAt'],
-              );
-            })
-            .whereType<({Project project, Object? createdAt})>()
-            .toList();
-        ranked.sort(
-          (left, right) =>
-              _compareOrderedValues(right.createdAt, left.createdAt),
-        );
-        final limited = maxResults == null ? ranked : ranked.take(maxResults);
-        final projects = limited
-            .map((entry) => entry.project)
-            .toList(growable: false);
-        controller.add(
-          _applyOptimisticProjectList(
-            baseItems: projects,
-            actions: currentActions,
-            workspaceId: workspaceId,
-            includePendingCreates: includePendingCreates,
-          ),
-        );
-      }
-
-      Future<void> refreshMetrics() async {
-        final snapshot = currentProjects;
-        if (snapshot == null) {
-          return;
-        }
-        final generation = ++metricsGeneration;
-        try {
-          final fetched = await _fetchMetricsForProjectIds(
-            snapshot.docs.map((doc) => doc.id),
-          );
-          if (generation != metricsGeneration) {
-            return;
-          }
-          metricsByProjectId = fetched;
-          emit();
-        } catch (error, stackTrace) {
-          if (generation != metricsGeneration) {
-            return;
-          }
-          controller.addError(error, stackTrace);
-        }
-      }
-
-      unawaited(() async {
-        try {
-          currentProjects = await query.get();
-          currentActions = await _queue.list(includeExpiredSynced: true);
-          emit();
-          unawaited(refreshMetrics());
-        } catch (error, stackTrace) {
-          controller.addError(error, stackTrace);
-        }
-      }());
-
-      final queueSub = _queue.watch(includeExpiredSynced: true).listen((
-        actions,
-      ) {
-        currentActions = actions;
-        emit();
-      }, onError: controller.addError);
-
-      controller.onCancel = () async {
-        metricsGeneration += 1;
-        await queueSub.cancel();
-      };
-    });
-  }
-
-  Future<Map<String, Map<String, dynamic>>> _fetchMetricsForProjectIds(
-    Iterable<String> projectIds,
-  ) async {
-    final ids = projectIds.toSet();
-    if (ids.isEmpty) {
-      return const {};
-    }
-    final snaps = await Future.wait(
-      ids.map((id) => _firestore.collection('project_metrics').doc(id).get()),
-    );
-    return {
-      for (final snap in snaps)
-        if (snap.exists) snap.id: snap.data() ?? const {},
-    };
   }
 
   List<Project> _applyOptimisticProjectList({
@@ -1124,17 +857,9 @@ class FirebaseProjectRepository
 }
 
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
-  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-    return LocalProjectRepository(
-      ref.watch(firestoreProvider),
-      ref.watch(workspaceMutationServiceProvider),
-      ref.watch(offlineActionQueueProvider),
-      ref.watch(localDatabaseProvider),
-    );
-  }
-  return FirebaseProjectRepository(
-    ref.watch(firestoreProvider),
+  return LocalProjectRepository(
     ref.watch(workspaceMutationServiceProvider),
     ref.watch(offlineActionQueueProvider),
+    ref.watch(localDatabaseProvider),
   );
 });

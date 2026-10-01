@@ -13,6 +13,7 @@ class LocalFixtureStore {
 
   final LocalTestDb local;
   final Map<String, Map<String, Map<String, dynamic>>> _docs = {};
+  var _nextAutoId = 0;
 
   static Future<LocalFixtureStore> open() async =>
       LocalFixtureStore._(await LocalTestDb.open());
@@ -60,13 +61,12 @@ class FixtureCollection {
 
   final LocalFixtureStore _store;
   final String _name;
-  var _next = 0;
 
   FixtureDocRef doc(String id) => FixtureDocRef._(_store, _name, id);
 
   /// Adds a document with a generated id, like Firestore's `add`.
   Future<FixtureDocRef> add(Map<String, dynamic> data) async {
-    final ref = doc('${_name}_auto_${_next++}');
+    final ref = doc('${_name}_auto_${_store._nextAutoId++}');
     await ref.set(data);
     return ref;
   }

@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -36,7 +37,8 @@ void main() {
   test(
     'an offline-queued create with no contract shows no fabricated zero',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await queue.enqueue(
         type: OfflineActionTypes.createProject,
         payload: {
@@ -48,10 +50,10 @@ void main() {
         },
       );
 
-      final repository = FirebaseProjectRepository(
-        firestore,
+      final repository = LocalProjectRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       // The stream merges two sources (Firestore + the offline queue) and emits
@@ -73,7 +75,8 @@ void main() {
   );
 
   test('queued contract clear is not swallowed by the current value', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('projects').doc('project_1').set({
       'workspaceId': 'workspace_1',
       'name': 'Tower',
@@ -94,10 +97,10 @@ void main() {
       },
     );
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final projects = await repository
@@ -110,7 +113,8 @@ void main() {
   });
 
   test('hasAnyPayment ignores archived payments', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('payments').doc('payment_1').set({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -118,10 +122,10 @@ void main() {
       'isArchived': true,
     });
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     // Archiving is the only removal this app offers, so an archived payment
@@ -130,7 +134,8 @@ void main() {
   });
 
   test('hasAnyPayment sees an active payment', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('payments').doc('payment_1').set({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -138,17 +143,18 @@ void main() {
       'isArchived': false,
     });
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     expect(await repository.hasAnyPayment('project_1'), isTrue);
   });
 
   test('hasAnyPayment counts a payment still queued offline', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await queue.enqueue(
       type: OfflineActionTypes.createPayment,
       payload: {
@@ -158,10 +164,10 @@ void main() {
       },
     );
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     // Otherwise a user could clear the contract offline and strand the queued
@@ -170,7 +176,8 @@ void main() {
   });
 
   test('hasAnyPayment ignores payments belonging to another project', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('payments').doc('payment_1').set({
       'workspaceId': 'workspace_1',
       'projectId': 'project_other',
@@ -178,17 +185,18 @@ void main() {
       'isArchived': false,
     });
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     expect(await repository.hasAnyPayment('project_1'), isFalse);
   });
 
   test('project reads include visible optimistic finance deltas', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('projects').doc('project_1').set({
       'workspaceId': 'workspace_1',
       'name': 'Tower A',
@@ -218,10 +226,10 @@ void main() {
       },
     );
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final page = await repository.fetchProjectsPage('workspace_1');
@@ -234,7 +242,8 @@ void main() {
   test(
     'project reads do not reapply deltas already reflected in metrics',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('projects').doc('project_1').set({
         'workspaceId': 'workspace_1',
         'name': 'Tower A',
@@ -265,10 +274,10 @@ void main() {
         },
       );
 
-      final repository = FirebaseProjectRepository(
-        firestore,
+      final repository = LocalProjectRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchProjectsPage('workspace_1');
@@ -282,7 +291,8 @@ void main() {
   test(
     'project reads keep synced payment deltas until metrics reflect them',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('projects').doc('project_1').set({
         'workspaceId': 'workspace_1',
         'name': 'Tower A',
@@ -320,10 +330,10 @@ void main() {
         ),
       );
 
-      final repository = FirebaseProjectRepository(
-        firestore,
+      final repository = LocalProjectRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchProjectsPage('workspace_1');
@@ -335,7 +345,8 @@ void main() {
   );
 
   test('project reads do not double count reflected synced payments', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('projects').doc('project_1').set({
       'workspaceId': 'workspace_1',
       'name': 'Tower A',
@@ -373,10 +384,10 @@ void main() {
       ),
     );
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final page = await repository.fetchProjectsPage('workspace_1');
@@ -387,7 +398,8 @@ void main() {
   });
 
   test('active project warm stream is capped to 50 most recent rows', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     for (var index = 0; index < 60; index++) {
       await firestore.collection('projects').doc('project_$index').set({
         'workspaceId': 'workspace_1',
@@ -404,10 +416,10 @@ void main() {
       });
     }
 
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final projects = await repository.watchProjects('workspace_1').first;
@@ -418,7 +430,8 @@ void main() {
   });
 
   test('name browse pages use stable project-field ordering', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     for (final entry in [
       ('project_c', 'Beta'),
       ('project_b', 'Alpha'),
@@ -439,10 +452,10 @@ void main() {
         'createdAt': DateTime.utc(2026, 1, 1),
       });
     }
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final first = await repository.fetchProjectBrowsePage(
@@ -466,7 +479,8 @@ void main() {
   });
 
   test('financial browse preserves global metric order across pages', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     for (final entry in [
       ('project_a', 'Alpha', 1000.0),
       ('project_b', 'Beta', 900.0),
@@ -498,10 +512,10 @@ void main() {
         'netProfit': 200,
       });
     }
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final first = await repository.fetchProjectBrowsePage(
@@ -527,7 +541,8 @@ void main() {
   });
 
   test('recent browse uses project id as a stable date tie-breaker', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     for (final id in ['project_a', 'project_b', 'project_c']) {
       await firestore.collection('projects').doc(id).set({
         'id': id,
@@ -544,10 +559,10 @@ void main() {
         'createdAt': DateTime.utc(2026, 6, 1),
       });
     }
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final first = await repository.fetchProjectBrowsePage(
@@ -569,15 +584,18 @@ void main() {
       const ProjectBrowseQuery(workspaceId: 'workspace_1', status: 'completed'),
     );
 
-    expect(first.items.map((item) => item.id), ['project_a', 'project_b']);
-    expect(second.items.map((item) => item.id), ['project_c']);
+    // Equal dates fall back to the id in the sort's direction (as Firestore
+    // orders by document name after a descending orderBy).
+    expect(first.items.map((item) => item.id), ['project_c', 'project_b']);
+    expect(second.items.map((item) => item.id), ['project_a']);
     expect(completed.items.map((item) => item.id), ['project_c']);
   });
 
   test(
     'recent browse net profit reflects project_metrics not stale doc',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('projects').doc('project_1').set({
         'id': 'project_1',
         'workspaceId': 'workspace_1',
@@ -602,10 +620,10 @@ void main() {
         'netProfit': 10000,
       });
 
-      final repository = FirebaseProjectRepository(
-        firestore,
+      final repository = LocalProjectRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchProjectBrowsePage(
@@ -623,7 +641,8 @@ void main() {
   );
 
   test('archived project page excludes active projects', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     for (final archived in [false, true]) {
       final id = archived ? 'archived' : 'active';
       await firestore.collection('projects').doc(id).set({
@@ -641,10 +660,10 @@ void main() {
         'createdAt': DateTime.utc(2026, 6, 1),
       });
     }
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final page = await repository.fetchArchivedProjectsPage('workspace_1');
@@ -653,7 +672,8 @@ void main() {
   });
 
   test('income and net sorts use their maintained metric fields', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     final metrics = {
       'project_a': (expenses: 1000, income: 100, net: -900),
       'project_b': (expenses: 900, income: 2000, net: 1100),
@@ -682,10 +702,10 @@ void main() {
         'net': entry.value.net,
       });
     }
-    final repository = FirebaseProjectRepository(
-      firestore,
+    final repository = LocalProjectRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final income = await repository.fetchProjectBrowsePage(

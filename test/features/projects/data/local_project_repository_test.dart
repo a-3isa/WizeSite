@@ -4,7 +4,6 @@ import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
@@ -28,7 +27,6 @@ void main() {
     queue = OfflineActionQueue(box);
     local = await LocalTestDb.open();
     repository = LocalProjectRepository(
-      FakeFirebaseFirestore(),
       _MockWorkspaceMutationService(),
       queue,
       Future.value(local.db),

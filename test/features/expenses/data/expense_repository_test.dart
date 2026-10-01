@@ -4,10 +4,11 @@ import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../../helpers/local_fixture_store.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -33,7 +34,8 @@ void main() {
   });
 
   test('fetchExpensesPage filters by entityId', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('expenses').add({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -54,10 +56,10 @@ void main() {
     });
 
     final mutationService = _MockWorkspaceMutationService();
-    final repository = FirebaseExpenseRepository(
-      firestore,
+    final repository = LocalExpenseRepository(
       mutationService,
       queue,
+      Future.value(firestore.local.db),
     );
 
     final page = await repository.fetchExpensesPage(
@@ -76,7 +78,8 @@ void main() {
   test(
     'fetchExpensesPage filters old records by entityName fallback',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('expenses').add({
         'workspaceId': 'workspace_1',
         'projectId': 'project_1',
@@ -94,10 +97,10 @@ void main() {
         'date': DateTime.utc(2026, 5, 26),
       });
 
-      final repository = FirebaseExpenseRepository(
-        firestore,
+      final repository = LocalExpenseRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchExpensesPage(
@@ -116,7 +119,8 @@ void main() {
   test(
     'fetchExpensesPage combines category, payment status, and entity type',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await firestore.collection('expenses').add({
         'workspaceId': 'workspace_1',
         'projectId': 'project_1',
@@ -148,10 +152,10 @@ void main() {
         'date': DateTime.utc(2026, 5, 27),
       });
 
-      final repository = FirebaseExpenseRepository(
-        firestore,
+      final repository = LocalExpenseRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchExpensesPage(
@@ -172,7 +176,8 @@ void main() {
   );
 
   test('fetchExpensesPage searches entity, description, and notes', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     await firestore.collection('expenses').add({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -196,10 +201,10 @@ void main() {
       'date': DateTime.utc(2026, 5, 26),
     });
 
-    final repository = FirebaseExpenseRepository(
-      firestore,
+    final repository = LocalExpenseRepository(
       _MockWorkspaceMutationService(),
       queue,
+      Future.value(firestore.local.db),
     );
 
     final entityMatch = await repository.fetchExpensesPage(
@@ -232,7 +237,8 @@ void main() {
   test(
     'fetchExpensesPage keeps pending creates that match active filters',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       await queue.enqueue(
         type: OfflineActionTypes.createExpense,
         payload: {
@@ -260,10 +266,10 @@ void main() {
         },
       );
 
-      final repository = FirebaseExpenseRepository(
-        firestore,
+      final repository = LocalExpenseRepository(
         _MockWorkspaceMutationService(),
         queue,
+        Future.value(firestore.local.db),
       );
 
       final page = await repository.fetchExpensesPage(
@@ -282,7 +288,8 @@ void main() {
   );
 
   test('createExpense forwards structured accounting fields', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = await LocalFixtureStore.open();
+    addTearDown(firestore.dispose);
     final mutationService = _MockWorkspaceMutationService();
     when(
       () => mutationService.createManualExpense(
@@ -306,10 +313,10 @@ void main() {
       ),
     ).thenAnswer((_) async => const MutationResult(queued: true));
 
-    final repository = FirebaseExpenseRepository(
-      firestore,
+    final repository = LocalExpenseRepository(
       mutationService,
       queue,
+      Future.value(firestore.local.db),
     );
 
     await repository.createExpense(
