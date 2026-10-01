@@ -1,10 +1,9 @@
 import 'dart:convert';
 
 import 'package:buildtrack_app/core/sync/schema.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// One fixture, two backends (spec 004, T033): Firestore-shaped documents are
-/// written to `fake_cloud_firestore` as-is and converted to local replica rows
+/// Fixture documents (spec 004, T033): Firestore-shaped documents are
+/// converted to local replica rows
 /// the way the migrator and sync rules shape them (data-model.md):
 ///
 /// - camelCase → snake_case, plus the renamed keys;
@@ -43,7 +42,6 @@ String replicaTimestamp(DateTime value) {
 }
 
 Object? _plain(Object? value) => switch (value) {
-  final Timestamp t => t.toDate().toUtc().toIso8601String(),
   final DateTime d => d.toUtc().toIso8601String(),
   final Map<dynamic, dynamic> m => {
     for (final e in m.entries) '${e.key}': _plain(e.value),
@@ -53,7 +51,6 @@ Object? _plain(Object? value) => switch (value) {
 };
 
 Object? _cell(Object? value) => switch (value) {
-  final Timestamp t => replicaTimestamp(t.toDate()),
   final DateTime d => replicaTimestamp(d),
   final bool b => b ? 1 : 0,
   final Map<dynamic, dynamic> m => jsonEncode(_plain(m)),
@@ -85,9 +82,8 @@ Map<String, Object?> firestoreDocToLocalRow(FixtureDoc doc) {
   return row;
 }
 
-/// Plain JSON for goldens: DateTimes/Timestamps → UTC ISO, keys sorted.
+/// Plain JSON for goldens: DateTimes → UTC ISO, keys sorted.
 Object? goldenJson(Object? value) => switch (value) {
-  final Timestamp t => t.toDate().toUtc().toIso8601String(),
   final DateTime d => d.toUtc().toIso8601String(),
   final Map<dynamic, dynamic> m => {
     for (final key in m.keys.map((k) => '$k').toList()..sort())

@@ -1,7 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
@@ -52,7 +52,7 @@ class _FakePaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -66,7 +66,7 @@ class _FakePaymentRepository implements PaymentRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage(items: [], hasMore: false);
+    return const RecordPage(items: [], hasMore: false);
   }
 
   @override
@@ -339,58 +339,59 @@ void main() {
     expect(find.text('Select attachments'), findsNothing);
   });
 
-  testWidgets('AddPaymentScreen blocks create when monthly payment quota is hit', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'AddPaymentScreen blocks create when monthly payment quota is hit',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final paymentRepository = _FakePaymentRepository();
+      final paymentRepository = _FakePaymentRepository();
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
-          activeUserIdProvider.overrideWith((ref) => 'user_1'),
-          paymentRepositoryProvider.overrideWithValue(paymentRepository),
-          projectsProvider.overrideWith((ref) => Stream.value([_project()])),
-          entitlementGuardProvider.overrideWithValue(
-            EntitlementGuardService(
-              subscriptionRepository: _FakeSubscriptionRepository(),
-              usageQuotaRepository: _FakeUsageQuotaRepository(),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
+            activeUserIdProvider.overrideWith((ref) => 'user_1'),
+            paymentRepositoryProvider.overrideWithValue(paymentRepository),
+            projectsProvider.overrideWith((ref) => Stream.value([_project()])),
+            entitlementGuardProvider.overrideWithValue(
+              EntitlementGuardService(
+                subscriptionRepository: _FakeSubscriptionRepository(),
+                usageQuotaRepository: _FakeUsageQuotaRepository(),
+              ),
             ),
-          ),
-        ],
-        child: MaterialApp.router(
-          routerConfig: _router(),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
           ],
-          supportedLocales: AppLocalizations.supportedLocales,
+          child: MaterialApp.router(
+            routerConfig: _router(),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('qa_add_payment_amount')),
-      '100',
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('qa_add_payment_save')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Save Payment'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('qa_add_payment_save')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('qa_add_payment_amount')),
+        '100',
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('qa_add_payment_save')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Save Payment'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('qa_add_payment_save')));
+      await tester.pumpAndSettle();
 
-    expect(paymentRepository.createCalls, 0);
-    expect(find.text('limit:paymentsPerMonth'), findsOneWidget);
-  });
+      expect(paymentRepository.createCalls, 0);
+      expect(find.text('limit:paymentsPerMonth'), findsOneWidget);
+    },
+  );
 }

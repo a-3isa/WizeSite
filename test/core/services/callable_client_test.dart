@@ -4,19 +4,10 @@ import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
-
-class _MockFunctions extends Mock implements FirebaseFunctions {}
-
-class _MockAuth extends Mock implements FirebaseAuth {}
-
-class _MockAppCheck extends Mock implements FirebaseAppCheck {}
 
 class _MockTelemetry extends Mock implements AppTelemetry {}
 
@@ -273,14 +264,7 @@ void main() {
       });
       final telemetry = _MockTelemetry();
       when(() => telemetry.log(any(), any())).thenAnswer((_) async {});
-      final functions = _MockFunctions();
-      final callable = CallableClient(
-        functions,
-        _MockAuth(),
-        _MockAppCheck(),
-        telemetry,
-        selfHostedTransport: _transport(client, _Tokens()),
-      );
+      final callable = CallableClient(_transport(client, _Tokens()), telemetry);
 
       final workspaceId = await callable.call<String>(
         functionName: 'ensureUserWorkspaceBootstrap',
@@ -292,7 +276,6 @@ void main() {
 
       expect(workspaceId, 'ws_1');
       expect(captured.headers['X-Idempotency-Key'], 'action_7');
-      verifyZeroInteractions(functions);
     },
   );
 
@@ -306,13 +289,7 @@ void main() {
       });
       final telemetry = _MockTelemetry();
       when(() => telemetry.log(any(), any())).thenAnswer((_) async {});
-      final callable = CallableClient(
-        _MockFunctions(),
-        _MockAuth(),
-        _MockAppCheck(),
-        telemetry,
-        selfHostedTransport: _transport(client, _Tokens()),
-      );
+      final callable = CallableClient(_transport(client, _Tokens()), telemetry);
 
       for (var i = 0; i < 2; i++) {
         await callable.call<void>(

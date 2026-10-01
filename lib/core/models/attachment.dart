@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum AttachmentUploadStatus {
   pending('pending'),
   uploading('uploading'),
@@ -78,9 +76,6 @@ class Attachment {
   static DateTime _parseUploadedAt(Object? raw) {
     if (raw is DateTime) {
       return raw;
-    }
-    if (raw is Timestamp) {
-      return raw.toDate();
     }
     if (raw is String) {
       final parsed = DateTime.tryParse(raw);

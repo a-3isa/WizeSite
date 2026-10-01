@@ -1,14 +1,15 @@
 import 'dart:io';
 
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+
+import '../../../helpers/memory_doc_source.dart';
 
 Future<T> _readStreamProvider<T>(
   ProviderContainer container,
@@ -46,7 +47,7 @@ void main() {
   });
 
   test('merges pending expense deltas into scoped quick summary', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = MemoryDocSource();
     await firestore.collection('project_summaries').doc('summary_1').set({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -77,7 +78,7 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
       ],
     );
@@ -101,7 +102,7 @@ void main() {
   });
 
   test('does not double count synced queued expenses', () async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = MemoryDocSource();
     await firestore.collection('project_summaries').doc('summary_1').set({
       'workspaceId': 'workspace_1',
       'projectId': 'project_1',
@@ -129,7 +130,7 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
       ],
     );

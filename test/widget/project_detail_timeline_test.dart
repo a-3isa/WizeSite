@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
@@ -44,21 +44,21 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
@@ -228,36 +228,26 @@ void main() {
       final elapsedText = tester.widget<Text>(elapsedFinder).data!;
       expect(
         elapsedText,
-        anyOf(
-          contains('49%'),
-          contains('50%'),
-          contains('51%'),
-        ),
+        anyOf(contains('49%'), contains('50%'), contains('51%')),
       );
     },
   );
 
-  testWidgets(
-    'omits the timeline block entirely when either date is missing',
-    (tester) async {
-      final controller = StreamController<Project?>();
-      addTearDown(controller.close);
+  testWidgets('omits the timeline block entirely when either date is missing', (
+    tester,
+  ) async {
+    final controller = StreamController<Project?>();
+    addTearDown(controller.close);
 
-      await _pump(tester, controller);
+    await _pump(tester, controller);
 
-      controller.add(
-        _project(startDate: DateTime.now(), expectedEndDate: null),
-      );
-      await tester.pumpAndSettle();
+    controller.add(_project(startDate: DateTime.now(), expectedEndDate: null));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('qa_project_detail_timeline')),
-        findsNothing,
-      );
-      expect(find.textContaining('Days Remaining'), findsNothing);
-      expect(find.textContaining('Overdue'), findsNothing);
-    },
-  );
+    expect(find.byKey(const Key('qa_project_detail_timeline')), findsNothing);
+    expect(find.textContaining('Days Remaining'), findsNothing);
+    expect(find.textContaining('Overdue'), findsNothing);
+  });
 
   testWidgets(
     'shows "Overdue" messaging when past the expected end date and the '

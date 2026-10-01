@@ -14,7 +14,6 @@ import 'package:buildtrack_app/core/services/attachment_cache_service.dart';
 import 'package:buildtrack_app/core/services/attachment_download_service.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
-import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
@@ -83,7 +82,6 @@ class PaymentDetailScreen extends ConsumerWidget {
               attachment: attachment,
               resolveUrl: () => resolveAttachmentDownloadUrl(
                 client: ref.read(callableClientProvider),
-                storage: ref.read(storageUploadServiceProvider),
                 workspaceId: workspaceId,
                 attachment: attachment,
                 defaultErrorMessage: l10n.t('attachmentCannotOpen'),

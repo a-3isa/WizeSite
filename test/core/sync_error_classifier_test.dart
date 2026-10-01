@@ -32,27 +32,24 @@ void main() {
     );
   });
 
-  test(
-    'failed-precondition contract and payment messages are not quota',
-    () {
-      const contract = CallableClientException(
-        'Set a contract value on this project before recording payments.',
-        code: 'failed-precondition',
-      );
-      expect(
-        SyncErrorClassifier.categoryFrom(
-          code: contract.code,
-          message: contract.message,
-        ),
-        SyncFailureCategory.invalidTarget,
-      );
-      expect(SyncErrorClassifier.isQuotaLimitFailure(contract), isFalse);
+  test('failed-precondition contract and payment messages are not quota', () {
+    const contract = CallableClientException(
+      'Set a contract value on this project before recording payments.',
+      code: 'failed-precondition',
+    );
+    expect(
+      SyncErrorClassifier.categoryFrom(
+        code: contract.code,
+        message: contract.message,
+      ),
+      SyncFailureCategory.invalidTarget,
+    );
+    expect(SyncErrorClassifier.isQuotaLimitFailure(contract), isFalse);
 
-      const quota = CallableClientException(
-        'LIMIT_REACHED',
-        code: 'failed-precondition',
-      );
-      expect(SyncErrorClassifier.isQuotaLimitFailure(quota), isTrue);
-    },
-  );
+    const quota = CallableClientException(
+      'LIMIT_REACHED',
+      code: 'failed-precondition',
+    );
+    expect(SyncErrorClassifier.isQuotaLimitFailure(quota), isTrue);
+  });
 }

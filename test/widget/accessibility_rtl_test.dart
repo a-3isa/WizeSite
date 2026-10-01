@@ -3,7 +3,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/prefetch/app_prefetcher.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/connectivity_provider.dart';
@@ -220,7 +220,7 @@ void main() {
       await tester.pumpWidget(
         _projectsApp(
           _FakeProjectRepository(
-            FirestorePage(items: [_project('alpha', 125)], hasMore: false),
+            RecordPage(items: [_project('alpha', 125)], hasMore: false),
           ),
         ),
       );
@@ -344,9 +344,9 @@ Widget _reportsApp() {
   final project = _project('project_1', 100);
   final selector = ReportProjectSelectorController(
     loadActivePage: ({cursor}) async =>
-        FirestorePage(items: [project], hasMore: false),
+        RecordPage(items: [project], hasMore: false),
     loadArchivedPage: ({cursor}) async =>
-        const FirestorePage(items: [], hasMore: false),
+        const RecordPage(items: [], hasMore: false),
   );
 
   return ProviderScope(
@@ -464,16 +464,16 @@ class _FakeProjectRepository
     implements ProjectRepository, ProjectBrowseRepository {
   _FakeProjectRepository(this.page);
 
-  final FirestorePage<Project> page;
+  final RecordPage<Project> page;
 
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) async => page;
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -504,11 +504,11 @@ class _FakeProjectRepository
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async => const FirestorePage(items: [], hasMore: false);
+  }) async => const RecordPage(items: [], hasMore: false);
 
   @override
   Future<Project?> getProject(String projectId) async => null;

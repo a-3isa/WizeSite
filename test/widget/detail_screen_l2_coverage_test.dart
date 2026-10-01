@@ -4,7 +4,7 @@ import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -443,14 +443,14 @@ class _FakeEntityRepository implements EntityRepository {
   final AppEntity entity;
 
   @override
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return FirestorePage(items: [entity], hasMore: false);
+    return RecordPage(items: [entity], hasMore: false);
   }
 
   @override
@@ -565,7 +565,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -580,7 +580,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return FirestorePage(items: [expense], hasMore: false);
+    return RecordPage(items: [expense], hasMore: false);
   }
 
   @override

@@ -15,7 +15,6 @@ class CloudFunctionService {
     try {
       return await _client.call<Map<String, dynamic>>(
         functionName: 'processVoiceExpense',
-        httpFunctionName: 'processVoiceExpenseHttp',
         payload: {
           'storagePath': storagePath,
           'projects': projects,
@@ -27,7 +26,7 @@ class CloudFunctionService {
         // Self-hosted (spec 004, T083): the server allows 120 s for
         // transcription + parsing, and the same recording reuses its result.
         idempotencyKey: 'voice:$storagePath',
-        selfHostedTimeout: const Duration(seconds: 130),
+        timeout: const Duration(seconds: 130),
       );
     } on CallableClientException catch (error) {
       throw CloudFunctionServiceException(error.message, code: error.code);

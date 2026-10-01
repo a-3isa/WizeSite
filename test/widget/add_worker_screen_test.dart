@@ -1,5 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/contacts_service.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -66,13 +66,13 @@ class _FakeWorkerRepository implements WorkerRepository {
   Future<void> archiveWorker(String workerId) async {}
 
   @override
-  Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
+  Future<RecordPage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async =>
-      FirestorePage(items: worker == null ? [] : [worker!], hasMore: false);
+      RecordPage(items: worker == null ? [] : [worker!], hasMore: false);
 
   @override
   Future<WorkerProfile?> getWorker(String workerId) async => worker;

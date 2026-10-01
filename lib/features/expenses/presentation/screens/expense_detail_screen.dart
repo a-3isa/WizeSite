@@ -14,7 +14,6 @@ import 'package:buildtrack_app/core/services/attachment_download_service.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_queue_coordinator.dart';
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
-import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
@@ -41,7 +40,6 @@ class ExpenseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final expenseAsync = ref.watch(expenseDetailsProvider(expenseId));
-    final storageUploadService = ref.read(storageUploadServiceProvider);
     final locale = Localizations.localeOf(context).languageCode;
     final fallbackProjectId = projectId ?? expenseAsync.value?.projectId;
 
@@ -55,7 +53,6 @@ class ExpenseDetailScreen extends ConsumerWidget {
               attachment: attachment,
               resolveUrl: () => resolveAttachmentDownloadUrl(
                 client: ref.read(callableClientProvider),
-                storage: storageUploadService,
                 workspaceId: workspaceId,
                 attachment: attachment,
                 defaultErrorMessage: l10n.t('attachmentCannotOpen'),

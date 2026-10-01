@@ -1,5 +1,5 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -51,7 +51,7 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     cursor,
     int pageSize = 20,
@@ -60,7 +60,7 @@ class _FakeProjectRepository implements ProjectRepository {
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     cursor,
     int pageSize = 20,

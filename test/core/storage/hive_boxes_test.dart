@@ -55,49 +55,49 @@ void main() {
     await plain.put('locale', 'ar');
     await plain.close();
 
-    final first = await openEncryptedBox<String>(
-      'prefs_flag',
-      cipher: cipher,
-    );
+    final first = await openEncryptedBox<String>('prefs_flag', cipher: cipher);
     expect(first.get('locale'), 'ar');
     await first.close();
 
     hiveMarkedEncryptedBoxes.clear();
     hiveNeedsPlaintextMigration = true;
-    final second = await openEncryptedBox<String>(
-      'prefs_flag',
-      cipher: cipher,
-    );
+    final second = await openEncryptedBox<String>('prefs_flag', cipher: cipher);
     expect(second.get('locale'), 'ar');
     await second.close();
   });
 
-  test('migrated boxes are not re-opened as plaintext in the same process', () async {
-    hiveNeedsPlaintextMigration = true;
-    final plain = await Hive.openBox<String>('prefs_remigrate');
-    await plain.put('locale', 'ar');
-    await plain.close();
+  test(
+    'migrated boxes are not re-opened as plaintext in the same process',
+    () async {
+      hiveNeedsPlaintextMigration = true;
+      final plain = await Hive.openBox<String>('prefs_remigrate');
+      await plain.put('locale', 'ar');
+      await plain.close();
 
-    final first = await openEncryptedBox<String>(
-      'prefs_remigrate',
-      cipher: cipher,
-    );
-    expect(first.get('locale'), 'ar');
-    await first.close();
+      final first = await openEncryptedBox<String>(
+        'prefs_remigrate',
+        cipher: cipher,
+      );
+      expect(first.get('locale'), 'ar');
+      await first.close();
 
-    hiveNeedsPlaintextMigration = true;
-    final second = await openEncryptedBox<String>(
-      'prefs_remigrate',
-      cipher: cipher,
-    );
-    expect(second.get('locale'), 'ar');
-    await second.close();
-  });
+      hiveNeedsPlaintextMigration = true;
+      final second = await openEncryptedBox<String>(
+        'prefs_remigrate',
+        cipher: cipher,
+      );
+      expect(second.get('locale'), 'ar');
+      await second.close();
+    },
+  );
 
-  test('openEncryptedBox without a cipher stays compatible with tests', () async {
-    final box = await openEncryptedBox<String>('prefs_encrypted');
-    await box.put('theme', 'dark');
-    expect(box.get('theme'), 'dark');
-    await box.close();
-  });
+  test(
+    'openEncryptedBox without a cipher stays compatible with tests',
+    () async {
+      final box = await openEncryptedBox<String>('prefs_encrypted');
+      await box.put('theme', 'dark');
+      expect(box.get('theme'), 'dark');
+      await box.close();
+    },
+  );
 }

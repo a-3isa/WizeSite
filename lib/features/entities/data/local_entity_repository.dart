@@ -194,7 +194,7 @@ class LocalEntityRepository implements EntityRepository {
   }
 
   @override
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
@@ -243,7 +243,7 @@ class LocalEntityRepository implements EntityRepository {
       [...args, pageSize],
     );
     final last = rows.isEmpty ? null : rows.last;
-    return FirestorePage<AppEntity>(
+    return RecordPage<AppEntity>(
       items: [for (final row in rows) _fromRow(row)],
       hasMore: rows.length == pageSize,
       nextCursor: last == null

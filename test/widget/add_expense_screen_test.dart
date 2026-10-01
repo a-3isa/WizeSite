@@ -2,7 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/accounting_categories.dart';
 import 'package:buildtrack_app/core/constants/accounting_entity_types.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
@@ -52,7 +52,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -67,7 +67,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage(items: [], hasMore: false);
+    return const RecordPage(items: [], hasMore: false);
   }
 
   @override
@@ -155,9 +155,7 @@ void main() {
     await tester.tap(find.byKey(const Key('qa_add_expense_category')));
     await tester.pumpAndSettle();
     await tester.tap(
-      find
-          .text(l10n.expenseCategoryLabel(AccountingCategories.materials))
-          .last,
+      find.text(l10n.expenseCategoryLabel(AccountingCategories.materials)).last,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('qa_add_expense_save')));
@@ -263,41 +261,42 @@ void main() {
     expect(entries.createdDailyWage, 120);
   });
 
-  testWidgets('duplicate last expense prefills amount and category without attachments', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _screen(
-        locale: const Locale('en'),
-        projectId: 'project_1',
-        duplicateFrom: Expense(
-          id: 'expense_last',
-          workspaceId: 'workspace_1',
+  testWidgets(
+    'duplicate last expense prefills amount and category without attachments',
+    (tester) async {
+      await tester.pumpWidget(
+        _screen(
+          locale: const Locale('en'),
           projectId: 'project_1',
-          projectName: 'Tower',
-          category: AccountingCategories.materials,
-          amount: 42.5,
-          currency: 'EGP',
-          date: DateTime.utc(2026, 1, 1),
-          notes: 'old notes',
-          supplierName: '',
-          entityId: 'entity_1',
-          entityName: 'Steel Co',
-          paymentMethod: 'cash',
-          inputMethod: 'manual',
-          transcript: '',
-          source: '',
-          storagePath: '',
-          isArchived: false,
-          attachments: const [],
+          duplicateFrom: Expense(
+            id: 'expense_last',
+            workspaceId: 'workspace_1',
+            projectId: 'project_1',
+            projectName: 'Tower',
+            category: AccountingCategories.materials,
+            amount: 42.5,
+            currency: 'EGP',
+            date: DateTime.utc(2026, 1, 1),
+            notes: 'old notes',
+            supplierName: '',
+            entityId: 'entity_1',
+            entityName: 'Steel Co',
+            paymentMethod: 'cash',
+            inputMethod: 'manual',
+            transcript: '',
+            source: '',
+            storagePath: '',
+            isArchived: false,
+            attachments: const [],
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('42.50'), findsWidgets);
-    expect(find.text('receipt.jpg'), findsNothing);
-  });
+      expect(find.text('42.50'), findsWidgets);
+      expect(find.text('receipt.jpg'), findsNothing);
+    },
+  );
 }
 
 Widget _screen({
@@ -337,7 +336,10 @@ Widget _screen({
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      home: AddExpenseScreen(projectId: projectId, duplicateFrom: duplicateFrom),
+      home: AddExpenseScreen(
+        projectId: projectId,
+        duplicateFrom: duplicateFrom,
+      ),
     ),
   );
 }
@@ -373,14 +375,14 @@ class _FakeEntityRepository implements EntityRepository {
   }
 
   @override
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return FirestorePage(
+    return RecordPage(
       items: entities.where((entity) => entity.type == type).toList(),
       hasMore: false,
     );
@@ -466,13 +468,13 @@ class _FakeWorkerRepository implements WorkerRepository {
   }) async {}
 
   @override
-  Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
+  Future<RecordPage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
     Set<WorkerStatus>? statuses,
   }) async {
-    return FirestorePage(items: workers, hasMore: false);
+    return RecordPage(items: workers, hasMore: false);
   }
 
   @override

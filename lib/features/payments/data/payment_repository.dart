@@ -2,7 +2,7 @@ import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -16,7 +16,7 @@ abstract interface class PaymentRepository {
     String workspaceId, {
     String? projectId,
   });
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -105,7 +105,7 @@ class LocalPaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -185,7 +185,7 @@ class LocalPaymentRepository implements PaymentRepository {
             )
             .toList(growable: false);
     final last = rows.isEmpty ? null : rows.last;
-    return FirestorePage<PaymentRecord>(
+    return RecordPage<PaymentRecord>(
       items: items,
       hasMore: rows.length == pageSize,
       nextCursor: last == null

@@ -40,7 +40,6 @@ void main() {
         payload: any(named: 'payload'),
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: any(named: 'defaultErrorMessage'),
-        httpFunctionName: any(named: 'httpFunctionName'),
         idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenAnswer((_) async {});

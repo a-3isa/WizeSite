@@ -41,9 +41,7 @@ Future<HiveAesCipher> loadOrCreateHiveCipher({
   return HiveAesCipher(bytes);
 }
 
-Future<void> persistHiveEncryptionReady({
-  FlutterSecureStorage? storage,
-}) async {
+Future<void> persistHiveEncryptionReady({FlutterSecureStorage? storage}) async {
   final secure = storage ?? defaultHiveKeyStore();
   await secure.write(key: hiveEncryptedFlagKey, value: '1');
   hiveMarkedEncryptedBoxes.addAll([
@@ -53,10 +51,7 @@ Future<void> persistHiveEncryptionReady({
   ]);
 }
 
-Future<Box<T>> openEncryptedBox<T>(
-  String name, {
-  HiveCipher? cipher,
-}) async {
+Future<Box<T>> openEncryptedBox<T>(String name, {HiveCipher? cipher}) async {
   if (Hive.isBoxOpen(name)) {
     return Hive.box<T>(name);
   }
@@ -109,10 +104,7 @@ Future<void> _writeBoxEncryptedFlag(String name) async {
   } catch (_) {}
 }
 
-Future<Box<T>> _migrateUnencryptedBox<T>(
-  String name,
-  HiveCipher cipher,
-) async {
+Future<Box<T>> _migrateUnencryptedBox<T>(String name, HiveCipher cipher) async {
   final plain = await Hive.openBox<T>(name);
   final entries = Map<dynamic, T>.from(plain.toMap());
   await plain.close();

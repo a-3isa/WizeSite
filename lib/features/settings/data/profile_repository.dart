@@ -4,7 +4,6 @@ import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -22,21 +21,17 @@ abstract interface class ProfileRepository {
   });
 }
 
-class FirebaseProfileRepository implements ProfileRepository {
-  FirebaseProfileRepository(
-    this._storage,
+/// Profile photos go to `POST /v1/files` (spec 004); the returned link is the
+/// permanent public avatar URL. Profile edits are queued RPCs.
+class SelfHostedProfileRepository implements ProfileRepository {
+  SelfHostedProfileRepository(
+    this._transport,
     this._mutationService, {
-    SelfHostedRpcTransport? selfHostedTransport,
     BackendConfig config = BackendConfig.fromEnvironment,
-  }) : _selfHosted = selfHostedTransport,
-       _config = config;
+  }) : _config = config;
 
-  final FirebaseStorage _storage;
+  final SelfHostedRpcTransport _transport;
   final WorkspaceMutationService _mutationService;
-
-  /// Self-hosted builds (spec 004): the photo goes to `POST /v1/files` and the
-  /// returned link is the permanent public avatar URL.
-  final SelfHostedRpcTransport? _selfHosted;
   final BackendConfig _config;
 
   @override
@@ -50,32 +45,18 @@ class FirebaseProfileRepository implements ProfileRepository {
         'Selected profile image was not found.',
       );
     }
-
-    final selfHosted = _selfHosted;
-    if (selfHosted != null) {
-      try {
-        final uploaded = await selfHosted.uploadFile(
-          kind: 'profile-photos',
-          bytes: await source.readAsBytes(),
-          fileName: 'avatar.jpg',
-          contentType: 'image/jpeg',
-          idempotencyKey: const Uuid().v4(),
-        );
-        return _config.publicFileUri('${uploaded['storagePath']}').toString();
-      } on CallableClientException catch (error) {
-        throw ProfileRepositoryException(error.message);
-      }
-    }
-
-    final ref = _storage.ref('profile-photos/$userId/avatar.jpg');
-    await ref.putFile(
-      source,
-      SettableMetadata(
+    try {
+      final uploaded = await _transport.uploadFile(
+        kind: 'profile-photos',
+        bytes: await source.readAsBytes(),
+        fileName: 'avatar.jpg',
         contentType: 'image/jpeg',
-        customMetadata: <String, String>{'uploadedBy': userId},
-      ),
-    );
-    return ref.getDownloadURL();
+        idempotencyKey: const Uuid().v4(),
+      );
+      return _config.publicFileUri('${uploaded['storagePath']}').toString();
+    } on CallableClientException catch (error) {
+      throw ProfileRepositoryException(error.message);
+    }
   }
 
   @override
@@ -104,9 +85,8 @@ class ProfileRepositoryException implements Exception {
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return FirebaseProfileRepository(
-    FirebaseStorage.instance,
+  return SelfHostedProfileRepository(
+    ref.watch(selfHostedRpcTransportProvider),
     ref.watch(workspaceMutationServiceProvider),
-    selfHostedTransport: ref.watch(selfHostedRpcTransportProvider),
   );
 });

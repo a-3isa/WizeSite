@@ -1,10 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-/// Makes a Firestore-shaped map safe for the offline queue (stored as JSON)
-/// and for the RPC API: timestamps and dates become UTC ISO-8601 strings,
+/// Makes a record map safe for the offline queue (stored as JSON)
+/// and for the RPC API: dates become UTC ISO-8601 strings,
 /// which the server parses back (spec 004).
 Object? jsonSafe(Object? value) => switch (value) {
-  final Timestamp t => t.toDate().toUtc().toIso8601String(),
   final DateTime d => d.toUtc().toIso8601String(),
   final Map<dynamic, dynamic> m => <String, dynamic>{
     for (final entry in m.entries) '${entry.key}': jsonSafe(entry.value),

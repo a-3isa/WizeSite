@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ProjectAccountingSummary {
   const ProjectAccountingSummary({
     required this.workspaceId,
@@ -247,9 +245,6 @@ int _intValue(Object? raw) => raw is num ? raw.toInt() : 0;
 DateTime _dateValue(Object? raw) {
   if (raw is DateTime) {
     return raw;
-  }
-  if (raw is Timestamp) {
-    return raw.toDate();
   }
   if (raw is String) {
     final parsed = DateTime.tryParse(raw);

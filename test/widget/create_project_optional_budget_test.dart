@@ -1,4 +1,4 @@
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
@@ -46,21 +46,21 @@ class _RecordingProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override

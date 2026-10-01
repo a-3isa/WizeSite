@@ -1,12 +1,10 @@
 import 'dart:io';
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:buildtrack_app/core/services/attachment_file_types.dart';
 import 'package:buildtrack_app/core/services/attachment_validation_service.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -62,21 +60,15 @@ class UploadedVoiceFile {
   final String downloadUrl;
 }
 
+/// Uploads to the self-hosted file API, `POST /v1/files` (spec 004). Files are
+/// read later through `getAttachmentDownloadUrl`, so no download URL is
+/// returned (empty string).
 class StorageUploadService {
-  const StorageUploadService(
-    this._storage, {
-    SelfHostedRpcTransport? selfHostedTransport,
-  }) : _selfHosted = selfHostedTransport;
+  const StorageUploadService(this._transport);
 
-  final FirebaseStorage _storage;
+  final SelfHostedRpcTransport _transport;
 
-  /// Set in self-hosted builds (spec 004): files go to `POST /v1/files` and are
-  /// read later through `getAttachmentDownloadUrl`, so no download URL is
-  /// returned (empty string).
-  final SelfHostedRpcTransport? _selfHosted;
-
-  Future<({String storagePath, int size})> _uploadSelfHosted({
-    required SelfHostedRpcTransport transport,
+  Future<({String storagePath, int size})> _upload({
     required String kind,
     required Uint8List bytes,
     required String fileName,
@@ -84,7 +76,7 @@ class StorageUploadService {
     required String idempotencyKey,
   }) async {
     try {
-      final result = await transport.uploadFile(
+      final result = await _transport.uploadFile(
         kind: kind,
         bytes: bytes,
         fileName: fileName,
@@ -130,61 +122,19 @@ class StorageUploadService {
     final extension = _extensionOf(localFilePath).isEmpty
         ? '.m4a'
         : _extensionOf(localFilePath);
-    final storagePath = 'voice-expenses/$userId/$timestamp$extension';
     final bytes = await source.readAsBytes();
-    final selfHosted = _selfHosted;
-    if (selfHosted != null) {
-      final uploaded = await _uploadSelfHosted(
-        transport: selfHosted,
-        kind: 'voice-expenses',
-        bytes: bytes,
-        fileName: '$timestamp$extension',
-        contentType: _contentTypeForAudioExtension(extension),
-        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
-      );
-      onProgress?.call(1);
-      return UploadedVoiceFile(
-        storagePath: uploaded.storagePath,
-        downloadUrl: '',
-      );
-    }
-    final ref = _storage.ref(storagePath);
-    final uploadTask = ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: _contentTypeForAudioExtension(extension),
-        customMetadata: <String, String>{'uploadedBy': userId},
-      ),
+    final uploaded = await _upload(
+      kind: 'voice-expenses',
+      bytes: bytes,
+      fileName: '$timestamp$extension',
+      contentType: _contentTypeForAudioExtension(extension),
+      idempotencyKey: idempotencyKey ?? const Uuid().v4(),
     );
-    StreamSubscription<TaskSnapshot>? progressSubscription;
-
-    if (onProgress != null) {
-      progressSubscription = uploadTask.snapshotEvents.listen(
-        (snapshot) {
-          final total = snapshot.totalBytes;
-          if (total <= 0) {
-            return;
-          }
-          onProgress(snapshot.bytesTransferred / total);
-        },
-        onError: (_) {
-          // Upload failures are handled by awaiting `uploadTask` below.
-        },
-      );
-    }
-
-    try {
-      await uploadTask;
-      final downloadUrl = await ref.getDownloadURL();
-      return UploadedVoiceFile(
-        storagePath: storagePath,
-        downloadUrl: downloadUrl,
-      );
-    } on FirebaseException catch (e) {
-      throw StorageUploadException.fromFirebase(e);
-    } finally {
-      await progressSubscription?.cancel();
-    }
+    onProgress?.call(1);
+    return UploadedVoiceFile(
+      storagePath: uploaded.storagePath,
+      downloadUrl: '',
+    );
   }
 
   Future<UploadedAttachment> uploadAttachment({
@@ -215,80 +165,24 @@ class StorageUploadService {
       );
     }
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final extension = _extensionOf(localFilePath).isEmpty
-        ? ''
-        : _extensionOf(localFilePath);
     final resolvedName = fileName ?? source.uri.pathSegments.last;
-    final storagePath = 'attachments/$userId/$timestamp$extension';
     final bytes = await source.readAsBytes();
     final contentType = contentTypeForAttachmentPath(localFilePath);
-    final selfHosted = _selfHosted;
-    if (selfHosted != null) {
-      final uploaded = await _uploadSelfHosted(
-        transport: selfHosted,
-        kind: 'attachments',
-        bytes: bytes,
-        fileName: resolvedName,
-        contentType: contentType,
-        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
-      );
-      onProgress?.call(1);
-      return UploadedAttachment(
-        storagePath: uploaded.storagePath,
-        downloadUrl: '',
-        fileName: resolvedName,
-        contentType: contentType,
-        size: uploaded.size,
-      );
-    }
-    final ref = _storage.ref(storagePath);
-    final uploadTask = ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: contentType,
-        customMetadata: <String, String>{'uploadedBy': userId},
-      ),
+    final uploaded = await _upload(
+      kind: 'attachments',
+      bytes: bytes,
+      fileName: resolvedName,
+      contentType: contentType,
+      idempotencyKey: idempotencyKey ?? const Uuid().v4(),
     );
-    StreamSubscription<TaskSnapshot>? progressSubscription;
-
-    if (onProgress != null) {
-      progressSubscription = uploadTask.snapshotEvents.listen((snapshot) {
-        final total = snapshot.totalBytes;
-        if (total <= 0) {
-          return;
-        }
-        onProgress(snapshot.bytesTransferred / total);
-      }, onError: (_) {});
-    }
-
-    try {
-      await uploadTask;
-      final downloadUrl = await ref.getDownloadURL();
-      return UploadedAttachment(
-        storagePath: storagePath,
-        downloadUrl: downloadUrl,
-        fileName: resolvedName,
-        contentType: contentType,
-        size: bytes.length,
-      );
-    } on FirebaseException catch (e) {
-      throw StorageUploadException.fromFirebase(e);
-    } finally {
-      await progressSubscription?.cancel();
-    }
-  }
-
-  Future<String> getDownloadUrl(String storagePath) async {
-    return _storage.ref(storagePath).getDownloadURL();
-  }
-
-  Future<Uint8List?> downloadAttachmentBytes(
-    String storagePath, {
-    int maxBytes = 20 * 1024 * 1024,
-  }) async {
-    final ref = _storage.ref(storagePath);
-    return ref.getData(maxBytes);
+    onProgress?.call(1);
+    return UploadedAttachment(
+      storagePath: uploaded.storagePath,
+      downloadUrl: '',
+      fileName: resolvedName,
+      contentType: contentType,
+      size: uploaded.size,
+    );
   }
 }
 
@@ -303,49 +197,10 @@ class StorageUploadException implements Exception {
   final String code;
   final bool retryable;
 
-  factory StorageUploadException.fromFirebase(FirebaseException error) {
-    switch (error.code) {
-      case 'unauthorized':
-        return const StorageUploadException(
-          'Upload is not authorized. Please sign in again and retry.',
-          code: 'unauthorized',
-          retryable: false,
-        );
-      case 'canceled':
-        return const StorageUploadException(
-          'Upload was canceled. Please try again.',
-          code: 'canceled',
-        );
-      case 'quota-exceeded':
-        return const StorageUploadException(
-          'Storage quota was exceeded. Please try again later.',
-          code: 'quota-exceeded',
-        );
-      case 'retry-limit-exceeded':
-        return const StorageUploadException(
-          'Upload timed out. Please check your connection and retry.',
-          code: 'retry-limit-exceeded',
-        );
-      case 'object-not-found':
-        return const StorageUploadException(
-          'Upload could not be completed in storage. Please try again.',
-          code: 'object-not-found',
-        );
-      default:
-        return StorageUploadException(
-          error.message ?? 'Failed to upload audio to Firebase Storage.',
-          code: error.code,
-        );
-    }
-  }
-
   @override
   String toString() => message;
 }
 
 final storageUploadServiceProvider = Provider<StorageUploadService>((ref) {
-  return StorageUploadService(
-    FirebaseStorage.instance,
-    selfHostedTransport: ref.watch(selfHostedRpcTransportProvider),
-  );
+  return StorageUploadService(ref.watch(selfHostedRpcTransportProvider));
 });

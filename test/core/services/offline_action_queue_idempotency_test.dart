@@ -7,20 +7,11 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
-
-class _MockFunctions extends Mock implements FirebaseFunctions {}
-
-class _MockAuth extends Mock implements FirebaseAuth {}
-
-class _MockAppCheck extends Mock implements FirebaseAppCheck {}
 
 class _MockTelemetry extends Mock implements AppTelemetry {}
 
@@ -69,11 +60,7 @@ void main() {
     final telemetry = _MockTelemetry();
     when(() => telemetry.log(any(), any())).thenAnswer((_) async {});
     final client = CallableClient(
-      _MockFunctions(),
-      _MockAuth(),
-      _MockAppCheck(),
-      telemetry,
-      selfHostedTransport: SelfHostedRpcTransport(
+      SelfHostedRpcTransport(
         config: const BackendConfig(
           apiBaseUrl: 'https://api.example.com',
           syncUrl: 'https://sync.example.com',
@@ -82,6 +69,7 @@ void main() {
         idToken: ({required bool forceRefresh}) async => 'id-token',
         appCheckToken: () async => 'app-check',
       ),
+      telemetry,
     );
     service = WorkspaceMutationService(client, queue, telemetry);
   });

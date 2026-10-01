@@ -764,7 +764,6 @@ class WorkspaceMutationService {
         final result = await _client.call<Map<String, dynamic>>(
           functionName: 'createProjectWithQuota',
           idempotencyKey: action.id,
-          httpFunctionName: 'createProjectWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to create project.',
@@ -817,7 +816,6 @@ class WorkspaceMutationService {
         await _client.call<Map<String, dynamic>>(
           functionName: 'createExpenseWithQuota',
           idempotencyKey: action.id,
-          httpFunctionName: 'createExpenseWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to save expense.',
@@ -836,7 +834,6 @@ class WorkspaceMutationService {
         await _client.call<void>(
           functionName: 'archiveExpenseWithQuotaRefund',
           idempotencyKey: action.id,
-          httpFunctionName: 'archiveExpenseWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive expense.',
@@ -846,7 +843,6 @@ class WorkspaceMutationService {
         await _client.call<Map<String, dynamic>>(
           functionName: 'createPaymentWithQuota',
           idempotencyKey: action.id,
-          httpFunctionName: 'createPaymentWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to save payment.',
@@ -865,7 +861,6 @@ class WorkspaceMutationService {
         await _client.call<void>(
           functionName: 'archivePaymentWithQuotaRefund',
           idempotencyKey: action.id,
-          httpFunctionName: 'archivePaymentWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive payment.',
@@ -875,7 +870,6 @@ class WorkspaceMutationService {
         await _client.call<Map<String, dynamic>>(
           functionName: 'createWorkerEntryWithQuota',
           idempotencyKey: action.id,
-          httpFunctionName: 'createWorkerEntryWithQuotaHttp',
           payload: action.payload,
           parseResult: (result) => Map<String, dynamic>.from(result as Map),
           defaultErrorMessage: 'Failed to save worker entry.',
@@ -921,7 +915,6 @@ class WorkspaceMutationService {
         await _client.call<void>(
           functionName: 'archiveWorkerEntryWithQuotaRefund',
           idempotencyKey: action.id,
-          httpFunctionName: 'archiveWorkerEntryWithQuotaRefundHttp',
           payload: action.payload,
           parseResult: (_) {},
           defaultErrorMessage: 'Failed to archive worker entry.',

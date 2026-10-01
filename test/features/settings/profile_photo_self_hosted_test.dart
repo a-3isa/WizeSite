@@ -5,13 +5,10 @@ import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/settings/data/profile_repository.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
-
-class _MockStorage extends Mock implements FirebaseStorage {}
 
 class _MockMutations extends Mock implements WorkspaceMutationService {}
 
@@ -28,11 +25,8 @@ void main() {
       apiBaseUrl: 'https://api.example.com/',
       syncUrl: 'https://sync.example.com',
     );
-    final repo = FirebaseProfileRepository(
-      _MockStorage(),
-      _MockMutations(),
-      config: config,
-      selfHostedTransport: SelfHostedRpcTransport(
+    final repo = SelfHostedProfileRepository(
+      SelfHostedRpcTransport(
         config: config,
         httpClient: MockClient.streaming((request, body) async {
           kind =
@@ -58,6 +52,8 @@ void main() {
         idToken: ({required bool forceRefresh}) async => 'id-token',
         appCheckToken: () async => 'app-check',
       ),
+      _MockMutations(),
+      config: config,
     );
     final url = await repo.uploadProfilePhoto(
       userId: 'u1',

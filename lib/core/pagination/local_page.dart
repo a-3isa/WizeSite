@@ -9,7 +9,7 @@ class LocalPageCursor {
   final String id;
 }
 
-/// One page of rows from the local replica. Same shape as `FirestorePage`
+/// One page of rows from the local replica. Same shape as `RecordPage`
 /// (items, hasMore, nextCursor) so list screens can switch without rework.
 class LocalPage<T> {
   const LocalPage({

@@ -32,9 +32,8 @@ class _FakeCallableClient implements CallableClient {
     required Map<String, dynamic> payload,
     required T Function(dynamic result) parseResult,
     required String defaultErrorMessage,
-    String? httpFunctionName,
     String? idempotencyKey,
-    Duration? selfHostedTimeout,
+    Duration? timeout,
   }) async {
     callCount += 1;
     lastFunctionName = functionName;

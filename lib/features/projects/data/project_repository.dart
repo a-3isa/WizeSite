@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
@@ -42,7 +42,7 @@ class ProjectBrowseQuery {
 }
 
 abstract interface class ProjectBrowseRepository {
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   });
@@ -53,12 +53,12 @@ abstract interface class ProjectRepository {
   Stream<List<Project>> watchAllProjects(String workspaceId);
   Stream<List<Project>> watchArchivedProjects(String workspaceId);
   Stream<Project?> watchProject(String projectId);
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   });
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -299,7 +299,7 @@ class LocalProjectRepository
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -315,7 +315,7 @@ class LocalProjectRepository
   );
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -331,7 +331,7 @@ class LocalProjectRepository
   );
 
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) {
@@ -377,7 +377,7 @@ class LocalProjectRepository
 
   /// [_page] ordered by an arbitrary SQL expression, exposed as `sort_value`
   /// so the keyset cursor can compare against it.
-  Future<FirestorePage<Project>> _pageWithSortValue({
+  Future<RecordPage<Project>> _pageWithSortValue({
     required String workspaceId,
     required String where,
     required List<Object?> args,
@@ -401,7 +401,7 @@ class LocalProjectRepository
     );
   }
 
-  Future<FirestorePage<Project>> _pageFrom({
+  Future<RecordPage<Project>> _pageFrom({
     required String select,
     required List<Object?> args,
     required String workspaceId,
@@ -441,7 +441,7 @@ class LocalProjectRepository
       includePendingCreates: includePendingCreates,
     );
     final last = pageRows.isEmpty ? null : pageRows.last;
-    return FirestorePage<Project>(
+    return RecordPage<Project>(
       items: items,
       hasMore: hasMore,
       nextCursor: last == null

@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
@@ -46,30 +47,24 @@ void main() {
       );
     });
 
-    test('maps Storage failures to a storage-specific or scoped key', () {
+    test('maps upload failures to a storage-specific or scoped key', () {
       expect(
         appErrorMessageKey(
-          FirebaseException(
-            plugin: 'firebase_storage',
-            code: 'retry-limit-exceeded',
-          ),
+          const StorageUploadException('x', code: 'upload-failed'),
         ),
         'errorStorage',
       );
       expect(
         appErrorMessageKey(
-          FirebaseException(plugin: 'firebase_storage', code: 'unauthorized'),
+          const StorageUploadException('x', code: 'permission-denied'),
         ),
         'errorPermissionDenied',
       );
       expect(
         appErrorMessageKey(
-          FirebaseException(
-            plugin: 'firebase_storage',
-            code: 'object-not-found',
-          ),
+          const StorageUploadException('x', code: 'unavailable'),
         ),
-        'errorNotFound',
+        'errorNetwork',
       );
     });
 

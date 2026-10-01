@@ -1,7 +1,7 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
@@ -19,8 +19,8 @@ void main() {
     (tester) async {
       final repository = _FakeEntityRepository(
         pages: [
-          FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: true),
-          FirestorePage(items: [_entity('c2', 'Bravo Build')], hasMore: false),
+          RecordPage(items: [_entity('c1', 'Alpha Build')], hasMore: true),
+          RecordPage(items: [_entity('c2', 'Bravo Build')], hasMore: false),
         ],
         searchResults: [_entity('c2', 'Bravo Build')],
       );
@@ -64,7 +64,7 @@ void main() {
   ) async {
     final repository = _FakeEntityRepository(
       pages: [
-        FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
+        RecordPage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
       ],
     );
     final router = GoRouter(
@@ -107,7 +107,7 @@ void main() {
     (tester) async {
       final repository = _FakeEntityRepository(
         pages: [
-          FirestorePage(
+          RecordPage(
             items: [_entity('e1', 'Crane Rentals', type: 'equipmentProvider')],
             hasMore: false,
           ),
@@ -147,7 +147,7 @@ void main() {
   ) async {
     final repository = _FakeEntityRepository(
       pages: [
-        FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
+        RecordPage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
       ],
     );
     final router = GoRouter(
@@ -178,7 +178,7 @@ void main() {
   testWidgets('resource directory debounces search input', (tester) async {
     final repository = _FakeEntityRepository(
       pages: [
-        FirestorePage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
+        RecordPage(items: [_entity('c1', 'Alpha Build')], hasMore: false),
       ],
       searchResults: [_entity('c2', 'Bravo Build')],
     );
@@ -251,13 +251,13 @@ Future<void> _pump(
 class _FakeEntityRepository implements EntityRepository {
   _FakeEntityRepository({required this.pages, this.searchResults = const []});
 
-  final List<FirestorePage<AppEntity>> pages;
+  final List<RecordPage<AppEntity>> pages;
   final List<AppEntity> searchResults;
   final List<(String, String)> searchCalls = [];
   int _pageIndex = 0;
 
   @override
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,

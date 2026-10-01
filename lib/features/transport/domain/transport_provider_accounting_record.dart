@@ -1,5 +1,4 @@
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransportProviderAccountingRecord {
   const TransportProviderAccountingRecord({
@@ -57,7 +56,7 @@ class TransportProviderAccountingRecord {
     'providerName': providerName,
     'description': description,
     'amount': amount,
-    'date': Timestamp.fromDate(date),
+    'date': date,
     'paymentMethod': paymentMethod,
     'paymentStatus': paymentStatus,
     'notes': notes,
@@ -67,7 +66,6 @@ class TransportProviderAccountingRecord {
 
 DateTime _parseDate(Object? raw) {
   if (raw is DateTime) return raw;
-  if (raw is Timestamp) return raw.toDate();
   if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
   return DateTime.now();
 }

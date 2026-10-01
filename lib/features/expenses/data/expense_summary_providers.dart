@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/core/models/accounting_summary.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ExpenseSummaryScope {
@@ -74,20 +74,25 @@ final expenseQuickSummaryProvider =
       ref,
       scope,
     ) {
-      final firestore = ref.watch(firestoreProvider);
+      final source = ref.watch(docSourceProvider);
       final queue = ref.watch(offlineActionQueueProvider);
-      final summaryStream = firestore
-          .collection('project_summaries')
-          .where('workspaceId', isEqualTo: scope.workspaceId)
-          .where('projectId', isEqualTo: scope.projectId)
-          .limit(1)
-          .snapshots()
-          .map((snap) {
-            if (snap.docs.isEmpty) {
+      final summaryStream = source
+          .watch(
+            DocQuery(
+              'project_summaries',
+              equals: {
+                'workspaceId': scope.workspaceId,
+                'projectId': scope.projectId,
+              },
+              limit: 1,
+            ),
+          )
+          .map((docs) {
+            if (docs.isEmpty) {
               return const ExpenseQuickSummary();
             }
             return ExpenseQuickSummary.fromProjectSummary(
-              ProjectAccountingSummary.fromMap(snap.docs.first.data()),
+              ProjectAccountingSummary.fromMap(docs.first.data),
             );
           });
       final pendingStream = queue.watch();

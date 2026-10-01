@@ -1,9 +1,10 @@
 import 'dart:async';
 
+import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -14,8 +15,6 @@ import 'package:buildtrack_app/features/projects/presentation/screens/archived_p
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,16 +49,16 @@ class _FakeProjectRepository
     implements ProjectRepository, ProjectBrowseRepository {
   _FakeProjectRepository({
     required this.firstPage,
-    this.secondPage = const FirestorePage<Project>(items: [], hasMore: false),
+    this.secondPage = const RecordPage<Project>(items: [], hasMore: false),
   });
 
-  final FirestorePage<Project> firstPage;
-  final FirestorePage<Project> secondPage;
+  final RecordPage<Project> firstPage;
+  final RecordPage<Project> secondPage;
   final queries = <ProjectBrowseQuery>[];
   final archivedIds = <String>[];
 
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) async {
@@ -94,14 +93,14 @@ class _FakeProjectRepository
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async => const FirestorePage(items: [], hasMore: false);
+  }) async => const RecordPage(items: [], hasMore: false);
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -144,11 +143,8 @@ class _FakeProjectRepository
       const Stream.empty();
 }
 
-Future<DocumentSnapshot<Map<String, dynamic>>> _cursor() async {
-  final firestore = FakeFirebaseFirestore();
-  await firestore.collection('cursors').doc('page_1').set({'value': 1});
-  return firestore.collection('cursors').doc('page_1').get();
-}
+Future<LocalPageCursor> _cursor() async =>
+    const LocalPageCursor(sortValue: 1, id: 'page_1');
 
 Widget _app(
   ProjectRepository repository,
@@ -223,7 +219,7 @@ void main() {
     expect(find.text('Project high'), findsNothing);
 
     repository.completeFirstPage(
-      FirestorePage(items: [_project('high', 500)], hasMore: false),
+      RecordPage(items: [_project('high', 500)], hasMore: false),
     );
     await tester.pumpAndSettle();
 
@@ -243,7 +239,7 @@ void main() {
     expect(find.text('Project old'), findsNothing);
 
     repository.completeFirstPage(
-      FirestorePage(items: [_project('old', 0)], hasMore: false),
+      RecordPage(items: [_project('old', 0)], hasMore: false),
     );
     await tester.pumpAndSettle();
 
@@ -255,7 +251,7 @@ void main() {
     tester,
   ) async {
     final repository = _FakeProjectRepository(
-      firstPage: FirestorePage(
+      firstPage: RecordPage(
         items: [
           _project('high', 500),
           _project('loss', -100),
@@ -267,7 +263,7 @@ void main() {
         hasMore: true,
         nextCursor: await _cursor(),
       ),
-      secondPage: FirestorePage(items: [_project('tail', 50)], hasMore: false),
+      secondPage: RecordPage(items: [_project('tail', 50)], hasMore: false),
     );
 
     await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
@@ -302,13 +298,13 @@ void main() {
     'a contract-less card shows expenses and never profit or loss wording',
     (tester) async {
       final repository = _FakeProjectRepository(
-        firstPage: FirestorePage(
+        firstPage: RecordPage(
           items: [
             _project('ledger', -400, contractValue: null, totalExpenses: 400),
           ],
           hasMore: false,
         ),
-        secondPage: const FirestorePage(items: [], hasMore: false),
+        secondPage: const RecordPage(items: [], hasMore: false),
       );
 
       await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
@@ -329,11 +325,8 @@ void main() {
     tester,
   ) async {
     final repository = _FakeProjectRepository(
-      firstPage: FirestorePage(
-        items: [_project('normal', 250)],
-        hasMore: false,
-      ),
-      secondPage: const FirestorePage(items: [], hasMore: false),
+      firstPage: RecordPage(items: [_project('normal', 250)], hasMore: false),
+      secondPage: const RecordPage(items: [], hasMore: false),
     );
 
     await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
@@ -343,35 +336,31 @@ void main() {
     expect(find.text('Total Expenses'), findsNothing);
   });
 
-  testWidgets(
-    'a contract-only project still shows no budget bar on its card',
-    (tester) async {
-      final repository = _FakeProjectRepository(
-        firstPage: FirestorePage(
-          items: [_project('contract_only', 250)],
-          hasMore: false,
-        ),
-        secondPage: const FirestorePage(items: [], hasMore: false),
-      );
+  testWidgets('a contract-only project still shows no budget bar on its card', (
+    tester,
+  ) async {
+    final repository = _FakeProjectRepository(
+      firstPage: RecordPage(
+        items: [_project('contract_only', 250)],
+        hasMore: false,
+      ),
+      secondPage: const RecordPage(items: [], hasMore: false),
+    );
 
-      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+    await tester.pumpAndSettle();
 
-      // The card has always required an explicit Budget Limit. Switching it to
-      // the shared budget baseline would make contract-only projects sprout a
-      // bar they never had, breaking FR-018.
-      expect(find.text('Budget used'), findsNothing);
-    },
-  );
+    // The card has always required an explicit Budget Limit. Switching it to
+    // the shared budget baseline would make contract-only projects sprout a
+    // bar they never had, breaking FR-018.
+    expect(find.text('Budget used'), findsNothing);
+  });
 
   testWidgets('member sees recent/name browse without financial values', (
     tester,
   ) async {
     final repository = _FakeProjectRepository(
-      firstPage: FirestorePage(
-        items: [_project('hidden', 9999)],
-        hasMore: false,
-      ),
+      firstPage: RecordPage(items: [_project('hidden', 9999)], hasMore: false),
     );
 
     await tester.pumpWidget(_app(repository, AccountingAccessRoleType.member));
@@ -386,57 +375,49 @@ void main() {
     );
   });
 
-  testWidgets(
-    'budget bar shows remaining amount, color-graded by usage',
-    (tester) async {
-      final repository = _FakeProjectRepository(
-        firstPage: FirestorePage(
-          items: [
-            // 75% used: warning band, 250 remaining out of a 1,000 budget.
-            _project('mid', 500, budgetLimit: 1000, totalExpenses: 750),
-          ],
-          hasMore: false,
-        ),
-      );
+  testWidgets('budget bar shows remaining amount, color-graded by usage', (
+    tester,
+  ) async {
+    final repository = _FakeProjectRepository(
+      firstPage: RecordPage(
+        items: [
+          // 75% used: warning band, 250 remaining out of a 1,000 budget.
+          _project('mid', 500, budgetLimit: 1000, totalExpenses: 750),
+        ],
+        hasMore: false,
+      ),
+    );
 
-      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Remaining'), findsOneWidget);
-      expect(find.textContaining('250'), findsOneWidget);
+    expect(find.textContaining('Remaining'), findsOneWidget);
+    expect(find.textContaining('250'), findsOneWidget);
 
-      final remainingText = tester.widget<Text>(
-        find.textContaining('Remaining'),
-      );
-      expect(remainingText.style?.color, BuildTokens.light.warning);
-    },
-  );
+    final remainingText = tester.widget<Text>(find.textContaining('Remaining'));
+    expect(remainingText.style?.color, BuildTokens.light.warning);
+  });
 
-  testWidgets(
-    'budget bar goes expense-red once spending is at/over 90%',
-    (tester) async {
-      final repository = _FakeProjectRepository(
-        firstPage: FirestorePage(
-          items: [
-            _project('hot', 500, budgetLimit: 1000, totalExpenses: 950),
-          ],
-          hasMore: false,
-        ),
-      );
+  testWidgets('budget bar goes expense-red once spending is at/over 90%', (
+    tester,
+  ) async {
+    final repository = _FakeProjectRepository(
+      firstPage: RecordPage(
+        items: [_project('hot', 500, budgetLimit: 1000, totalExpenses: 950)],
+        hasMore: false,
+      ),
+    );
 
-      await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_app(repository, AccountingAccessRoleType.owner));
+    await tester.pumpAndSettle();
 
-      final remainingText = tester.widget<Text>(
-        find.textContaining('Remaining'),
-      );
-      expect(remainingText.style?.color, BuildTokens.light.expense);
-    },
-  );
+    final remainingText = tester.widget<Text>(find.textContaining('Remaining'));
+    expect(remainingText.style?.color, BuildTokens.light.expense);
+  });
 
   testWidgets('archive requires confirmation before mutation', (tester) async {
     final repository = _FakeProjectRepository(
-      firstPage: FirestorePage(
+      firstPage: RecordPage(
         items: [_project('archive_me', 100)],
         hasMore: false,
       ),
@@ -462,10 +443,7 @@ void main() {
     tester,
   ) async {
     final repository = _RefreshHoldProjectRepository(
-      firstPage: FirestorePage(
-        items: [_project('stable', 100)],
-        hasMore: false,
-      ),
+      firstPage: RecordPage(items: [_project('stable', 100)], hasMore: false),
     );
 
     await tester.pumpWidget(
@@ -491,13 +469,13 @@ void main() {
 
 class _PendingProjectRepository extends _FakeProjectRepository {
   _PendingProjectRepository()
-    : _firstPageCompleter = Completer<FirestorePage<Project>>(),
-      super(firstPage: const FirestorePage(items: [], hasMore: false));
+    : _firstPageCompleter = Completer<RecordPage<Project>>(),
+      super(firstPage: const RecordPage(items: [], hasMore: false));
 
-  final Completer<FirestorePage<Project>> _firstPageCompleter;
+  final Completer<RecordPage<Project>> _firstPageCompleter;
 
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) {
@@ -508,7 +486,7 @@ class _PendingProjectRepository extends _FakeProjectRepository {
     return _firstPageCompleter.future;
   }
 
-  void completeFirstPage(FirestorePage<Project> page) {
+  void completeFirstPage(RecordPage<Project> page) {
     _firstPageCompleter.complete(page);
   }
 }
@@ -517,17 +495,17 @@ class _RefreshHoldProjectRepository extends _FakeProjectRepository {
   _RefreshHoldProjectRepository({required super.firstPage});
 
   var _holdNextFetch = false;
-  Completer<FirestorePage<Project>>? _heldFetch;
+  Completer<RecordPage<Project>>? _heldFetch;
 
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
   }) {
     queries.add(request);
     if (_holdNextFetch && cursor == null) {
       _holdNextFetch = false;
-      _heldFetch = Completer<FirestorePage<Project>>();
+      _heldFetch = Completer<RecordPage<Project>>();
       return _heldFetch!.future;
     }
     return Future.value(cursor == null ? firstPage : secondPage);
@@ -540,24 +518,24 @@ class _RefreshHoldProjectRepository extends _FakeProjectRepository {
 
 class _PendingArchivedProjectRepository extends _FakeProjectRepository {
   _PendingArchivedProjectRepository()
-    : _firstPageCompleter = Completer<FirestorePage<Project>>(),
-      super(firstPage: const FirestorePage(items: [], hasMore: false));
+    : _firstPageCompleter = Completer<RecordPage<Project>>(),
+      super(firstPage: const RecordPage(items: [], hasMore: false));
 
-  final Completer<FirestorePage<Project>> _firstPageCompleter;
+  final Completer<RecordPage<Project>> _firstPageCompleter;
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) {
     if (cursor != null) {
-      return Future.value(const FirestorePage(items: [], hasMore: false));
+      return Future.value(const RecordPage(items: [], hasMore: false));
     }
     return _firstPageCompleter.future;
   }
 
-  void completeFirstPage(FirestorePage<Project> page) {
+  void completeFirstPage(RecordPage<Project> page) {
     _firstPageCompleter.complete(page);
   }
 }

@@ -7,7 +7,7 @@ import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/widgets/app_bottom_nav_shell.dart'
     show showAddSheet;
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -89,7 +89,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -104,7 +104,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage(items: [], hasMore: false);
+    return const RecordPage(items: [], hasMore: false);
   }
 
   @override
@@ -162,7 +162,7 @@ class _FakePaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -176,7 +176,7 @@ class _FakePaymentRepository implements PaymentRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage(items: [], hasMore: false);
+    return const RecordPage(items: [], hasMore: false);
   }
 
   @override
@@ -253,10 +253,10 @@ class _FakeUsageQuotaRepository implements UsageQuotaRepository {
 class _FakeProjectRepository
     implements ProjectRepository, ProjectBrowseRepository {
   @override
-  Future<FirestorePage<Project>> fetchProjectBrowsePage(
+  Future<RecordPage<Project>> fetchProjectBrowsePage(
     ProjectBrowseQuery request, {
     Object? cursor,
-  }) async => const FirestorePage(items: [], hasMore: false);
+  }) async => const RecordPage(items: [], hasMore: false);
 
   @override
   Future<bool> hasAnyPayment(String projectId) async => false;
@@ -283,18 +283,18 @@ class _FakeProjectRepository
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async => const FirestorePage(items: [], hasMore: false);
+  }) async => const RecordPage(items: [], hasMore: false);
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
-  }) async => const FirestorePage(items: [], hasMore: false);
+  }) async => const RecordPage(items: [], hasMore: false);
 
   @override
   Future<Project?> getProject(String projectId) async => null;
@@ -492,9 +492,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('More (MoreScreen) renders without exception', (
-      tester,
-    ) async {
+    testWidgets('More (MoreScreen) renders without exception', (tester) async {
       await tester.pumpWidget(
         ProviderScope(child: wrap(home: const MoreScreen())),
       );
@@ -612,10 +610,8 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.initialWorkspaceSetup,
-            builder: (context, state) => const Text(
-              'Workspace Setup',
-              textDirection: TextDirection.ltr,
-            ),
+            builder: (context, state) =>
+                const Text('Workspace Setup', textDirection: TextDirection.ltr),
           ),
           GoRoute(
             path: AppRoutes.verifyEmail,

@@ -1,7 +1,7 @@
 import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -267,9 +267,9 @@ Future<void> _pumpReportsScreen(
   );
   final selector = ReportProjectSelectorController(
     loadActivePage: ({cursor}) async =>
-        FirestorePage(items: [activeProject], hasMore: false),
+        RecordPage(items: [activeProject], hasMore: false),
     loadArchivedPage: ({cursor}) async =>
-        FirestorePage(items: [archivedProject], hasMore: false),
+        RecordPage(items: [archivedProject], hasMore: false),
   );
   return selector.loadInitial().then((_) {
     return tester.pumpWidget(

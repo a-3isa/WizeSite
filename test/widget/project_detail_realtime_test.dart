@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/ds/hero_net_card.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -46,21 +46,21 @@ class _RealtimeProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
@@ -232,90 +232,93 @@ void main() {
     expect(find.text('3,200'), findsOneWidget); // expense split value
   });
 
-  testWidgets(
-    'budget hero shows remaining amount, color-graded by usage',
-    (tester) async {
-      final controller = StreamController<Project?>();
-      addTearDown(controller.close);
+  testWidgets('budget hero shows remaining amount, color-graded by usage', (
+    tester,
+  ) async {
+    final controller = StreamController<Project?>();
+    addTearDown(controller.close);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            projectRepositoryProvider.overrideWithValue(
-              _RealtimeProjectRepository(controller),
-            ),
-            projectRecentTransactionsProvider.overrideWith(
-              (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
-            ),
-          ],
-          child: MaterialApp.router(routerConfig: _router()),
-        ),
-      );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(
+            _RealtimeProjectRepository(controller),
+          ),
+          projectRecentTransactionsProvider.overrideWith(
+            (ref, scope) => Stream.value(const <DashboardTransactionRef>[]),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: _router()),
+      ),
+    );
 
-      // 50% used (budgetLimit: 2000, spent: 1000): income (green) band, with
-      // the 1,000 remaining amount always shown — even well below the
-      // warning threshold, so the card never looks "empty" at low usage.
-      controller.add(
-        _project(
-          name: 'Project Alpha',
-          clientName: 'Client One',
-          totalExpenses: 1000,
-          budgetLimit: 2000,
-        ),
-      );
-      await tester.pumpAndSettle();
+    // 50% used (budgetLimit: 2000, spent: 1000): income (green) band, with
+    // the 1,000 remaining amount always shown — even well below the
+    // warning threshold, so the card never looks "empty" at low usage.
+    controller.add(
+      _project(
+        name: 'Project Alpha',
+        clientName: 'Client One',
+        totalExpenses: 1000,
+        budgetLimit: 2000,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Remaining', skipOffstage: false), findsOneWidget);
-      expect(find.textContaining('1,000', skipOffstage: false), findsWidgets);
-      var remainingText = tester.widget<Text>(
-        find.textContaining('Remaining', skipOffstage: false),
-      );
-      expect(remainingText.style?.color, BuildTokens.light.income);
+    expect(
+      find.textContaining('Remaining', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1,000', skipOffstage: false), findsWidgets);
+    var remainingText = tester.widget<Text>(
+      find.textContaining('Remaining', skipOffstage: false),
+    );
+    expect(remainingText.style?.color, BuildTokens.light.income);
 
-      // 95% used (budgetLimit: 2000, spent: 1900): expense (red) band.
-      controller.add(
-        _project(
-          name: 'Project Alpha',
-          clientName: 'Client One',
-          totalExpenses: 1900,
-          budgetLimit: 2000,
-        ),
-      );
-      await tester.pumpAndSettle();
+    // 95% used (budgetLimit: 2000, spent: 1900): expense (red) band.
+    controller.add(
+      _project(
+        name: 'Project Alpha',
+        clientName: 'Client One',
+        totalExpenses: 1900,
+        budgetLimit: 2000,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Remaining', skipOffstage: false), findsOneWidget);
-      expect(find.textContaining('100', skipOffstage: false), findsWidgets);
-      remainingText = tester.widget<Text>(
-        find.textContaining('Remaining', skipOffstage: false),
-      );
-      expect(remainingText.style?.color, BuildTokens.light.expense);
+    expect(
+      find.textContaining('Remaining', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.textContaining('100', skipOffstage: false), findsWidgets);
+    remainingText = tester.widget<Text>(
+      find.textContaining('Remaining', skipOffstage: false),
+    );
+    expect(remainingText.style?.color, BuildTokens.light.expense);
 
-      // Contract Value is demoted to a compact, muted secondary row (per
-      // the v2 UI audit) — guard against it being re-inflated back to
-      // prominent styling.
-      final contractValueRow = find.byKey(
-        const Key('qa_project_detail_contract_value'),
-        skipOffstage: false,
-      );
-      expect(contractValueRow, findsOneWidget);
-      final contractValueText = tester.widget<Text>(
-        find
-            .descendant(of: contractValueRow, matching: find.byType(Text))
-            .last,
-      );
-      expect(contractValueText.style?.fontSize, 12);
-      expect(contractValueText.style?.fontWeight, FontWeight.w700);
-      expect(contractValueText.style?.color, BuildTokens.light.textMuted);
+    // Contract Value is demoted to a compact, muted secondary row (per
+    // the v2 UI audit) — guard against it being re-inflated back to
+    // prominent styling.
+    final contractValueRow = find.byKey(
+      const Key('qa_project_detail_contract_value'),
+      skipOffstage: false,
+    );
+    expect(contractValueRow, findsOneWidget);
+    final contractValueText = tester.widget<Text>(
+      find.descendant(of: contractValueRow, matching: find.byType(Text)).last,
+    );
+    expect(contractValueText.style?.fontSize, 12);
+    expect(contractValueText.style?.fontWeight, FontWeight.w700);
+    expect(contractValueText.style?.color, BuildTokens.light.textMuted);
 
-      // Ordering: the demoted Contract Value row must render after the Net
-      // Profit hero card, never re-promoted above it.
-      final heroDy = tester
-          .getTopLeft(find.byType(HeroNetCard, skipOffstage: false))
-          .dy;
-      final contractValueDy = tester.getTopLeft(contractValueRow).dy;
-      expect(contractValueDy, greaterThan(heroDy));
-    },
-  );
+    // Ordering: the demoted Contract Value row must render after the Net
+    // Profit hero card, never re-promoted above it.
+    final heroDy = tester
+        .getTopLeft(find.byType(HeroNetCard, skipOffstage: false))
+        .dy;
+    final contractValueDy = tester.getTopLeft(contractValueRow).dy;
+    expect(contractValueDy, greaterThan(heroDy));
+  });
 
   testWidgets(
     'profit margin KPI shows net/income as a percentage next to the hero',

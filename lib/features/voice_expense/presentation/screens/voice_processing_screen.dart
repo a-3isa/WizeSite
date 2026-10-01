@@ -7,11 +7,11 @@ import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/cloud_function_service.dart';
 import 'package:buildtrack_app/core/utils/app_error_messages.dart';
-import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
+import 'package:buildtrack_app/core/utils/callable_error_message.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
 import 'package:buildtrack_app/features/voice_expense/presentation/screens/voice_review_screen.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -106,7 +106,7 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
     if (error is CloudFunctionServiceException) {
       return error.code == 'unauthenticated';
     }
-    if (error is FirebaseFunctionsException) {
+    if (error is CallableClientException) {
       return error.code == 'unauthenticated';
     }
     return false;
@@ -135,8 +135,8 @@ class _VoiceProcessingScreenState extends ConsumerState<VoiceProcessingScreen> {
       final message = error.message.trim();
       return message.isEmpty ? l10n.t('unexpectedErrorTryAgain') : message;
     }
-    if (error is FirebaseFunctionsException) {
-      return firebaseFunctionsErrorMessage(error, l10n);
+    if (error is CallableClientException) {
+      return callableErrorMessage(error, l10n);
     }
     return appErrorMessage(l10n, error);
   }

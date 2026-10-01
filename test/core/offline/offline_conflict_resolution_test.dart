@@ -38,7 +38,6 @@ void main() {
         payload: any(named: 'payload'),
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: any(named: 'defaultErrorMessage'),
-        httpFunctionName: any(named: 'httpFunctionName'),
         idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenAnswer((_) async {});
@@ -86,7 +85,6 @@ void main() {
         payload: any(named: 'payload'),
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: any(named: 'defaultErrorMessage'),
-        httpFunctionName: any(named: 'httpFunctionName'),
         idempotencyKey: any(named: 'idempotencyKey'),
       ),
     );
@@ -99,7 +97,6 @@ void main() {
         payload: any(named: 'payload'),
         parseResult: any(named: 'parseResult'),
         defaultErrorMessage: 'Failed to update expense.',
-        httpFunctionName: any(named: 'httpFunctionName'),
         idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).called(1);
@@ -154,7 +151,6 @@ void main() {
           payload: any(named: 'payload'),
           parseResult: any(named: 'parseResult'),
           defaultErrorMessage: 'Failed to update expense.',
-          httpFunctionName: any(named: 'httpFunctionName'),
           idempotencyKey: any(named: 'idempotencyKey'),
         ),
       ).called(1);

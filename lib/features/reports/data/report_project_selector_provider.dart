@@ -1,13 +1,13 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 typedef ReportProjectPageLoader =
-    Future<FirestorePage<Project>> Function({Object? cursor});
+    Future<RecordPage<Project>> Function({Object? cursor});
 
 class ReportProjectSelectorState {
   const ReportProjectSelectorState({

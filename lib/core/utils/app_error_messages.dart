@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/services/storage_upload_service.dart';
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -22,7 +23,7 @@ const List<String> appErrorMessageKeys = <String>[
 /// Maps an arbitrary thrown [error] to a stable, localized message key.
 ///
 /// This is the single sanitization boundary between low-level failures
-/// (Firebase, storage, auth, recording, queued callables) and the UI. Callers
+/// (server RPCs, uploads, auth, recording, queued calls) and the UI. Callers
 /// must never render `error.toString()`; pass the error here instead so the
 /// app shows a friendly, translated message and never leaks raw exception or
 /// stack text.
@@ -35,14 +36,14 @@ String appErrorMessageKey(Object? error) {
   }
 
   if (error is FirebaseException) {
-    switch (error.plugin) {
-      case 'firebase_storage':
-        return _storageKey(error.code);
-      case 'firebase_auth':
-        return _authKey(error.code);
-      default:
-        return _statusCodeKey(error.code, error.message ?? '');
-    }
+    if (error.plugin == 'firebase_auth') return _authKey(error.code);
+    return _statusCodeKey(error.code, error.message ?? '');
+  }
+
+  // File uploads: server error codes, anything else is a storage failure.
+  if (error is StorageUploadException) {
+    final key = _statusCodeKey(error.code, error.message);
+    return key == 'errorUnknown' ? 'errorStorage' : key;
   }
 
   if (error is CallableClientException) {
@@ -91,21 +92,6 @@ String _authKey(String? code) {
   }
 }
 
-String _storageKey(String? code) {
-  switch (_normalize(code)) {
-    case 'unauthorized':
-      return 'errorPermissionDenied';
-    case 'unauthenticated':
-      return 'errorUnauthenticated';
-    case 'object-not-found':
-      return 'errorNotFound';
-    case 'quota-exceeded':
-      return 'errorQuota';
-    default:
-      return 'errorStorage';
-  }
-}
-
 String _statusCodeKey(String? code, String message) {
   switch (_normalize(code)) {
     case 'unavailable':
@@ -126,10 +112,10 @@ String _statusCodeKey(String? code, String message) {
       return 'errorQuota';
     case 'failed-precondition':
       return SyncErrorClassifier.categoryFrom(
-            code: 'failed-precondition',
-            message: message,
-          ) ==
-          SyncFailureCategory.quota
+                code: 'failed-precondition',
+                message: message,
+              ) ==
+              SyncFailureCategory.quota
           ? 'errorQuota'
           : 'errorUnknown';
     default:

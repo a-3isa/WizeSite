@@ -2,7 +2,7 @@ import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
@@ -19,7 +19,7 @@ abstract interface class WorkerRepository {
     String workspaceId, {
     Set<WorkerStatus>? statuses,
   });
-  Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
+  Future<RecordPage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -130,7 +130,7 @@ class LocalWorkerRepository implements WorkerRepository {
   }
 
   @override
-  Future<FirestorePage<WorkerProfile>> fetchWorkersPage(
+  Future<RecordPage<WorkerProfile>> fetchWorkersPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -152,7 +152,7 @@ class LocalWorkerRepository implements WorkerRepository {
       for (final row in rows) _fromRow(row),
     ].where((w) => statuses == null || statuses.contains(w.status)).toList();
     final last = rows.isEmpty ? null : rows.last;
-    return FirestorePage<WorkerProfile>(
+    return RecordPage<WorkerProfile>(
       items: items,
       hasMore: rows.length == pageSize,
       nextCursor: last == null

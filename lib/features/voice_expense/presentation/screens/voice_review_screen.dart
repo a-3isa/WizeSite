@@ -10,13 +10,13 @@ import 'package:buildtrack_app/core/services/expense_save_service.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:buildtrack_app/core/services/sync_error_classifier.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:buildtrack_app/core/utils/firebase_functions_error_message.dart';
+import 'package:buildtrack_app/core/utils/callable_error_message.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/features/projects/data/project_repository.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/data/voice_expense_repository.dart';
 import 'package:buildtrack_app/features/voice_expense/domain/voice_expense_models.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -198,14 +198,14 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
       } else if (mounted) {
         setState(() => _error = _messageForSaveError(e, l10n));
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on CallableClientException catch (e) {
       if (SyncErrorClassifier.isQuotaLimitFailure(e)) {
         if (!mounted) {
           return;
         }
         context.push('${AppRoutes.subscriptionLimit}?limit=expensesPerMonth');
       } else if (mounted) {
-        setState(() => _error = firebaseFunctionsErrorMessage(e, l10n));
+        setState(() => _error = callableErrorMessage(e, l10n));
       }
     } catch (_) {
       if (mounted) {
@@ -294,11 +294,10 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                     l10n.t(
                       'voiceConfidenceSummary',
                       params: {
-                        'amount': (confidence.amount * 100).toStringAsFixed(
+                        'amount': (confidence.amount * 100).toStringAsFixed(0),
+                        'category': (confidence.category * 100).toStringAsFixed(
                           0,
                         ),
-                        'category': (confidence.category * 100)
-                            .toStringAsFixed(0),
                         'project': (confidence.project * 100).toStringAsFixed(
                           0,
                         ),
@@ -352,7 +351,10 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                 selected: _category,
                 options: [
                   for (final category in _allowedCategories)
-                    (value: category, label: l10n.expenseCategoryLabel(category)),
+                    (
+                      value: category,
+                      label: l10n.expenseCategoryLabel(category),
+                    ),
                 ],
                 onSelected: (value) => setState(() => _category = value),
               ),

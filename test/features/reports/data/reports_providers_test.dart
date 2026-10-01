@@ -2,7 +2,7 @@ import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
@@ -94,9 +94,9 @@ void main() {
       );
       final controller = ReportProjectSelectorController(
         loadActivePage: ({cursor}) async =>
-            FirestorePage<Project>(items: [active], hasMore: false),
+            RecordPage<Project>(items: [active], hasMore: false),
         loadArchivedPage: ({cursor}) async =>
-            FirestorePage<Project>(items: [archived], hasMore: false),
+            RecordPage<Project>(items: [archived], hasMore: false),
       );
 
       await controller.loadInitial();
@@ -1033,7 +1033,7 @@ void main() {
             pageSize: 500,
           ),
         ).thenAnswer(
-          (_) async => FirestorePage(
+          (_) async => RecordPage(
             items: [inScopeExpense, wrongProjectExpense, oldExpense],
             hasMore: false,
           ),
@@ -1048,10 +1048,8 @@ void main() {
             pageSize: 500,
           ),
         ).thenAnswer(
-          (_) async => FirestorePage(
-            items: [inScopePayment, latePayment],
-            hasMore: false,
-          ),
+          (_) async =>
+              RecordPage(items: [inScopePayment, latePayment], hasMore: false),
         );
 
         final container = ProviderContainer(
@@ -1141,7 +1139,7 @@ void main() {
           cursor: null,
           pageSize: 500,
         ),
-      ).thenAnswer((_) async => const FirestorePage(items: [], hasMore: false));
+      ).thenAnswer((_) async => const RecordPage(items: [], hasMore: false));
       when(
         () => payments.fetchPaymentsPage(
           'workspace_1',
@@ -1151,7 +1149,7 @@ void main() {
           cursor: null,
           pageSize: 500,
         ),
-      ).thenAnswer((_) async => FirestorePage(items: [unpaid], hasMore: false));
+      ).thenAnswer((_) async => RecordPage(items: [unpaid], hasMore: false));
 
       final container = ProviderContainer(
         overrides: [

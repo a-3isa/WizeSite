@@ -4,13 +4,9 @@ import 'dart:io';
 import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/self_hosted_rpc_transport.dart';
 import 'package:buildtrack_app/core/services/storage_upload_service.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:mocktail/mocktail.dart';
-
-class _MockStorage extends Mock implements FirebaseStorage {}
 
 /// Self-hosted uploads (spec 004, T081): POST /v1/files, multipart, same
 /// headers as RPCs, a stable idempotency key, and no download URL returned.
@@ -32,8 +28,7 @@ void main() {
       );
     });
     return StorageUploadService(
-      _MockStorage(),
-      selfHostedTransport: SelfHostedRpcTransport(
+      SelfHostedRpcTransport(
         config: const BackendConfig(
           apiBaseUrl: 'https://api.example.com/',
           syncUrl: 'https://sync.example.com',

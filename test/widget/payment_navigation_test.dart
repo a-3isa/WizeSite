@@ -2,7 +2,7 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -55,7 +55,7 @@ class _FakePaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -69,7 +69,7 @@ class _FakePaymentRepository implements PaymentRepository {
     cursor,
     int pageSize = 20,
   }) async {
-    return FirestorePage<PaymentRecord>(
+    return RecordPage<PaymentRecord>(
       items: projectId == null || projectId == payment.projectId
           ? [payment]
           : const [],
@@ -136,21 +136,21 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override

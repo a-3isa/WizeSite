@@ -16,7 +16,6 @@ import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final dashboardSnapshotProvider =
@@ -313,7 +312,6 @@ Stream<DashboardWeeklyInsights> _weeklyInsightsStream({
 
       DateTime? parseDate(dynamic date) {
         if (date is DateTime) return date;
-        if (date is Timestamp) return date.toDate();
         if (date is String) return DateTime.tryParse(date);
         return null;
       }

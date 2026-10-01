@@ -319,8 +319,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final projectsAsync = ref.watch(projectsProvider);
     final currency =
-        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ??
-        'EGP';
+        ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
     return AppBackScope(
       fallbackRoute: _fallbackRoute(),
       child: Scaffold(
@@ -434,8 +433,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                             label: l10n.paymentMethodLabel(method),
                           ),
                       ],
-                      onSelected: (value) =>
-                          setState(() => _method = value),
+                      onSelected: (value) => setState(() => _method = value),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -523,9 +521,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                               ),
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(
-                                  Icons.attach_file_outlined,
-                                ),
+                                leading: const Icon(Icons.attach_file_outlined),
                                 title: Text(entry.value.fileName),
                                 subtitle: Text(entry.value.storagePath),
                               ),
@@ -560,9 +556,7 @@ class _AddPaymentScreenState extends ConsumerState<AddPaymentScreen> {
                               ),
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(
-                                  Icons.description_outlined,
-                                ),
+                                leading: const Icon(Icons.description_outlined),
                                 title: Text(entry.value.name),
                                 subtitle: Text(entry.value.path ?? ''),
                               ),

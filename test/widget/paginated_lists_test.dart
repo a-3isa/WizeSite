@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
@@ -27,8 +27,8 @@ class _FakeProjectRepository implements ProjectRepository {
   }) : _activeProjects = activeProjects;
 
   final List<Project> _activeProjects;
-  final FirestorePage<Project> firstPage;
-  final FirestorePage<Project>? secondPage;
+  final RecordPage<Project> firstPage;
+  final RecordPage<Project>? secondPage;
   int _fetchCalls = 0;
 
   @override
@@ -58,16 +58,16 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
@@ -159,7 +159,7 @@ class _FakePaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -174,7 +174,7 @@ class _FakePaymentRepository implements PaymentRepository {
     int pageSize = 20,
   }) async {
     requestedProjectIds.add(projectId);
-    return FirestorePage<PaymentRecord>(
+    return RecordPage<PaymentRecord>(
       items: paymentsByProject[projectId] ?? const [],
       hasMore: false,
     );
@@ -303,7 +303,7 @@ void main() {
     (tester) async {
       final fakeProjectRepository = _FakeProjectRepository(
         activeProjects: [_project(1)],
-        firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+        firstPage: const RecordPage<Project>(items: [], hasMore: false),
       );
       final fakePaymentRepository = _PendingPaymentRepository();
 
@@ -345,7 +345,7 @@ void main() {
   ) async {
     final fakeProjectRepository = _FakeProjectRepository(
       activeProjects: [_project(1), _project(2)],
-      firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+      firstPage: const RecordPage<Project>(items: [], hasMore: false),
     );
     final fakePaymentRepository = _FakePaymentRepository({
       null: [
@@ -391,7 +391,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final fakeProjectRepository = _FakeProjectRepository(
         activeProjects: [_project(1)],
-        firstPage: const FirestorePage<Project>(items: [], hasMore: false),
+        firstPage: const RecordPage<Project>(items: [], hasMore: false),
       );
       final fakePaymentRepository = _FakePaymentRepository({
         null: [
@@ -499,8 +499,8 @@ void main() {
 
     final fakeProjectRepository = _FakeProjectRepository(
       activeProjects: firstBatch,
-      firstPage: FirestorePage<Project>(items: firstBatch, hasMore: true),
-      secondPage: FirestorePage<Project>(items: secondBatch, hasMore: false),
+      firstPage: RecordPage<Project>(items: firstBatch, hasMore: true),
+      secondPage: RecordPage<Project>(items: secondBatch, hasMore: false),
     );
 
     await tester.pumpWidget(
@@ -537,10 +537,10 @@ void main() {
 class _PendingPaymentRepository extends _FakePaymentRepository {
   _PendingPaymentRepository() : super(const {});
 
-  final _firstPageCompleter = Completer<FirestorePage<PaymentRecord>>();
+  final _firstPageCompleter = Completer<RecordPage<PaymentRecord>>();
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -560,7 +560,7 @@ class _PendingPaymentRepository extends _FakePaymentRepository {
 
   void completeFirstPage(List<PaymentRecord> items) {
     _firstPageCompleter.complete(
-      FirestorePage<PaymentRecord>(items: items, hasMore: false),
+      RecordPage<PaymentRecord>(items: items, hasMore: false),
     );
   }
 }

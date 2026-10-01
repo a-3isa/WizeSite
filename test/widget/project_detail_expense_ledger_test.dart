@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/ds/hero_net_card.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
@@ -52,21 +52,21 @@ class _StreamProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {}
 
   @override
-  Future<FirestorePage<Project>> fetchArchivedProjectsPage(
+  Future<RecordPage<Project>> fetchArchivedProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
-  Future<FirestorePage<Project>> fetchProjectsPage(
+  Future<RecordPage<Project>> fetchProjectsPage(
     String workspaceId, {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return const FirestorePage<Project>(items: [], hasMore: false);
+    return const RecordPage<Project>(items: [], hasMore: false);
   }
 
   @override
@@ -226,7 +226,10 @@ void main() {
 
     // Revenue-side widgets and actions are gone.
     expect(find.byType(HeroNetCard), findsNothing);
-    expect(find.byKey(const Key('qa_project_detail_profit_margin')), findsNothing);
+    expect(
+      find.byKey(const Key('qa_project_detail_profit_margin')),
+      findsNothing,
+    );
     // The action grid sits below the fold in a lazy scroll view, so assert on
     // its wiring rather than on rendered children.
     expect(
@@ -235,7 +238,10 @@ void main() {
     );
 
     // Contract row omitted rather than rendered as a zero amount.
-    expect(find.byKey(const Key('qa_project_detail_contract_value')), findsNothing);
+    expect(
+      find.byKey(const Key('qa_project_detail_contract_value')),
+      findsNothing,
+    );
 
     // The headline states expenses instead of a net profit built from no income.
     expect(
@@ -280,20 +286,21 @@ void main() {
     expect(grid.onArchive, isNotNull);
   });
 
-  testWidgets('a budget limit shows budget widgets while revenue stays hidden', (
-    tester,
-  ) async {
-    await _pumpProject(tester, _project(budgetLimit: 5000));
+  testWidgets(
+    'a budget limit shows budget widgets while revenue stays hidden',
+    (tester) async {
+      await _pumpProject(tester, _project(budgetLimit: 5000));
 
-    // The two switches are independent: a spending budget with no income
-    // expected is a coherent, intended combination.
-    expect(find.text('Budget used'), findsOneWidget);
-    expect(find.byType(HeroNetCard), findsNothing);
-    expect(
-      tester.widget<ActionGrid>(find.byType(ActionGrid)).showPaymentActions,
-      isFalse,
-    );
-  });
+      // The two switches are independent: a spending budget with no income
+      // expected is a coherent, intended combination.
+      expect(find.text('Budget used'), findsOneWidget);
+      expect(find.byType(HeroNetCard), findsNothing);
+      expect(
+        tester.widget<ActionGrid>(find.byType(ActionGrid)).showPaymentActions,
+        isFalse,
+      );
+    },
+  );
 
   testWidgets(
     'adding a contract value restores budget and revenue widgets against '

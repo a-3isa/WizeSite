@@ -22,14 +22,11 @@ Future<PowerSyncDatabase> openSyncDatabase(String uid) async {
 
 /// The signed-in user's local replica, connected to the sync service.
 ///
-/// Null when this build uses Firebase (no `SYNC_URL`) or nobody is signed in.
+/// Null when nobody is signed in.
 /// Rebuilt whenever the Firebase user changes; the previous user's database is
 /// disconnected and closed.
 final syncDatabaseProvider = FutureProvider<PowerSyncDatabase?>((ref) async {
   const config = BackendConfig.fromEnvironment;
-  if (!config.useSelfHostedBackend || config.syncUrl.trim().isEmpty) {
-    return null;
-  }
   final auth = ref.watch(firebaseAuthProvider);
   final user = await ref.watch(_firebaseUserProvider.future);
   if (user == null) {
@@ -47,14 +44,11 @@ final syncDatabaseProvider = FutureProvider<PowerSyncDatabase?>((ref) async {
 });
 
 /// The replica as a future, for repositories (which are synchronous
-/// providers). Only read in self-hosted builds; fails loudly otherwise.
+/// providers). Fails loudly when nobody is signed in.
 final localDatabaseProvider = Provider<Future<PowerSyncDatabase>>((ref) {
   return ref.watch(syncDatabaseProvider.future).then((db) {
     if (db == null) {
-      throw StateError(
-        'Local database unavailable: self-hosted backend not configured '
-        'or no signed-in user.',
-      );
+      throw StateError('Local database unavailable: no signed-in user.');
     }
     return db;
   });

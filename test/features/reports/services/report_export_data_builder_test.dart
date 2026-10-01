@@ -1,19 +1,18 @@
+import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
 import 'package:buildtrack_app/features/payments/data/payment_repository.dart';
 import 'package:buildtrack_app/features/payments/domain/payment.dart';
 import 'package:buildtrack_app/features/reports/services/report_export_data_builder.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeExpenseRepository implements ExpenseRepository {
   _FakeExpenseRepository(this.pages);
 
-  final List<FirestorePage<Expense>> pages;
+  final List<RecordPage<Expense>> pages;
   final List<
     ({String projectId, DateTime? startDate, DateTime? endDate, int pageSize})
   >
@@ -51,7 +50,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -109,7 +108,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
 class _FakePaymentRepository implements PaymentRepository {
   _FakePaymentRepository(this.pages);
 
-  final List<FirestorePage<PaymentRecord>> pages;
+  final List<RecordPage<PaymentRecord>> pages;
   final List<
     ({String? projectId, DateTime? startDate, DateTime? endDate, int pageSize})
   >
@@ -143,7 +142,7 @@ class _FakePaymentRepository implements PaymentRepository {
   }
 
   @override
-  Future<FirestorePage<PaymentRecord>> fetchPaymentsPage(
+  Future<RecordPage<PaymentRecord>> fetchPaymentsPage(
     String workspaceId, {
     String? projectId,
     String? entityId,
@@ -258,18 +257,15 @@ PaymentRecord _payment({
   );
 }
 
-Future<DocumentSnapshot<Map<String, dynamic>>> _cursor(String id) async {
-  final firestore = FakeFirebaseFirestore();
-  await firestore.collection('cursors').doc(id).set({'id': id});
-  return firestore.collection('cursors').doc(id).get();
-}
+Future<LocalPageCursor> _cursor(String id) async =>
+    LocalPageCursor(sortValue: id, id: id);
 
 void main() {
   test(
     'builds scoped report data from project/date-bounded rows only',
     () async {
       final expenseRepository = _FakeExpenseRepository([
-        FirestorePage<Expense>(
+        RecordPage<Expense>(
           items: [
             _expense(
               id: 'expense_1',
@@ -298,7 +294,7 @@ void main() {
         ),
       ]);
       final paymentRepository = _FakePaymentRepository([
-        FirestorePage<PaymentRecord>(
+        RecordPage<PaymentRecord>(
           items: [
             _payment(
               id: 'payment_1',
@@ -357,10 +353,10 @@ void main() {
 
   test('entity payment totals use cash collected not gross amount', () async {
     final expenseRepository = _FakeExpenseRepository([
-      const FirestorePage<Expense>(items: [], hasMore: false),
+      const RecordPage<Expense>(items: [], hasMore: false),
     ]);
     final paymentRepository = _FakePaymentRepository([
-      FirestorePage<PaymentRecord>(
+      RecordPage<PaymentRecord>(
         items: [
           _payment(
             id: 'payment_unpaid',
@@ -374,27 +370,28 @@ void main() {
       ),
     ]);
 
-    final result = await ReportExportDataBuilder(
-      expenseRepository: expenseRepository,
-      paymentRepository: paymentRepository,
-    ).build(
-      workspaceId: 'workspace_1',
-      projectId: 'project_1',
-      startDate: DateTime.utc(2026, 6, 1),
-      endDate: DateTime.utc(2026, 6, 30, 23, 59, 59),
-      includeExpenses: false,
-      includePayments: true,
-      includeEntities: true,
-      includeDaily: false,
-      includeWeekly: false,
-    );
+    final result =
+        await ReportExportDataBuilder(
+          expenseRepository: expenseRepository,
+          paymentRepository: paymentRepository,
+        ).build(
+          workspaceId: 'workspace_1',
+          projectId: 'project_1',
+          startDate: DateTime.utc(2026, 6, 1),
+          endDate: DateTime.utc(2026, 6, 30, 23, 59, 59),
+          includeExpenses: false,
+          includePayments: true,
+          includeEntities: true,
+          includeDaily: false,
+          includeWeekly: false,
+        );
 
     expect(result.entitySummaries.single.totalPayments, 0);
   });
 
   test('continues paging until all report rows are loaded', () async {
     final expenseRepository = _FakeExpenseRepository([
-      FirestorePage<Expense>(
+      RecordPage<Expense>(
         items: List.generate(
           500,
           (index) => _expense(
@@ -407,7 +404,7 @@ void main() {
         hasMore: true,
         nextCursor: await _cursor('expense_page_1'),
       ),
-      FirestorePage<Expense>(
+      RecordPage<Expense>(
         items: List.generate(
           25,
           (index) => _expense(
@@ -421,7 +418,7 @@ void main() {
       ),
     ]);
     final paymentRepository = _FakePaymentRepository([
-      const FirestorePage<PaymentRecord>(items: [], hasMore: false),
+      const RecordPage<PaymentRecord>(items: [], hasMore: false),
     ]);
 
     final progress = <ReportExportProgress>[];
@@ -456,7 +453,7 @@ void main() {
 
   test('cooperative cancellation stops before the next export page', () async {
     final expenseRepository = _FakeExpenseRepository([
-      FirestorePage<Expense>(
+      RecordPage<Expense>(
         items: [
           _expense(
             id: 'expense_1',
@@ -468,10 +465,10 @@ void main() {
         hasMore: true,
         nextCursor: await _cursor('expense_page_1'),
       ),
-      const FirestorePage<Expense>(items: [], hasMore: false),
+      const RecordPage<Expense>(items: [], hasMore: false),
     ]);
     final paymentRepository = _FakePaymentRepository([
-      const FirestorePage<PaymentRecord>(items: [], hasMore: false),
+      const RecordPage<PaymentRecord>(items: [], hasMore: false),
     ]);
     var cancelled = false;
 

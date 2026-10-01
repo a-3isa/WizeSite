@@ -1,4 +1,4 @@
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
@@ -60,7 +60,7 @@ void main() {
   Future<List<String>> allPages(EntityDirectorySort sort) async {
     final ids = <String>[];
     Object? cursor;
-    FirestorePage<AppEntity> page;
+    RecordPage<AppEntity> page;
     do {
       page = await repository.fetchEntityDirectoryPage(
         'ws_1',

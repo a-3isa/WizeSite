@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:buildtrack_app/core/models/attachment.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
@@ -50,7 +50,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -65,7 +65,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     Object? cursor,
     int pageSize = 20,
   }) async {
-    return FirestorePage<Expense>(items: items, hasMore: false);
+    return RecordPage<Expense>(items: items, hasMore: false);
   }
 
   @override
@@ -296,10 +296,10 @@ void main() {
 class _PendingExpenseRepository extends _FakeExpenseRepository {
   _PendingExpenseRepository() : super(const []);
 
-  final _firstPageCompleter = Completer<FirestorePage<Expense>>();
+  final _firstPageCompleter = Completer<RecordPage<Expense>>();
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -319,7 +319,7 @@ class _PendingExpenseRepository extends _FakeExpenseRepository {
 
   void completeFirstPage(List<Expense> items) {
     _firstPageCompleter.complete(
-      FirestorePage<Expense>(items: items, hasMore: false),
+      RecordPage<Expense>(items: items, hasMore: false),
     );
   }
 }

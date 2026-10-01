@@ -2,7 +2,7 @@ import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/sync/json_safe.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
@@ -32,7 +32,7 @@ abstract interface class EntityRepository {
   });
 
   /// Cursor-paged directory of entities of an exact [type], ordered by [sort].
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort,

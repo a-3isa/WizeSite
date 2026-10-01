@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
 import 'package:buildtrack_app/features/entities/presentation/widgets/entity_autocomplete_field.dart';
@@ -133,7 +133,7 @@ class _FakeEntityRepository implements EntityRepository {
   final List<AppEntity> entities;
 
   @override
-  Future<FirestorePage<AppEntity>> fetchEntityDirectoryPage(
+  Future<RecordPage<AppEntity>> fetchEntityDirectoryPage(
     String workspaceId, {
     required String type,
     EntityDirectorySort sort = EntityDirectorySort.recent,
@@ -145,7 +145,7 @@ class _FakeEntityRepository implements EntityRepository {
         .where((entity) => entity.type == type)
         .take(pageSize)
         .toList(growable: false);
-    return FirestorePage(items: items, hasMore: false);
+    return RecordPage(items: items, hasMore: false);
   }
 
   @override

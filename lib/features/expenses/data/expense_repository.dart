@@ -2,7 +2,7 @@ import 'package:buildtrack_app/core/pagination/local_page.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
-import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/pagination/record_page.dart';
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
@@ -13,7 +13,7 @@ import 'package:powersync/powersync.dart';
 
 abstract interface class ExpenseRepository {
   Stream<List<Expense>> watchExpenses(String workspaceId, String projectId);
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -104,7 +104,7 @@ class LocalExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<FirestorePage<Expense>> fetchExpensesPage(
+  Future<RecordPage<Expense>> fetchExpensesPage(
     String workspaceId, {
     required String projectId,
     String? entityId,
@@ -188,7 +188,7 @@ class LocalExpenseRepository implements ExpenseRepository {
             )
             .toList(growable: false);
     final last = rows.isEmpty ? null : rows.last;
-    return FirestorePage<Expense>(
+    return RecordPage<Expense>(
       items: items,
       hasMore: rows.length == pageSize,
       nextCursor: last == null

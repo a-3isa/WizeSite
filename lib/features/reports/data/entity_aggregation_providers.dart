@@ -5,7 +5,6 @@ import 'package:buildtrack_app/core/models/accounting_summary.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final entityAggregationsProvider =
@@ -354,6 +353,5 @@ String _recordEntityType(Map<String, dynamic> data) {
 DateTime? _parseDate(dynamic rawDate) {
   if (rawDate is DateTime) return rawDate;
   if (rawDate is String) return DateTime.tryParse(rawDate);
-  if (rawDate is Timestamp) return rawDate.toDate();
   return null;
 }
