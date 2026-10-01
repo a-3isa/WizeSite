@@ -13,6 +13,7 @@ import {
   inviteMemberWithQuotaForUser,
   removeWorkspaceMemberForUser,
   updateWorkspaceMemberRoleForUser,
+  updateWorkspaceNameForUser,
 } from "../../src/rpc/members";
 import { resetDatabase, seedWorkspace, skipReason, testSql } from "./helpers";
 
@@ -165,4 +166,15 @@ test("checkLimit: usage against the plan; Pro is unlimited", { skip: skipReason 
   await pro();
   const unlimited = await checkLimitForUser(sql, "u1", { workspaceId: "ws_1", type: "teamMembers" });
   assert.deepEqual([unlimited.allowed, unlimited.current, unlimited.max], [true, 0, 999999]);
+});
+
+test("updateWorkspaceName: owner only, trimmed", { skip: skipReason }, async () => {
+  await rejectsWith(
+    tx((t) => updateWorkspaceNameForUser(t, "admin1", { workspaceId: "ws_1", name: "X" })),
+    "permission-denied",
+    "Only the workspace owner can rename it",
+  );
+  await rejectsWith(tx((t) => updateWorkspaceNameForUser(t, "u1", { workspaceId: "ws_1", name: " " })), "invalid-argument", "Missing required field: name");
+  const result = await tx((t) => updateWorkspaceNameForUser(t, "u1", { workspaceId: "ws_1", name: " ورشتي " }));
+  assert.deepEqual(result, { workspaceId: "ws_1", name: "ورشتي" });
 });

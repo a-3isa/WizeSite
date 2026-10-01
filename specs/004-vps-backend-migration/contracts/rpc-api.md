@@ -83,6 +83,7 @@ their `clientMutationId` uniqueness as today.
 | `upsertTransportProviderAccountingRecord` | `transport/data/transport_provider_accounting_repository.dart` |
 | `markNotificationsRead` | `notifications/data/notification_repository.dart` |
 | `restoreMembership` | `core/services/session_restore_service.dart` |
+| `updateWorkspaceName` | `settings/presentation/screens/workspace_settings_screen.dart` (owner only, as the rules) |
 
 (`user_settings_repository.dart` direct writes → existing `updateUserSettings`.)
 

@@ -24,6 +24,7 @@ const NEW_RPCS = [
   "upsertTransportProviderAccountingRecord",
   "markNotificationsRead",
   "restoreMembership",
+  "updateWorkspaceName",
 ];
 
 function firebaseCallables(): string[] {

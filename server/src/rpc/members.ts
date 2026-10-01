@@ -93,6 +93,28 @@ export async function createWorkspaceForUser(
   return { workspaceId, created: true };
 }
 
+/**
+ * Renames a workspace. Replaces the app's direct Firestore update (workspace_settings_screen.dart);
+ * firestore.rules allowed it for the workspace owner only (isWorkspaceOwner).
+ */
+export async function updateWorkspaceNameForUser(
+  sql: Sql,
+  uid: string,
+  data: Record<string, unknown>,
+): Promise<{ workspaceId: string; name: string }> {
+  const workspaceId = requireString(data, "workspaceId");
+  const name = requireString(data, "name");
+  const [ws] = await sql<{ owner_uid: string }[]>`SELECT owner_uid FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
+  if (!ws) {
+    throw new RpcError("not-found", "Workspace not found");
+  }
+  if (ws.owner_uid !== uid) {
+    throw new RpcError("permission-denied", "Only the workspace owner can rename it");
+  }
+  await sql`UPDATE workspaces SET name = ${name}, updated_at = now() WHERE id = ${workspaceId}`;
+  return { workspaceId, name };
+}
+
 const WORKSPACE_ROLES = ["owner", "admin", "accountingApproved", "member", "entryOnly"];
 
 async function ownerCount(sql: Sql, workspaceId: string): Promise<number> {
@@ -370,6 +392,10 @@ export const memberRpcs: RpcRegistry = {
         role: `${d.role ?? "member"}`,
       });
     },
+  },
+  updateWorkspaceName: {
+    mutating: true,
+    handler: (ctx, data) => updateWorkspaceNameForUser(ctx.sql, ctx.uid, asRecord(data)),
   },
   checkLimit: {
     mutating: false,
