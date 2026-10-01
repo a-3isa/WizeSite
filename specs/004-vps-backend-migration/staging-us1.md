@@ -49,18 +49,20 @@ duplicates below. Collections not listed were empty.
   is used. The live Firebase app keeps showing the inflated figure until cutover.
 - The dropped duplicate expense and the merged duplicate membership.
 
-## 2. App check against staging — PENDING (owner)
+## 2. App check against staging — PASS (owner, 2026-10-01)
 
 Run the app on the Android emulator (same app id as production, so not on the phone), signed in as
 the owner, with `--dart-define=API_BASE_URL=https://api.buildozer.dpdns.org
 --dart-define=SYNC_URL=https://sync.buildozer.dpdns.org`. Staging is **read-only** for US1: do not
 add or edit records in this build.
 
-- [ ] Sign-in works and the "loading your data" gate clears (real Firebase token accepted by
+- [x] Sign-in works and the "loading your data" gate clears (real Firebase token accepted by
       PowerSync — also closes the T012 token check)
-- [ ] Projects list and totals match the production app (except ODxe9XiyW82ojGcS7hXK: −50,000 EGP
+- [x] Projects list and totals match the production app (except ODxe9XiyW82ojGcS7hXK: −50,000 EGP
       expenses, by design)
-- [ ] Expenses, payments, workers, worker entries, contacts match per project
-- [ ] Dashboard and reports match
-- [ ] An attachment opens; after turning networking off, it opens again from the device cache
-- [ ] With networking off after the first sync, the app still shows all data
+- [x] Expenses, payments, workers, worker entries, contacts match per project
+- [x] Dashboard and reports match
+- [x] An attachment opens; after turning networking off, it opens again from the device cache
+- [x] With networking off after the first sync, the app still shows all data
+
+Owner confirmed all items on 2026-10-01 (emulator, signed in with the production account).

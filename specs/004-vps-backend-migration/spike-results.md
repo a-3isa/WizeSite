@@ -40,7 +40,7 @@ through Cloudflare Tunnel instead of Caddy; memory caps lowered (see `server/com
 
 | Check | Pass criterion |
 |---|---|
-| Real Firebase ID token accepted via `jwks_uri` + audience `wize-site` | 200 on `/sync/stream` |
+| Real Firebase ID token accepted via `jwks_uri` + audience `wize-site` | 200 on `/sync/stream` | ✅ 2026-10-01: the owner signed in on the staging build with the production account and the data synced (US1 staging check) |
 | p95 propagation over 50 writes, API → second phone | ≤ 5 s |
 | RAM per container on the 4 GB box under light load | Within research R13 budget |
 | Offline: write through the Hive queue, reconnect, row returns via sync | Exactly one row |
