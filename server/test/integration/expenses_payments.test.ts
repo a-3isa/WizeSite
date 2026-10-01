@@ -176,6 +176,20 @@ test("payment create: 10 per month on free", { skip: skipReason }, async () => {
   await rejectsWith(tx((t) => createPaymentWithQuotaForUser(t, "u1", payment())), "failed-precondition", "LIMIT_REACHED");
 });
 
+test("payment update stores an edited paidAmount (Firebase dropped it) and totals follow it", { skip: skipReason }, async () => {
+  const { id } = await tx((t) =>
+    createPaymentWithQuotaForUser(t, "u1", payment({ paymentStatus: "partial", paidAmount: 300 })),
+  );
+  await tx((t) => updatePaymentForUser(t, "u1", payment({ paymentId: id, paymentStatus: "partial", paidAmount: 650 })));
+  const [row] = await sql`SELECT paid_amount FROM payments WHERE id = ${id}`;
+  assert.equal(row.paid_amount, "650.00");
+  assert.equal((await metrics("p1")).totalPayments, 650);
+  // Not sent: the stored value stays.
+  await tx((t) => updatePaymentForUser(t, "u1", payment({ paymentId: id, paymentStatus: "partial" })));
+  const [kept] = await sql`SELECT paid_amount FROM payments WHERE id = ${id}`;
+  assert.equal(kept.paid_amount, "650.00");
+});
+
 test("payment update: cannot move onto a project without a contract; totals follow", { skip: skipReason }, async () => {
   const { id } = await tx((t) => createPaymentWithQuotaForUser(t, "u1", payment()));
   await rejectsWith(

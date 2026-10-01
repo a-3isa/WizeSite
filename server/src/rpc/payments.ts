@@ -91,8 +91,9 @@ async function paymentInWorkspace(sql: Sql, paymentId: string, workspaceId: stri
 }
 
 /**
- * Note for parity: like the Firestore version, `paidAmount` in the request only fed the cash
- * delta and is not stored, so the stored paid amount is unchanged by an edit.
+ * Fix over the Firestore version (owner's decision): an edited `paidAmount` is stored. Firebase
+ * used it for the cash delta but never saved it, so editing a partial payment's paid amount had
+ * no lasting effect. When the request omits it, the stored value stays.
  */
 export async function updatePaymentForUser(sql: Sql, uid: string, data: Record<string, unknown>): Promise<void> {
   const workspaceId = requireString(data, "workspaceId");
@@ -117,6 +118,15 @@ export async function updatePaymentForUser(sql: Sql, uid: string, data: Record<s
     throw new HttpsError("failed-precondition", NO_CONTRACT);
   }
   const attachments = data.attachments != null ? ensureAttachmentItems(data, "attachments") : null;
+  const paidAmountSent = Object.prototype.hasOwnProperty.call(data, "paidAmount");
+  const rawPaid = data.paidAmount;
+  const paidAmount =
+    rawPaid === null || rawPaid === undefined || `${rawPaid}`.trim() === ""
+      ? null
+      : assertTwoDecimals(Number(rawPaid), "paidAmount");
+  if (paidAmount !== null && !Number.isFinite(paidAmount)) {
+    throw new HttpsError("invalid-argument", "Invalid number: paidAmount");
+  }
 
   await sql`
     UPDATE payments SET
@@ -126,6 +136,7 @@ export async function updatePaymentForUser(sql: Sql, uid: string, data: Record<s
       payment_method = ${text(data, "paymentMethod", "cash")},
       payment_status = ${parsePaymentStatus(data.paymentStatus ?? payment.payment_status, "paid")},
       notes = ${text(data, "notes")},
+      paid_amount = ${paidAmountSent ? sql`${paidAmount}` : sql`paid_amount`},
       client_mutation_id = ${mutationIdOf(data)},
       attachments = COALESCE(${attachments === null ? null : sql.json(attachments as never)}, attachments),
       legacy = legacy || ${sql.json(legacyFields({ clientUpdatedAt: data.clientUpdatedAt }) as never)},
