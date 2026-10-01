@@ -82,10 +82,9 @@ void main() {
   test(
     'repository save queues the record and replays it to the upsert RPC',
     () async {
-      final repo = LocalContractorAccountingRepository(
-        firestore,
+      final repo = ContractorAccountingRepository(
         Future.value(local.db),
-        mutations: mutations,
+        mutations,
       );
       await repo.save(
         ContractorAccountingRecord(
@@ -113,10 +112,6 @@ void main() {
       expect(call.payload['id'], 'c1');
       expect(call.payload['date'], '2026-06-01T00:00:00.000Z');
       expect(call.payload['contractorName'], 'مقاول');
-      final firestoreDocs = await firestore
-          .collection('contractor_accounting_records')
-          .get();
-      expect(firestoreDocs.docs, isEmpty);
     },
   );
 

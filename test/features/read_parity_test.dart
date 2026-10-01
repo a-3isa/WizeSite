@@ -496,6 +496,18 @@ void _expectParity(String name, Object? firestore, Object? local) {
   );
 }
 
+/// After the Firestore repositories are removed (T084/T085) the committed
+/// goldens are the reference for the local repositories.
+void _expectGolden(String name, Object? local) {
+  final file = File('test/fixtures/read_parity/$name.json');
+  final golden = jsonDecode(file.readAsStringSync());
+  expect(
+    jsonDecode(jsonEncode(goldenJson(local))),
+    golden,
+    reason: '$name: local repository differs from the Firestore golden',
+  );
+}
+
 void main() {
   late Directory tempDir;
   late Box<String> box;
@@ -659,46 +671,25 @@ void main() {
   });
 
   test('contractor, equipment and transport accounting records', () async {
-    final oldC = ContractorAccountingRepository(firestore);
-    final newC = LocalContractorAccountingRepository(firestore, db);
-    _expectParity(
-      'contractor_accounting_k1',
-      [
-        for (final r in await oldC.fetchForContractor(
-          workspaceId: 'ws_1',
-          contractorId: 'k1',
-        ))
-          _record(
-            id: r.id,
-            owner: r.contractorId,
-            ownerName: r.contractorName,
-            amount: r.amount,
-            date: r.date,
-            status: r.paymentStatus,
-            description: r.description,
-            attachments: r.attachments,
-          ),
-      ],
-      [
-        for (final r in await newC.fetchForContractor(
-          workspaceId: 'ws_1',
-          contractorId: 'k1',
-        ))
-          _record(
-            id: r.id,
-            owner: r.contractorId,
-            ownerName: r.contractorName,
-            amount: r.amount,
-            date: r.date,
-            status: r.paymentStatus,
-            description: r.description,
-            attachments: r.attachments,
-          ),
-      ],
-    );
+    final newC = ContractorAccountingRepository(db, mutations);
+    _expectGolden('contractor_accounting_k1', [
+      for (final r in await newC.fetchForContractor(
+        workspaceId: 'ws_1',
+        contractorId: 'k1',
+      ))
+        _record(
+          id: r.id,
+          owner: r.contractorId,
+          ownerName: r.contractorName,
+          amount: r.amount,
+          date: r.date,
+          status: r.paymentStatus,
+          description: r.description,
+          attachments: r.attachments,
+        ),
+    ]);
 
-    final oldE = EquipmentAccountingRepository(firestore);
-    final newE = LocalEquipmentAccountingRepository(firestore, db);
+    final newE = EquipmentAccountingRepository(db, mutations);
     Future<List<Map<String, Object?>>> equipment(
       EquipmentAccountingRepository repo,
     ) async => [
@@ -717,14 +708,9 @@ void main() {
           attachments: r.attachments,
         ),
     ];
-    _expectParity(
-      'equipment_accounting_eq1',
-      await equipment(oldE),
-      await equipment(newE),
-    );
+    _expectGolden('equipment_accounting_eq1', await equipment(newE));
 
-    final oldT = TransportProviderAccountingRepository(firestore);
-    final newT = LocalTransportProviderAccountingRepository(firestore, db);
+    final newT = TransportProviderAccountingRepository(db, mutations);
     Future<List<Map<String, Object?>>> transport(
       TransportProviderAccountingRepository repo,
     ) async => [
@@ -743,11 +729,7 @@ void main() {
           attachments: r.attachments,
         ),
     ];
-    _expectParity(
-      'transport_accounting_tr1',
-      await transport(oldT),
-      await transport(newT),
-    );
+    _expectGolden('transport_accounting_tr1', await transport(newT));
   });
 
   test('entity summaries through DocSource', () async {

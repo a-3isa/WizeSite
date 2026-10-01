@@ -2,10 +2,13 @@ import 'package:buildtrack_app/features/common/data/domain_accounting_records_so
 import 'package:buildtrack_app/features/contractors/data/contractor_accounting_repository.dart';
 import 'package:buildtrack_app/features/equipment/data/equipment_accounting_repository.dart';
 import 'package:buildtrack_app/features/transport/data/transport_provider_accounting_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../../helpers/local_db.dart';
+
+class _MockMutations extends Mock implements WorkspaceMutationService {}
 
 void main() {
   late LocalTestDb local;
@@ -46,9 +49,9 @@ void main() {
   test(
     'contractor records: owner scoped, newest first, fields mapped',
     () async {
-      final repo = LocalContractorAccountingRepository(
-        FakeFirebaseFirestore(),
+      final repo = ContractorAccountingRepository(
         Future.value(local.db),
+        _MockMutations(),
       );
       final records = await repo.fetchForContractor(
         workspaceId: 'ws_1',
@@ -61,9 +64,9 @@ void main() {
   );
 
   test('equipment and transport provider records', () async {
-    final equipment = LocalEquipmentAccountingRepository(
-      FakeFirebaseFirestore(),
+    final equipment = EquipmentAccountingRepository(
       Future.value(local.db),
+      _MockMutations(),
     );
     expect(
       (await equipment.fetchForProvider(
@@ -72,9 +75,9 @@ void main() {
       )).map((r) => r.id),
       ['e1'],
     );
-    final transport = LocalTransportProviderAccountingRepository(
-      FakeFirebaseFirestore(),
+    final transport = TransportProviderAccountingRepository(
       Future.value(local.db),
+      _MockMutations(),
     );
     expect(
       (await transport.fetchForProvider(
