@@ -1,5 +1,3 @@
-import 'package:buildtrack_app/core/config/backend_config.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
@@ -33,7 +31,7 @@ const _allowedOwnerFields = {
   'equipmentId',
 };
 
-/// Local-replica variant of [domainAccountingRecordsProvider].
+/// The records of [query], newest first, live from the local replica.
 Stream<List<DomainRecord>> watchLocalDomainRecords(
   Future<PowerSyncDatabase> db,
   DomainRecordsQuery query,
@@ -59,29 +57,10 @@ Stream<List<DomainRecord>> watchLocalDomainRecords(
 String _snake(String field) =>
     field.replaceAllMapped(RegExp('[A-Z]'), (m) => '_${m[0]!.toLowerCase()}');
 
-/// Live list for a domain accounting screen (spec 004, tasks.md T047): the
-/// local replica in self-hosted builds, Firestore otherwise. Auto-disposed so
-/// each screen gets its own subscription.
+/// Live list for a domain accounting screen (spec 004), from the local
+/// replica. Auto-disposed so each screen gets its own subscription.
 final domainAccountingRecordsProvider = Provider.autoDispose
-    .family<Stream<List<DomainRecord>>, DomainRecordsQuery>((ref, query) {
-      if (!_allowedCollections.contains(query.collection) ||
-          !_allowedOwnerFields.contains(query.ownerField)) {
-        throw ArgumentError('Unsupported domain records query: $query');
-      }
-      if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-        return watchLocalDomainRecords(ref.watch(localDatabaseProvider), query);
-      }
-      return ref
-          .watch(firestoreProvider)
-          .collection(query.collection)
-          .where('workspaceId', isEqualTo: query.workspaceId)
-          .where(query.ownerField, isEqualTo: query.ownerId)
-          .orderBy('date', descending: true)
-          .limit(50)
-          .snapshots()
-          .map(
-            (snap) => [
-              for (final doc in snap.docs) (id: doc.id, data: doc.data()),
-            ],
-          );
-    });
+    .family<Stream<List<DomainRecord>>, DomainRecordsQuery>(
+      (ref, query) =>
+          watchLocalDomainRecords(ref.watch(localDatabaseProvider), query),
+    );

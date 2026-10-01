@@ -1,41 +1,15 @@
 import 'package:buildtrack_app/features/workers/data/worker_accounting_repository.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_accounting_record.dart';
 import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+
+import '../../helpers/local_db.dart';
+
+class _MockMutations extends Mock implements WorkspaceMutationService {}
 
 void main() {
-  test(
-    'worker accounting records persist attachments and list by worker',
-    () async {
-      final firestore = FakeFirebaseFirestore();
-      final repository = WorkerAccountingRepository(firestore);
-      final record = WorkerAccountingRecord(
-        id: 'record_1',
-        workspaceId: 'workspace_1',
-        projectId: 'project_1',
-        workerId: 'worker_1',
-        workerName: 'Worker One',
-        description: 'Weekly labor settlement',
-        amount: 250,
-        date: DateTime.utc(2026, 5, 20),
-        paymentMethod: 'cash',
-        paymentStatus: 'paid',
-        attachments: const [],
-      );
-
-      await repository.save(record);
-
-      final records = await repository.fetchForWorker(
-        workspaceId: 'workspace_1',
-        workerId: 'worker_1',
-      );
-      expect(records, hasLength(1));
-      expect(records.single.workerName, 'Worker One');
-      expect(records.single.amount, 250);
-    },
-  );
-
   test('worker wage entries parse attachment metadata', () {
     final entry = WorkerEntryRecord.fromMap('entry_1', {
       'workspaceId': 'workspace_1',
@@ -226,23 +200,24 @@ void main() {
     test(
       'reads exact totals over more than 50 records, not a 50-row page',
       () async {
-        final firestore = FakeFirebaseFirestore();
-        final repository = WorkerAccountingRepository(firestore);
+        final local = await LocalTestDb.open();
+        addTearDown(local.dispose);
+        final repository = WorkerAccountingRepository(
+          Future.value(local.db),
+          _MockMutations(),
+        );
 
         // The maintained summary is computed over the full ledger (120 records),
         // independent of the 50-record fetch cap.
-        await firestore
-            .collection('worker_accounting_summaries')
-            .doc('ws_w1')
-            .set({
-              'workspaceId': 'ws',
-              'workerId': 'w1',
-              'totalAmount': 12000,
-              'confirmedPaid': 8000,
-              'confirmedOutstanding': 4000,
-              'unresolvedLegacyCount': 0,
-              'recordCount': 120,
-            });
+        await local.seedRows('worker_accounting_summaries', [
+          {
+            'id': 'ws_w1',
+            'workspace_id': 'ws',
+            'worker_id': 'w1',
+            'payload':
+                '{"workspaceId":"ws","workerId":"w1","totalAmount":12000,"confirmedPaid":8000,"confirmedOutstanding":4000,"unresolvedLegacyCount":0,"recordCount":120}',
+          },
+        ]);
 
         final summary = await repository.fetchSummary(
           workspaceId: 'ws',
@@ -257,8 +232,12 @@ void main() {
     );
 
     test('returns null when no maintained summary exists yet', () async {
-      final firestore = FakeFirebaseFirestore();
-      final repository = WorkerAccountingRepository(firestore);
+      final local = await LocalTestDb.open();
+      addTearDown(local.dispose);
+      final repository = WorkerAccountingRepository(
+        Future.value(local.db),
+        _MockMutations(),
+      );
 
       final summary = await repository.fetchSummary(
         workspaceId: 'ws',

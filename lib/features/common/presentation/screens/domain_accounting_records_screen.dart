@@ -15,7 +15,6 @@ import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_record_draft.dart';
 import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_save_adapter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -416,7 +415,6 @@ class _AccountingRecord {
 
 DateTime _parseDate(Object? raw) {
   if (raw is DateTime) return raw;
-  if (raw is Timestamp) return raw.toDate();
   if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
   return DateTime.now();
 }

@@ -630,8 +630,7 @@ void main() {
   });
 
   test('worker accounting records and summary', () async {
-    final old = WorkerAccountingRepository(firestore);
-    final neu = LocalWorkerAccountingRepository(firestore, db);
+    final neu = WorkerAccountingRepository(db, mutations);
     Map<String, Object?> project(WorkerAccountingRecord r) => _record(
       id: r.id,
       owner: r.workerId,
@@ -643,12 +642,8 @@ void main() {
       description: r.description,
       attachments: r.attachments,
     );
-    _expectParity(
+    _expectGolden(
       'worker_accounting_w1',
-      (await old.fetchForWorker(
-        workspaceId: 'ws_1',
-        workerId: 'w1',
-      )).map(project).toList(),
       (await neu.fetchForWorker(
         workspaceId: 'ws_1',
         workerId: 'w1',
@@ -663,9 +658,8 @@ void main() {
       'unresolvedLegacyCount': s?.unresolvedLegacyCount,
       'recordCount': s?.recordCount,
     };
-    _expectParity(
+    _expectGolden(
       'worker_accounting_summary_w1',
-      summary(await old.fetchSummary(workspaceId: 'ws_1', workerId: 'w1')),
       summary(await neu.fetchSummary(workspaceId: 'ws_1', workerId: 'w1')),
     );
   });

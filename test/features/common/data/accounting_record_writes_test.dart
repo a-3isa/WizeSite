@@ -8,7 +8,6 @@ import 'package:buildtrack_app/features/common/presentation/controllers/domain_a
 import 'package:buildtrack_app/features/common/presentation/controllers/domain_accounting_save_adapter.dart';
 import 'package:buildtrack_app/features/contractors/data/contractor_accounting_repository.dart';
 import 'package:buildtrack_app/features/contractors/domain/contractor_accounting_record.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
@@ -30,7 +29,6 @@ void main() {
   late OfflineActionQueue queue;
   late _MockCallableClient client;
   late WorkspaceMutationService mutations;
-  late FakeFirebaseFirestore firestore;
   late LocalTestDb local;
   final calls = <({String name, String? key, Map<String, dynamic> payload})>[];
 
@@ -62,7 +60,6 @@ void main() {
       ));
     });
     mutations = WorkspaceMutationService(client, queue, telemetry);
-    firestore = FakeFirebaseFirestore();
     local = await LocalTestDb.open();
   });
 
@@ -118,10 +115,7 @@ void main() {
   test(
     'the domain save adapter queues equipment records with providerId',
     () async {
-      final adapter = DomainAccountingSaveAdapter(
-        firestore,
-        mutations: mutations,
-      );
+      final adapter = DomainAccountingSaveAdapter(mutations);
       await adapter.save(
         collectionName: 'equipment_accounting_records',
         draft: DomainAccountingRecordDraft(

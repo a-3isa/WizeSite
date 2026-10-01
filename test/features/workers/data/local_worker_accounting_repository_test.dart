@@ -1,18 +1,21 @@
 import 'package:buildtrack_app/features/workers/data/worker_accounting_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../../helpers/local_db.dart';
 
+class _MockMutations extends Mock implements WorkspaceMutationService {}
+
 void main() {
   late LocalTestDb local;
-  late LocalWorkerAccountingRepository repository;
+  late WorkerAccountingRepository repository;
 
   setUp(() async {
     local = await LocalTestDb.open();
-    repository = LocalWorkerAccountingRepository(
-      FakeFirebaseFirestore(),
+    repository = WorkerAccountingRepository(
       Future.value(local.db),
+      _MockMutations(),
     );
     await local.seedRows('worker_accounting_records', [
       {
