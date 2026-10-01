@@ -1,0 +1,13 @@
+{
+  "firestore": {
+    "rules": "firestore.parity.rules"
+  },
+  "storage": {
+    "rules": "storage.parity.rules"
+  },
+  "emulators": {
+    "firestore": { "port": 8181 },
+    "storage": { "port": 9198 },
+    "ui": { "enabled": false }
+  }
+}
