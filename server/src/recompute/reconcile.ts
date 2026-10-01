@@ -68,7 +68,9 @@ export async function reconcile(sql: Sql, now: Date = new Date()): Promise<Recon
 export async function runAndRecord(sql: Sql, stateFile: string): Promise<boolean> {
   const startedAt = new Date();
   const result = await reconcile(sql, startedAt);
-  const record = { ...result, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString() };
+  // Rollback tombstones (migration 006) are only needed for the window after cutover.
+  await sql`DELETE FROM deleted_rows WHERE deleted_at < now() - interval '30 days'`;
+  const record ={ ...result, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString() };
   await mkdir(path.dirname(stateFile), { recursive: true });
   await writeFile(stateFile, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   for (const d of result.drift) {
