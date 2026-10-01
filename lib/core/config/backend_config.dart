@@ -30,4 +30,8 @@ class BackendConfig {
 
   /// File uploads (contracts/files-api.md).
   Uri get filesUri => Uri.parse('$_base/v1/files');
+
+  /// Permanent public link for an uploaded profile photo.
+  Uri publicFileUri(String storagePath) =>
+      Uri.parse('$_base/v1/public/$storagePath');
 }

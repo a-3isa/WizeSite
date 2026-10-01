@@ -47,6 +47,17 @@ caller is a member of the workspace that owns the referencing record (or owns th
 No direct delete endpoint. Files are deleted server-side by `deleteProjectCascade`, record archive
 policies that already delete today, and `deleteOwnAccount`.
 
+## Public profile photos
+
+```
+GET /v1/public/profile-photos/{uid}/{uuid}.{jpg|png}
+```
+
+No sign-in. Profile photos are shown from a permanent link (`photoUrl`, Firebase Auth `photoURL`),
+which signed URLs cannot give. Only paths of exactly that shape are served (upload names are random
+UUIDs, so links are not guessable, and a new photo gets a new URL): `Cache-Control: public,
+max-age=31536000, immutable`. Every other file stays behind signed URLs.
+
 ## Storage layout on VPS
 
 `/srv/wizesite/files/<storagePath>`; owned by the API container user; mode 0600; backed up by restic

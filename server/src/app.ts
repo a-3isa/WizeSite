@@ -5,6 +5,7 @@ import { loadConfig } from "./config";
 import { createPool, type Sql } from "./db/pool";
 import { RpcError } from "./domain/errors";
 import { registerSignedFileRoute } from "./files/download";
+import { registerPublicAvatarRoute } from "./files/public_avatars";
 import type { FilesConfig } from "./files/signing";
 import { buildRegistry } from "./rpc/registry";
 import { registerRpcRoutes, sendRpcError } from "./rpc/router";
@@ -81,6 +82,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   if (deps.files) {
     registerSignedFileRoute(app, deps.files);
+    registerPublicAvatarRoute(app, deps.files);
   }
   if (deps.revenueCatWebhookSecret !== undefined) {
     registerRevenueCatWebhook(app, { sql: deps.sql, secret: deps.revenueCatWebhookSecret });
