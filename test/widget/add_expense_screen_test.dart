@@ -313,8 +313,10 @@ Widget _screen({
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
       activeUserIdProvider.overrideWith((ref) => 'user_1'),
       expenseRepositoryProvider.overrideWithValue(_FakeExpenseRepository()),
-      if (entityRepository != null)
-        entityRepositoryProvider.overrideWithValue(entityRepository),
+      // Contacts come from the local replica in the app; tests use a fake.
+      entityRepositoryProvider.overrideWithValue(
+        entityRepository ?? const _FakeEntityRepository([]),
+      ),
       if (workerRepository != null)
         workerRepositoryProvider.overrideWithValue(workerRepository),
       if (workerEntryRepository != null)

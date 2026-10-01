@@ -620,11 +620,9 @@ void main() {
   });
 
   test('entities', () async {
-    final old = FirebaseEntityRepository(firestore);
-    final neu = LocalEntityRepository(firestore, db);
-    _expectParity(
+    final neu = LocalEntityRepository(db, mutations);
+    _expectGolden(
       'entities',
-      (await _settled(old.watchEntities('ws_1'))).map(_entity).toList(),
       (await _settled(neu.watchEntities('ws_1'))).map(_entity).toList(),
     );
   });

@@ -6,19 +6,27 @@ part of 'entity_repository.dart';
 /// field excludes documents that lack it, so the `lastUsedAt` / `normalizedName`
 /// orderings filter `IS NOT NULL`.
 ///
-/// Writes (T082) are queued for the contact RPCs when [WorkspaceMutationService]
-/// is given, so they work offline; the new or changed contact is returned at
-/// once and reaches the lists when it syncs. Without it (tests) the inherited
-/// Firestore writes remain.
-class LocalEntityRepository extends FirebaseEntityRepository {
-  LocalEntityRepository(
-    super.firestore,
-    this._db, {
-    WorkspaceMutationService? mutations,
-  }) : _mutations = mutations;
+/// Writes (T082) are queued for the contact RPCs, so they work offline; the new
+/// or changed contact is returned at once and reaches the lists when it syncs.
+class LocalEntityRepository implements EntityRepository {
+  LocalEntityRepository(this._db, this._mutations);
 
   final Future<PowerSyncDatabase> _db;
-  final WorkspaceMutationService? _mutations;
+  final WorkspaceMutationService _mutations;
+
+  static String normalizeName(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static int _compareRecentFirst(AppEntity left, AppEntity right) {
+    final leftDate = left.lastUsedAt ?? left.createdAt;
+    final rightDate = right.lastUsedAt ?? right.createdAt;
+    final byDate = rightDate.compareTo(leftDate);
+    if (byDate != 0) {
+      return byDate;
+    }
+    return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+  }
 
   static String? _trimmedOrNull(String? value) {
     final trimmed = value?.trim();
@@ -55,13 +63,6 @@ class LocalEntityRepository extends FirebaseEntityRepository {
     String? type,
   }) async {
     final mutations = _mutations;
-    if (mutations == null) {
-      return super.ensureEntity(
-        workspaceId: workspaceId,
-        name: name,
-        type: type,
-      );
-    }
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       return null;
@@ -92,17 +93,6 @@ class LocalEntityRepository extends FirebaseEntityRepository {
     String? notes,
   }) async {
     final mutations = _mutations;
-    if (mutations == null) {
-      return super.createEntity(
-        workspaceId: workspaceId,
-        name: name,
-        type: type,
-        defaultRate: defaultRate,
-        rateUnit: rateUnit,
-        phoneNumber: phoneNumber,
-        notes: notes,
-      );
-    }
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
@@ -112,7 +102,7 @@ class LocalEntityRepository extends FirebaseEntityRepository {
       id: const Uuid().v4(),
       workspaceId: workspaceId,
       name: trimmed,
-      normalizedName: FirebaseEntityRepository.normalizeName(trimmed),
+      normalizedName: normalizeName(trimmed),
       type: type,
       createdAt: now,
       lastUsedAt: now,
@@ -136,17 +126,6 @@ class LocalEntityRepository extends FirebaseEntityRepository {
     String? notes,
   }) async {
     final mutations = _mutations;
-    if (mutations == null) {
-      return super.updateEntity(
-        entityId: entityId,
-        name: name,
-        type: type,
-        defaultRate: defaultRate,
-        rateUnit: rateUnit,
-        phoneNumber: phoneNumber,
-        notes: notes,
-      );
-    }
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError.value(name, 'name', 'Entity name cannot be empty');
@@ -156,7 +135,7 @@ class LocalEntityRepository extends FirebaseEntityRepository {
       id: existing.id,
       workspaceId: existing.workspaceId,
       name: trimmed,
-      normalizedName: FirebaseEntityRepository.normalizeName(trimmed),
+      normalizedName: normalizeName(trimmed),
       type: type,
       createdAt: existing.createdAt,
       attachments: existing.attachments,
@@ -174,9 +153,6 @@ class LocalEntityRepository extends FirebaseEntityRepository {
   @override
   Future<void> deleteEntity(String entityId) async {
     final mutations = _mutations;
-    if (mutations == null) {
-      return super.deleteEntity(entityId);
-    }
     final existing = await _existing(entityId);
     await mutations.deleteEntity(
       workspaceId: existing.workspaceId,
@@ -190,12 +166,6 @@ class LocalEntityRepository extends FirebaseEntityRepository {
     required List<Map<String, dynamic>> attachments,
   }) async {
     final mutations = _mutations;
-    if (mutations == null) {
-      return super.saveAttachments(
-        entityId: entityId,
-        attachments: attachments,
-      );
-    }
     final existing = await _existing(entityId);
     await mutations.upsertEntity({
       ..._upsertPayload(existing),
@@ -292,7 +262,7 @@ class LocalEntityRepository extends FirebaseEntityRepository {
     String? type,
     int limit = 20,
   }) async {
-    final normalized = FirebaseEntityRepository.normalizeName(query);
+    final normalized = normalizeName(query);
     final byType = type != null && type.isNotEmpty;
     // Same prefix range as the Firestore query ('' upper bound).
     final rows = await getLocalRows(
@@ -303,7 +273,7 @@ class LocalEntityRepository extends FirebaseEntityRepository {
       [workspaceId, normalized, '$normalized', if (byType) type],
     );
     final entities = [for (final row in rows) _fromRow(row)]
-      ..sort(FirebaseEntityRepository._compareRecentFirst);
+      ..sort(_compareRecentFirst);
     return entities.take(limit).toList(growable: false);
   }
 
@@ -328,11 +298,7 @@ class LocalEntityRepository extends FirebaseEntityRepository {
       _db,
       'SELECT * FROM entities WHERE workspace_id = ? AND normalized_name = ?'
       '${byType ? ' AND type = ?' : ''} LIMIT 1',
-      [
-        workspaceId,
-        FirebaseEntityRepository.normalizeName(name),
-        if (byType) type,
-      ],
+      [workspaceId, normalizeName(name), if (byType) type],
     );
     return rows.isEmpty ? null : _fromRow(rows.first);
   }

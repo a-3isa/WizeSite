@@ -1,10 +1,13 @@
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
 import 'package:buildtrack_app/features/entities/domain/entity.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../../helpers/local_db.dart';
+
+class _MockMutations extends Mock implements WorkspaceMutationService {}
 
 void main() {
   late LocalTestDb local;
@@ -21,7 +24,7 @@ void main() {
     'workspace_id': workspace,
     'type': type,
     'name': name,
-    'normalized_name': FirebaseEntityRepository.normalizeName(name),
+    'normalized_name': LocalEntityRepository.normalizeName(name),
     'last_used_at': lastUsed,
     'attachments': '[]',
   };
@@ -29,8 +32,8 @@ void main() {
   setUp(() async {
     local = await LocalTestDb.open();
     repository = LocalEntityRepository(
-      FakeFirebaseFirestore(),
       Future.value(local.db),
+      _MockMutations(),
     );
     await local.seedRows('entities', [
       entity('s1', 'Cement Co', lastUsed: '2026-06-01 00:00:00Z'),

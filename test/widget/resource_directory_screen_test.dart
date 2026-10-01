@@ -215,7 +215,7 @@ AppEntity _entity(String id, String name, {String type = 'contractor'}) =>
       id: id,
       workspaceId: 'workspace_1',
       name: name,
-      normalizedName: FirebaseEntityRepository.normalizeName(name),
+      normalizedName: LocalEntityRepository.normalizeName(name),
       type: type,
       createdAt: DateTime.utc(2026, 6, 1),
       lastUsedAt: DateTime.utc(2026, 6, 10),

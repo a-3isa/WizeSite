@@ -5,7 +5,6 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/entities/data/entity_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
@@ -24,7 +23,6 @@ void main() {
   late Directory tempDir;
   late Box<String> box;
   late OfflineActionQueue queue;
-  late FakeFirebaseFirestore firestore;
   late LocalTestDb local;
   late LocalEntityRepository repo;
 
@@ -46,7 +44,6 @@ void main() {
         idempotencyKey: any(named: 'idempotencyKey'),
       ),
     ).thenAnswer((_) async {});
-    firestore = FakeFirebaseFirestore();
     local = await LocalTestDb.open();
     await local.seedRows('entities', [
       {
@@ -64,9 +61,8 @@ void main() {
       },
     ]);
     repo = LocalEntityRepository(
-      firestore,
       Future.value(local.db),
-      mutations: WorkspaceMutationService(client, queue, telemetry),
+      WorkspaceMutationService(client, queue, telemetry),
     );
   });
 
@@ -96,7 +92,6 @@ void main() {
       expect(action.payload['name'], 'Sara   Ali');
       expect(action.payload['phoneNumber'], '011');
       expect(action.payload['defaultRate'], 12.5);
-      expect((await firestore.collection('entities').get()).docs, isEmpty);
     },
   );
 
@@ -130,7 +125,7 @@ void main() {
       final action = (await queued()).single;
       expect(action.type, OfflineActionTypes.touchEntityLastUsed);
       expect(action.payload['workspaceId'], 'ws_1');
-    expect(action.payload['entityId'], 'ent1');
+      expect(action.payload['entityId'], 'ent1');
     },
   );
 

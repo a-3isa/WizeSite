@@ -234,7 +234,7 @@ class _FakeEntityRepository implements EntityRepository {
     String? type,
     int limit = 20,
   }) async {
-    final normalized = FirebaseEntityRepository.normalizeName(query);
+    final normalized = LocalEntityRepository.normalizeName(query);
     return entities
         .where((entity) => entity.workspaceId == workspaceId)
         .where((entity) => type == null || entity.type == type)

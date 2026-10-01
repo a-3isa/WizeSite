@@ -100,20 +100,19 @@ void main() {
     test(
       '100-entity directories depend on post-backfill timestamp visibility',
       () {
+        // Reads come from the local replica (spec 004); the orderings keep
+        // Firestore's semantics (never-used entities excluded from "recent").
         final entityRepository = File(
-          'lib/features/entities/data/entity_repository.dart',
+          'lib/features/entities/data/local_entity_repository.dart',
         ).readAsStringSync();
         final backfill = File(
           'functions/src/entity_last_used_backfill.ts',
         ).readAsStringSync();
 
-        expect(
-          entityRepository,
-          contains(".orderBy('lastUsedAt', descending: true)"),
-        );
-        expect(entityRepository, contains(".orderBy('normalizedName')"));
-        expect(entityRepository, contains(".orderBy('id')"));
-        expect(entityRepository, contains('query.startAfter(['));
+        expect(entityRepository, contains('last_used_at IS NOT NULL'));
+        expect(entityRepository, contains('ORDER BY last_used_at DESC'));
+        expect(entityRepository, contains('normalized_name'));
+        expect(entityRepository, contains('LocalPageCursor'));
         expect(backfill, contains('data.lastUsedAt == null'));
         expect(backfill, contains('parseDate(data.createdAt)'));
         expect(backfill, contains('parseDate(data.updatedAt)'));
