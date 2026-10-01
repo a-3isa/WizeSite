@@ -1,16 +1,17 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:buildtrack_app/features/settings/presentation/widgets/workspace_switcher_sheet.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../helpers/memory_doc_source.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -70,7 +71,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeWorkspaceIdProvider.overrideWith((ref) => 'ws_1'),
             userWorkspaceSummariesProvider.overrideWith(
               (ref) => Stream.value(const [
@@ -107,7 +108,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeWorkspaceIdProvider.overrideWith((ref) => 'ws_1'),
             userWorkspaceSummariesProvider.overrideWith(
               (ref) => Stream.value(const [
@@ -148,7 +149,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+          docSourceProvider.overrideWithValue(MemoryDocSource()),
           activeWorkspaceIdProvider.overrideWith((ref) => 'ws_1'),
           userWorkspaceSummariesProvider.overrideWith(
             (ref) => Stream.value(const [
@@ -192,7 +193,7 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+        docSourceProvider.overrideWithValue(MemoryDocSource()),
         activeWorkspaceIdProvider.overrideWith((ref) => 'ws_1'),
         userWorkspaceSummariesProvider.overrideWith(
           (ref) => Stream.value(const [

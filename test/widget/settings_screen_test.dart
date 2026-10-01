@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/locale_controller.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -16,6 +17,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import '../helpers/memory_doc_source.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -143,6 +146,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            // Reads come from the local replica; these tests need none.
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             userWorkspaceSummariesProvider.overrideWith(
@@ -238,6 +243,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            // Reads come from the local replica; these tests need none.
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             userWorkspaceSummariesProvider.overrideWith(
@@ -319,6 +326,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            // Reads come from the local replica; these tests need none.
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             userWorkspaceSummariesProvider.overrideWith(
@@ -420,6 +429,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            // Reads come from the local replica; these tests need none.
+            docSourceProvider.overrideWithValue(MemoryDocSource()),
             activeUserIdProvider.overrideWith((ref) => 'user_1'),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             userWorkspaceSummariesProvider.overrideWith(

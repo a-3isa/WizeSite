@@ -1,7 +1,12 @@
 import 'package:buildtrack_app/features/notifications/data/notification_repository.dart';
 import 'package:buildtrack_app/features/notifications/domain/notification_item.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+
+import '../helpers/local_fixture_store.dart';
+
+class _MockMutations extends Mock implements WorkspaceMutationService {}
 
 void main() {
   test('missing readAt remains unread for backward compatibility', () {
@@ -33,7 +38,8 @@ void main() {
   test(
     'repository returns only the bounded targeted feed and marks read',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = await LocalFixtureStore.open();
+      addTearDown(firestore.dispose);
       for (var index = 0; index < 52; index += 1) {
         await firestore.collection('notifications').doc('notice_$index').set({
           'workspaceId': 'workspace_1',
@@ -50,7 +56,11 @@ void main() {
         'message': 'Hidden',
         'createdAt': DateTime(2026, 6, 16),
       });
-      final repository = NotificationRepository(firestore);
+      final mutations = _MockMutations();
+      when(
+        () => mutations.markNotificationsRead(any()),
+      ).thenAnswer((_) async => const MutationResult(queued: true));
+      final repository = NotificationRepository(firestore.source, mutations);
 
       final items = await repository
           .watchTargeted(workspaceId: 'workspace_1', userId: 'user_1')
@@ -59,11 +69,7 @@ void main() {
       expect(items.every((item) => item.targetUserId == 'user_1'), isTrue);
 
       await repository.markRead([items.first.id]);
-      final updated = await firestore
-          .collection('notifications')
-          .doc(items.first.id)
-          .get();
-      expect(updated.data()?['readAt'], isNotNull);
+      verify(() => mutations.markNotificationsRead({items.first.id})).called(1);
     },
   );
 }

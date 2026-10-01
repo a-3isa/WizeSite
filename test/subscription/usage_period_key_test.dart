@@ -1,4 +1,4 @@
-import 'package:buildtrack_app/features/subscription/data/firebase_usage_quota_repository.dart';
+import 'package:buildtrack_app/features/subscription/data/local_usage_quota_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

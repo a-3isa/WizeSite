@@ -735,24 +735,16 @@ void main() {
     List<Map<String, Object?>> docs(List<Doc> list) => [
       for (final d in list) {'id': d.id, ...d.data},
     ];
-    _expectParity(
+    _expectGolden(
       'entity_summaries_p1',
-      docs(await FirestoreDocSource(firestore).get(query)),
       docs(await LocalDocSource(db).get(query)),
     );
   });
 
   test('notifications', () async {
-    final old = NotificationRepository(firestore);
-    final neu = NotificationRepository.withSource(
-      firestore,
-      LocalDocSource(db),
-    );
-    _expectParity(
+    final neu = NotificationRepository(LocalDocSource(db), mutations);
+    _expectGolden(
       'notifications_u1',
-      (await _settled(
-        old.watchTargeted(workspaceId: 'ws_1', userId: 'u1'),
-      )).map(_notification).toList(),
       (await _settled(
         neu.watchTargeted(workspaceId: 'ws_1', userId: 'u1'),
       )).map(_notification).toList(),

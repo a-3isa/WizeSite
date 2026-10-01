@@ -636,6 +636,19 @@ class WorkspaceMutationService {
     );
   }
 
+  /// Owner only; online (the name is shown everywhere, so no queued rename).
+  Future<void> updateWorkspaceName({
+    required String workspaceId,
+    required String name,
+  }) {
+    return _client.call<void>(
+      functionName: 'updateWorkspaceName',
+      payload: {'workspaceId': workspaceId, 'name': name},
+      parseResult: (_) {},
+      defaultErrorMessage: 'Failed to rename the workspace.',
+    );
+  }
+
   Future<WorkspaceBootstrapResult> ensureUserWorkspaceBootstrap() {
     return _client.call<WorkspaceBootstrapResult>(
       functionName: 'ensureUserWorkspaceBootstrap',

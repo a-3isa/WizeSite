@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
@@ -19,6 +20,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers/memory_doc_source.dart';
 
 class _CancellableExportBuilder implements ReportExportDataBuilder {
   @override
@@ -234,7 +237,8 @@ Future<void> _pumpReportsScreen(
   ReportExportDataBuilder? exportDataBuilder,
   Project? project,
 }) {
-  final activeProject = project ??
+  final activeProject =
+      project ??
       const Project(
         id: 'project_1',
         workspaceId: 'workspace_1',
@@ -272,6 +276,8 @@ Future<void> _pumpReportsScreen(
       ProviderScope(
         key: ValueKey<Object?>(metrics ?? exportDataBuilder ?? role),
         overrides: [
+          // Reads come from the local replica; these tests need none.
+          docSourceProvider.overrideWithValue(MemoryDocSource()),
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
           activeUserIdProvider.overrideWith((ref) => 'user_1'),
           currentAccountingRoleProvider.overrideWith(

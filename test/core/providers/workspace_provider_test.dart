@@ -1,9 +1,9 @@
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../helpers/memory_doc_source.dart';
 
 Future<T> _readStreamProvider<T>(
   ProviderContainer container,
@@ -22,7 +22,7 @@ void main() {
   test(
     'workspace list includes memberships and owned personal workspace',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = MemoryDocSource();
       await firestore.collection('workspaces').doc('personal_ws').set({
         'id': 'personal_ws',
         'name': 'My Personal Workspace',
@@ -41,7 +41,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
-          firestoreProvider.overrideWithValue(firestore),
+          docSourceProvider.overrideWithValue(firestore),
           activeUserIdProvider.overrideWith((ref) => 'user_1'),
         ],
       );
@@ -64,14 +64,14 @@ void main() {
   test(
     'workspace sync updates active workspace when invite changes user doc',
     () async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = MemoryDocSource();
       await firestore.collection('users').doc('user_1').set({
         'workspaceId': 'personal_ws',
       });
 
       final container = ProviderContainer(
         overrides: [
-          firestoreProvider.overrideWithValue(firestore),
+          docSourceProvider.overrideWithValue(firestore),
           activeUserIdProvider.overrideWith((ref) => 'user_1'),
           activeWorkspaceIdProvider.overrideWith((ref) => 'personal_ws'),
         ],
@@ -86,7 +86,7 @@ void main() {
       addTearDown(subscription.close);
       await firestore.collection('users').doc('user_1').set({
         'workspaceId': 'invited_ws',
-      }, SetOptions(merge: true));
+      }, merge: true);
       await container.pump();
       await Future<void>.delayed(Duration.zero);
 

@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
@@ -14,12 +15,12 @@ import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../helpers/memory_doc_source.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -356,7 +357,7 @@ void main() {
   testWidgets(
     'workspace switcher uses active workspace doc name before summaries load',
     (tester) async {
-      final firestore = FakeFirebaseFirestore();
+      final firestore = MemoryDocSource();
       await firestore.collection('workspaces').doc('workspace_1').set({
         'name': 'Acme Sites',
       });
@@ -364,7 +365,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            firestoreProvider.overrideWithValue(firestore),
+            docSourceProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             userWorkspaceSummariesProvider.overrideWith(
               (ref) => Stream.value(const <WorkspaceSummary>[]),

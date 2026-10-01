@@ -7,11 +7,14 @@ import 'dart:async';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_repository.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../helpers/local_db.dart';
+
+class _MockMutations extends Mock implements WorkspaceMutationService {}
 
 Future<T> _until<T>(
   ProviderContainer container,
@@ -71,10 +74,7 @@ void main() {
   tearDown(() => local.dispose());
 
   test('notifications: targeted, newest first', () async {
-    final repo = NotificationRepository.withSource(
-      FakeFirebaseFirestore(),
-      source,
-    );
+    final repo = NotificationRepository(source, _MockMutations());
     final items = await repo
         .watchTargeted(workspaceId: 'ws_own', userId: 'u1')
         .first;

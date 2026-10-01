@@ -2,9 +2,10 @@ import 'package:buildtrack_app/core/services/app_telemetry.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/session_restore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../helpers/local_fixture_store.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -98,19 +99,21 @@ void main() {
   group('SessionRestoreService', () {
     late _MockFirebaseAuth auth;
     late _MockUser user;
-    late FakeFirebaseFirestore firestore;
+    late LocalFixtureStore firestore;
     late _FakeTelemetry telemetry;
 
-    setUp(() {
+    setUp(() async {
       auth = _MockFirebaseAuth();
       user = _MockUser();
-      firestore = FakeFirebaseFirestore();
+      firestore = await LocalFixtureStore.open();
       telemetry = _FakeTelemetry();
 
       when(() => auth.currentUser).thenReturn(user);
       when(() => user.uid).thenReturn('user_1');
       when(() => auth.signOut()).thenAnswer((_) async {});
     });
+
+    tearDown(() => firestore.dispose());
 
     test(
       'restores workspace from membership before bootstrap fallback',
@@ -123,7 +126,7 @@ void main() {
 
         final service = SessionRestoreService(
           auth: auth,
-          firestore: firestore,
+          source: firestore.source,
           callableClient: callable,
           telemetry: telemetry,
         );
@@ -135,10 +138,7 @@ void main() {
         expect(result.setupCompleted, true);
         expect(callable.callCount, 0);
         expect(telemetry.events, contains('session_restore.success'));
-        expect(
-          (await firestore.collection('users').doc('user_1').get()).exists,
-          isFalse,
-        );
+        expect(firestore.collection('users').doc('user_1').data, isNull);
       },
     );
 
@@ -153,7 +153,7 @@ void main() {
 
         final service = SessionRestoreService(
           auth: auth,
-          firestore: firestore,
+          source: firestore.source,
           callableClient: callable,
           telemetry: telemetry,
         );
@@ -184,7 +184,7 @@ void main() {
 
       final service = SessionRestoreService(
         auth: auth,
-        firestore: firestore,
+        source: firestore.source,
         callableClient: callable,
         telemetry: telemetry,
       );
@@ -194,14 +194,6 @@ void main() {
       expect(result, isNotNull);
       expect(result!.workspaceId, 'workspace_1');
       expect(callable.callCount, 0);
-      expect(
-        (await firestore
-                .collection('memberships')
-                .doc('workspace_1_user_1')
-                .get())
-            .exists,
-        isTrue,
-      );
     });
 
     test(
@@ -219,7 +211,7 @@ void main() {
 
         final service = SessionRestoreService(
           auth: auth,
-          firestore: firestore,
+          source: firestore.source,
           callableClient: callable,
           telemetry: telemetry,
         );
@@ -244,7 +236,7 @@ void main() {
 
         final service = SessionRestoreService(
           auth: auth,
-          firestore: firestore,
+          source: firestore.source,
           callableClient: callable,
           telemetry: telemetry,
         );
@@ -270,7 +262,7 @@ void main() {
 
       final service = SessionRestoreService(
         auth: auth,
-        firestore: firestore,
+        source: firestore.source,
         callableClient: callable,
         telemetry: telemetry,
         onSignOutCleanup: () async {
@@ -295,7 +287,7 @@ void main() {
 
       final service = SessionRestoreService(
         auth: auth,
-        firestore: firestore,
+        source: firestore.source,
         callableClient: callable,
         telemetry: throwingTelemetry,
       );
@@ -316,7 +308,7 @@ void main() {
 
       final service = SessionRestoreService(
         auth: auth,
-        firestore: firestore,
+        source: firestore.source,
         callableClient: callable,
         telemetry: throwingTelemetry,
       );
@@ -339,7 +331,7 @@ void main() {
 
       final service = SessionRestoreService(
         auth: auth,
-        firestore: firestore,
+        source: firestore.source,
         callableClient: callable,
         telemetry: telemetry,
       );

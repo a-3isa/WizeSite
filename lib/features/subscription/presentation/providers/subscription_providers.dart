@@ -1,6 +1,6 @@
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
-import 'package:buildtrack_app/features/subscription/data/firebase_subscription_repository.dart';
-import 'package:buildtrack_app/features/subscription/data/firebase_usage_quota_repository.dart';
+import 'package:buildtrack_app/features/subscription/data/local_subscription_repository.dart';
+import 'package:buildtrack_app/features/subscription/data/local_usage_quota_repository.dart';
 import 'package:buildtrack_app/features/subscription/data/revenuecat_purchase_coordinator.dart';
 import 'package:buildtrack_app/features/subscription/domain/entitlement_guard_service.dart';
 import 'package:buildtrack_app/features/subscription/domain/purchase_coordinator.dart';

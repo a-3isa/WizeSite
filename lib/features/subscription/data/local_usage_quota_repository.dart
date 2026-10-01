@@ -1,34 +1,24 @@
 import 'package:buildtrack_app/core/constants/app_limits.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/usage_quota_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 
 String usagePeriodKey(DateTime now) => DateFormat('yyyyMM').format(now.toUtc());
 
-class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
-  FirebaseUsageQuotaRepository(
-    FirebaseFirestore firestore,
-    this._functions, {
+/// Usage from the local replica; limit checks ask the server (spec 004).
+class LocalUsageQuotaRepository implements UsageQuotaRepository {
+  LocalUsageQuotaRepository(
+    this._source,
+    this._client, {
     DateTime Function()? nowProvider,
-  }) : _source = FirestoreDocSource(firestore),
-       _nowProvider = nowProvider ?? DateTime.now;
-
-  /// Reads through [source] (local replica in self-hosted builds, spec 004).
-  FirebaseUsageQuotaRepository.withSource(
-    DocSource source,
-    this._functions, {
-    DateTime Function()? nowProvider,
-  }) : _source = source,
-       _nowProvider = nowProvider ?? DateTime.now;
+  }) : _nowProvider = nowProvider ?? DateTime.now;
 
   final DocSource _source;
-  final FirebaseFunctions _functions;
+  final CallableClient _client;
   final DateTime Function() _nowProvider;
 
   static DocQuery _activeProjectsQuery(String workspaceId) => DocQuery(
@@ -135,13 +125,17 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
     required int delta,
   }) async {
     try {
-      final callable = _functions.httpsCallable('checkLimit');
-      final response = await callable.call<Map<String, dynamic>>({
-        'workspaceId': workspaceId,
-        'type': type.name,
-        'delta': delta,
-      });
-      final data = response.data;
+      final data = await _client.call<Map<String, dynamic>>(
+        functionName: 'checkLimit',
+        payload: {
+          'workspaceId': workspaceId,
+          'type': type.name,
+          'delta': delta,
+        },
+        parseResult: (result) =>
+            Map<String, dynamic>.from(result as Map? ?? const {}),
+        defaultErrorMessage: 'Unable to check the plan limit.',
+      );
       return LimitCheckResult(
         allowed: data['allowed'] as bool? ?? false,
         limitType: type,
@@ -150,7 +144,7 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
         resetAt: DateTime.tryParse(data['resetAt'] as String? ?? ''),
       );
     } catch (_) {
-      // If callable check isn't deployed yet, fallback to conservative local free limits.
+      // Offline or server unreachable: fall back to the free limits locally.
       final snapshot = await getUsageSnapshot(
         workspaceId: workspaceId,
         limits: PlanLimits.free(),
@@ -170,8 +164,8 @@ class FirebaseUsageQuotaRepository implements UsageQuotaRepository {
 }
 
 final usageQuotaRepositoryProvider = Provider<UsageQuotaRepository>((ref) {
-  return FirebaseUsageQuotaRepository.withSource(
+  return LocalUsageQuotaRepository(
     ref.watch(docSourceProvider),
-    ref.watch(functionsProvider),
+    ref.watch(callableClientProvider),
   );
 });

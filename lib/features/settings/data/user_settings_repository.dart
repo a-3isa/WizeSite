@@ -5,7 +5,6 @@ import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/settings/domain/user_settings.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
@@ -21,17 +20,15 @@ abstract interface class UserSettingsRepository {
   });
 }
 
-class FirebaseUserSettingsRepository implements UserSettingsRepository {
-  FirebaseUserSettingsRepository(
-    this._firestore,
+/// Settings read from the local replica (cached in [_prefsBox] for a cold
+/// start) and written through the queued `updateUserSettings` RPC (spec 004).
+class LocalUserSettingsRepository implements UserSettingsRepository {
+  LocalUserSettingsRepository(
+    this._source,
     this._prefsBox,
-    this._mutationService, {
-    DocSource? source,
-  }) : _source = source ?? FirestoreDocSource(_firestore);
+    this._mutationService,
+  );
 
-  final FirebaseFirestore _firestore;
-
-  /// Reads (local replica in self-hosted builds, spec 004).
   final DocSource _source;
   final Box<String> _prefsBox;
   final WorkspaceMutationService _mutationService;
@@ -94,10 +91,6 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
     final current = await getSettings(userId);
     final next = current.copyWith(defaultCurrency: currency);
     await _cache(next);
-    await _firestore.collection('users').doc(userId).set({
-      'defaultCurrency': currency,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
     await _mutationService.updateUserSettings(
       userId: userId,
       defaultCurrency: currency,
@@ -109,10 +102,6 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
     final current = await getSettings(userId);
     final next = current.copyWith(riskAlertsEnabled: enabled);
     await _cache(next);
-    await _firestore.collection('users').doc(userId).set({
-      'riskAlertsEnabled': enabled,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
     await _mutationService.updateUserSettings(
       userId: userId,
       riskAlertsEnabled: enabled,
@@ -131,11 +120,10 @@ class FirebaseUserSettingsRepository implements UserSettingsRepository {
 }
 
 final userSettingsRepositoryProvider = Provider<UserSettingsRepository>((ref) {
-  return FirebaseUserSettingsRepository(
-    ref.watch(firestoreProvider),
+  return LocalUserSettingsRepository(
+    ref.watch(docSourceProvider),
     Hive.box<String>('app_prefs'),
     ref.watch(workspaceMutationServiceProvider),
-    source: ref.watch(docSourceProvider),
   );
 });
 

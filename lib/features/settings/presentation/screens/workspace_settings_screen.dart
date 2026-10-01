@@ -2,7 +2,6 @@ import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
@@ -12,7 +11,6 @@ import 'package:buildtrack_app/core/widgets/async_content.dart';
 import 'package:buildtrack_app/core/widgets/below_dropdown_field.dart';
 import 'package:buildtrack_app/core/widgets/ds/ds.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -176,13 +174,8 @@ class _WorkspaceSettingsScreenState
     }
     try {
       await ref
-          .read(firestoreProvider)
-          .collection('workspaces')
-          .doc(workspaceId)
-          .update({
-            'name': nextName,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          .read(workspaceMutationServiceProvider)
+          .updateWorkspaceName(workspaceId: workspaceId, name: nextName);
       ref.invalidate(userWorkspaceSummariesProvider);
       ref.invalidate(workspaceNameProvider);
     } catch (error) {

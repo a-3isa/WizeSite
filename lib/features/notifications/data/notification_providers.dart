@@ -1,19 +1,14 @@
-import 'package:buildtrack_app/core/config/backend_config.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/sync/doc_source.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/notifications/data/notification_repository.dart';
 import 'package:buildtrack_app/features/notifications/domain/notification_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
-  return NotificationRepository.withSource(
-    ref.watch(firestoreProvider),
+  return NotificationRepository(
     ref.watch(docSourceProvider),
-    mutations: BackendConfig.fromEnvironment.useSelfHostedBackend
-        ? ref.watch(workspaceMutationServiceProvider)
-        : null,
+    ref.watch(workspaceMutationServiceProvider),
   );
 });
 

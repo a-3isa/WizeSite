@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class NotificationItem {
   const NotificationItem({
     required this.id,
@@ -36,7 +34,6 @@ class NotificationItem {
 
   static DateTime? _date(Object? value) {
     if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.tryParse(value);
     return null;
   }

@@ -1,16 +1,11 @@
 import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_models.dart';
 import 'package:buildtrack_app/features/subscription/domain/subscription_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Reads the workspace subscription through [DocSource], so it serves both
-/// Firebase builds and the local replica (spec 004, tasks.md T051).
-class FirebaseSubscriptionRepository implements SubscriptionRepository {
-  FirebaseSubscriptionRepository(FirebaseFirestore firestore)
-    : _source = FirestoreDocSource(firestore);
-
-  FirebaseSubscriptionRepository.withSource(this._source);
+/// Reads the workspace subscription from the local replica (spec 004, T051).
+class LocalSubscriptionRepository implements SubscriptionRepository {
+  LocalSubscriptionRepository(this._source);
 
   final DocSource _source;
 
@@ -32,8 +27,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
 
   SubscriptionState _fromDocument(Map<String, dynamic> data) {
     DateTime? toDate(dynamic value) {
-      if (value is Timestamp) {
-        return value.toDate();
+      if (value is DateTime) {
+        return value;
       }
       if (value is String) {
         return DateTime.tryParse(value);
@@ -68,7 +63,5 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
 }
 
 final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
-  return FirebaseSubscriptionRepository.withSource(
-    ref.watch(docSourceProvider),
-  );
+  return LocalSubscriptionRepository(ref.watch(docSourceProvider));
 });

@@ -1,9 +1,9 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/pagination/firestore_page.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
@@ -13,10 +13,11 @@ import 'package:buildtrack_app/features/reports/data/reports_providers.dart';
 import 'package:buildtrack_app/features/reports/domain/report_scope.dart';
 import 'package:buildtrack_app/features/reports/data/report_project_selector_provider.dart';
 import 'package:buildtrack_app/features/projects/domain/project.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../../helpers/memory_doc_source.dart';
 
 class _MockExpenseRepository extends Mock implements ExpenseRepository {}
 
@@ -812,7 +813,7 @@ void main() {
     test(
       'domain accounting report providers return bounded project records',
       () async {
-        final firestore = FakeFirebaseFirestore();
+        final firestore = MemoryDocSource();
         final firstDate = DateTime.utc(2026, 6, 10);
         final secondDate = DateTime.utc(2026, 6, 9);
         await firestore.collection('worker_accounting_records').doc('w1').set({
@@ -896,7 +897,7 @@ void main() {
 
         final container = ProviderContainer(
           overrides: [
-            firestoreProvider.overrideWithValue(firestore),
+            docSourceProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             reportProjectIdProvider.overrideWith((ref) => 'project_1'),
             // Pin the report clock inside the seeded June 2026 window so the
@@ -1140,9 +1141,7 @@ void main() {
           cursor: null,
           pageSize: 500,
         ),
-      ).thenAnswer(
-        (_) async => const FirestorePage(items: [], hasMore: false),
-      );
+      ).thenAnswer((_) async => const FirestorePage(items: [], hasMore: false));
       when(
         () => payments.fetchPaymentsPage(
           'workspace_1',
@@ -1152,9 +1151,7 @@ void main() {
           cursor: null,
           pageSize: 500,
         ),
-      ).thenAnswer(
-        (_) async => FirestorePage(items: [unpaid], hasMore: false),
-      );
+      ).thenAnswer((_) async => FirestorePage(items: [unpaid], hasMore: false));
 
       final container = ProviderContainer(
         overrides: [
@@ -1171,9 +1168,7 @@ void main() {
           ),
           expenseRepositoryProvider.overrideWithValue(expenses),
           paymentRepositoryProvider.overrideWithValue(payments),
-          reportBaseMetricsProvider.overrideWith(
-            (ref) => Stream.value(null),
-          ),
+          reportBaseMetricsProvider.overrideWith((ref) => Stream.value(null)),
           reportPendingActionsProvider.overrideWith(
             (ref) => Stream.value(const []),
           ),
@@ -1193,14 +1188,14 @@ void main() {
     test('denied roles short-circuit report data reads', () async {
       final expenses = _MockExpenseRepository();
       final payments = _MockPaymentRepository();
-      final firestore = FakeFirebaseFirestore();
+      final firestore = MemoryDocSource();
       await firestore.collection('project_metrics').doc('project_1').set({
         'projectId': 'project_1',
         'totalExpenses': 100,
       });
       final container = ProviderContainer(
         overrides: [
-          firestoreProvider.overrideWithValue(firestore),
+          docSourceProvider.overrideWithValue(firestore),
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
           currentAccountingRoleProvider.overrideWithValue(
             const AsyncData(AccountingAccessRoleType.member),
@@ -1254,7 +1249,7 @@ void main() {
     test(
       'all-projects scope aggregates workspace rows across projects',
       () async {
-        final firestore = FakeFirebaseFirestore();
+        final firestore = MemoryDocSource();
         final start = DateTime.utc(2026, 6, 1);
         final end = DateTime.utc(2026, 6, 30, 23, 59, 59, 999);
 
@@ -1317,7 +1312,7 @@ void main() {
 
         final container = ProviderContainer(
           overrides: [
-            firestoreProvider.overrideWithValue(firestore),
+            docSourceProvider.overrideWithValue(firestore),
             activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
             currentAccountingRoleProvider.overrideWithValue(
               const AsyncData(AccountingAccessRoleType.owner),

@@ -1,12 +1,9 @@
 import 'dart:async';
 
-import 'package:buildtrack_app/core/config/backend_config.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/sync/local_queries.dart';
 import 'package:buildtrack_app/core/sync/local_row.dart';
 import 'package:buildtrack_app/core/sync/powersync_db.dart';
 import 'package:buildtrack_app/core/sync/schema.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
 
@@ -38,9 +35,8 @@ class DocQuery {
   final int? limit;
 }
 
-/// Backend-neutral document reads (spec 004). Providers that queried Firestore
-/// directly use this instead, so the same code serves Firebase builds and
-/// self-hosted builds (local PowerSync replica).
+/// Document reads from the local PowerSync replica (spec 004). The providers
+/// keep the Firestore-shaped vocabulary they were written against.
 abstract interface class DocSource {
   Stream<List<Doc>> watch(DocQuery query);
   Future<List<Doc>> get(DocQuery query);
@@ -51,72 +47,8 @@ abstract interface class DocSource {
   Future<int> count(DocQuery query);
 }
 
-class FirestoreDocSource implements DocSource {
-  const FirestoreDocSource(this._firestore);
-
-  final FirebaseFirestore _firestore;
-
-  Query<Map<String, dynamic>> _query(DocQuery q) {
-    Query<Map<String, dynamic>> query = _firestore.collection(q.collection);
-    for (final entry in q.equals.entries) {
-      query = query.where(entry.key, isEqualTo: entry.value);
-    }
-    if (q.rangeField != null && q.rangeFrom != null) {
-      query = query.where(q.rangeField!, isGreaterThanOrEqualTo: q.rangeFrom);
-    }
-    if (q.rangeField != null && q.rangeTo != null) {
-      query = query.where(q.rangeField!, isLessThanOrEqualTo: q.rangeTo);
-    }
-    if (q.orderBy != null) {
-      query = query.orderBy(q.orderBy!, descending: q.descending);
-    }
-    if (q.limit != null) {
-      query = query.limit(q.limit!);
-    }
-    return query;
-  }
-
-  static List<Doc> _docs(QuerySnapshot<Map<String, dynamic>> snap) => [
-    for (final doc in snap.docs) (id: doc.id, data: doc.data()),
-  ];
-
-  @override
-  Stream<List<Doc>> watch(DocQuery query) =>
-      _query(query).snapshots().map(_docs);
-
-  @override
-  Future<List<Doc>> get(DocQuery query) async =>
-      _docs(await _query(query).get());
-
-  @override
-  Stream<Doc?> watchDoc(String collection, String id) => _firestore
-      .collection(collection)
-      .doc(id)
-      .snapshots()
-      .map((snap) => snap.exists ? (id: snap.id, data: snap.data()!) : null);
-
-  @override
-  Future<Doc?> getDoc(String collection, String id) async {
-    final snap = await _firestore.collection(collection).doc(id).get();
-    return snap.exists ? (id: snap.id, data: snap.data()!) : null;
-  }
-
-  @override
-  Future<int> count(DocQuery query) async {
-    final snap = await _query(
-      DocQuery(
-        query.collection,
-        equals: query.equals,
-        rangeField: query.rangeField,
-        rangeFrom: query.rangeFrom,
-        rangeTo: query.rangeTo,
-      ),
-    ).count().get();
-    return snap.count ?? 0;
-  }
-}
-
-/// Reads the local replica with the same semantics as [FirestoreDocSource].
+/// Reads the local replica with Firestore's query semantics (the providers
+/// were written against them).
 class LocalDocSource implements DocSource {
   LocalDocSource(this._db);
 
@@ -261,8 +193,5 @@ class LocalDocSource implements DocSource {
 }
 
 final docSourceProvider = Provider<DocSource>((ref) {
-  if (BackendConfig.fromEnvironment.useSelfHostedBackend) {
-    return LocalDocSource(ref.watch(localDatabaseProvider));
-  }
-  return FirestoreDocSource(ref.watch(firestoreProvider));
+  return LocalDocSource(ref.watch(localDatabaseProvider));
 });

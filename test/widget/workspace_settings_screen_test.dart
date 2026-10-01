@@ -1,14 +1,15 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/providers/workspace_provider.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/settings/presentation/screens/workspace_settings_screen.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../helpers/memory_doc_source.dart';
 
 class _MockWorkspaceMutationService extends Mock
     implements WorkspaceMutationService {}
@@ -16,13 +17,13 @@ class _MockWorkspaceMutationService extends Mock
 void main() {
   Future<void> pumpWorkspaceSettings(
     WidgetTester tester, {
-    required FakeFirebaseFirestore firestore,
+    required MemoryDocSource firestore,
     required WorkspaceMutationService workspaceService,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          firestoreProvider.overrideWithValue(firestore),
+          docSourceProvider.overrideWithValue(firestore),
           activeUserIdProvider.overrideWith((ref) => 'owner_1'),
           activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
           workspaceMutationServiceProvider.overrideWithValue(workspaceService),
@@ -44,7 +45,7 @@ void main() {
   testWidgets('shows workspace name crew and all privilege roles', (
     tester,
   ) async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = MemoryDocSource();
     await firestore.collection('workspaces').doc('workspace_1').set({
       'id': 'workspace_1',
       'name': 'Acme Sites',
@@ -100,7 +101,7 @@ void main() {
   testWidgets('renaming workspace does not reuse a disposed controller', (
     tester,
   ) async {
-    final firestore = FakeFirebaseFirestore();
+    final firestore = MemoryDocSource();
     await firestore.collection('workspaces').doc('workspace_1').set({
       'id': 'workspace_1',
       'name': 'Acme Sites',
@@ -118,10 +119,17 @@ void main() {
       'role': 'owner',
     });
 
+    final workspaceService = _MockWorkspaceMutationService();
+    when(
+      () => workspaceService.updateWorkspaceName(
+        workspaceId: any(named: 'workspaceId'),
+        name: any(named: 'name'),
+      ),
+    ).thenAnswer((_) async {});
     await pumpWorkspaceSettings(
       tester,
       firestore: firestore,
-      workspaceService: _MockWorkspaceMutationService(),
+      workspaceService: workspaceService,
     );
     await tester.pumpAndSettle();
 
@@ -132,10 +140,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    final workspace = await firestore
-        .collection('workspaces')
-        .doc('workspace_1')
-        .get();
-    expect(workspace.data()?['name'], 'Renamed Sites');
+    verify(
+      () => workspaceService.updateWorkspaceName(
+        workspaceId: 'workspace_1',
+        name: 'Renamed Sites',
+      ),
+    ).called(1);
   });
 }

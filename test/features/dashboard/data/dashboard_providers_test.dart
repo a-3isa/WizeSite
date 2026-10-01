@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
 import 'package:buildtrack_app/core/providers/accounting_access_provider.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
@@ -9,10 +9,11 @@ import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/core/utils/utc_calendar.dart';
 import 'package:buildtrack_app/features/dashboard/data/dashboard_providers.dart';
 import 'package:buildtrack_app/features/dashboard/domain/dashboard_snapshot.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+
+import '../../../helpers/memory_doc_source.dart';
 
 Future<T> _readStreamProvider<T>(
   ProviderContainer container,
@@ -53,7 +54,7 @@ void main() {
   late Directory tempDir;
   late Box<String> box;
   late OfflineActionQueue queue;
-  late FakeFirebaseFirestore firestore;
+  late MemoryDocSource firestore;
   late ProviderContainer container;
 
   setUp(() async {
@@ -63,10 +64,10 @@ void main() {
     Hive.init(tempDir.path);
     box = await Hive.openBox<String>('dashboard_providers_test');
     queue = OfflineActionQueue(box);
-    firestore = FakeFirebaseFirestore();
+    firestore = MemoryDocSource();
     container = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
       ],
     );
@@ -249,7 +250,7 @@ void main() {
     () async {
       final deniedContainer = ProviderContainer(
         overrides: [
-          firestoreProvider.overrideWithValue(firestore),
+          docSourceProvider.overrideWithValue(firestore),
           offlineActionQueueProvider.overrideWithValue(queue),
           currentAccountingRoleProvider.overrideWithValue(
             const AsyncData(AccountingAccessRoleType.member),
@@ -280,7 +281,7 @@ void main() {
     });
     final allowedContainer = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
         currentAccountingRoleProvider.overrideWithValue(
           const AsyncData(AccountingAccessRoleType.accountingApproved),
@@ -322,7 +323,7 @@ void main() {
 
     final allowedContainer = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
         currentAccountingRoleProvider.overrideWithValue(
           const AsyncData(AccountingAccessRoleType.owner),
@@ -339,136 +340,127 @@ void main() {
     expect(snapshot.totalIncome, 0);
   });
 
-  test(
-    'worker attendance excludes a pending update that moves an in-window '
-    'entry out of the window',
-    () async {
-      final today = DateTime.now();
-      final movedOutDate = today.subtract(const Duration(days: 40));
+  test('worker attendance excludes a pending update that moves an in-window '
+      'entry out of the window', () async {
+    final today = DateTime.now();
+    final movedOutDate = today.subtract(const Duration(days: 40));
 
-      // Base doc still reflects the OLD (in-window) date/daysWorked because
-      // Firestore hasn't synced the pending edit yet.
-      await firestore.collection('worker_entries').doc('entry_1').set({
+    // Base doc still reflects the OLD (in-window) date/daysWorked because
+    // Firestore hasn't synced the pending edit yet.
+    await firestore.collection('worker_entries').doc('entry_1').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'workerId': 'worker_1',
+      'projectId': 'project_1',
+      'daysWorked': 3,
+      'date': today,
+    });
+
+    await queue.enqueue(
+      type: OfflineActionTypes.updateWorkerEntry,
+      payload: {
         'workspaceId': 'workspace_1',
-        'isArchived': false,
-        'workerId': 'worker_1',
+        'entryId': 'entry_1',
         'projectId': 'project_1',
         'daysWorked': 3,
-        'date': today,
-      });
+        'dailyWage': 100,
+        'date': movedOutDate.toIso8601String(),
+        'previousProjectId': 'project_1',
+        'previousDaysWorked': 3,
+        'previousDailyWage': 100,
+        'previousDate': today.toIso8601String(),
+      },
+    );
 
-      await queue.enqueue(
-        type: OfflineActionTypes.updateWorkerEntry,
-        payload: {
-          'workspaceId': 'workspace_1',
-          'entryId': 'entry_1',
-          'projectId': 'project_1',
-          'daysWorked': 3,
-          'dailyWage': 100,
-          'date': movedOutDate.toIso8601String(),
-          'previousProjectId': 'project_1',
-          'previousDaysWorked': 3,
-          'previousDailyWage': 100,
-          'previousDate': today.toIso8601String(),
-        },
-      );
+    final summary = await _readSettledStreamProvider(
+      container,
+      dashboardWorkerAttendanceProvider('workspace_1'),
+    );
 
-      final summary = await _readSettledStreamProvider(
-        container,
-        dashboardWorkerAttendanceProvider('workspace_1'),
-      );
+    expect(summary.workerCount, 0);
+    expect(summary.manDays, 0);
+  });
 
-      expect(summary.workerCount, 0);
-      expect(summary.manDays, 0);
-    },
-  );
+  test('worker attendance keeps counting a worker whose other entry stays '
+      'in-window after a sibling entry is pending-moved out', () async {
+    final today = DateTime.now();
+    final movedOutDate = today.subtract(const Duration(days: 40));
 
-  test(
-    'worker attendance keeps counting a worker whose other entry stays '
-    'in-window after a sibling entry is pending-moved out',
-    () async {
-      final today = DateTime.now();
-      final movedOutDate = today.subtract(const Duration(days: 40));
+    await firestore.collection('worker_entries').doc('entry_1').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'workerId': 'worker_1',
+      'projectId': 'project_1',
+      'daysWorked': 3,
+      'date': today,
+    });
+    await firestore.collection('worker_entries').doc('entry_2').set({
+      'workspaceId': 'workspace_1',
+      'isArchived': false,
+      'workerId': 'worker_1',
+      'projectId': 'project_1',
+      'daysWorked': 2,
+      'date': today,
+    });
 
-      await firestore.collection('worker_entries').doc('entry_1').set({
+    await queue.enqueue(
+      type: OfflineActionTypes.updateWorkerEntry,
+      payload: {
         'workspaceId': 'workspace_1',
-        'isArchived': false,
-        'workerId': 'worker_1',
+        'entryId': 'entry_1',
         'projectId': 'project_1',
         'daysWorked': 3,
-        'date': today,
-      });
-      await firestore.collection('worker_entries').doc('entry_2').set({
+        'dailyWage': 100,
+        'date': movedOutDate.toIso8601String(),
+        'previousProjectId': 'project_1',
+        'previousDaysWorked': 3,
+        'previousDailyWage': 100,
+        'previousDate': today.toIso8601String(),
+      },
+    );
+
+    final summary = await _readSettledStreamProvider(
+      container,
+      dashboardWorkerAttendanceProvider('workspace_1'),
+    );
+
+    // worker_1 is NOT blindly dropped from the distinct count just
+    // because entry_1 moved out of window — entry_2 still keeps them in.
+    expect(summary.workerCount, 1);
+    expect(summary.manDays, 2);
+  });
+
+  test('worker attendance adds the full day count (not a stale delta) when a '
+      'pending update moves an entry into the window', () async {
+    final today = DateTime.now();
+    final movedFromDate = today.subtract(const Duration(days: 40));
+
+    // No base doc: the entry's currently-stored (unsynced) date is still
+    // outside the window, so the base query correctly excludes it — the
+    // pending action is the only source of this contribution.
+    await queue.enqueue(
+      type: OfflineActionTypes.updateWorkerEntry,
+      payload: {
         'workspaceId': 'workspace_1',
-        'isArchived': false,
-        'workerId': 'worker_1',
+        'entryId': 'entry_3',
         'projectId': 'project_1',
-        'daysWorked': 2,
-        'date': today,
-      });
+        'daysWorked': 4,
+        'dailyWage': 100,
+        'date': today.toIso8601String(),
+        'previousProjectId': 'project_1',
+        'previousDaysWorked': 4,
+        'previousDailyWage': 100,
+        'previousDate': movedFromDate.toIso8601String(),
+      },
+    );
 
-      await queue.enqueue(
-        type: OfflineActionTypes.updateWorkerEntry,
-        payload: {
-          'workspaceId': 'workspace_1',
-          'entryId': 'entry_1',
-          'projectId': 'project_1',
-          'daysWorked': 3,
-          'dailyWage': 100,
-          'date': movedOutDate.toIso8601String(),
-          'previousProjectId': 'project_1',
-          'previousDaysWorked': 3,
-          'previousDailyWage': 100,
-          'previousDate': today.toIso8601String(),
-        },
-      );
+    final summary = await _readSettledStreamProvider(
+      container,
+      dashboardWorkerAttendanceProvider('workspace_1'),
+    );
 
-      final summary = await _readSettledStreamProvider(
-        container,
-        dashboardWorkerAttendanceProvider('workspace_1'),
-      );
-
-      // worker_1 is NOT blindly dropped from the distinct count just
-      // because entry_1 moved out of window — entry_2 still keeps them in.
-      expect(summary.workerCount, 1);
-      expect(summary.manDays, 2);
-    },
-  );
-
-  test(
-    'worker attendance adds the full day count (not a stale delta) when a '
-    'pending update moves an entry into the window',
-    () async {
-      final today = DateTime.now();
-      final movedFromDate = today.subtract(const Duration(days: 40));
-
-      // No base doc: the entry's currently-stored (unsynced) date is still
-      // outside the window, so the base query correctly excludes it — the
-      // pending action is the only source of this contribution.
-      await queue.enqueue(
-        type: OfflineActionTypes.updateWorkerEntry,
-        payload: {
-          'workspaceId': 'workspace_1',
-          'entryId': 'entry_3',
-          'projectId': 'project_1',
-          'daysWorked': 4,
-          'dailyWage': 100,
-          'date': today.toIso8601String(),
-          'previousProjectId': 'project_1',
-          'previousDaysWorked': 4,
-          'previousDailyWage': 100,
-          'previousDate': movedFromDate.toIso8601String(),
-        },
-      );
-
-      final summary = await _readSettledStreamProvider(
-        container,
-        dashboardWorkerAttendanceProvider('workspace_1'),
-      );
-
-      expect(summary.manDays, 4);
-    },
-  );
+    expect(summary.manDays, 4);
+  });
 
   group('cash collected / outstanding payments (UI audit Task B3 fix)', () {
     /// Every payment used across this group's tests, tagged with which
@@ -531,75 +523,66 @@ void main() {
       });
     }
 
-    test(
-      'dashboardCashCollectedProvider is a one-time fetch summing '
-      'paid + partial (+ legacy missing-status docs), excluding '
-      'unpaid/refunded/cancelled/archived/other workspaces',
-      () async {
-        await seedPayments();
+    test('dashboardCashCollectedProvider is a one-time fetch summing '
+        'paid + partial (+ legacy missing-status docs), excluding '
+        'unpaid/refunded/cancelled/archived/other workspaces', () async {
+      await seedPayments();
 
-        final collected = await container.read(
-          dashboardCashCollectedProvider('workspace_1').future,
-        );
+      final collected = await container.read(
+        dashboardCashCollectedProvider('workspace_1').future,
+      );
 
-        expect(collected, 10000 + 2000 + 1500);
-      },
-    );
+      expect(collected, 10000 + 2000 + 1500);
+    });
 
-    test(
-      'dashboardOutstandingPaymentsProvider is a live listener bounded to '
-      'paymentStatus == unpaid, excluding paid/partial/refunded/cancelled/'
-      'archived/other workspaces',
-      () async {
-        await seedPayments();
+    test('dashboardOutstandingPaymentsProvider is a live listener bounded to '
+        'paymentStatus == unpaid, excluding paid/partial/refunded/cancelled/'
+        'archived/other workspaces', () async {
+      await seedPayments();
 
-        final outstanding = await _readStreamProvider(
-          container,
-          dashboardOutstandingPaymentsProvider('workspace_1'),
-        );
+      final outstanding = await _readStreamProvider(
+        container,
+        dashboardOutstandingPaymentsProvider('workspace_1'),
+      );
 
-        expect(outstanding, 3000);
+      expect(outstanding, 3000);
 
-        // Live: marking the outstanding payment as paid removes it from the
-        // listener without needing to re-fetch/invalidate anything.
-        await firestore.collection('payments').doc('payment_unpaid').update({
-          'paymentStatus': 'paid',
-        });
-        await pumpEventQueue();
+      // Live: marking the outstanding payment as paid removes it from the
+      // listener without needing to re-fetch/invalidate anything.
+      await firestore.collection('payments').doc('payment_unpaid').update({
+        'paymentStatus': 'paid',
+      });
+      await pumpEventQueue();
 
-        expect(
-          container.read(dashboardOutstandingPaymentsProvider('workspace_1')),
-          const AsyncData<double>(0),
-        );
-      },
-    );
+      expect(
+        container.read(dashboardOutstandingPaymentsProvider('workspace_1')),
+        const AsyncData<double>(0),
+      );
+    });
 
-    test(
-      'no payment is ever double-counted or silently dropped: each '
-      'workspace_1, non-archived payment is in exactly one of collected/'
-      'outstanding, or explicitly neither (refunded/cancelled)',
-      () async {
-        await seedPayments();
+    test('no payment is ever double-counted or silently dropped: each '
+        'workspace_1, non-archived payment is in exactly one of collected/'
+        'outstanding, or explicitly neither (refunded/cancelled)', () async {
+      await seedPayments();
 
-        final collected = await container.read(
-          dashboardCashCollectedProvider('workspace_1').future,
-        );
-        final outstanding = await _readStreamProvider(
-          container,
-          dashboardOutstandingPaymentsProvider('workspace_1'),
-        );
+      final collected = await container.read(
+        dashboardCashCollectedProvider('workspace_1').future,
+      );
+      final outstanding = await _readStreamProvider(
+        container,
+        dashboardOutstandingPaymentsProvider('workspace_1'),
+      );
 
-        // paid (10000) + partial (2000) + legacy (1500) = collected.
-        expect(collected, 13500);
-        // unpaid (3000) = outstanding.
-        expect(outstanding, 3000);
-        // refunded (500) + cancelled (750) = 1250, deliberately in neither
-        // bucket. Confirm the two buckets together account for exactly the
-        // workspace's collectible total (paid+partial+legacy+unpaid) and no
-        // more — i.e. refunded/cancelled amounts never leak into either sum,
-        // and nothing from collected leaks into outstanding or vice versa.
-        expect(collected + outstanding, 13500 + 3000);
-      },
-    );
+      // paid (10000) + partial (2000) + legacy (1500) = collected.
+      expect(collected, 13500);
+      // unpaid (3000) = outstanding.
+      expect(outstanding, 3000);
+      // refunded (500) + cancelled (750) = 1250, deliberately in neither
+      // bucket. Confirm the two buckets together account for exactly the
+      // workspace's collectible total (paid+partial+legacy+unpaid) and no
+      // more — i.e. refunded/cancelled amounts never leak into either sum,
+      // and nothing from collected leaks into outstanding or vice versa.
+      expect(collected + outstanding, 13500 + 3000);
+    });
   });
 }

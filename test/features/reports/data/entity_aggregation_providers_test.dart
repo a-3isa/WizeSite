@@ -1,14 +1,15 @@
 import 'dart:io';
 
-import 'package:buildtrack_app/core/providers/firebase_providers.dart';
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/reports/data/entity_aggregation_providers.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+
+import '../../../helpers/memory_doc_source.dart';
 
 Future<T> _readStreamProvider<T>(
   ProviderContainer container,
@@ -29,7 +30,7 @@ void main() {
   late Directory tempDir;
   late Box<String> box;
   late OfflineActionQueue queue;
-  late FakeFirebaseFirestore firestore;
+  late MemoryDocSource firestore;
   late ProviderContainer container;
 
   setUp(() async {
@@ -39,10 +40,10 @@ void main() {
     Hive.init(tempDir.path);
     box = await Hive.openBox<String>('entity_aggregation_providers_test');
     queue = OfflineActionQueue(box);
-    firestore = FakeFirebaseFirestore();
+    firestore = MemoryDocSource();
     container = ProviderContainer(
       overrides: [
-        firestoreProvider.overrideWithValue(firestore),
+        docSourceProvider.overrideWithValue(firestore),
         offlineActionQueueProvider.overrideWithValue(queue),
       ],
     );

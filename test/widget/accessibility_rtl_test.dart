@@ -1,3 +1,4 @@
+import 'package:buildtrack_app/core/sync/doc_source.dart';
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
 import 'package:buildtrack_app/core/models/accounting_access_role.dart';
@@ -33,6 +34,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../helpers/memory_doc_source.dart';
+
 void main() {
   testWidgets('shell destinations localize into RTL Arabic semantics', (
     tester,
@@ -62,6 +65,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // Reads come from the local replica; these tests need none.
+          docSourceProvider.overrideWithValue(MemoryDocSource()),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
           appPrefetcherProvider.overrideWithValue(
             AppPrefetcher(warm: ({required target, projectId}) {}),
@@ -106,9 +111,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           home: Scaffold(
-            appBar: AppBar(
-              leading: const AppBackButton(fallbackRoute: '/'),
-            ),
+            appBar: AppBar(leading: const AppBackButton(fallbackRoute: '/')),
           ),
         ),
       );
@@ -285,6 +288,8 @@ void main() {
 Widget _dashboardApp() {
   return ProviderScope(
     overrides: [
+      // Reads come from the local replica; these tests need none.
+      docSourceProvider.overrideWithValue(MemoryDocSource()),
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
       unreadNotificationCountProvider.overrideWith((ref) => 0),
       currentUsageProvider.overrideWith(
@@ -346,6 +351,8 @@ Widget _reportsApp() {
 
   return ProviderScope(
     overrides: [
+      // Reads come from the local replica; these tests need none.
+      docSourceProvider.overrideWithValue(MemoryDocSource()),
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
       activeUserIdProvider.overrideWith((ref) => 'user_1'),
       currentAccountingRoleProvider.overrideWith(
@@ -413,6 +420,8 @@ Widget _reportsApp() {
 Widget _projectsApp(ProjectRepository repository) {
   return ProviderScope(
     overrides: [
+      // Reads come from the local replica; these tests need none.
+      docSourceProvider.overrideWithValue(MemoryDocSource()),
       activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_1'),
       projectRepositoryProvider.overrideWithValue(repository),
       currentAccountingRoleProvider.overrideWith(
