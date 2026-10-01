@@ -232,7 +232,7 @@ decommission. Production cutover is a separate cross-cutting phase between US3 a
 - [X] T109 [P] Rewrite the backend sections of `README.md` (stack, voice flow now `POST /v1/files` + `processVoiceExpense` RPC, setup via `server/` and `ops/`) and remove the Firebase Functions setup
 - [X] T110 [P] Update `docs/SECURITY.md` for the new threat surface: VPS hardening, secrets location, signed file URLs, sync rules, backup encryption
 - [ ] T111 [P] Refresh the knowledge graph to include `server/`: `graphify lib server --update`, then `graphify export obsidian`
-- [ ] T112 Final gate (constitution workflow): `flutter analyze`, `flutter test --reporter compact`, `npm --prefix server test` and the integration suites. Report any failures or skipped environment-dependent checks in `specs/004-vps-backend-migration/final-verification.md`
+- [ ] T112 Final gate (constitution workflow): `flutter analyze`, `flutter test --reporter compact`, `npm --prefix server test` and the integration suites. Report any failures or skipped environment-dependent checks in `specs/004-vps-backend-migration/final-verification.md` _Pre-cutover run 2026-10-01, all green: `flutter analyze` clean; `flutter test` 723; server unit+migration 80; integration 112 (incl. the 8 sync tests with `SYNC_TEST_URL` and the compose.test.yml PowerSync); parity 11 on the emulators; server lint clean. Re-run after T108._
 
 ---
 
