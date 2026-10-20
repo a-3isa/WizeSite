@@ -15,7 +15,7 @@ const ALLOWED_CATEGORIES: ExpenseCategory[] = [
   "other",
 ];
 
-function safeJsonParse(input: string): Record<string, unknown> | null {
+export function safeJsonParse(input: string): Record<string, unknown> | null {
   const raw = input.trim();
   if (!raw) {
     return null;

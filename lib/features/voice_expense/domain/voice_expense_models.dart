@@ -1,3 +1,5 @@
+import 'package:buildtrack_app/features/expenses/domain/expense_proposal.dart';
+
 class VoiceProjectOption {
   const VoiceProjectOption({required this.id, required this.name});
 
@@ -85,6 +87,7 @@ class VoiceExpenseParseResponse {
     required this.source,
     required this.needsConfirmation,
     required this.storagePath,
+    this.proposal,
   });
 
   final String transcript;
@@ -93,6 +96,9 @@ class VoiceExpenseParseResponse {
   final String source;
   final bool needsConfirmation;
   final String storagePath;
+
+  /// Title + items from the AI (feature 005); null from an older server.
+  final ExpenseProposal? proposal;
 
   factory VoiceExpenseParseResponse.fromMap(Map<String, dynamic> map) {
     return VoiceExpenseParseResponse(
@@ -110,6 +116,11 @@ class VoiceExpenseParseResponse {
       source: map['source'] as String? ?? 'rules',
       needsConfirmation: map['needsConfirmation'] as bool? ?? true,
       storagePath: map['storagePath'] as String? ?? '',
+      proposal: map['proposal'] is Map
+          ? ExpenseProposal.fromMap(
+              Map<String, dynamic>.from(map['proposal'] as Map),
+            )
+          : null,
     );
   }
 }

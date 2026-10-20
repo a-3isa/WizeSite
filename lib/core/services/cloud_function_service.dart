@@ -1,4 +1,5 @@
 import 'package:buildtrack_app/core/services/callable_client.dart';
+import 'package:buildtrack_app/core/utils/local_date_key.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CloudFunctionService {
@@ -20,6 +21,8 @@ class CloudFunctionService {
           'projects': projects,
           'currency': currency,
           'languageHint': languageHint,
+          // Relative dates ("امبارح") resolve against the device's day.
+          'today': localDateKey(DateTime.now()),
         },
         parseResult: (result) => Map<String, dynamic>.from(result as Map),
         defaultErrorMessage: 'Failed to process voice expense.',

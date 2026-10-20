@@ -84,7 +84,7 @@ test("expense create: validation, roles and project checks keep today's messages
   const create = (uid: string, data: Record<string, unknown>) => tx((t) => createExpenseWithQuotaForUser(t, uid, data));
   await rejectsWith(create("u1", expense({ category: "food" })), "invalid-argument", "Unsupported expense category");
   await rejectsWith(create("u1", expense({ amount: 0 })), "invalid-argument", "Amount must be greater than zero");
-  await rejectsWith(create("u1", expense({ inputMethod: "fax" })), "invalid-argument", "inputMethod must be manual or voice");
+  await rejectsWith(create("u1", expense({ inputMethod: "fax" })), "invalid-argument", "inputMethod must be manual, voice or text");
   await rejectsWith(create("u1", expense({ projectId: "nope" })), "invalid-argument", "Project does not exist");
   await rejectsWith(create("u1", expense({ projectId: "p_arch" })), "permission-denied", "Project is not available in this workspace");
   await rejectsWith(create("entry", expense()), "permission-denied", "Accounting access required");
@@ -134,6 +134,110 @@ test("expense archive: refunds the monthly count once and removes it from totals
     "not-found",
     "Expense not found",
   );
+});
+
+// ---------------------------------------------------------------- expense items (feature 005)
+
+const plumbing = [
+  { id: "item_faucet", name: "حنفية", amount: 100 },
+  { id: "item_gasket", name: "جلبه", amount: 50 },
+  { id: "item_pipe", name: "ماسورة", amount: 90 },
+];
+const itemsOf = async (id: string) => {
+  const [row] = await sql<{ items: Array<Record<string, unknown>>; amount: string; description: string }[]>`
+    SELECT items, amount, description FROM expenses WHERE id = ${id}`;
+  return row;
+};
+
+test("expense items: create stores ordered items, sets amount to their sum, counts once", { skip: skipReason }, async () => {
+  const { amount: _omit, ...withoutAmount } = expense();
+  const { id } = await tx((t) => createExpenseWithQuotaForUser(t, "u1", {
+    ...withoutAmount, items: plumbing, description: "سباكه شهر 10",
+  }));
+  const row = await itemsOf(id);
+  assert.equal(row.amount, "240.00");
+  assert.equal(row.description, "سباكه شهر 10");
+  assert.deepEqual(row.items.map((i) => [i.id, i.name, i.amount]), [
+    ["item_faucet", "حنفية", 100], ["item_gasket", "جلبه", 50], ["item_pipe", "ماسورة", 90],
+  ]);
+  assert.equal((await metrics("p1")).totalExpenses, 240);
+  assert.deepEqual(await counter(), { expenses: 1, payments: 0 }, "one receipt is one expense for the quota");
+
+  const matching = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ items: plumbing, amount: 240 })));
+  assert.equal((await itemsOf(matching.id)).amount, "240.00");
+});
+
+test("expense items: mismatching amount and invalid items are rejected before any write", { skip: skipReason }, async () => {
+  const create = (data: Record<string, unknown>) => tx((t) => createExpenseWithQuotaForUser(t, "u1", expense(data)));
+  await rejectsWith(create({ items: plumbing, amount: 250 }), "invalid-argument", "Amount must equal the sum of items");
+  await rejectsWith(create({ items: [] }), "invalid-argument", "Expense must have between 1 and 100 items");
+  await rejectsWith(create({ items: [{ name: "", amount: 5 }] }), "invalid-argument", "Item 1: name is required");
+  const [{ count }] = await sql`SELECT count(*)::int AS count FROM expenses`;
+  assert.equal(count, 0);
+  assert.equal(await counter(), undefined, "no quota consumed by rejected creates");
+});
+
+test("expense items: legacy create (no items) keeps today's shape; text input method accepted", { skip: skipReason }, async () => {
+  const { id } = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ amount: 75, inputMethod: "text", transcript: "رمل 75" })));
+  const row = await itemsOf(id);
+  assert.deepEqual(row.items, []);
+  assert.equal(row.amount, "75.00");
+  const [{ input_method, transcript }] = await sql`SELECT input_method, transcript FROM expenses WHERE id = ${id}`;
+  assert.deepEqual({ input_method, transcript }, { input_method: "text", transcript: "رمل 75" });
+});
+
+test("expense items: the database rejects an amount that no longer matches the items", { skip: skipReason }, async () => {
+  const { id } = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ items: plumbing, amount: undefined })));
+  await assert.rejects(sql`UPDATE expenses SET amount = 1 WHERE id = ${id}`, (error: { code?: string; constraint_name?: string }) => {
+    assert.equal(error.code, "23514");
+    assert.equal(error.constraint_name, "expenses_amount_matches_items");
+    return true;
+  });
+});
+
+test("expense items: update replaces items and total; metrics follow", { skip: skipReason }, async () => {
+  const { id } = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ items: plumbing, amount: undefined })));
+  const edited = [
+    { ...plumbing[0] }, { ...plumbing[1] }, { ...plumbing[2], amount: 95 },
+    { id: "item_teflon", name: "شريط تيفلون", amount: 10 },
+  ];
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: id, items: edited, amount: undefined })));
+  const row = await itemsOf(id);
+  assert.equal(row.amount, "255.00");
+  assert.equal(row.items.length, 4);
+  assert.equal((await metrics("p1")).totalExpenses, 255);
+});
+
+test("expense items: legacy update payloads branch on the stored items", { skip: skipReason }, async () => {
+  const legacy = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ amount: 100 })));
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: legacy.id, amount: 120 })));
+  assert.deepEqual(await itemsOf(legacy.id), { items: [], amount: "120.00", description: "" });
+
+  const single = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({
+    items: [{ id: "item_sand", name: "رمل", amount: 2000, quantity: 3, note: "ناعم" }], amount: undefined,
+  })));
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: single.id, amount: 2100 })));
+  const singleRow = await itemsOf(single.id);
+  assert.equal(singleRow.amount, "2100.00");
+  assert.deepEqual(singleRow.items, [{ id: "item_sand", name: "رمل", amount: 2100, quantity: 3, note: "ناعم" }]);
+
+  const multi = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ items: plumbing, amount: undefined })));
+  await rejectsWith(
+    tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: multi.id, amount: 300 }))),
+    "failed-precondition",
+    "This expense has several items; edit its items to change the amount",
+  );
+  assert.equal((await itemsOf(multi.id)).amount, "240.00", "row unchanged");
+});
+
+test("expense items: title is saved on update only when sent", { skip: skipReason }, async () => {
+  const { id } = await tx((t) => createExpenseWithQuotaForUser(t, "u1", expense({ description: "قديم" })));
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: id, description: "  سباكه شهر 10 " })));
+  assert.equal((await itemsOf(id)).description, "سباكه شهر 10");
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: id })));
+  assert.equal((await itemsOf(id)).description, "سباكه شهر 10", "absent description leaves the title");
+  await tx((t) => updateExpenseForUser(t, "u1", expense({ expenseId: id, description: null })));
+  assert.equal((await itemsOf(id)).description, "سباكه شهر 10", "null description leaves the title");
 });
 
 // ---------------------------------------------------------------- payments

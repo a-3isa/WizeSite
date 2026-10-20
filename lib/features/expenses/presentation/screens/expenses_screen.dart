@@ -634,9 +634,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   }
 
   Future<void> _openAddExpense() async {
-    await context.push(
-      AppRoutes.addExpensePath(projectId: widget.projectId),
-    );
+    await context.push(AppRoutes.addExpensePath(projectId: widget.projectId));
     if (mounted) {
       await _refresh();
     }
@@ -791,7 +789,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
           }
           if (search.isNotEmpty) {
             final haystack =
-                '${expense.projectName} ${expense.category} ${expense.notes} ${expense.supplierName} ${expense.paymentMethod} ${expense.entityName}'
+                '${expense.projectName} ${expense.category} ${expense.notes} ${expense.supplierName} ${expense.paymentMethod} ${expense.entityName} ${expense.title} ${expense.items.map((item) => item.name).join(' ')}'
                     .toLowerCase();
             if (!haystack.contains(search)) {
               return false;
@@ -1152,7 +1150,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsetsDirectional.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: 16,
+        vertical: 4,
+      ),
       itemCount: itemCount,
       itemBuilder: (context, index) {
         if (index >= filtered.length) {
@@ -1198,7 +1199,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     return ListView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsetsDirectional.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: 16,
+        vertical: 4,
+      ),
       children: groups.map((group) {
         return ExpenseGroupSection(
           group: _localizedGroup(group, l10n),
@@ -1254,7 +1258,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
           );
         },
         title: Text(
-          '${Formatters.money(expense.amount, currencyCode: expense.currency, locale: locale)} | ${l10n.expenseCategoryLabel(expense.category)}',
+          '${Formatters.money(expense.amount, currencyCode: expense.currency, locale: locale)} | ${expenseDisplayTitle(expense, l10n)}',
         ),
         subtitle: Text(_expenseSubtitle(expense, projectLabel, l10n)),
         trailing: bulkState.isSelecting
@@ -1360,11 +1364,16 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     if (expense.paymentStatus.isNotEmpty) {
       parts.add(l10n.paymentStatusLabel(expense.paymentStatus));
     }
-    final description = expense.description.isNotEmpty
-        ? expense.description
-        : expense.notes;
-    if (description.isNotEmpty) {
-      parts.add(description);
+    // The title is the row's main label now; keep the category visible here
+    // when a title took its place, and say how many items the receipt has.
+    if (expenseDisplayTitle(expense, l10n) !=
+        l10n.expenseCategoryLabel(expense.category)) {
+      parts.add(l10n.expenseCategoryLabel(expense.category));
+    }
+    if (expense.itemCount > 1) {
+      parts.add(
+        l10n.t('itemsCount', params: {'count': '${expense.itemCount}'}),
+      );
     }
     if (expense.attachments.isNotEmpty) {
       parts.add(

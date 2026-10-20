@@ -1,5 +1,6 @@
 import 'package:buildtrack_app/core/models/attachment.dart';
 import 'package:buildtrack_app/core/constants/payment_statuses.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
 
 class Expense {
   const Expense({
@@ -26,6 +27,7 @@ class Expense {
     required this.storagePath,
     required this.isArchived,
     required this.attachments,
+    this.items = const [],
     this.clientMutationId = '',
   });
 
@@ -51,8 +53,22 @@ class Expense {
   final String source;
   final String storagePath;
   final List<Attachment> attachments;
+
+  /// Receipt line items in order (feature 005). Empty for expenses recorded
+  /// before items existed; read those through [effectiveItems].
+  final List<ExpenseItem> items;
   final bool isArchived;
   final String clientMutationId;
+
+  /// The expense title is stored in [description] (research R4).
+  String get title => description;
+
+  /// [items], or for a legacy expense one item carrying its whole amount.
+  List<ExpenseItem> get effectiveItems => items.isNotEmpty
+      ? items
+      : [ExpenseItem(id: 'legacy', name: description.trim(), amount: amount)];
+
+  int get itemCount => effectiveItems.length;
 
   factory Expense.fromMap(String id, Map<String, dynamic> map) {
     DateTime parseDate(dynamic value) {
@@ -104,6 +120,7 @@ class Expense {
       source: map['source'] as String? ?? '',
       storagePath: map['storagePath'] as String? ?? '',
       attachments: Attachment.listFromDynamic(map['attachments']),
+      items: ExpenseItem.listFromDynamic(map['items']),
       isArchived: map['isArchived'] as bool? ?? false,
       clientMutationId: map['clientMutationId'] as String? ?? '',
     );

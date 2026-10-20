@@ -3,14 +3,24 @@
 Buildozer is a mobile-first construction operations app. It works offline: every screen reads a
 local copy of the workspace's data, and changes are queued and sent to the server when online.
 
+Expenses are receipts: one title and one or more line items (name + amount, optional quantity and
+note), with project, category, supplier, payment details and attachments shared by the whole
+receipt. The expense total is the sum of its items (spec `specs/005-multi-item-expenses/`).
+
 Voice expenses:
 1. Flutter records audio.
 2. Flutter uploads it to the server (`POST /v1/files`, kind `voice-expenses`).
 3. Flutter calls the `processVoiceExpense` RPC.
 4. The server transcribes the audio with OpenRouter audio input.
-5. A rule-based parser runs first; the OpenRouter LLM is used only when the rules are uncertain.
+5. One structured OpenRouter call extracts the title, the items and any mentioned project, category,
+   supplier, date and payment status, in any word order. The rule-based parser is only the fallback
+   when that call fails.
 6. Flutter shows a review/edit confirmation.
 7. Only confirmed data is saved (`createExpenseWithQuota` RPC).
+
+Pasted receipt text: on the Add Expense screen, **Paste text** → **Organize with AI** sends the text
+to the `organizeExpenseText` RPC (same extraction, no records written) and fills the form for
+review. Fields the user already set are never overwritten.
 
 ## Architecture
 
@@ -131,11 +141,16 @@ Output:
 ## Rule + LLM Formula
 
 - Normalize transcript (Arabic-aware + numeral conversion).
-- Extract amount/category/project/note using rules first.
-- Compute confidence scores.
-- Fallback to OpenRouter only if fields are missing or confidence is low.
+- AI first: one OpenRouter call with a strict JSON schema returns a `proposal` (title, ordered
+  items, mentioned fields, stated total, several-receipts flag); see
+  `specs/005-multi-item-expenses/contracts/ai-extraction.md`.
+- Rules fallback: on an AI error, timeout or malformed reply, the rule-based parser returns today's
+  single-amount result as one flagged item (`source: "rules"`).
+- The legacy `parsed`/`confidence` fields are still returned (`parsed.amount` = the items' total).
 - Always return confirmation-ready payload.
 - Never auto-save without user confirmation.
+- Quality check before changing the prompt or model: `cd server && npm run eval:receipts` (needs
+  `OPENROUTER_API_KEY`; ≥ 85% item accuracy, no title number turned into an item, p95 ≤ 8 s).
 
 ## Tests
 

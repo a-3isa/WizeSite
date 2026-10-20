@@ -1,4 +1,26 @@
+import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
+
+/// The title shown for an expense (feature 005): its title, else its notes
+/// (legacy expenses), else the category label (spec FR-023).
+String expenseDisplayTitle(Expense expense, AppLocalizations l10n) {
+  final title = expense.title.trim();
+  if (title.isNotEmpty) return title;
+  final notes = expense.notes.trim();
+  if (notes.isNotEmpty) return notes;
+  return l10n.expenseCategoryLabel(expense.category);
+}
+
+/// An item's display name; an unnamed legacy item shows the category label.
+String expenseItemDisplayName(
+  ExpenseItem item,
+  Expense expense,
+  AppLocalizations l10n,
+) {
+  final name = item.name.trim();
+  return name.isNotEmpty ? name : l10n.expenseCategoryLabel(expense.category);
+}
 
 enum ExpenseGroupMode {
   list,

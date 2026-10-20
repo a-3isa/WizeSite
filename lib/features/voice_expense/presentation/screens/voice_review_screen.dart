@@ -1,9 +1,11 @@
 import 'package:buildtrack_app/app/localization/app_localizations.dart';
 import 'package:buildtrack_app/app/theme/build_tokens.dart';
 import 'package:buildtrack_app/core/constants/app_routes.dart';
+import 'package:buildtrack_app/core/constants/payment_statuses.dart';
 import 'package:buildtrack_app/core/utils/expense_category.dart';
-import 'package:buildtrack_app/core/utils/number_parser.dart';
 import 'package:buildtrack_app/core/utils/thousands_separator_input_formatter.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_proposal.dart';
+import 'package:buildtrack_app/features/expenses/presentation/widgets/expense_items_editor.dart';
 import 'package:buildtrack_app/core/navigation/app_back_navigation.dart';
 import 'package:buildtrack_app/core/providers/firebase_providers.dart';
 import 'package:buildtrack_app/core/services/expense_save_service.dart';
@@ -36,11 +38,15 @@ class VoiceReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
-  final _amountController = TextEditingController();
+  final _titleController = TextEditingController();
   final _noteController = TextEditingController();
+  final _supplierController = TextEditingController();
+  final _items = ExpenseItemsEditorController();
   String _currency = 'EGP';
   String _category = 'other';
   String? _projectId;
+  String? _entityId;
+  String _paymentStatus = PaymentStatuses.unpaid;
   DateTime _date = DateTime.now();
   bool _saving = false;
   String? _error;
@@ -51,6 +57,9 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     'materials',
     'equipment',
     'transport',
+    'contractor',
+    'storage',
+    'rentals',
     'other',
   ];
 
@@ -58,30 +67,64 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
   void initState() {
     super.initState();
     final parsed = widget.response.parsed;
-    _amountController.text = parsed.amount == null
-        ? ''
-        : ThousandsSeparatorInputFormatter.formatInitial(
-            parsed.amount.toString(),
-          );
-    _noteController.text = parsed.note ?? '';
-    _currency = _allowedCurrencies.contains(parsed.currency)
+    final proposal = widget.response.proposal;
+    _currency = _allowedCurrencies.contains(proposal?.currency)
+        ? proposal!.currency
+        : _allowedCurrencies.contains(parsed.currency)
         ? parsed.currency!
         : 'EGP';
-    final parsedCategory = normalizeExpenseCategory(parsed.category);
+    final parsedCategory = normalizeExpenseCategory(
+      proposal?.category ?? parsed.category,
+    );
     _category = _allowedCategories.contains(parsedCategory)
         ? parsedCategory
         : 'other';
-    _projectId = _resolveInitialProjectId(parsed);
+    _projectId = _resolveInitialProjectId(parsed, proposal);
+    if (proposal != null) {
+      // Feature 005: the AI's title, items and any mentioned fields.
+      _titleController.text = proposal.proposedTitle ?? '';
+      _items.replaceAll(proposal.toDrafts());
+      _supplierController.text = proposal.entityName ?? '';
+      _entityId = proposal.entityId;
+      if (const [
+        PaymentStatuses.unpaid,
+        PaymentStatuses.partial,
+        PaymentStatuses.paid,
+      ].contains(proposal.paymentStatus)) {
+        _paymentStatus = proposal.paymentStatus!;
+      }
+      _date = proposal.parsedDate ?? _date;
+    } else {
+      // An older server: one row from the single parsed amount.
+      _noteController.text = parsed.note ?? '';
+      _items.replaceAll([
+        ExpenseItemDraft(
+          name: parsed.note ?? '',
+          amountText: parsed.amount == null
+              ? ''
+              : ExpenseItemDraft.formatNumber(parsed.amount!),
+        ),
+      ]);
+    }
   }
 
   @override
   void dispose() {
-    _amountController.dispose();
+    _titleController.dispose();
     _noteController.dispose();
+    _supplierController.dispose();
+    _items.dispose();
     super.dispose();
   }
 
-  String? _resolveInitialProjectId(VoiceParsedExpense parsed) {
+  String? _resolveInitialProjectId(
+    VoiceParsedExpense parsed,
+    ExpenseProposal? proposal,
+  ) {
+    final proposed = proposal?.projectId;
+    if (proposed != null && widget.projects.any((p) => p.id == proposed)) {
+      return proposed;
+    }
     if (parsed.matchedProjectId != null) {
       return parsed.matchedProjectId;
     }
@@ -136,7 +179,12 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final l10n = AppLocalizations.of(context);
     final workspaceId =
         await _resolvedWorkspaceId() ?? await _workspaceIdFromSelectedProject();
-    final amount = NumberParser.parseDouble(_amountController.text);
+    if (!mounted) {
+      return;
+    }
+    // Every item needs a name and a positive amount; AI-flagged rows must be
+    // checked first (FR-007, FR-016).
+    final amount = _items.validate() ? _items.total : null;
     if (workspaceId == null || workspaceId.isEmpty) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
@@ -163,6 +211,13 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
       setState(() => _error = l10n.t('selectedProjectInvalid'));
       return;
     }
+    final items = _items.toItemMaps();
+    // FR-008: an empty title becomes the first item name.
+    var title = _titleController.text.trim();
+    if (title.isEmpty) {
+      title = '${items.first['name'] ?? ''}'.trim();
+    }
+    final supplier = _supplierController.text.trim();
 
     setState(() {
       _saving = true;
@@ -184,6 +239,11 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
             source: widget.response.source,
             storagePath: widget.response.storagePath,
             date: _date,
+            items: items,
+            description: title,
+            entityId: supplier.isEmpty ? null : _entityId,
+            entityName: supplier.isEmpty ? null : supplier,
+            paymentStatus: _paymentStatus,
           );
       if (!mounted) {
         return;
@@ -239,6 +299,7 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
     final l10n = AppLocalizations.of(context);
     final t = context.tokens;
     final parsed = widget.response.parsed;
+    final proposal = widget.response.proposal;
     final confidence = widget.response.confidence;
     final defaultCurrency =
         ref.watch(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
@@ -312,15 +373,42 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // Parsed fields list: amount, currency, category, project, date, notes.
-            BuildTextField(
-              key: const Key('qa_voice_review_amount'),
-              label: l10n.t('amount'),
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+            if (proposal != null && proposal.totalMismatch) ...[
+              _InfoBanner(
+                key: const Key('qa_voice_review_total_mismatch'),
+                message: l10n.t(
+                  'statedTotalMismatch',
+                  params: {
+                    'stated': ThousandsSeparatorInputFormatter.formatInitial(
+                      (proposal.statedTotal ?? 0).toStringAsFixed(2),
+                    ),
+                    'sum': ThousandsSeparatorInputFormatter.formatInitial(
+                      proposal.itemsTotal.toStringAsFixed(2),
+                    ),
+                  },
+                ),
               ),
-              inputFormatters: const [ThousandsSeparatorInputFormatter()],
+              const SizedBox(height: 12),
+            ],
+            if (proposal != null && proposal.multipleReceiptsSuspected) ...[
+              _InfoBanner(
+                key: const Key('qa_voice_review_multiple_receipts'),
+                message: l10n.t('multipleReceiptsWarning'),
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Title, items, then the fields shared by the whole receipt.
+            BuildTextField(
+              fieldKey: const Key('qa_voice_review_title'),
+              label: l10n.t('expenseTitle'),
+              controller: _titleController,
+            ),
+            const SizedBox(height: 16),
+            ExpenseItemsEditor(
+              key: const Key('qa_voice_review_items'),
+              controller: _items,
+              currency: _currency,
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
             SelectField(
@@ -401,6 +489,35 @@ class _VoiceReviewScreenState extends ConsumerState<VoiceReviewScreen> {
                   setState(() => _date = picked);
                 }
               },
+            ),
+            const SizedBox(height: 16),
+            BuildTextField(
+              fieldKey: const Key('qa_voice_review_supplier'),
+              label: l10n.t('supplierNameOptional'),
+              controller: _supplierController,
+              // A typed name is a new supplier, not the AI-matched one.
+              onChanged: (_) => _entityId = null,
+            ),
+            const SizedBox(height: 16),
+            SelectField(
+              key: const Key('qa_voice_review_payment_status'),
+              label: l10n.t('paymentStatus'),
+              valueLabel: l10n.paymentStatusLabel(_paymentStatus),
+              icon: Icons.receipt_long_outlined,
+              onTap: () => pickOption(
+                context,
+                title: l10n.t('paymentStatus'),
+                selected: _paymentStatus,
+                options: [
+                  for (final status in const [
+                    PaymentStatuses.unpaid,
+                    PaymentStatuses.partial,
+                    PaymentStatuses.paid,
+                  ])
+                    (value: status, label: l10n.paymentStatusLabel(status)),
+                ],
+                onSelected: (value) => setState(() => _paymentStatus = value),
+              ),
             ),
             const SizedBox(height: 16),
             BuildTextField(
@@ -486,6 +603,33 @@ class _ErrorBanner extends StatelessWidget {
               message,
               style: TextStyle(fontSize: 13, color: t.expense),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Non-blocking notice about the AI proposal (total mismatch, several
+/// receipts), tinted with the warning semantic color.
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({required this.message, super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.warningSoft, borderRadius: t.radiusMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: t.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13, color: t.text)),
           ),
         ],
       ),

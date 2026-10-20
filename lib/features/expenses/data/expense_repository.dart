@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/providers/offline_queue_provider.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/workspace_mutation_service.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:powersync/powersync.dart';
 
@@ -49,6 +50,10 @@ abstract interface class ExpenseRepository {
     String? paymentStatus,
     double? projectTotalExpensesBefore,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
+    String inputMethod = 'manual',
+    String? transcript,
+    String? source,
   });
 
   Future<void> updateExpense({
@@ -66,6 +71,7 @@ abstract interface class ExpenseRepository {
     String? paymentMethod,
     String? paymentStatus,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
   });
 
   Future<MutationResult> archiveExpense(String expenseId);
@@ -228,6 +234,10 @@ class LocalExpenseRepository implements ExpenseRepository {
     String? paymentStatus,
     double? projectTotalExpensesBefore,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
+    String inputMethod = 'manual',
+    String? transcript,
+    String? source,
   }) async {
     return _mutationService.createManualExpense(
       workspaceId: workspaceId,
@@ -248,6 +258,10 @@ class LocalExpenseRepository implements ExpenseRepository {
       paymentStatus: paymentStatus,
       projectTotalExpensesBefore: projectTotalExpensesBefore,
       attachments: attachments?.map((item) => item.toMap()).toList(),
+      items: items,
+      inputMethod: inputMethod,
+      transcript: transcript,
+      source: source,
     );
   }
 
@@ -267,6 +281,7 @@ class LocalExpenseRepository implements ExpenseRepository {
     String? paymentMethod,
     String? paymentStatus,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
   }) async {
     final expense = await getExpense(expenseId);
     if (expense == null) {
@@ -294,6 +309,7 @@ class LocalExpenseRepository implements ExpenseRepository {
       previousAmount: expense.amount,
       previousDate: expense.date,
       previousCategory: expense.category,
+      items: items,
     );
   }
 
@@ -398,6 +414,9 @@ class LocalExpenseRepository implements ExpenseRepository {
                 .map(Attachment.fromMap)
                 .toList() ??
             current.attachments,
+        items: action.payload.containsKey('items')
+            ? ExpenseItem.listFromDynamic(action.payload['items'])
+            : current.items,
         isArchived: current.isArchived,
         clientMutationId: current.clientMutationId,
       );
@@ -504,6 +523,8 @@ class LocalExpenseRepository implements ExpenseRepository {
       expense.description,
       expense.purpose,
       expense.notes,
+      // Feature 005 (FR-024): the receipt's item names are searchable too.
+      ...expense.items.map((item) => item.name),
     ].any((value) => value.toLowerCase().contains(searchText));
   }
 
@@ -532,7 +553,7 @@ class LocalExpenseRepository implements ExpenseRepository {
       entityType: '${payload['entityType'] ?? 'supplier'}',
       paymentMethod: '${payload['paymentMethod'] ?? ''}',
       paymentStatus: '${payload['paymentStatus'] ?? 'unpaid'}',
-      inputMethod: 'manual',
+      inputMethod: '${payload['inputMethod'] ?? 'manual'}',
       transcript: '',
       source: 'pending',
       storagePath: '',
@@ -542,6 +563,8 @@ class LocalExpenseRepository implements ExpenseRepository {
               .map(Attachment.fromMap)
               .toList() ??
           const <Attachment>[],
+      // Queued by an app build older than feature 005: no items (legacy).
+      items: ExpenseItem.listFromDynamic(payload['items']),
       isArchived: false,
       clientMutationId: '${payload['clientMutationId'] ?? action.id}',
     );

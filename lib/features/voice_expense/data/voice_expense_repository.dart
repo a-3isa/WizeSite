@@ -65,6 +65,11 @@ class VoiceExpenseRepository {
     required String source,
     required String storagePath,
     required DateTime date,
+    List<Map<String, dynamic>>? items,
+    String? description,
+    String? entityId,
+    String? entityName,
+    String? paymentStatus,
   }) {
     return _telemetry.trace(
       'voice_expense.save',
@@ -80,6 +85,11 @@ class VoiceExpenseRepository {
         transcript: transcript,
         source: source,
         storagePath: storagePath,
+        items: items,
+        description: description,
+        entityId: entityId,
+        entityName: entityName,
+        paymentStatus: paymentStatus,
       ),
       details: {
         'workspace_id': workspaceId,

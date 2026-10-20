@@ -18,6 +18,9 @@ import 'package:buildtrack_app/core/utils/formatters.dart';
 import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/core/widgets/attachment_tile.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
+import 'package:buildtrack_app/features/expenses/presentation/models/expense_group.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -93,6 +96,12 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          expenseDisplayTitle(expense, l10n),
+                          key: const Key('qa_expense_detail_title'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 4),
                         Text(
                           l10n.t(
                             'amountWithValue',
@@ -173,6 +182,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
                             },
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        _ExpenseItemsSection(expense: expense, locale: locale),
                         if (expense.attachments.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Text(
@@ -277,6 +288,16 @@ class ExpenseDetailScreen extends ConsumerWidget {
                             attachments: expense.attachments.isNotEmpty
                                 ? expense.attachments
                                 : null,
+                            // The copy keeps the receipt's items, each with a
+                            // new id; a legacy expense stays legacy.
+                            items: expense.items.isEmpty
+                                ? null
+                                : [
+                                    for (final item in expense.items)
+                                      item
+                                          .copyWith(id: ExpenseItem.newId())
+                                          .toMap(),
+                                  ],
                           );
                       if (result.queued) {
                         await ref
@@ -392,5 +413,84 @@ class ExpenseDetailScreen extends ConsumerWidget {
             fileName.endsWith('.jpg') ||
             fileName.endsWith('.jpeg') ||
             fileName.endsWith('.webp'));
+  }
+}
+
+/// Every receipt item on its own line, then the total (spec FR-021). A legacy
+/// expense shows its single effective item.
+class _ExpenseItemsSection extends StatelessWidget {
+  const _ExpenseItemsSection({required this.expense, required this.locale});
+
+  final Expense expense;
+  final String locale;
+
+  static String _quantityLabel(double quantity) =>
+      quantity == quantity.roundToDouble()
+      ? quantity.toStringAsFixed(0)
+      : quantity.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+    String money(double value) =>
+        Formatters.money(value, currencyCode: expense.currency, locale: locale);
+    return Column(
+      key: const Key('qa_expense_detail_items'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.t('expenseItems'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        for (final item in expense.effectiveItems)
+          Padding(
+            padding: const EdgeInsetsDirectional.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      text: expenseItemDisplayName(item, expense, l10n),
+                      children: [
+                        if (item.quantity != null)
+                          TextSpan(
+                            text: '  × ${_quantityLabel(item.quantity!)}',
+                            style: TextStyle(color: t.textMuted),
+                          ),
+                        if (item.note.isNotEmpty)
+                          TextSpan(
+                            text: '\n${item.note}',
+                            style: TextStyle(fontSize: 12, color: t.textMuted),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(money(item.amount)),
+              ],
+            ),
+          ),
+        const Divider(),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.t('itemsTotal'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(
+              money(expense.amount),
+              key: const Key('qa_expense_detail_total'),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

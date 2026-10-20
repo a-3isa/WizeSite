@@ -27,6 +27,11 @@ import 'package:buildtrack_app/features/entities/presentation/widgets/entity_aut
 import 'package:buildtrack_app/features/expenses/data/expense_entry_defaults.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/data/expense_text_organizer.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_proposal.dart';
+import 'package:buildtrack_app/features/expenses/presentation/widgets/expense_items_editor.dart';
+import 'package:buildtrack_app/features/expenses/presentation/widgets/paste_organize_sheet.dart';
 import 'package:buildtrack_app/features/projects/presentation/screens/projects_screen.dart';
 import 'package:buildtrack_app/features/settings/data/user_settings_repository.dart';
 import 'package:buildtrack_app/features/workers/data/worker_repository.dart';
@@ -34,6 +39,7 @@ import 'package:buildtrack_app/features/workers/domain/worker_models.dart';
 import 'package:buildtrack_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,6 +68,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _supplierController = TextEditingController();
   final _daysController = TextEditingController(text: '1');
   final _quantityController = TextEditingController(text: '1');
+
+  /// Receipt line items for every category except worker (feature 005).
+  final _items = ExpenseItemsEditorController();
+
+  /// Fields the user set by hand: "Organize with AI" never overwrites them.
+  bool _titleEdited = false;
+  bool _projectEdited = false;
+  bool _categoryEdited = false;
+  bool _entityEdited = false;
+  bool _dateEdited = false;
+  bool _paymentStatusEdited = false;
+
+  /// The last "Organize with AI" result, saved as the expense's text input.
+  ExpenseTextOrganizeResult? _organized;
+
+  /// Bumped when a proposal fills the supplier, so the autocomplete field
+  /// (which only reads its initial value) shows it.
+  int _entityFieldRevision = 0;
   String? _category;
   String _paymentMethod = 'cash';
   String _paymentStatus = PaymentStatuses.unpaid;
@@ -95,19 +119,29 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _paymentStatus = defaults.paymentStatus;
       if (widget.projectId != null) {
         _projectId = widget.projectId;
+        // Adding inside a project is the user's choice: AI keeps it.
+        _projectEdited = true;
       }
       final seed = widget.duplicateFrom;
       if (seed != null) {
         _projectId = seed.projectId;
         _projectName = seed.projectName;
         _category = seed.category;
-        _amountController.text =
-            ThousandsSeparatorInputFormatter.formatInitial(
-              seed.amount.toStringAsFixed(2),
-            );
+        _amountController.text = ThousandsSeparatorInputFormatter.formatInitial(
+          seed.amount.toStringAsFixed(2),
+        );
+        // A duplicate copies the title and the items, each with a new id.
+        _descriptionController.text = seed.description;
+        _items.replaceAll([
+          for (final item in seed.effectiveItems)
+            ExpenseItemDraft.fromItem(item.copyWith(id: ExpenseItem.newId())),
+        ]);
         _entityId = seed.entityId;
         _entityName = seed.entityName;
         _date = DateTime.now();
+        // Values copied from the duplicated expense count as user-set.
+        _projectEdited = _categoryEdited = _entityEdited = true;
+        _titleEdited = seed.description.trim().isNotEmpty;
       }
     }
   }
@@ -140,6 +174,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           _date = expense.date;
           _attachments.clear();
           _attachments.addAll(expense.attachments);
+          // Stored order and ids are kept; a legacy expense gets one row.
+          _items.replaceAll(
+            expense.effectiveItems.map(ExpenseItemDraft.fromItem).toList(),
+          );
+          // A saved expense's values are never overwritten by the AI.
+          _titleEdited = _projectEdited = _categoryEdited = true;
+          _entityEdited = _dateEdited = _paymentStatusEdited = true;
         });
       }
     } catch (_) {
@@ -183,6 +224,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _supplierController.dispose();
     _daysController.dispose();
     _quantityController.dispose();
+    _items.dispose();
     super.dispose();
   }
 
@@ -230,7 +272,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final workspaceId = ref.read(activeWorkspaceIdProvider);
     final userId = ref.read(activeUserIdProvider);
     final category = _category;
-    final amount = NumberParser.parseDouble(_amountController.text);
+    // Worker expenses keep the single amount; every other category saves the
+    // receipt items and their total (feature 005).
+    final usesItems = category != AccountingCategories.worker;
+    final itemsValid = !usesItems || _items.validate();
+    final amount = usesItems
+        ? (itemsValid ? _items.total : null)
+        : NumberParser.parseDouble(_amountController.text);
     if (workspaceId == null || userId == null) {
       setState(() => _error = l10n.t('pleaseLoginFirst'));
       return;
@@ -250,6 +298,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (_projectId == null || amount == null || amount < 0) {
       setState(() => _error = l10n.t('selectProjectAndValidAmount'));
       return;
+    }
+    final items = usesItems ? _items.toItemMaps() : null;
+    // FR-008: an empty title becomes the first item name, else the category.
+    var title = _descriptionController.text.trim();
+    if (usesItems && title.isEmpty) {
+      final firstName = '${items!.first['name'] ?? ''}'.trim();
+      title = firstName.isNotEmpty
+          ? firstName
+          : l10n.expenseCategoryLabel(category);
+      _descriptionController.text = title;
     }
 
     setState(() {
@@ -290,7 +348,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               currency: currency,
               date: _date,
               purpose: _purposeController.text.trim(),
-              description: _descriptionController.text.trim(),
+              description: title,
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
               entityId: resolvedEntity.id,
@@ -300,6 +358,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               paymentStatus: _paymentStatus,
               projectTotalExpensesBefore: selectedProject?.totalExpenses,
               attachments: attachments.isNotEmpty ? attachments : null,
+              items: items,
+              inputMethod: _organized == null ? 'manual' : 'text',
+              transcript: _organized?.text,
+              source: _organized?.source,
             );
         queued = result.queued;
         ref
@@ -318,7 +380,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               amount: amount,
               date: _date,
               purpose: _purposeController.text.trim(),
-              description: _descriptionController.text.trim(),
+              description: title,
               notes: _notesController.text.trim(),
               supplierName: _supplierController.text.trim(),
               entityId: resolvedEntity.id,
@@ -327,6 +389,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               paymentMethod: _paymentMethod,
               paymentStatus: _paymentStatus,
               attachments: attachments,
+              // Always sent for itemized categories: the server refuses an
+              // amount-only update of an expense with several items.
+              items: items,
             );
       }
       if (mounted) {
@@ -338,6 +403,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           }
           pushAppUiNotice(ref, l10n.t('queuedForSync'));
         }
+        ref.read(pasteDraftTextProvider.notifier).state = '';
         appNavigateBack(context, fallbackRoute: _fallbackRoute());
       }
     } on CallableClientException catch (e) {
@@ -413,12 +479,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (rate == null) {
       return;
     }
+    // Rate × quantity fills the receipt's single item; with several items the
+    // user enters each amount (the hint under the quantity field says so).
+    if (_items.length != 1) {
+      return;
+    }
     final quantity = NumberParser.parseDouble(_quantityController.text) ?? 1;
-    final nextAmount = ThousandsSeparatorInputFormatter.formatInitial(
-      (rate * quantity).toStringAsFixed(2),
-    );
-    if (force || _amountController.text.trim().isEmpty) {
-      setState(() => _amountController.text = nextAmount);
+    final first = _items.items.first;
+    if (force || first.amountText.trim().isEmpty) {
+      _items.setFirstItemAmount(rate * quantity);
+      _items.setFirstItemQuantity(_quantityController.text.trim());
     }
   }
 
@@ -488,6 +558,96 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
+  /// "Paste text" → "Organize with AI" → merge the proposal into the form
+  /// without overwriting anything the user set (spec Story 2b, research R7).
+  Future<void> _pasteAndOrganize() async {
+    final workspaceId = ref.read(activeWorkspaceIdProvider);
+    if (workspaceId == null) {
+      setState(
+        () => _error = AppLocalizations.of(context).t('pleaseLoginFirst'),
+      );
+      return;
+    }
+    final currency =
+        ref.read(currentUserSettingsProvider).value?.defaultCurrency ?? 'EGP';
+    final result = await showPasteOrganizeSheet(
+      context,
+      workspaceId: workspaceId,
+      currency: currency,
+    );
+    if (result == null || !mounted) return;
+    final next = applyProposal(
+      ExpenseFormSnapshot(
+        title: _descriptionController.text,
+        projectId: _projectId,
+        category: _category,
+        entityId: _entityId,
+        entityName: _entityName,
+        date: _date,
+        paymentStatus: _paymentStatus,
+        items: _items.items,
+        titleEdited: _titleEdited,
+        projectEdited: _projectEdited,
+        categoryEdited: _categoryEdited,
+        entityEdited: _entityEdited,
+        dateEdited: _dateEdited,
+        paymentStatusEdited: _paymentStatusEdited,
+        itemsHaveUserEdits: _items.hasUserEdits,
+      ),
+      result.proposal,
+    );
+    final projects = ref.read(projectsProvider).value ?? const [];
+    final project = projects.where((p) => p.id == next.projectId);
+    setState(() {
+      _organized = result;
+      _descriptionController.text = next.title;
+      if (project.isNotEmpty) {
+        _projectId = project.first.id;
+        _projectName = project.first.name;
+      }
+      // Items need a category to be shown; a still-empty one becomes
+      // "other", which the user can change before saving.
+      _category = next.category ?? _category ?? AccountingCategories.other;
+      if (next.entityName != _entityName) {
+        _entityId = (next.entityId ?? '').isEmpty ? null : next.entityId;
+        _entityName = next.entityName;
+        _supplierController.text = next.entityName;
+        _entityFieldRevision++;
+      }
+      _date = next.date ?? _date;
+      _paymentStatus = next.paymentStatus;
+      _error = null;
+    });
+    _items.replaceAll(next.items);
+  }
+
+  List<Widget> _organizeNotices(AppLocalizations l10n) {
+    final proposal = _organized?.proposal;
+    if (proposal == null) return const [];
+    String money(double value) =>
+        ThousandsSeparatorInputFormatter.formatInitial(
+          value.toStringAsFixed(2),
+        );
+    return [
+      if (proposal.multipleReceiptsSuspected)
+        _NoticeBanner(
+          key: const Key('qa_add_expense_multiple_receipts'),
+          message: l10n.t('multipleReceiptsWarning'),
+        ),
+      if (proposal.totalMismatch)
+        _NoticeBanner(
+          key: const Key('qa_add_expense_total_mismatch'),
+          message: l10n.t(
+            'statedTotalMismatch',
+            params: {
+              'stated': money(proposal.statedTotal ?? 0),
+              'sum': money(proposal.itemsTotal),
+            },
+          ),
+        ),
+    ];
+  }
+
   WorkerProfile? _selectedWorker(List<WorkerProfile> workers) {
     final id = _workerId;
     if (id == null || id.isEmpty) {
@@ -537,6 +697,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     _ErrorBanner(message: _error!),
                     const SizedBox(height: 16),
                   ],
+                  if (_category != AccountingCategories.worker) ...[
+                    BuildTextField(
+                      key: const Key('qa_add_expense_title_field'),
+                      fieldKey: const Key('qa_add_expense_title'),
+                      label: l10n.t('expenseTitle'),
+                      controller: _descriptionController,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [LengthLimitingTextInputFormatter(200)],
+                      onChanged: (_) => _titleEdited = true,
+                    ),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton.icon(
+                        key: const Key('qa_add_expense_paste'),
+                        onPressed: _loading ? null : _pasteAndOrganize,
+                        icon: const Icon(Icons.content_paste_go_outlined),
+                        label: Text(l10n.t('pasteText')),
+                      ),
+                    ),
+                    ..._organizeNotices(l10n),
+                    const SizedBox(height: 8),
+                  ],
                   projectsAsync.whenStale(
                     data: (projects) {
                       final selected = projects.where(
@@ -559,10 +741,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               (value: project.id, label: project.name),
                           ],
                           onSelected: (value) {
-                            final match = projects.where(
-                              (p) => p.id == value,
-                            );
+                            final match = projects.where((p) => p.id == value);
                             setState(() {
+                              _projectEdited = true;
                               _projectId = value;
                               _projectName = match.isEmpty
                                   ? ''
@@ -608,6 +789,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ],
                       onSelected: (value) {
                         setState(() {
+                          _categoryEdited = true;
                           _category = value;
                           _entityId = null;
                           _entityName = '';
@@ -686,12 +868,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   if (_category != null &&
                       _category != AccountingCategories.worker) ...[
                     const SizedBox(height: 16),
-                    _AmountHero(
-                      textFieldKey: const Key('qa_add_expense_amount'),
-                      controller: _amountController,
-                      color: t.expense,
+                    ExpenseItemsEditor(
+                      key: const Key('qa_add_expense_items'),
+                      controller: _items,
                       currency: currency,
-                      label: l10n.t('amount'),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 16),
                     ListTile(
@@ -713,7 +894,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           initialDate: _date,
                         );
                         if (date != null) {
-                          setState(() => _date = date);
+                          setState(() {
+                            _dateEdited = true;
+                            _date = date;
+                          });
                         }
                       },
                     ),
@@ -753,9 +937,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         key: const Key('qa_add_expense_supplier'),
                         label: l10n.t('entityNameOptional'),
                         controller: _supplierController,
+                        onChanged: (_) => _entityEdited = true,
                       )
                     else
                       EntityAutocompleteField(
+                        key: ValueKey('entity_$_entityFieldRevision'),
                         workspaceId: workspaceId ?? '',
                         label: l10n.t('entityNameOptional'),
                         entityType: _entityTypeForCategory(_category!),
@@ -766,6 +952,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             : null,
                         onChanged: (entityId, entityName) {
                           setState(() {
+                            _entityEdited = true;
                             _entityId = entityId;
                             _entityName = entityName ?? '';
                             _supplierController.text = entityName ?? '';
@@ -789,6 +976,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             _recalculateResourceAmount(force: true),
                         decoration: InputDecoration(
                           labelText: l10n.t('quantity'),
+                          helperText: _items.length > 1
+                              ? l10n.t('autoRateSingleItemOnly')
+                              : null,
                         ),
                       ),
                     ],
@@ -797,12 +987,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       key: const Key('qa_add_expense_purpose'),
                       label: l10n.t('purpose'),
                       controller: _purposeController,
-                    ),
-                    const SizedBox(height: 12),
-                    BuildTextField(
-                      key: const Key('qa_add_expense_description'),
-                      label: l10n.t('description'),
-                      controller: _descriptionController,
                     ),
                     const SizedBox(height: 12),
                     SelectField(
@@ -847,9 +1031,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           label: l10n.paymentStatusLabel(PaymentStatuses.paid),
                         ),
                       ],
-                      onSelected: (value) => setState(
-                        () => _paymentStatus = value ?? _paymentStatus,
-                      ),
+                      onSelected: (value) => setState(() {
+                        _paymentStatusEdited = true;
+                        _paymentStatus = value ?? _paymentStatus;
+                      }),
                     ),
                     const SizedBox(height: 12),
                     BuildTextField(
@@ -1005,71 +1190,27 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Big, centered amount entry used at the top of the non-worker expense form
-/// and the payment form. [color] carries the money semantic (expense red for
-/// outflow, income green for inflow).
-class _AmountHero extends StatelessWidget {
-  const _AmountHero({
-    required this.controller,
-    required this.color,
-    required this.currency,
-    required this.label,
-    this.textFieldKey,
-  });
+/// Non-blocking notice after "Organize with AI" (several receipts, stated
+/// total mismatch), tinted with the warning semantic color.
+class _NoticeBanner extends StatelessWidget {
+  const _NoticeBanner({required this.message, super.key});
 
-  final TextEditingController controller;
-  final Color color;
-  final String currency;
-  final String label;
-  final Key? textFieldKey;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    return BuildCard(
-      elevated: true,
-      child: Column(
+    return Container(
+      margin: const EdgeInsetsDirectional.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: t.warningSoft, borderRadius: t.radiusMd),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: t.textMuted,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            key: textFieldKey,
-            controller: controller,
-            textAlign: TextAlign.center,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: const [ThousandsSeparatorInputFormatter()],
-            style: TextStyle(
-              fontSize: 42,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1,
-              color: color,
-            ),
-            decoration: InputDecoration(
-              isCollapsed: true,
-              border: InputBorder.none,
-              hintText: '0.00',
-              hintStyle: TextStyle(
-                fontSize: 42,
-                fontWeight: FontWeight.w800,
-                color: t.textFaint,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            currency,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: t.textMuted,
-            ),
+          Icon(Icons.info_outline, size: 18, color: t.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13, color: t.text)),
           ),
         ],
       ),

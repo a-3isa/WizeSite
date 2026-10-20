@@ -1,13 +1,23 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { assertCanMutateMoney } from "../auth/roles";
 import type { Sql } from "../db/pool";
 import { RpcError as HttpsError } from "../domain/errors";
-import { parseExpenseFromTranscript } from "../domain/voice/services/expense_parser.service";
+import { extractReceipt } from "../domain/voice/services/receipt_extraction.service";
 import { transcribeAudioFromStorage } from "../domain/voice/services/transcription.service";
-import type { CurrencyCode, ProcessVoiceExpenseResponse, VoiceProjectInput } from "../domain/voice/types/expense";
+import type {
+  CurrencyCode,
+  EntityInput,
+  ExpenseCategory,
+  ExpenseProposal,
+  ExpenseProposalResponse,
+  ProcessVoiceExpenseResponse,
+  VoiceProjectInput,
+} from "../domain/voice/types/expense";
+import { buildConfidenceScores } from "../domain/voice/utils/confidence";
 import type { RpcRegistry } from "./types";
-import { asRecord } from "./validation";
+import { asRecord, requireString } from "./validation";
 
 /**
  * processVoiceExpense, ported from functions/src/voice/process_voice_expense.ts. The audio is read
@@ -43,18 +53,70 @@ function emptyResult(storagePath: string): ProcessVoiceExpenseResponse {
   };
 }
 
-/** loadWorkspaceProjectsForUser: live projects of the caller's active workspace (up to 100). */
-async function workspaceProjects(sql: Sql, uid: string): Promise<VoiceProjectInput[]> {
-  const [profile] = await sql<{ active_workspace_id: string | null }[]>`
-    SELECT active_workspace_id FROM user_profiles WHERE uid = ${uid}`;
-  const workspaceId = `${profile?.active_workspace_id ?? ""}`.trim();
+type ExtractionContext = { projects: VoiceProjectInput[]; entities: EntityInput[] };
+
+const named = (rows: { id: string; name: string }[]) =>
+  rows.map((r) => ({ id: r.id, name: `${r.name ?? ""}`.trim() })).filter((r) => r.name.length > 0);
+
+/** Live projects (≤100) and suppliers/entities (≤200) of one workspace, names only go to the AI. */
+export async function loadExtractionContext(sql: Sql, workspaceId: string): Promise<ExtractionContext> {
   if (!workspaceId) {
-    return [];
+    return { projects: [], entities: [] };
   }
-  const rows = await sql<{ id: string; name: string }[]>`
+  const projects = await sql<{ id: string; name: string }[]>`
     SELECT id, name FROM projects WHERE workspace_id = ${workspaceId} AND NOT is_archived
     ORDER BY created_at LIMIT 100`;
-  return rows.map((r) => ({ id: r.id, name: `${r.name ?? ""}`.trim() })).filter((p) => p.name.length > 0);
+  const entities = await sql<{ id: string; name: string }[]>`
+    SELECT id, name FROM entities WHERE workspace_id = ${workspaceId} AND NOT is_archived
+    ORDER BY name LIMIT 200`;
+  return { projects: named(projects), entities: named(entities) };
+}
+
+/** loadWorkspaceProjectsForUser: the caller's active workspace (voice keeps using it). */
+async function activeWorkspaceContext(sql: Sql, uid: string): Promise<ExtractionContext> {
+  const [profile] = await sql<{ active_workspace_id: string | null }[]>`
+    SELECT active_workspace_id FROM user_profiles WHERE uid = ${uid}`;
+  return loadExtractionContext(sql, `${profile?.active_workspace_id ?? ""}`.trim());
+}
+
+/** Today in Cairo as YYYY-MM-DD (en-CA formats dates that way). */
+export function cairoToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(now);
+}
+
+function parseToday(input: unknown): string {
+  const value = `${input ?? ""}`.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : cairoToday();
+}
+
+const LEGACY_CATEGORIES: ExpenseCategory[] = ["labor", "materials", "equipment", "transport", "other"];
+
+/**
+ * Legacy `parsed`/`confidence` fields derived from the proposal, so a client older than feature 005
+ * still gets a sensible single total (contracts/rpc-expense-items.md §4).
+ */
+function legacyFields(proposal: ExpenseProposal) {
+  const amounts = proposal.items.map((i) => i.amount).filter((a): a is number => a !== null);
+  const total = amounts.length ? Math.round(amounts.reduce((s, a) => s + Math.round(a * 100), 0)) / 100 : null;
+  const category = LEGACY_CATEGORIES.includes(proposal.category as ExpenseCategory)
+    ? (proposal.category as ExpenseCategory)
+    : proposal.category ? "other" : null;
+  const flagged = proposal.items.some((i) => i.needsReview);
+  return {
+    parsed: {
+      amount: total,
+      currency: total === null ? null : proposal.currency,
+      category,
+      matchedProjectId: proposal.projectId,
+      matchedProjectName: proposal.projectName,
+      note: proposal.title ?? proposal.items[0]?.name ?? null,
+    },
+    confidence: buildConfidenceScores({
+      amount: total === null ? 0 : flagged ? 0.5 : 0.9,
+      category: category ? 0.8 : 0,
+      project: proposal.projectId ? 0.85 : 0,
+    }),
+  };
 }
 
 export async function processVoiceExpenseForUser(
@@ -70,7 +132,7 @@ export async function processVoiceExpenseForUser(
   if (!storagePath.startsWith(`voice-expenses/${uid}/`)) {
     throw new HttpsError("permission-denied", "storagePath is not owned by current user");
   }
-  const projects = await workspaceProjects(sql, uid);
+  const context = await activeWorkspaceContext(sql, uid);
   const currency = parseCurrency(payload.currency);
   const languageHint = parseLanguageHint(payload.languageHint);
   if (!deps.openRouter.apiKey) {
@@ -108,14 +170,48 @@ export async function processVoiceExpenseForUser(
   if (!transcript.trim()) {
     return emptyResult(storagePath);
   }
-  return parseExpenseFromTranscript({
-    transcript,
-    projects,
+  // Feature 005: AI-first; the rules extractor only runs inside extractReceipt as the fallback.
+  const { proposal, source } = await extractReceipt({
+    text: transcript,
+    projects: context.projects,
+    entities: context.entities,
     currency,
-    storagePath,
+    today: parseToday(payload.today),
     openRouterApiKey: deps.openRouter.apiKey,
-    openRouterModel: deps.openRouter.model,
+    model: deps.openRouter.model,
   });
+  return { transcript, ...legacyFields(proposal), source, needsConfirmation: true, storagePath, proposal };
+}
+
+const MAX_ORGANIZE_TEXT = 4000;
+
+/** organizeExpenseText: pasted receipt text → AI proposal; writes nothing (contract §3). */
+export async function organizeExpenseTextForUser(
+  sql: Sql,
+  deps: VoiceDeps,
+  uid: string,
+  payload: Record<string, unknown>,
+): Promise<ExpenseProposalResponse> {
+  const workspaceId = requireString(payload, "workspaceId");
+  await assertCanMutateMoney(sql, workspaceId, uid);
+  const text = typeof payload.text === "string" ? payload.text.trim() : "";
+  if (text.length < 1 || text.length > MAX_ORGANIZE_TEXT) {
+    throw new HttpsError("invalid-argument", `text must be between 1 and ${MAX_ORGANIZE_TEXT} characters`);
+  }
+  if (!deps.openRouter.apiKey) {
+    throw new HttpsError("failed-precondition", "OPENROUTER_API_KEY is not configured");
+  }
+  const context = await loadExtractionContext(sql, workspaceId);
+  const { proposal, source } = await extractReceipt({
+    text,
+    projects: context.projects,
+    entities: context.entities,
+    currency: parseCurrency(payload.currency),
+    today: parseToday(payload.today),
+    openRouterApiKey: deps.openRouter.apiKey,
+    model: deps.openRouter.model,
+  });
+  return { text, proposal, source, needsConfirmation: true };
 }
 
 export function voiceRpcs(deps: VoiceDeps): RpcRegistry {
@@ -126,6 +222,12 @@ export function voiceRpcs(deps: VoiceDeps): RpcRegistry {
       mutating: true,
       timeoutMs: 120_000,
       handler: (ctx, data) => processVoiceExpenseForUser(ctx.sql, deps, ctx.uid, asRecord(data)),
+    },
+    organizeExpenseText: {
+      // Like processVoiceExpense: no records written, but a retry must not pay for a second AI call.
+      mutating: true,
+      timeoutMs: 60_000,
+      handler: (ctx, data) => organizeExpenseTextForUser(ctx.sql, deps, ctx.uid, asRecord(data)),
     },
   };
 }

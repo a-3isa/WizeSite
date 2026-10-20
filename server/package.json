@@ -18,7 +18,8 @@
     "rollback:firestore": "npm run build && node dist/tools/rollback-to-firestore/index.js",
     "reconcile": "node dist/src/recompute/reconcile.js",
     "test:e2e": "npm run build && node --test --test-concurrency=1 \"dist/test/e2e/**/*.test.js\"",
-    "test:parity": "npm run build && node --test --test-concurrency=1 \"dist/test/parity/**/*.test.js\""
+    "test:parity": "npm run build && node --test --test-concurrency=1 \"dist/test/parity/**/*.test.js\"",
+    "eval:receipts": "npm run build && node dist/test/eval/eval_receipts.js"
   },
   "dependencies": {
     "@fastify/multipart": "^9.0.0",

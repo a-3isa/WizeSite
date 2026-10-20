@@ -8,6 +8,7 @@ import 'package:buildtrack_app/core/widgets/app_async_state.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_repository.dart';
 import 'package:buildtrack_app/features/expenses/data/expense_summary_providers.dart';
 import 'package:buildtrack_app/features/expenses/domain/expense.dart';
+import 'package:buildtrack_app/features/expenses/domain/expense_item.dart';
 import 'package:buildtrack_app/features/expenses/presentation/screens/expenses_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +46,10 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? paymentStatus,
     double? projectTotalExpensesBefore,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
+    String inputMethod = 'manual',
+    String? transcript,
+    String? source,
   }) async {
     return const MutationResult();
   }
@@ -89,6 +94,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? paymentMethod,
     String? paymentStatus,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
   }) async {}
 
   @override
@@ -103,6 +109,7 @@ Expense _expense({
   required String supplierName,
   String paymentStatus = 'unpaid',
   String description = '',
+  List<ExpenseItem> items = const [],
 }) {
   return Expense(
     id: id,
@@ -126,6 +133,7 @@ Expense _expense({
     storagePath: '',
     isArchived: false,
     attachments: const [],
+    items: items,
   );
 }
 
@@ -289,6 +297,58 @@ void main() {
       expect(find.text('No expenses yet.'), findsOneWidget);
       expect(find.text('Add Expense'), findsWidgets);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a multi-item receipt shows its title and item count; item names are searchable',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _FakeExpenseRepository([
+        _expense(
+          id: 'expense_plumbing',
+          amount: 240,
+          supplierName: 'ورشة حسن',
+          description: 'سباكه شهر 10',
+          items: const [
+            ExpenseItem(id: 'a', name: 'حنفية', amount: 100),
+            ExpenseItem(id: 'b', name: 'جلبه', amount: 50),
+            ExpenseItem(id: 'c', name: 'ماسورة', amount: 90),
+          ],
+        ),
+        _expense(id: 'expense_paint', amount: 200, supplierName: 'Paint Crew'),
+      ]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeWorkspaceIdProvider.overrideWith((ref) => 'workspace_test'),
+            expenseRepositoryProvider.overrideWithValue(repository),
+            expenseQuickSummaryProvider.overrideWith(
+              (ref, scope) => Stream.value(
+                const ExpenseQuickSummary(
+                  todayExpenses: 0,
+                  weeklyExpenses: 0,
+                  monthlyExpenses: 0,
+                  transactionCount: 2,
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: _router()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('240 USD | سباكه شهر 10'), findsOneWidget);
+      expect(find.textContaining('3 items'), findsOneWidget);
+      expect(find.text('200 USD | Materials'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, 'ماسورة');
+      await tester.pumpAndSettle();
+      expect(find.text('240 USD | سباكه شهر 10'), findsOneWidget);
+      expect(find.text('200 USD | Materials'), findsNothing);
     },
   );
 }

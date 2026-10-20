@@ -9,7 +9,7 @@ const _booleanColumns = {
 };
 
 /// Columns holding JSON text in the local replica.
-const _jsonColumns = {'attachments', 'legacy', 'payload'};
+const _jsonColumns = {'attachments', 'items', 'legacy', 'payload'};
 
 /// Keys renamed by the migration (data-model.md), mapped back to the
 /// Firestore field names the models read.

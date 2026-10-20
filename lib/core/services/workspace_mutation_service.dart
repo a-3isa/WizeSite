@@ -7,6 +7,7 @@ import 'package:buildtrack_app/core/services/callable_client.dart';
 import 'package:buildtrack_app/core/services/offline_action_queue.dart';
 import 'package:buildtrack_app/core/services/pending_attachment_service.dart';
 import 'package:buildtrack_app/core/utils/cash_collected.dart';
+import 'package:buildtrack_app/core/utils/expense_items_total.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -177,13 +178,15 @@ class WorkspaceMutationService {
     String? storagePath,
     double? projectTotalExpensesBefore,
     List<Map<String, dynamic>>? attachments,
+    List<Map<String, dynamic>>? items,
   }) async {
     final payload = {
       'workspaceId': workspaceId,
       'projectId': projectId,
       'projectName': projectName,
       'category': category,
-      'amount': amount,
+      'amount': items == null ? amount : expenseItemsTotal(items),
+      'items': ?items,
       'currency': currency,
       'date': date.toIso8601String(),
       'notes': notes ?? '',
@@ -273,17 +276,21 @@ class WorkspaceMutationService {
     double? previousAmount,
     DateTime? previousDate,
     String? previousCategory,
+    List<Map<String, dynamic>>? items,
   }) {
     final payload = {
       'workspaceId': workspaceId,
       'expenseId': expenseId,
       'projectId': projectId,
       'category': category,
-      'amount': amount,
+      'amount': items == null ? amount : expenseItemsTotal(items),
       'date': date.toIso8601String(),
       'notes': notes ?? '',
       'purpose': purpose ?? '',
-      'description': description ?? notes ?? '',
+      // The server saves the title on update (feature 005), so a missing
+      // description must stay missing instead of copying the notes over it.
+      'description': ?description,
+      'items': ?items,
       'supplierName': supplierName ?? '',
       'entityId': entityId ?? '',
       'entityName': entityName ?? '',

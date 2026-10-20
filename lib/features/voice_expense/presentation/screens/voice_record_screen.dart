@@ -66,35 +66,13 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
   }
 
   Future<bool> _ensureVoiceAiDisclosure(AppLocalizations l10n) async {
-    final store = ref.read(voiceAiDisclosureStoreProvider);
-    if (store.hasAccepted) {
-      return true;
-    }
     if (!mounted) {
       return false;
     }
-    final accepted = await showAdaptiveDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog.adaptive(
-        title: Text(l10n.t('voiceAiDisclosureTitle')),
-        content: Text(l10n.t('voiceAiDisclosureMessage')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.t('notNow')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.t('voiceAiDisclosureContinue')),
-          ),
-        ],
-      ),
+    return ensureAiDisclosureAccepted(
+      context,
+      ref.read(voiceAiDisclosureStoreProvider),
     );
-    if (accepted != true) {
-      return false;
-    }
-    await store.accept();
-    return true;
   }
 
   Future<bool> _ensureMicrophonePermission(AppLocalizations l10n) async {
@@ -335,7 +313,12 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                   left: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsetsDirectional.fromSTEB(24, 32, 24, 40),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      24,
+                      32,
+                      24,
+                      40,
+                    ),
                     decoration: BoxDecoration(
                       color: t.surface,
                       borderRadius: BorderRadius.vertical(
@@ -355,37 +338,37 @@ class _VoiceRecordScreenState extends ConsumerState<VoiceRecordScreen>
                           const SizedBox(height: 12),
                         ],
                         Row(
-                      children: [
-                        Expanded(
-                          child: BuildButton(
-                            label: l10n.t('cancelRerecord'),
-                            variant: BuildButtonVariant.outline,
-                            size: BuildButtonSize.lg,
-                            full: true,
-                            onPressed:
-                                captureState.isRecording ||
-                                    captureState.hasRecording
-                                ? _controller.cancel
-                                : null,
-                          ),
+                          children: [
+                            Expanded(
+                              child: BuildButton(
+                                label: l10n.t('cancelRerecord'),
+                                variant: BuildButtonVariant.outline,
+                                size: BuildButtonSize.lg,
+                                full: true,
+                                onPressed:
+                                    captureState.isRecording ||
+                                        captureState.hasRecording
+                                    ? _controller.cancel
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: BuildButton(
+                                key: const Key('qa_voice_process'),
+                                label: l10n.t('processVoice'),
+                                size: BuildButtonSize.lg,
+                                full: true,
+                                onPressed: _canProcessVoice(captureState)
+                                    ? () => _goToProcessing(
+                                        projectOptions,
+                                        captureState,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: BuildButton(
-                            key: const Key('qa_voice_process'),
-                            label: l10n.t('processVoice'),
-                            size: BuildButtonSize.lg,
-                            full: true,
-                            onPressed: _canProcessVoice(captureState)
-                                ? () => _goToProcessing(
-                                    projectOptions,
-                                    captureState,
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
                       ],
                     ),
                   ),
@@ -442,7 +425,10 @@ class _ErrorBanner extends StatelessWidget {
           Icon(Icons.error_outline, size: 20, color: t.expense),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(message, style: TextStyle(fontSize: 13, color: t.expense)),
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: t.expense),
+            ),
           ),
         ],
       ),
@@ -534,9 +520,7 @@ class _MicButton extends StatelessWidget {
                   ],
                 ),
                 child: Icon(
-                  isRecording
-                      ? Icons.stop_circle_outlined
-                      : Icons.mic_outlined,
+                  isRecording ? Icons.stop_circle_outlined : Icons.mic_outlined,
                   color: t.onAccent,
                   size: 48,
                 ),

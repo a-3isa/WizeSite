@@ -560,6 +560,10 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? paymentStatus,
     double? projectTotalExpensesBefore,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
+    String inputMethod = 'manual',
+    String? transcript,
+    String? source,
   }) async {
     return const MutationResult();
   }
@@ -602,6 +606,7 @@ class _FakeExpenseRepository implements ExpenseRepository {
     String? paymentMethod,
     String? paymentStatus,
     List<Attachment>? attachments,
+    List<Map<String, dynamic>>? items,
   }) async {}
 
   @override

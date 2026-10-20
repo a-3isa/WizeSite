@@ -131,6 +131,7 @@ const syncSchema = Schema([
     Column.text('transcript'),
     Column.text('storage_path'),
     Column.text('attachments'),
+    Column.text('items'),
     Column.integer('is_archived'),
     Column.text('archived_at'),
     Column.text('client_mutation_id'),

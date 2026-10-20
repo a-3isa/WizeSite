@@ -77,3 +77,24 @@ test("webhook_events and derived tables are never written back", () => {
   assert.equal(TABLE_COLLECTIONS.project_metrics, undefined);
   assert.equal(TABLE_COLLECTIONS.expenses, "expenses");
 });
+
+test("feature 005: receipt items survive a rollback to Firestore", () => {
+  const items = [
+    { id: "item_a", name: "حنفية", amount: 100, quantity: 2, note: "" },
+    { id: "item_b", name: "جلبه", amount: 140, quantity: null, note: "كبيرة" },
+  ];
+  const back = rowToFirestoreDoc("expenses", {
+    id: "e_items", workspace_id: "ws_1", project_id: "p1", amount: "240.00", date,
+    category: "materials", description: "سباكه شهر 10", items, is_archived: false, legacy: {},
+  });
+  assert.equal(back.id, "e_items");
+  assert.equal(back.data.amount, 240);
+  assert.equal(back.data.description, "سباكه شهر 10");
+  assert.deepEqual(back.data.items, items);
+
+  const legacy = rowToFirestoreDoc("expenses", {
+    id: "e_old", workspace_id: "ws_1", project_id: "p1", amount: "75.00", date,
+    category: "other", items: [], is_archived: false, legacy: {},
+  });
+  assert.deepEqual(legacy.data.items, [], "legacy rows carry an empty list, which old clients ignore");
+});

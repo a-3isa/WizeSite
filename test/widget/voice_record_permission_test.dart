@@ -54,7 +54,13 @@ void main() {
     await tester.tap(find.byIcon(Icons.mic_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('Voice notes are processed by AI'), findsOneWidget);
+    // Shared voice + pasted-text disclosure (feature 005, T057).
+    expect(
+      find.text(
+        AppLocalizations(const Locale('en')).t('voiceAiDisclosureTitle'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Allow microphone access'), findsNothing);
     expect(recorder.startCalls, 0);
 
