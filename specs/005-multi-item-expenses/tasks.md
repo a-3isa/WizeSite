@@ -487,6 +487,7 @@ appended.
   - Write `specs/005-multi-item-expenses/release-verification.md` with: date, migration applied (`007_expense_items`), both snapshots, the row counts, the comparison result (`mismatches: 0`), and the eval accuracy/latency from T061. This is the constitution Principle II record.
   - Bump the app version in `pubspec.yaml`. Install on both phones.
   - Run the quickstart §4 "Sync atomicity" check.
+  - *Status 2026-10-20:* deployed to the VPS before the 004 cutover, as the owner chose (rollback mapping proven to carry items). Totals are identical (see `release-verification.md`). App version bump and phone installs are still pending.
 
 ---
 
