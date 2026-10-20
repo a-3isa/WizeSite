@@ -59,7 +59,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCGFd6OT7S0gRLLKvQRy2uBaX-nJ5Thcag',
-    appId: '1:549941684400:ios:33da1c501d6650638e7375',
+    appId: '1:549941684400:ios:19edd9d2ec4448d68e7375',
     messagingSenderId: '549941684400',
     projectId: 'wize-site',
     storageBucket: 'wize-site.firebasestorage.app',
@@ -68,7 +68,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCGFd6OT7S0gRLLKvQRy2uBaX-nJ5Thcag',
-    appId: '1:549941684400:ios:33da1c501d6650638e7375',
+    appId: '1:549941684400:ios:19edd9d2ec4448d68e7375',
     messagingSenderId: '549941684400',
     projectId: 'wize-site',
     storageBucket: 'wize-site.firebasestorage.app',

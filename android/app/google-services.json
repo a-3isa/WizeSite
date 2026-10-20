@@ -63,10 +63,10 @@
               "client_type": 3
             },
             {
-              "client_id": "549941684400-hjq57nnh3rrmavc1fgsfrjdebdqd271h.apps.googleusercontent.com",
+              "client_id": "549941684400-fveof93eklftudeup0il9q3t34i8hfga.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.buildtrack.buildtrackApp"
+                "bundle_id": "com.ahmed.buildozer"
               }
             }
           ]

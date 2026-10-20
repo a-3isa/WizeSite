@@ -176,9 +176,11 @@ tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
 
 tasks.matching { it.name == "uploadCrashlyticsMappingFileRelease" }.configureEach {
     onlyIf {
+        // Release builds upload the R8 mapping file so Crashlytics can
+        // deobfuscate native stacks. Set UPLOAD_CRASHLYTICS_MAPPING=false to skip.
         providers.environmentVariable("UPLOAD_CRASHLYTICS_MAPPING")
-            .map { it.equals("true", ignoreCase = true) }
-            .orElse(false)
+            .map { !it.equals("false", ignoreCase = true) }
+            .orElse(true)
             .get()
     }
 }

@@ -125,14 +125,13 @@ class GoogleAuthService {
     );
     final serverClientId = kIsWeb ? null : (rawId.isEmpty ? null : rawId);
 
-    // Apple platforms need the iOS OAuth client ID. The plugin would normally
-    // read it from a bundled GoogleService-Info.plist, but that file is not in
-    // the app bundle (Firebase initializes from firebase_options.dart instead),
-    // so authenticate() fails immediately on iOS unless we pass it explicitly.
+    // Apple platforms need the iOS OAuth client from the Firebase iOS app
+    // registered for com.ahmed.buildozer. Pass it explicitly so sign-in does
+    // not depend on the native SDK finding GoogleService-Info.plist first.
     final rawClientId = const String.fromEnvironment(
       'GOOGLE_IOS_CLIENT_ID',
       defaultValue:
-          '549941684400-hjq57nnh3rrmavc1fgsfrjdebdqd271h.apps.googleusercontent.com',
+          '549941684400-fveof93eklftudeup0il9q3t34i8hfga.apps.googleusercontent.com',
     );
     final isApple =
         !kIsWeb &&

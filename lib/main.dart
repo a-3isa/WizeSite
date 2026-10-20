@@ -21,33 +21,43 @@ Future<void> main() async {
       await openEncryptedBox<String>('pending_attachments');
       await persistHiveEncryptionReady();
       await FirebaseInitializer.ensureInitialized();
-      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
-        !kDebugMode,
-      );
-      await FirebaseCrashlytics.instance.log('app.start firebase_initialized');
+      if (crashlyticsSupported) {
+        await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+          !kDebugMode,
+        );
+        FlutterError.onError = (details) {
+          FlutterError.presentError(details);
+          FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+        };
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          return true;
+        };
+        await FirebaseCrashlytics.instance.log(
+          'app.start firebase_initialized',
+        );
+      }
       coldStart.stop();
-      await FirebaseCrashlytics.instance.log(
-        'app.start bootstrap_complete duration_ms=${coldStart.elapsedMilliseconds}',
-      );
-
-      FlutterError.onError = (details) {
-        FlutterError.presentError(details);
-        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-      };
-
-      PlatformDispatcher.instance.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
-        return true;
-      };
+      if (crashlyticsSupported) {
+        await FirebaseCrashlytics.instance.log(
+          'app.start bootstrap_complete duration_ms=${coldStart.elapsedMilliseconds}',
+        );
+      }
 
       runApp(const ProviderScope(child: BuildozerApp()));
     },
-      (error, stack) async {
+    (error, stack) async {
+      if (!crashlyticsSupported) {
+        FlutterError.reportError(
+          FlutterErrorDetails(exception: error, stack: stack),
+        );
+        return;
+      }
       try {
         await FirebaseCrashlytics.instance.recordError(
           error,
           stack,
-          fatal: false,
+          fatal: true,
         );
       } catch (_) {
         FlutterError.reportError(
@@ -56,4 +66,14 @@ Future<void> main() async {
       }
     },
   );
+}
+
+/// Crashlytics ships native plugins for Android, iOS, and macOS only.
+bool get crashlyticsSupported {
+  if (kIsWeb) {
+    return false;
+  }
+  return defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
 }

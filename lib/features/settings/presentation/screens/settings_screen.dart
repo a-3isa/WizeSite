@@ -1202,6 +1202,7 @@ class _CrashlyticsTestCardState extends State<_CrashlyticsTestCard> {
   }
 
   Future<void> _sendNonFatal() async {
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
     await FirebaseCrashlytics.instance.recordError(
       Exception('Crashlytics test non-fatal error'),
       StackTrace.current,
@@ -1255,6 +1256,7 @@ class _CrashlyticsTestCardState extends State<_CrashlyticsTestCard> {
       ),
     );
     if (confirmed == true) {
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
       FirebaseCrashlytics.instance.crash();
     }
   }

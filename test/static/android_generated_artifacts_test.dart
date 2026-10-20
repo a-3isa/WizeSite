@@ -11,10 +11,15 @@ void main() {
     expect(buildFile, contains('integration_test'));
   });
 
-  test('release Crashlytics mapping upload is opt-in', () {
-    final buildFile = File('android/app/build.gradle.kts').readAsStringSync();
+  test(
+    'release Crashlytics mapping upload runs unless explicitly disabled',
+    () {
+      final buildFile = File('android/app/build.gradle.kts').readAsStringSync();
 
-    expect(buildFile, contains('uploadCrashlyticsMappingFileRelease'));
-    expect(buildFile, contains('UPLOAD_CRASHLYTICS_MAPPING'));
-  });
+      expect(buildFile, contains('uploadCrashlyticsMappingFileRelease'));
+      expect(buildFile, contains('UPLOAD_CRASHLYTICS_MAPPING'));
+      expect(buildFile, contains('!it.equals("false", ignoreCase = true)'));
+      expect(buildFile, contains('.orElse(true)'));
+    },
+  );
 }
